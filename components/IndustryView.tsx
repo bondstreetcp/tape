@@ -135,6 +135,7 @@ export default function IndustryView({
             tf={tf}
             hidden={hidden}
             highlight={highlight}
+            showEndLabels
           />
         </section>
 
@@ -239,9 +240,20 @@ function LegendRow({
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-sm"
-          style={{ background: color, outline: isRef ? "1px dashed #8b93a7" : "none" }}
-        />
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded border"
+          style={{
+            background: hidden ? "transparent" : color,
+            borderColor: color,
+            borderStyle: isRef ? "dashed" : "solid",
+          }}
+          title={hidden ? "Show line" : "Hide line"}
+        >
+          {!hidden && (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0b0e14" strokeWidth="4">
+              <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </span>
         <span className="w-12 shrink-0 font-mono text-sm font-semibold">{symbol}</span>
         <span className="min-w-0 flex-1 truncate text-xs text-[#8b93a7]">{name}</span>
         {near && (

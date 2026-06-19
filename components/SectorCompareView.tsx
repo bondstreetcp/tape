@@ -106,6 +106,7 @@ export default function SectorCompareView({
             tf={tf}
             hidden={hidden}
             highlight={highlight}
+            showEndLabels
           />
         </section>
 

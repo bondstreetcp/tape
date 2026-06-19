@@ -1,6 +1,7 @@
 "use client";
 import {
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   ReferenceLine,
@@ -84,12 +85,15 @@ export default function MultiLineChart({
   tf,
   hidden,
   highlight,
+  showEndLabels,
 }: {
   rows: Array<Record<string, number>>;
   series: SeriesDef[];
   tf: TimeframeKey;
   hidden: Set<string>;
   highlight: string | null;
+  /** Label each line with its ticker at the right end (good for short keys). */
+  showEndLabels?: boolean;
 }) {
   const colorMap: Record<string, string> = Object.fromEntries(
     series.map((s) => [s.symbol, s.color]),
@@ -104,10 +108,14 @@ export default function MultiLineChart({
   }
 
   const visible = series.filter((s) => !hidden.has(s.symbol));
+  const lastIdx = rows.length - 1;
 
   return (
     <ResponsiveContainer width="100%" height={440}>
-      <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 4 }}>
+      <LineChart
+        data={rows}
+        margin={{ top: 8, right: showEndLabels ? 52 : 12, bottom: 0, left: 4 }}
+      >
         <CartesianGrid stroke="#1f2430" vertical={false} />
         <XAxis
           dataKey="t"
@@ -147,7 +155,30 @@ export default function MultiLineChart({
               dot={false}
               connectNulls
               isAnimationActive={false}
-            />
+            >
+              {showEndLabels && (
+                <LabelList
+                  dataKey={s.symbol}
+                  content={(props: any) => {
+                    const { x, y, index, value } = props;
+                    if (index !== lastIdx || value == null || x == null) return null;
+                    return (
+                      <text
+                        x={x + 5}
+                        y={y}
+                        dy={3}
+                        fontSize={10}
+                        fontWeight={700}
+                        fill={s.color}
+                        opacity={dim ? 0.25 : 1}
+                      >
+                        {s.symbol}
+                      </text>
+                    );
+                  }}
+                />
+              )}
+            </Line>
           );
         })}
       </LineChart>
