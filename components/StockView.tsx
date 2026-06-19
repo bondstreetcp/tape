@@ -14,6 +14,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 import WatchStar from "./WatchStar";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
+const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
 
 export default function StockView({
   universe,
@@ -31,6 +32,7 @@ export default function StockView({
   generatedAt: string;
 }) {
   const [tf, setTf] = useState<TimeframeKey>("1y");
+  const [chartMode, setChartMode] = useState<"line" | "candles">("line");
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
   const windowChange = useMemo(() => {
@@ -100,7 +102,25 @@ export default function StockView({
 
       {/* hero: price chart + technical indicators */}
       <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-        {daily.length === 0 && intraday.length === 0 ? (
+        <div className="mb-2 flex justify-end">
+          <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5 text-xs font-medium">
+            {(["line", "candles"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setChartMode(m)}
+                className={
+                  "rounded-md px-2.5 py-1 capitalize transition-colors " +
+                  (chartMode === m ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")
+                }
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+        {chartMode === "candles" ? (
+          <CandleChart symbol={row.symbol} tf={tf} now={now} />
+        ) : daily.length === 0 && intraday.length === 0 ? (
           <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
             No price history for {row.symbol}.
           </div>

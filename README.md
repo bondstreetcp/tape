@@ -35,7 +35,8 @@ constituent compared on one chart.
   Bollinger Bands** as overlays on any single-stock or sector-ETF chart, plus
   **MACD** and **RSI** as sub-panels. Computed over the **full price history**
   then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
-  Every constituent has a **dedicated stock page** (its own timeframe + the full
+  Every constituent has a **dedicated stock page** (its own timeframe, a
+  **line / candlestick toggle** with OHLC readout + volume panel, and the full
   indicator set), reachable from a treemap tile or any comparison legend.
 - **Company financials & analytics** — from a stock page, open a FactSet-style
   page with four tabs:
