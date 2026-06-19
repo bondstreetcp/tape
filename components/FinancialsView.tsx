@@ -2,7 +2,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { FinPeriod, Financials } from "@/lib/financials";
+import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import CompanyStats from "./CompanyStats";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
 interface RowSpec {
@@ -112,6 +114,7 @@ export default function FinancialsView({
   etf,
   sectorName,
   financials,
+  stats,
 }: {
   universe: string;
   symbol: string;
@@ -119,7 +122,9 @@ export default function FinancialsView({
   etf: string | null;
   sectorName: string | null;
   financials: Financials;
+  stats: CompanyStatsData | null;
 }) {
+  const [view, setView] = useState<"statements" | "stats">("statements");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
@@ -165,7 +170,20 @@ export default function FinancialsView({
         </div>
       </div>
 
-      {!hasData ? (
+      <div className="mb-4">
+        <Segmented
+          options={[
+            { key: "statements", label: "Statements" },
+            { key: "stats", label: "Estimates & Stats" },
+          ]}
+          value={view}
+          onChange={(v) => setView(v as "statements" | "stats")}
+        />
+      </div>
+
+      {view === "stats" ? (
+        <CompanyStats stats={stats} />
+      ) : !hasData ? (
         <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
           No financial data available for {symbol}.
         </div>

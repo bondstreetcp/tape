@@ -30,10 +30,17 @@ constituent compared on one chart.
   then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
   Every constituent has a **dedicated stock page** (its own timeframe + the full
   indicator set), reachable from a treemap tile or any comparison legend.
-- **Company financials** — from a stock page, open its **quarterly & annual**
-  income statement, balance sheet, and cash flow (with margins and a
-  revenue/net-income trend), FactSet-style. Fetched live from Yahoo fundamentals
-  on demand and cached 24h (so it isn't baked into the snapshot).
+- **Company financials & analytics** — from a stock page, open a FactSet-style
+  page with two tabs:
+  - **Statements:** quarterly & annual income statement, balance sheet, and cash
+    flow (with margins and a revenue/net-income trend).
+  - **Estimates & Stats:** analyst **consensus** (rating distribution, mean
+    target & upside, forward EPS, est. earnings/revenue growth), **earnings
+    surprise** history, **valuation** (P/E, PEG, P/S, P/B, EV/EBITDA, beta),
+    **profitability** (margins, ROE/ROA), **financial health** (debt/equity,
+    liquidity, dividends), and **ownership/short interest**.
+
+  All fetched live from Yahoo on demand and cached 24h (not baked into the snapshot).
 - **Sector & sub-industry comparison** — from the home page, compare the SPDR
   sectors head-to-head (XLK vs XLY vs XLI …); from any sector, compare its
   sub-industries as cap-weighted indexes rebased to % (with the whole sector
