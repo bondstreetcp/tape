@@ -11,3 +11,6 @@ npm-debug.log*
 # Refresh the deployed data with: npm run refresh-data && git commit -am "data" && git push
 # (Vercel's runtime filesystem is read-only, so the data must be in the repo.)
 data/iwv-holdings.*
+_*.html
+_*.json
+_*.csv
