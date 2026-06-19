@@ -20,6 +20,15 @@ const CODE_LABEL: Record<string, string> = {
 };
 const KIND_COLOR = { buy: "#22c55e", sell: "#ef4444", other: "#8b93a7" } as const;
 
+type RangeKey = "1y" | "2y" | "5y" | "10y" | "all";
+const RANGES: { key: RangeKey; label: string; years: number }[] = [
+  { key: "1y", label: "1Y", years: 1 },
+  { key: "2y", label: "2Y", years: 2 },
+  { key: "5y", label: "5Y", years: 5 },
+  { key: "10y", label: "10Y", years: 10 },
+  { key: "all", label: "All", years: 100 },
+];
+
 function fmtVal(v: number | null): string {
   if (v == null) return "—";
   const a = Math.abs(v);
@@ -47,6 +56,7 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showOther, setShowOther] = useState(false);
+  const [range, setRange] = useState<RangeKey>("2y");
   const [err, setErr] = useState<string | null>(null);
 
   // initial load: price series + first page of Form 4s
@@ -56,9 +66,11 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
     setErr(null);
     setTxns([]);
     setOffset(0);
-    fetch(`/api/series/${encodeURIComponent(symbol)}`)
+    fetch(`/api/ohlc/${encodeURIComponent(symbol)}?years=12`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => alive && setSeries(s?.daily ?? null))
+      .then((s) =>
+        alive && setSeries(Array.isArray(s?.daily) ? s.daily.map((b: any) => [b.t, b.c] as [number, number]) : null),
+      )
       .catch(() => alive && setSeries(null));
     fetch(`/api/insiders/${encodeURIComponent(symbol)}?offset=0&limit=24`)
       .then((r) => r.json())
@@ -110,7 +122,24 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
     return { buy, sell, other };
   }, [txns]);
 
-  const chart = useMemo(() => buildChart(series, txns, showOther), [series, txns, showOther]);
+  const rangeStartMs = useMemo(() => {
+    const yrs = RANGES.find((r) => r.key === range)?.years ?? 2;
+    return Date.now() - yrs * 365.25 * 86_400_000;
+  }, [range]);
+
+  // Auto-load filings until the chart's selected range is covered with activity.
+  useEffect(() => {
+    if (loading || loadingMore || nextOffset == null || offset >= 1200) return;
+    const oldest = txns.length ? Date.parse(txns[txns.length - 1].date) : Date.now();
+    if (range !== "all" && oldest <= rangeStartMs) return; // range already covered
+    loadMore();
+  }, [txns, range, rangeStartMs, nextOffset, loading, loadingMore, offset, loadMore]);
+
+  const slicedSeries = useMemo(
+    () => (series ? series.filter(([t]) => t >= rangeStartMs) : null),
+    [series, rangeStartMs],
+  );
+  const chart = useMemo(() => buildChart(slicedSeries, txns, showOther), [slicedSeries, txns, showOther]);
 
   if (loading) {
     return (
@@ -134,11 +163,22 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
       {/* Price chart with insider buy/sell markers */}
       <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[#aab2c5]">
-            Insider activity vs price{" "}
-            <span className="font-normal text-[#8b93a7]">· last 5y</span>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#aab2c5]">
+            Insider activity vs price
+            {loadingMore && <span className="text-[11px] font-normal text-[#5b6478]">loading activity…</span>}
           </h3>
-          <div className="flex items-center gap-3 text-[11px] text-[#8b93a7]">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8b93a7]">
+            <div className="inline-flex rounded-md border border-[#2a2e39] bg-[#0b0e14] p-0.5">
+              {RANGES.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setRange(r.key)}
+                  className={"rounded px-1.5 py-0.5 font-medium " + (range === r.key ? "bg-[#2563eb] text-white" : "hover:text-[#e6e9f0]")}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
             <span className="flex items-center gap-1"><Tri up color="#22c55e" /> Buy</span>
             <span className="flex items-center gap-1"><Tri color="#ef4444" /> Sell</span>
             <label className="flex cursor-pointer items-center gap-1 select-none">

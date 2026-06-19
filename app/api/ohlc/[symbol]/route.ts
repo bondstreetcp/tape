@@ -32,16 +32,18 @@ function bars(quotes: any[]): Bar[] {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ symbol: string }> },
 ) {
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const now = Date.now();
+  const years = Math.min(25, Math.max(1, parseInt(new URL(req.url).searchParams.get("years") || "0", 10) || 0));
+  const dailyDays = years ? Math.round(years * 366) : 2010; // default ~5.5y
   try {
     const [d, i] = await Promise.all([
       yf
-        .chart(sym, { period1: new Date(now - 2010 * DAY), interval: "1d" }, { validateResult: false })
+        .chart(sym, { period1: new Date(now - dailyDays * DAY), interval: "1d" }, { validateResult: false })
         .catch(() => null),
       yf
         .chart(sym, { period1: new Date(now - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false })
