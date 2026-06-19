@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FinPeriod, Financials } from "@/lib/financials";
 import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
@@ -140,6 +140,20 @@ export default function FinancialsView({
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
+  // Deep-link the active tab via ?tab= (e.g. shareable ownership/insider view).
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && ["statements", "stats", "peers", "ownership", "profile"].includes(t)) {
+      setView(t as "statements" | "stats" | "ownership" | "profile" | "peers");
+    }
+  }, []);
+  const changeView = (v: "statements" | "stats" | "ownership" | "profile" | "peers") => {
+    setView(v);
+    const u = new URL(window.location.href);
+    u.searchParams.set("tab", v);
+    window.history.replaceState(null, "", u);
+  };
+
   const chrono = financials[type]; // oldest → newest
   const periods = useMemo(() => [...chrono].reverse(), [chrono]); // newest → oldest for columns
   const rows = STATEMENTS[stmt].rows;
@@ -148,38 +162,64 @@ export default function FinancialsView({
   const cell = (p: FinPeriod, r: RowSpec): number | null =>
     r.derived ? r.derived(p) : fld(p, r.field);
 
-  // Forward-year consensus estimate column for the income statement (annual).
-  const estPeriod = useMemo<FinPeriod | null>(() => {
-    if (stmt !== "income" || type !== "annual" || !stats) return null;
+  // Forward-year consensus estimates (FY+1, FY+2) for the annual income statement.
+  // Yahoo's earningsTrend gives 0y/+1y, so when the last reported year is the
+  // prior FY both forward years are real consensus; otherwise the later year is
+  // derived from consensus growth.
+  const estPeriods = useMemo<FinPeriod[]>(() => {
+    if (stmt !== "income" || type !== "annual" || !stats) return [];
     const lastActual = chrono[chrono.length - 1];
-    if (!lastActual) return null;
-    const estYear = new Date(lastActual.date).getFullYear() + 1;
-    const trend =
-      stats.estimates.find((e) => e.endDate && new Date(e.endDate).getFullYear() === estYear) ??
-      stats.estimates.find((e) => e.period === "0y" || e.period === "+1y") ??
-      null;
-    const lastRev = fld(lastActual, "totalRevenue");
-    const revEst =
-      trend?.revAvg ??
-      (lastRev != null && stats.revenueGrowth != null ? lastRev * (1 + stats.revenueGrowth) : null);
-    const epsEst = trend?.epsAvg ?? stats.forwardEps;
+    if (!lastActual) return [];
+    const lastYear = new Date(lastActual.date).getFullYear();
     const lastShares = fld(lastActual, "dilutedAverageShares");
-    const niEst = epsEst != null && lastShares != null ? epsEst * lastShares : null;
-    if (revEst == null && epsEst == null) return null;
-    return {
-      date: `${estYear}-12-31`,
-      __est: 1,
-      totalRevenue: revEst,
-      netIncome: niEst,
-      netIncomeCommonStockholders: niEst,
-      dilutedEPS: epsEst,
-      dilutedAverageShares: lastShares,
-    } as FinPeriod;
+    const revG = stats.revenueGrowth;
+    const epsG = stats.earningsGrowth;
+
+    const findTrend = (year: number) =>
+      stats.estimates.find((e) => e.endDate && new Date(e.endDate).getFullYear() === year) ?? null;
+
+    const out: FinPeriod[] = [];
+    let prevRev = fld(lastActual, "totalRevenue");
+    let prevEps: number | null = stats.trailingEps;
+    for (let k = 1; k <= 2; k++) {
+      const year = lastYear + k;
+      const tr =
+        findTrend(year) ??
+        (k === 1
+          ? stats.estimates.find((e) => e.period === "0y" || e.period === "+1y") ?? null
+          : null);
+      const revEst =
+        tr?.revAvg ?? (prevRev != null && revG != null ? prevRev * (1 + revG) : null);
+      const epsEst =
+        tr?.epsAvg ??
+        (k === 1
+          ? stats.forwardEps
+          : prevEps != null && epsG != null
+            ? prevEps * (1 + epsG)
+            : null);
+      const derived = tr?.revAvg == null && tr?.epsAvg == null;
+      const niEst = epsEst != null && lastShares != null ? epsEst * lastShares : null;
+      if (revEst == null && epsEst == null) break;
+      out.push({
+        date: `${year}-12-31`,
+        __est: 1,
+        __derived: derived ? 1 : 0,
+        totalRevenue: revEst,
+        netIncome: niEst,
+        netIncomeCommonStockholders: niEst,
+        dilutedEPS: epsEst,
+        dilutedAverageShares: lastShares,
+      } as FinPeriod);
+      prevRev = revEst;
+      prevEps = epsEst;
+    }
+    return out; // [FY+1, FY+2]
   }, [stmt, type, stats, chrono]);
 
+  const anyDerived = estPeriods.some((p) => p.__derived);
   const displayPeriods = useMemo(
-    () => (estPeriod ? [estPeriod, ...periods] : periods),
-    [estPeriod, periods],
+    () => [...[...estPeriods].reverse(), ...periods], // FY+2, FY+1, then actuals
+    [estPeriods, periods],
   );
 
   return (
@@ -227,7 +267,7 @@ export default function FinancialsView({
           ]}
           value={view}
           onChange={(v) =>
-            setView(v as "statements" | "stats" | "ownership" | "profile" | "peers")
+            changeView(v as "statements" | "stats" | "ownership" | "profile" | "peers")
           }
         />
       </div>
@@ -237,7 +277,7 @@ export default function FinancialsView({
       ) : view === "peers" ? (
         <PeerComparison universe={universe} symbol={symbol} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
-        <OwnershipPanel profile={profile} />
+        <OwnershipPanel profile={profile} symbol={symbol} />
       ) : view === "profile" ? (
         <ProfilePanel profile={profile} />
       ) : !hasData ? (
@@ -289,8 +329,11 @@ export default function FinancialsView({
                           "px-4 py-3 text-right font-medium tabular-nums " +
                           (p.__est ? "text-[#60a5fa]" : "")
                         }
+                        title={p.__derived ? "Derived from consensus growth (Yahoo provides only one forward year)" : undefined}
                       >
-                        {p.__est ? `${periodLabel(p.date, type)}E` : periodLabel(p.date, type)}
+                        {p.__est
+                          ? `${periodLabel(p.date, type)}E${p.__derived ? "*" : ""}`
+                          : periodLabel(p.date, type)}
                       </th>
                     ))}
                   </tr>
@@ -339,12 +382,13 @@ export default function FinancialsView({
           <p className="mt-3 text-[11px] text-[#8b93a7]">
             Source: Yahoo Finance fundamentals · {type} · most recent period on the
             left · fetched live and cached for 24h.
-            {estPeriod && (
+            {estPeriods.length > 0 && (
               <>
                 {" · "}
-                <span className="text-[#60a5fa]">FY…E</span> = consensus estimate
-                (revenue from consensus growth, EPS forward, net income ≈ EPS ×
-                shares); other lines aren&apos;t consensus-estimated.
+                <span className="text-[#60a5fa]">FY…E</span> = forward consensus
+                (EPS &amp; revenue from analyst estimates; net income ≈ EPS ×
+                shares); other lines aren&apos;t estimated.
+                {anyDerived && " *later year derived from consensus growth."}
               </>
             )}
           </p>

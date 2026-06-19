@@ -1,5 +1,6 @@
 "use client";
-import type { CompanyProfile } from "@/lib/companyProfile";
+import type { CompanyProfile, Holder } from "@/lib/companyProfile";
+import InsiderActivity from "./InsiderActivity";
 
 function big(v: number | null): string {
   if (v == null) return "—";
@@ -32,80 +33,79 @@ function Empty() {
   return <div className="py-2 text-xs text-[#8b93a7]">Not available.</div>;
 }
 
-export function OwnershipPanel({ profile }: { profile: CompanyProfile | null }) {
-  if (!profile) return <Empty />;
+function HolderTable({ holders }: { holders: Holder[] }) {
+  if (holders.length === 0) return <Empty />;
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card title="Top Institutional Holders">
-        {profile.institutions.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[#8b93a7]">
-                  <th className="py-1 text-left font-medium">Holder</th>
-                  <th className="py-1 text-right font-medium">% Held</th>
-                  <th className="py-1 text-right font-medium">Value</th>
-                  <th className="py-1 text-right font-medium">Δ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profile.institutions.map((h, i) => (
-                  <tr key={i} className="border-t border-[#1f2430]">
-                    <td className="py-1 pr-2 text-left text-[#aab2c5]">{h.name}</td>
-                    <td className="py-1 text-right tabular-nums">{pct(h.pct)}</td>
-                    <td className="py-1 text-right tabular-nums">{big(h.value)}</td>
-                    <td
-                      className="py-1 text-right tabular-nums"
-                      style={{ color: h.change == null ? undefined : h.change >= 0 ? "#22c55e" : "#ef4444" }}
-                    >
-                      {h.change == null ? "—" : `${h.change >= 0 ? "+" : ""}${(h.change * 100).toFixed(1)}%`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+    <div className="max-h-[320px] overflow-y-auto">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-[#131722]">
+          <tr className="text-[#8b93a7]">
+            <th className="py-1 text-left font-medium">Holder</th>
+            <th className="py-1 text-right font-medium">% Held</th>
+            <th className="py-1 text-right font-medium">Value</th>
+            <th className="py-1 text-right font-medium">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {holders.map((h, i) => (
+            <tr key={i} className="border-t border-[#1f2430]">
+              <td className="py-1 pr-2 text-left text-[#aab2c5]">{h.name}</td>
+              <td className="py-1 text-right tabular-nums">{pct(h.pct)}</td>
+              <td className="py-1 text-right tabular-nums">{big(h.value)}</td>
+              <td
+                className="py-1 text-right tabular-nums"
+                style={{ color: h.change == null ? undefined : h.change >= 0 ? "#22c55e" : "#ef4444" }}
+              >
+                {h.change == null ? "—" : `${h.change >= 0 ? "+" : ""}${(h.change * 100).toFixed(1)}%`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-      <Card title="Recent Insider Transactions">
-        {profile.insiders.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="max-h-[360px] overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[#8b93a7]">
-                  <th className="py-1 text-left font-medium">Insider</th>
-                  <th className="py-1 text-left font-medium">Transaction</th>
-                  <th className="py-1 text-right font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profile.insiders.map((t, i) => {
-                  const sale = /sale/i.test(t.text);
-                  return (
-                    <tr key={i} className="border-t border-[#1f2430]">
-                      <td className="py-1 pr-2 text-left">
-                        <div className="text-[#aab2c5]">{t.name}</div>
-                        <div className="text-[10px] text-[#8b93a7]">
-                          {t.relation} · {t.date}
-                        </div>
-                      </td>
-                      <td className="py-1 pr-2 text-left" style={{ color: sale ? "#ef4444" : "#22c55e" }}>
-                        {t.text || "—"}
-                      </td>
-                      <td className="py-1 text-right tabular-nums">{big(t.value)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] text-[#8b93a7]">{label}</div>
+      <div className="text-base font-semibold tabular-nums text-[#e6e9f0]">{value}</div>
+    </div>
+  );
+}
+
+export function OwnershipPanel({ profile, symbol }: { profile: CompanyProfile | null; symbol: string }) {
+  return (
+    <div className="space-y-4">
+      {profile?.breakdown && (
+        <div className="flex flex-wrap gap-x-8 gap-y-3 rounded-xl border border-[#2a2e39] bg-[#131722] px-4 py-3">
+          <Stat label="Held by institutions" value={pct(profile.breakdown.institutionsPct)} />
+          <Stat label="Institutional (of float)" value={pct(profile.breakdown.institutionsFloatPct)} />
+          <Stat label="Held by insiders" value={pct(profile.breakdown.insidersPct)} />
+          <Stat
+            label="# institutional holders"
+            value={profile.breakdown.institutionsCount != null ? profile.breakdown.institutionsCount.toLocaleString() : "—"}
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card title={`Institutional Holders${profile?.institutions.length ? ` (top ${profile.institutions.length})` : ""}`}>
+          <HolderTable holders={profile?.institutions ?? []} />
+        </Card>
+        <Card title={`Mutual Fund Holders${profile?.funds.length ? ` (top ${profile.funds.length})` : ""}`}>
+          <HolderTable holders={profile?.funds ?? []} />
+        </Card>
+      </div>
+      <p className="-mt-2 text-[11px] text-[#5b6478]">
+        Top holders via Yahoo (13F-derived); the full institutional list isn&apos;t available from free sources.
+      </p>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-[#aab2c5]">Insider Transactions — SEC Form 4</h3>
+        <InsiderActivity symbol={symbol} />
+      </div>
     </div>
   );
 }

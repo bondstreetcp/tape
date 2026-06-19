@@ -21,6 +21,12 @@ export interface Officer { name: string; title: string; pay: number | null }
 export interface Holder { name: string; pct: number | null; shares: number | null; value: number | null; change: number | null }
 export interface Insider { name: string; relation: string; text: string; shares: number | null; value: number | null; date: string | null }
 export interface DividendPay { date: string | null; amount: number | null }
+export interface OwnershipBreakdown {
+  insidersPct: number | null;
+  institutionsPct: number | null;
+  institutionsFloatPct: number | null;
+  institutionsCount: number | null;
+}
 
 export interface CompanyProfile {
   description: string | null;
@@ -34,6 +40,8 @@ export interface CompanyProfile {
   exDividend: string | null;
   dividendDate: string | null;
   institutions: Holder[];
+  funds: Holder[];
+  breakdown: OwnershipBreakdown | null;
   insiders: Insider[];
   dividends: DividendPay[];
 }
@@ -47,6 +55,8 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
           "assetProfile",
           "calendarEvents",
           "institutionOwnership",
+          "fundOwnership",
+          "majorHoldersBreakdown",
           "insiderTransactions",
         ] as any,
       },
@@ -55,7 +65,16 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
     const ap = r.assetProfile || {};
     const ce = r.calendarEvents || {};
     const io = r.institutionOwnership?.ownershipList || [];
+    const fo = r.fundOwnership?.ownershipList || [];
+    const mhb = r.majorHoldersBreakdown || {};
     const it = r.insiderTransactions?.transactions || [];
+    const holder = (h: any): Holder => ({
+      name: h.organization,
+      pct: num(h.pctHeld),
+      shares: num(h.position),
+      value: num(h.value),
+      change: num(h.pctChange),
+    });
 
     let dividends: DividendPay[] = [];
     try {
@@ -87,13 +106,14 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
       nextEarnings: dstr(ce.earnings?.earningsDate?.[0]),
       exDividend: dstr(ce.exDividendDate),
       dividendDate: dstr(ce.dividendDate),
-      institutions: io.slice(0, 10).map((h: any) => ({
-        name: h.organization,
-        pct: num(h.pctHeld),
-        shares: num(h.position),
-        value: num(h.value),
-        change: num(h.pctChange),
-      })),
+      institutions: io.map(holder),
+      funds: fo.map(holder),
+      breakdown: {
+        insidersPct: num(mhb.insidersPercentHeld),
+        institutionsPct: num(mhb.institutionsPercentHeld),
+        institutionsFloatPct: num(mhb.institutionsFloatPercentHeld),
+        institutionsCount: num(mhb.institutionsCount),
+      },
       insiders: it.slice(0, 12).map((t: any) => ({
         name: t.filerName,
         relation: t.filerRelation,

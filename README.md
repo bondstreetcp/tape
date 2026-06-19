@@ -19,7 +19,7 @@ constituent compared on one chart.
 - **Screener** — sort/filter the whole universe by return (any timeframe),
   52-week proximity, market cap, P/E, forward P/E, P/B, dividend yield, and
   sector. Quick presets for stocks near their 52-week high/low.
-- **Ticker search** to jump straight to any stock, and a **watchlist** (★,
+- **Ticker search** in the header on **every page**, and a **watchlist** (★,
   saved in your browser) you can fill from the screener or any stock page. The
   watchlist shows **signal badges** per name — at/near 52-week high or low,
   above/below the 200-day MA, and golden/death cross — plus a summary count.
@@ -41,7 +41,9 @@ constituent compared on one chart.
   page with four tabs:
   - **Statements:** quarterly & annual income statement, balance sheet, and cash
     flow (with margins and a revenue/net-income trend). The annual income
-    statement adds a forward-year **FY…E consensus-estimate** column.
+    statement adds forward-year **FY+1E / FY+2E consensus-estimate** columns
+    (real analyst consensus where available; the later year falls back to
+    consensus-growth derivation, flagged with `*`).
   - **Estimates & Stats:** analyst **consensus** (rating distribution, mean
     target & upside, forward EPS, est. earnings/revenue growth), **earnings
     surprise** history, **recent analyst actions** (upgrades/downgrades + target
@@ -50,8 +52,10 @@ constituent compared on one chart.
   - **Peers:** the company vs its sub-industry peers on valuation (P/E, fwd P/E,
     P/B, yield), returns, and market cap — company highlighted, with a peer
     median; sortable, straight from the snapshot (no extra fetching).
-  - **Ownership:** top institutional holders (% held, value, change) and recent
-    insider transactions.
+  - **Ownership:** institutional **and** mutual-fund holders (% held / value /
+    change) with an ownership breakdown, plus **insider activity from SEC EDGAR
+    Form 4s** — a Bloomberg-style price chart with green/red insider buy/sell
+    markers and an infinite-scroll transaction history back to ~2003.
   - **Profile:** business summary, key facts, executives & comp, upcoming
     earnings/ex-dividend dates, and dividend history.
 

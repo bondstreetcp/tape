@@ -10,7 +10,6 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
-import SearchBox from "./SearchBox";
 
 export default function HomeDashboard({
   snapshot,
@@ -21,11 +20,6 @@ export default function HomeDashboard({
 }) {
   const [tf, setTf] = useState<TimeframeKey>("1d");
   const [threshold, setThreshold] = useState(2);
-
-  const searchList = useMemo(
-    () => snapshot.stocks.map((s) => ({ symbol: s.symbol, name: s.name })),
-    [snapshot],
-  );
 
   const sectorStats = useMemo(() => {
     return snapshot.sectors
@@ -91,7 +85,6 @@ export default function HomeDashboard({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <SearchBox universe={universe} stocks={searchList} />
             <UniverseSwitcher current={universe} />
             <TimeframeSelector value={tf} onChange={setTf} />
           </div>
