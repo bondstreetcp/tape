@@ -141,7 +141,13 @@ export default function SectorView({
             {fmtPct(windowChange)} this range
           </span>
         </div>
-        <IndicatorChart points={chartPoints} tf={tf} up={(windowChange ?? 0) >= 0} />
+        <IndicatorChart
+          daily={series?.daily ?? []}
+          intraday={series?.intraday ?? []}
+          tf={tf}
+          now={now}
+          up={(windowChange ?? 0) >= 0}
+        />
       </section>
 
       {/* industries — drill into a multi-line comparison */}
@@ -294,12 +300,14 @@ function StockDetail({
     };
   }, [row.symbol]);
 
+  const fullDaily = useMemo(() => (series ? xyToPoints(series.daily) : []), [series]);
+  const fullIntraday = useMemo(
+    () => (series ? xyToPoints(series.intraday) : []),
+    [series],
+  );
   const points = useMemo(
-    () =>
-      series
-        ? sliceSeries(xyToPoints(series.intraday), xyToPoints(series.daily), tf, now)
-        : [],
-    [series, tf, now],
+    () => sliceSeries(fullIntraday, fullDaily, tf, now),
+    [fullIntraday, fullDaily, tf, now],
   );
   const change = seriesChangePct(points);
 
@@ -333,7 +341,13 @@ function StockDetail({
             Loading {row.symbol} price history…
           </div>
         ) : (
-          <IndicatorChart points={points} tf={tf} up={(change ?? 0) >= 0} />
+          <IndicatorChart
+            daily={fullDaily}
+            intraday={fullIntraday}
+            tf={tf}
+            now={now}
+            up={(change ?? 0) >= 0}
+          />
         )}
       </div>
 

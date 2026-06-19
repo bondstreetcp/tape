@@ -125,6 +125,7 @@ export function bollinger(v: number[], p = 20, mult = 2): Bollinger {
 export type OverlayId =
   | "sma20"
   | "sma50"
+  | "sma150"
   | "sma200"
   | "ema12"
   | "ema26"
@@ -135,6 +136,7 @@ export type IndicatorId = OverlayId | PanelId;
 export const OVERLAYS: { id: OverlayId; label: string; color: string }[] = [
   { id: "sma20", label: "SMA 20", color: "#38bdf8" },
   { id: "sma50", label: "SMA 50", color: "#fbbf24" },
+  { id: "sma150", label: "SMA 150", color: "#fb923c" },
   { id: "sma200", label: "SMA 200", color: "#f472b6" },
   { id: "ema12", label: "EMA 12", color: "#4ade80" },
   { id: "ema26", label: "EMA 26", color: "#c084fc" },
@@ -153,6 +155,8 @@ export function computeOverlay(id: OverlayId, closes: number[]) {
       return { lines: [{ data: sma(closes, 20), color: "#38bdf8" }] };
     case "sma50":
       return { lines: [{ data: sma(closes, 50), color: "#fbbf24" }] };
+    case "sma150":
+      return { lines: [{ data: sma(closes, 150), color: "#fb923c" }] };
     case "sma200":
       return { lines: [{ data: sma(closes, 200), color: "#f472b6" }] };
     case "ema12":
