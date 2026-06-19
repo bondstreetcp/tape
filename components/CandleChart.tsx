@@ -11,6 +11,7 @@ interface Bar { t: number; o: number; h: number; l: number; c: number; v: number
 const SMA_DEFS: { period: number; color: string }[] = [
   { period: 20, color: "#38bdf8" },
   { period: 50, color: "#fbbf24" },
+  { period: 150, color: "#fb923c" },
   { period: 200, color: "#f472b6" },
 ];
 

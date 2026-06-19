@@ -322,14 +322,19 @@ async function main() {
   for (const etf of SECTOR_ETFS) {
     let daily: SeriesPoint[] = [];
     let intraday: SeriesPoint[] = [];
-    try {
-      const ch: any = await yf.chart(
-        etf,
-        { period1: dailyPeriod1, interval: "1d" },
-        { validateResult: false },
-      );
-      daily = toPoints(ch?.quotes);
-    } catch {}
+    // ETFs drive the sector heatmap + indices — retry so a transient rate-limit
+    // at the tail of a big refresh can't leave them empty.
+    for (let attempt = 0; attempt < 3 && daily.length === 0; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const ch: any = await yf.chart(
+          etf,
+          { period1: dailyPeriod1, interval: "1d" },
+          { validateResult: false },
+        );
+        daily = toPoints(ch?.quotes);
+      } catch {}
+    }
     try {
       const ch: any = await yf.chart(
         etf,
@@ -359,7 +364,8 @@ async function main() {
       seen.add(e.symbol);
       const c = classBySym.get(e.symbol);
       const m = metricBySym.get(e.symbol);
-      if (!c?.etf || !m) continue; // unmapped or no data, or excluded by LIMIT
+      // drop unmapped / no-data / junk rows (no market cap or price → empty cells)
+      if (!c?.etf || !m || !m.marketCap || !m.price) continue;
       stocks.push({
         symbol: e.symbol,
         name: m.name,

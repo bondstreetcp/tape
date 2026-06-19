@@ -1,10 +1,11 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { UNIVERSES } from "@/lib/universes";
 
 /**
  * Switches the active index universe. Stays on the same sector when `etf` is
- * provided, otherwise goes to that universe's home.
+ * provided; otherwise keeps you on the same section (screener / watchlist /
+ * market / macro / compare) for the new universe, falling back to its home.
  */
 export default function UniverseSwitcher({
   current,
@@ -14,8 +15,13 @@ export default function UniverseSwitcher({
   etf?: string | null;
 }) {
   const router = useRouter();
-  const href = (id: string) =>
-    etf ? `/u/${id}/sector/${etf.toLowerCase()}` : `/u/${id}`;
+  const pathname = usePathname();
+  const href = (id: string) => {
+    if (etf) return `/u/${id}/sector/${etf.toLowerCase()}`;
+    const sub = pathname.replace(/^\/u\/[^/]+/, ""); // path after /u/<universe>
+    const keep = /^\/(screener|watchlist|market|macro|compare)(\/|$)/.test(sub) ? sub : "";
+    return `/u/${id}${keep}`;
+  };
   return (
     <label className="inline-flex items-center gap-2">
       <span className="text-xs uppercase tracking-wide text-[#8b93a7]">
