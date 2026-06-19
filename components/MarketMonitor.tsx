@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MarketGroup, Tile } from "@/lib/market";
 import { fmtDateTime } from "@/lib/format";
+import NewsFeed from "./NewsFeed";
 
 function fmtPrice(t: Tile): string {
   const p = t.price;
@@ -74,6 +75,10 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
           </div>
         </section>
       ))}
+
+      <section className="mt-6">
+        <NewsFeed query="market" title="Market headlines" count={14} />
+      </section>
 
       <p className="mt-2 text-[11px] text-[#5b6478]">
         Quotes via Yahoo (may be delayed). Yields shown as level; change in basis points.

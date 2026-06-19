@@ -12,6 +12,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import WatchStar from "./WatchStar";
+import NewsFeed from "./NewsFeed";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -64,6 +65,20 @@ export default function StockView({
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <Link
+              href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+            >
+              ← {row.etf} {sectorName} heatmap
+            </Link>
+            <Link
+              href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+            >
+              ⇄ {row.industry} peers
+            </Link>
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[#8b93a7]">
             <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
@@ -225,6 +240,11 @@ export default function StockView({
             </div>
           </button>
         ))}
+      </section>
+
+      {/* news */}
+      <section className="mt-5">
+        <NewsFeed query={row.symbol} title={`${row.symbol} — recent news`} count={10} />
       </section>
     </main>
   );
