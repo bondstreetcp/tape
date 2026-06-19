@@ -360,6 +360,18 @@ async function main() {
     );
   }
 
+  // Carry trend fundamentals over from the previous snapshots — they're refreshed
+  // by the separate (heavier) patch-fundamentals-deep, not on every price refresh.
+  const existingFund = new Map<string, unknown>();
+  for (const u of UNIVERSES) {
+    try {
+      const prev = JSON.parse(await fs.readFile(path.join(DATA_DIR, u.id, "snapshot.json"), "utf8"));
+      for (const st of prev.stocks || []) if (st.fund && !existingFund.has(st.symbol)) existingFund.set(st.symbol, st.fund);
+    } catch {
+      /* no prior snapshot */
+    }
+  }
+
   // 6) Assemble per-universe snapshots.
   console.log("Writing per-universe snapshots…");
   for (const u of UNIVERSES) {
@@ -394,6 +406,7 @@ async function main() {
         earningsDate: m.earningsDate,
         earningsEstimate: m.earningsEstimate,
         epsForward: m.epsForward,
+        fund: (existingFund.get(e.symbol) as StockRow["fund"]) ?? null,
       });
     }
     const sectors: SectorAgg[] = SECTORS.map((s) => {

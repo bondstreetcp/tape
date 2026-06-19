@@ -31,6 +31,20 @@ const CAP_OPTIONS = [
   { label: "> $100B", v: 1e11 },
 ];
 
+const REV_OPTS = [
+  { label: "Rev growth: any", v: null as number | null },
+  { label: "Rev growth ≥ 0%", v: 0 },
+  { label: "Rev growth ≥ 10%", v: 0.1 },
+  { label: "Rev growth ≥ 20%", v: 0.2 },
+];
+
+const pctFrac = (v: any) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
+const ppFrac = (v: any) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}pp`);
+const daysFmt = (v: any) => (v == null ? "—" : `${v.toFixed(0)}d`);
+const daysSigned = (v: any) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}d`);
+// rising DSO (receivables outrunning revenue) is a red flag → red; falling → green
+const dsoColor = (v: any) => (v == null ? undefined : v > 0.5 ? "#ef4444" : v < -0.5 ? "#22c55e" : undefined);
+
 const LIMIT = 250;
 
 export default function ScreenerView({
@@ -61,24 +75,41 @@ export default function ScreenerView({
   const [sortDir, setSortDir] = useState<"asc" | "desc">(
     initFilter === "low" ? "asc" : "desc",
   );
+  const [colSet, setColSet] = useState<"valuation" | "fundamentals">("valuation");
+  const [minRevG, setMinRevG] = useState<number | null>(null);
+  const [expanding, setExpanding] = useState(false); // operating margin expanding YoY
+  const [dsoRising, setDsoRising] = useState(false); // ballooning DSO
+  const [profitable, setProfitable] = useState(false);
 
-  const columns: Col[] = useMemo(
-    () => [
+  const columns: Col[] = useMemo(() => {
+    const base: Col[] = [
       { key: "symbol", label: "Symbol", num: false, get: (s) => s.symbol, fmt: (v) => v, align: "left" },
       { key: "name", label: "Name", num: false, get: (s) => s.name, fmt: (v) => v, align: "left" },
       { key: "etf", label: "Sector", num: false, get: (s) => ETF_TO_SECTOR[s.etf]?.name ?? s.sector, fmt: (v) => v, align: "left" },
       { key: "price", label: "Price", num: true, get: (s) => s.price, fmt: (v) => (v == null ? "—" : `$${fmtPrice(v)}`), align: "right" },
       { key: "ret", label: TIMEFRAMES.find((t) => t.key === tf)?.label ?? "Ret", num: true, get: (s) => s.returns[tf], fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
+      { key: "cap", label: "Mkt Cap", num: true, get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v), align: "right" },
+    ];
+    const valuation: Col[] = [
       { key: "fromHigh", label: "% fr High", num: true, get: (s) => s.pctFromHigh, fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
       { key: "fromLow", label: "% fr Low", num: true, get: (s) => s.pctFromLow, fmt: (v) => (v == null ? "—" : `+${v.toFixed(1)}%`), align: "right" },
-      { key: "cap", label: "Mkt Cap", num: true, get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v), align: "right" },
       { key: "pe", label: "P/E", num: true, get: (s) => s.trailingPE ?? null, fmt: (v) => (v == null ? "—" : v.toFixed(1)), align: "right" },
       { key: "fpe", label: "Fwd P/E", num: true, get: (s) => s.forwardPE ?? null, fmt: (v) => (v == null ? "—" : v.toFixed(1)), align: "right" },
       { key: "pb", label: "P/B", num: true, get: (s) => s.priceToBook ?? null, fmt: (v) => (v == null ? "—" : v.toFixed(1)), align: "right" },
       { key: "yld", label: "Div Yld", num: true, get: (s) => s.dividendYield ?? null, fmt: (v) => (v == null ? "—" : `${(v * 100).toFixed(2)}%`), align: "right" },
-    ],
-    [tf],
-  );
+    ];
+    const fund: Col[] = [
+      { key: "revG", label: "Rev Gr", num: true, get: (s) => s.fund?.revGrowth ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" },
+      { key: "opM", label: "Op Mgn", num: true, get: (s) => s.fund?.opMargin ?? null, fmt: pctFrac, align: "right" },
+      { key: "opMChg", label: "Δ Op Mgn", num: true, get: (s) => s.fund?.opMarginChg ?? null, fmt: ppFrac, color: (v) => trendColor(v), align: "right" },
+      { key: "netM", label: "Net Mgn", num: true, get: (s) => s.fund?.netMargin ?? null, fmt: pctFrac, align: "right" },
+      { key: "dso", label: "DSO", num: true, get: (s) => s.fund?.dso ?? null, fmt: daysFmt, align: "right" },
+      { key: "dsoChg", label: "Δ DSO", num: true, get: (s) => s.fund?.dsoChg ?? null, fmt: daysSigned, color: dsoColor, align: "right" },
+      { key: "fcfM", label: "FCF Mgn", num: true, get: (s) => s.fund?.fcfMargin ?? null, fmt: pctFrac, align: "right" },
+      { key: "roe", label: "ROE", num: true, get: (s) => s.fund?.roe ?? null, fmt: pctFrac, align: "right" },
+    ];
+    return [...base, ...(colSet === "fundamentals" ? fund : valuation)];
+  }, [tf, colSet]);
 
   const filtered = useMemo(() => {
     let r = stocks;
@@ -90,6 +121,10 @@ export default function ScreenerView({
     if (capMin > 0) r = r.filter((s) => (s.marketCap || 0) >= capMin);
     if (hl === "high") r = r.filter((s) => isNearHigh(s, threshold));
     else if (hl === "low") r = r.filter((s) => isNearLow(s, threshold));
+    if (minRevG != null) r = r.filter((s) => (s.fund?.revGrowth ?? -Infinity) >= minRevG);
+    if (expanding) r = r.filter((s) => (s.fund?.opMarginChg ?? -Infinity) > 0);
+    if (dsoRising) r = r.filter((s) => (s.fund?.dsoChg ?? -Infinity) > 0);
+    if (profitable) r = r.filter((s) => (s.fund?.netMargin ?? -Infinity) > 0);
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -106,7 +141,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -184,6 +219,40 @@ export default function ScreenerView({
         )}
         <div className="ml-auto">
           <TimeframeSelector value={tf} onChange={setTf} />
+        </div>
+      </div>
+
+      {/* fundamentals filters + column set */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[#8b93a7]">Fundamentals:</span>
+        <select
+          value={minRevG == null ? "" : String(minRevG)}
+          onChange={(e) => setMinRevG(e.target.value === "" ? null : Number(e.target.value))}
+          className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-2 py-1.5 text-xs outline-none"
+        >
+          {REV_OPTS.map((o) => (
+            <option key={o.label} value={o.v == null ? "" : String(o.v)}>{o.label}</option>
+          ))}
+        </select>
+        <button onClick={() => setExpanding((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (expanding ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")}>
+          Margins expanding
+        </button>
+        <button onClick={() => setDsoRising((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (dsoRising ? "border-[#ef4444] bg-[#ef4444]/15 text-[#fca5a5]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")} title="Days sales outstanding rising YoY — receivables outrunning revenue">
+          DSO rising 🚩
+        </button>
+        <button onClick={() => setProfitable((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (profitable ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")}>
+          Profitable
+        </button>
+        <div className="ml-auto inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+          {(["valuation", "fundamentals"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setColSet(k)}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors " + (colSet === k ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+            >
+              {k} cols
+            </button>
+          ))}
         </div>
       </div>
 

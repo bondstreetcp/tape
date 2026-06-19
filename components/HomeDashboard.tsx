@@ -11,6 +11,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
+import MoversSection from "./MoversSection";
+import AnalystFeed from "./AnalystFeed";
 
 export default function HomeDashboard({
   snapshot,
@@ -138,6 +140,10 @@ export default function HomeDashboard({
           );
         })}
       </div>
+
+      <MoversSection universe={universe} stocks={snapshot.stocks} tf={tf} />
+
+      <AnalystFeed universe={universe} />
 
       <p className="mt-6 text-center text-xs text-[#8b93a7]">
         Click a sector to see its constituents grouped by industry, with a price

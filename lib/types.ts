@@ -2,6 +2,25 @@ import type { TimeframeKey } from "./timeframes";
 
 export type Returns = Record<TimeframeKey, number | null>; // percent values, e.g. 1.23 = +1.23%
 
+/** Trend fundamentals computed from annual fundamentalsTimeSeries (fractions, except DSO in days). */
+export interface Fundamentals {
+  revGrowth: number | null; // latest FY YoY
+  revCagr3y: number | null;
+  grossMargin: number | null;
+  opMargin: number | null;
+  netMargin: number | null;
+  grossMarginChg: number | null; // YoY change in margin (pp as fraction)
+  opMarginChg: number | null;
+  netMarginChg: number | null;
+  dso: number | null; // days sales outstanding
+  dsoChg: number | null; // YoY change in DSO (days)
+  fcfMargin: number | null;
+  roe: number | null;
+  netDebtEbitda: number | null;
+  currentRatio: number | null;
+  asOf: string | null; // latest FY period end
+}
+
 export interface StockRow {
   symbol: string;
   name: string;
@@ -26,6 +45,7 @@ export interface StockRow {
   earningsDate?: string | null; // ISO; earningsTimestampStart
   earningsEstimate?: boolean; // date is an estimate, not confirmed
   epsForward?: number | null;
+  fund?: Fundamentals | null; // trend fundamentals (separate periodic patch)
 }
 
 export interface SectorAgg {

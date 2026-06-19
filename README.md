@@ -18,7 +18,12 @@ constituent compared on one chart.
   entry points, sorted by performance and color-coded.
 - **Screener** — sort/filter the whole universe by return (any timeframe),
   52-week proximity, market cap, P/E, forward P/E, P/B, dividend yield, and
-  sector. Quick presets for stocks near their 52-week high/low.
+  sector. Quick presets for stocks near their 52-week high/low. A **Fundamentals**
+  column set + filters adds revenue growth, **operating-margin expansion**, the
+  **DSO trend** (ballooning-receivables red flag), FCF margin, and ROE.
+- **Home dashboard extras** — **top movers** (gainers/losers with the headline
+  driving each) and a **recent analyst-actions** feed (upgrades/downgrades +
+  target changes across the largest names).
 - **Ticker search** in the header on **every page**, and a **watchlist** (★,
   saved in your browser) you can fill from the screener or any stock page. The
   watchlist shows **signal badges** per name — at/near 52-week high or low,
