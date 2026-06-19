@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+build/
+*.log
+npm-debug.log*
+.env*
+.DS_Store
+
+# NOTE: data/ is intentionally TRACKED so Vercel ships the market-data snapshot.
+# Refresh the deployed data with: npm run refresh-data && git commit -am "data" && git push
+# (Vercel's runtime filesystem is read-only, so the data must be in the repo.)
