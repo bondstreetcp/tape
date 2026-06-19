@@ -129,6 +129,51 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
         )}
       </Section>
 
+      {/* Recent analyst actions */}
+      {s.ratingChanges.length > 0 && (
+        <Section title="Recent Analyst Actions" wide>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-xs">
+              <thead>
+                <tr className="text-[#8b93a7]">
+                  <th className="py-1 text-left font-medium">Date</th>
+                  <th className="py-1 text-left font-medium">Firm</th>
+                  <th className="py-1 text-left font-medium">Action</th>
+                  <th className="py-1 text-right font-medium">Price Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.ratingChanges.map((c, i) => {
+                  const m = actionMeta(c.action);
+                  return (
+                    <tr key={i} className="border-t border-[#1f2430]">
+                      <td className="py-1 pr-3 text-left text-[#8b93a7]">{c.date}</td>
+                      <td className="py-1 pr-3 text-left text-[#aab2c5]">{c.firm}</td>
+                      <td className="py-1 pr-3 text-left">
+                        <span style={{ color: m.color }}>{m.label}</span>
+                        {c.toGrade && (
+                          <span className="text-[#8b93a7]">
+                            {" · "}
+                            {c.fromGrade && c.fromGrade !== c.toGrade ? `${c.fromGrade} → ` : ""}
+                            {c.toGrade}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 text-right tabular-nums">
+                        {c.targetTo != null ? `$${c.targetTo.toFixed(0)}` : "—"}
+                        {c.targetFrom != null && c.targetTo != null && c.targetFrom !== c.targetTo && (
+                          <span className="text-[10px] text-[#8b93a7]"> (was ${c.targetFrom.toFixed(0)})</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
       {/* Valuation */}
       <Section title="Valuation">
         <Grid>
@@ -196,13 +241,24 @@ function periodName(p: string): string {
   }
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+    <div className={"rounded-xl border border-[#2a2e39] bg-[#131722] p-4" + (wide ? " lg:col-span-2" : "")}>
       <h3 className="mb-3 text-sm font-semibold text-[#aab2c5]">{title}</h3>
       {children}
     </div>
   );
+}
+
+function actionMeta(action: string) {
+  switch (action) {
+    case "up": return { label: "Upgrade", color: "#22c55e" };
+    case "down": return { label: "Downgrade", color: "#ef4444" };
+    case "init": return { label: "Initiate", color: "#60a5fa" };
+    case "reit": return { label: "Reiterate", color: "#8b93a7" };
+    case "main": return { label: "Maintain", color: "#8b93a7" };
+    default: return { label: action || "Update", color: "#8b93a7" };
+  }
 }
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">{children}</div>;

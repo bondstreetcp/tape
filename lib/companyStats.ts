@@ -10,6 +10,24 @@ const num = (v: any): number | null => {
 };
 const str = (v: any): string | null =>
   typeof v === "string" ? v : (v?.fmt ?? null);
+const dstr = (v: any): string => {
+  if (!v) return "";
+  try {
+    return new Date(v).toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+};
+
+export interface RatingChange {
+  firm: string;
+  action: string; // up | down | main | reit | init
+  fromGrade: string;
+  toGrade: string;
+  targetFrom: number | null;
+  targetTo: number | null;
+  date: string;
+}
 
 export interface RatingDist {
   strongBuy: number;
@@ -52,6 +70,7 @@ export interface CompanyStats {
   revenueGrowth: number | null;
   estimates: EstimatePeriod[];
   surprises: SurpriseRow[];
+  ratingChanges: RatingChange[];
   // valuation
   trailingPE: number | null;
   forwardPE: number | null;
@@ -99,6 +118,7 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
           "recommendationTrend",
           "earningsHistory",
           "earningsTrend",
+          "upgradeDowngradeHistory",
         ] as any,
       },
       { validateResult: false },
@@ -109,6 +129,7 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
     const rt = r.recommendationTrend?.trend?.[0] || null;
     const eh = r.earningsHistory?.history || [];
     const et = r.earningsTrend?.trend || [];
+    const ud = r.upgradeDowngradeHistory?.history || [];
 
     return {
       price: num(fd.currentPrice),
@@ -151,6 +172,18 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
           surprisePercent: num(h.surprisePercent),
         }))
         .filter((s: SurpriseRow) => s.actual != null || s.estimate != null),
+      ratingChanges: ud
+        .slice(0, 15)
+        .map((h: any) => ({
+          firm: h.firm || "",
+          action: String(h.action || ""),
+          fromGrade: h.fromGrade || "",
+          toGrade: h.toGrade || "",
+          targetFrom: num(h.priorPriceTarget),
+          targetTo: num(h.currentPriceTarget),
+          date: dstr(h.epochGradeDate),
+        }))
+        .filter((c: RatingChange) => c.firm),
       trailingPE: num(sd.trailingPE),
       forwardPE: num(ks.forwardPE) ?? num(sd.forwardPE),
       pegRatio: num(ks.pegRatio),

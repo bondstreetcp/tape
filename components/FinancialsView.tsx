@@ -3,8 +3,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { FinPeriod, Financials } from "@/lib/financials";
 import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
+import type { CompanyProfile } from "@/lib/companyProfile";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
+import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
 interface RowSpec {
@@ -115,6 +117,7 @@ export default function FinancialsView({
   sectorName,
   financials,
   stats,
+  profile,
 }: {
   universe: string;
   symbol: string;
@@ -123,8 +126,11 @@ export default function FinancialsView({
   sectorName: string | null;
   financials: Financials;
   stats: CompanyStatsData | null;
+  profile: CompanyProfile | null;
 }) {
-  const [view, setView] = useState<"statements" | "stats">("statements");
+  const [view, setView] = useState<
+    "statements" | "stats" | "ownership" | "profile"
+  >("statements");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
@@ -175,14 +181,22 @@ export default function FinancialsView({
           options={[
             { key: "statements", label: "Statements" },
             { key: "stats", label: "Estimates & Stats" },
+            { key: "ownership", label: "Ownership" },
+            { key: "profile", label: "Profile" },
           ]}
           value={view}
-          onChange={(v) => setView(v as "statements" | "stats")}
+          onChange={(v) =>
+            setView(v as "statements" | "stats" | "ownership" | "profile")
+          }
         />
       </div>
 
       {view === "stats" ? (
         <CompanyStats stats={stats} />
+      ) : view === "ownership" ? (
+        <OwnershipPanel profile={profile} />
+      ) : view === "profile" ? (
+        <ProfilePanel profile={profile} />
       ) : !hasData ? (
         <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
           No financial data available for {symbol}.
