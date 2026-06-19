@@ -16,6 +16,7 @@ import {
 import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { fmtPrice } from "@/lib/format";
+import { sliceSeries } from "@/lib/compute";
 import {
   OVERLAYS,
   PANELS,
@@ -47,6 +48,8 @@ const overlayCloses = (id: OverlayId, c: number[]) => {
       return { keys: [["sma20", sma(c, 20), "#38bdf8", false]] as const };
     case "sma50":
       return { keys: [["sma50", sma(c, 50), "#fbbf24", false]] as const };
+    case "sma150":
+      return { keys: [["sma150", sma(c, 150), "#fb923c", false]] as const };
     case "sma200":
       return { keys: [["sma200", sma(c, 200), "#f472b6", false]] as const };
     case "ema12":
@@ -66,12 +69,16 @@ const overlayCloses = (id: OverlayId, c: number[]) => {
 };
 
 export default function IndicatorChart({
-  points,
+  daily,
+  intraday,
   tf,
+  now,
   up,
 }: {
-  points: SeriesPoint[];
+  daily: SeriesPoint[];
+  intraday: SeriesPoint[];
   tf: TimeframeKey;
+  now: number;
   up: boolean;
 }) {
   const [enabled, setEnabled] = useState<Set<IndicatorId>>(new Set(["sma50"]));
@@ -83,7 +90,22 @@ export default function IndicatorChart({
       return next;
     });
 
-  const closes = useMemo(() => points.map((p) => p.c), [points]);
+  // Indicators are computed over the FULL series, then sliced to the visible
+  // window — so the 50/150/200-day SMAs are warmed up by the history that
+  // precedes the window instead of starting blank inside it.
+  const source = tf === "1d" || tf === "1w" ? intraday : daily;
+  const closes = useMemo(() => source.map((p) => p.c), [source]);
+
+  const windowStart = useMemo(() => {
+    if (!source.length) return 0;
+    const win = sliceSeries(intraday, daily, tf, now);
+    if (!win.length) return 0;
+    const t0 = win[0].t;
+    const idx = source.findIndex((p) => p.t >= t0);
+    return idx < 0 ? 0 : idx;
+  }, [intraday, daily, tf, now, source]);
+
+  const points = useMemo(() => source.slice(windowStart), [source, windowStart]);
 
   const { priceData, lineSeries } = useMemo(() => {
     const cols: Record<string, (number | null)[]> = {};
@@ -96,30 +118,32 @@ export default function IndicatorChart({
         lineSeries.push({ key, color: color as string, dash: dash as boolean });
       }
     }
-    const priceData = points.map((p, i) => {
-      const row: Record<string, number | null> = { t: p.t, c: p.c };
+    const priceData: Record<string, number | null>[] = [];
+    for (let i = windowStart; i < source.length; i++) {
+      const row: Record<string, number | null> = { t: source[i].t, c: source[i].c };
       for (const k in cols) row[k] = cols[k][i];
-      return row;
-    });
+      priceData.push(row);
+    }
     return { priceData, lineSeries };
-  }, [points, closes, enabled]);
+  }, [source, windowStart, closes, enabled]);
 
   const macdData = useMemo(() => {
     if (!enabled.has("macd")) return null;
     const m = macd(closes);
-    return points.map((p, i) => ({
-      t: p.t,
-      macd: m.macd[i],
-      signal: m.signal[i],
-      hist: m.hist[i],
-    }));
-  }, [points, closes, enabled]);
+    const out = [];
+    for (let i = windowStart; i < source.length; i++)
+      out.push({ t: source[i].t, macd: m.macd[i], signal: m.signal[i], hist: m.hist[i] });
+    return out;
+  }, [source, windowStart, closes, enabled]);
 
   const rsiData = useMemo(() => {
     if (!enabled.has("rsi")) return null;
     const r = rsi(closes, 14);
-    return points.map((p, i) => ({ t: p.t, rsi: r[i] }));
-  }, [points, closes, enabled]);
+    const out = [];
+    for (let i = windowStart; i < source.length; i++)
+      out.push({ t: source[i].t, rsi: r[i] });
+    return out;
+  }, [source, windowStart, closes, enabled]);
 
   const color = up ? "#22c55e" : "#ef4444";
   const fmt = tickFmt(tf);

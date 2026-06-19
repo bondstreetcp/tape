@@ -24,11 +24,13 @@ constituent compared on one chart.
   are directly comparable, and the sector ETF is overlaid as a dashed reference.
   The legend is interactive: click to hide/show a line, hover to highlight,
   sorted by performance with 52-week badges.
-- **Technical indicators** — toggle **SMA (20/50/200), EMA (12/26), Bollinger
-  Bands** as overlays on any single-stock or sector-ETF chart, plus **MACD** and
-  **RSI** as sub-panels. Computed client-side, so they add no data cost.
-- **Sub-industry comparison** — from any sector, compare its sub-industries
-  head-to-head as cap-weighted indexes rebased to % (with the whole sector
+- **Technical indicators** — toggle **SMA (20/50/150/200), EMA (12/26),
+  Bollinger Bands** as overlays on any single-stock or sector-ETF chart, plus
+  **MACD** and **RSI** as sub-panels. Computed over the **full price history**
+  then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
+- **Sector & sub-industry comparison** — from the home page, compare the SPDR
+  sectors head-to-head (XLK vs XLY vs XLI …); from any sector, compare its
+  sub-industries as cap-weighted indexes rebased to % (with the whole sector
   overlaid). Toggle the legend to isolate, e.g., *Managed Health Care vs Health
   Care Equipment*.
 - **Treemap heatmap** per sector: market-cap-weighted boxes grouped by GICS
