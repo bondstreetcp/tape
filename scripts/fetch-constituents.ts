@@ -14,7 +14,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import * as cheerio from "cheerio";
-import { type Entry, norm, parseIWV } from "./iwv";
+import { type Entry, norm, parseIWV, toRows } from "./iwv";
 
 interface SourceCfg {
   name: string;
@@ -154,17 +154,29 @@ async function main() {
     sp1500: dedupe([...sp500, ...sp400, ...sp600]),
   };
 
-  // Optional real Russell 3000 — only if an iShares IWV holdings CSV is present.
-  const iwvPath = path.join(process.cwd(), "data", "iwv-holdings.csv");
-  try {
-    const csv = await fs.readFile(iwvPath, "utf8");
-    const r3000 = parseIWV(csv, gics);
-    const m = new Map<string, Entry>();
-    for (const e of r3000) if (!m.has(e.symbol)) m.set(e.symbol, e);
-    universes.russell3000 = [...m.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
-    console.log(`  Russell 3000: ${universes.russell3000.length} (from iwv-holdings.csv)`);
-  } catch (e: any) {
-    if (e?.code !== "ENOENT") console.warn(`  Russell 3000 skipped: ${e.message}`);
+  // Optional real Russell 3000 — only if an iShares IWV holdings file is present
+  // (data/iwv-holdings.xls SpreadsheetML, or .csv).
+  let iwvText: string | null = null;
+  let iwvFrom = "";
+  for (const fn of ["iwv-holdings.xls", "iwv-holdings.csv"]) {
+    try {
+      iwvText = await fs.readFile(path.join(process.cwd(), "data", fn), "utf8");
+      iwvFrom = fn;
+      break;
+    } catch (e: any) {
+      if (e?.code !== "ENOENT") throw e;
+    }
+  }
+  if (iwvText) {
+    try {
+      const r3000 = parseIWV(toRows(iwvText), gics);
+      const m = new Map<string, Entry>();
+      for (const e of r3000) if (!m.has(e.symbol)) m.set(e.symbol, e);
+      universes.russell3000 = [...m.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+      console.log(`  Russell 3000: ${universes.russell3000.length} (from ${iwvFrom})`);
+    } catch (e: any) {
+      console.warn(`  Russell 3000 skipped: ${e.message}`);
+    }
   }
 
   const dir = path.join(process.cwd(), "data", "constituents");

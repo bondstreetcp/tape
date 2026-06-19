@@ -23,7 +23,14 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "Broad 1500 (S&P 1500)",
     short: "Broad 1500",
     intraday: false,
-    note: "S&P 500 + 400 + 600 — a broad large/mid/small-cap universe (stands in for the Russell 3000, whose holdings aren't available from free sources).",
+    note: "S&P 500 + 400 + 600 — a broad large/mid/small-cap universe.",
+  },
+  {
+    id: "russell3000",
+    name: "Russell 3000",
+    short: "Russell 3000",
+    intraday: false,
+    note: "The full Russell 3000 (~2,900 names), sourced from the iShares IWV holdings file — the broadest U.S. equity universe here.",
   },
 ];
 
