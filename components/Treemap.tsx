@@ -4,6 +4,7 @@ import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import type { StockRow } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { returnColor } from "@/lib/color";
+import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { fmtPct } from "@/lib/format";
 import { isNearHigh, isNearLow, matchesFilter, type HighLowFilter } from "@/lib/compute";
 import { useElementWidth } from "./useElementWidth";
@@ -24,6 +25,7 @@ export default function Treemap({
   selected,
   onSelect,
   onIndustryClick,
+  groupBy = "industry",
 }: {
   stocks: StockRow[];
   tf: TimeframeKey;
@@ -32,6 +34,7 @@ export default function Treemap({
   selected: string | null;
   onSelect: (symbol: string | null) => void;
   onIndustryClick?: (industry: string) => void;
+  groupBy?: "industry" | "sector";
 }) {
   const { ref, width } = useElementWidth<HTMLDivElement>();
   const [hover, setHover] = useState<{ row: StockRow; x: number; y: number } | null>(
@@ -40,8 +43,10 @@ export default function Treemap({
 
   const root = useMemo(() => {
     const byIndustry = new Map<string, StockRow[]>();
+    const keyOf = (s: StockRow) =>
+      groupBy === "sector" ? ETF_TO_SECTOR[s.etf]?.name ?? s.sector ?? "Other" : s.industry || "Other";
     for (const s of stocks) {
-      const k = s.industry || "Other";
+      const k = keyOf(s);
       if (!byIndustry.has(k)) byIndustry.set(k, []);
       byIndustry.get(k)!.push(s);
     }
@@ -73,7 +78,7 @@ export default function Treemap({
       .tile(treemapSquarify)(h);
 
     return h;
-  }, [stocks, width]);
+  }, [stocks, width, groupBy]);
 
   const leaves = root.leaves();
   const groups = root.descendants().filter((d) => d.depth === 1);

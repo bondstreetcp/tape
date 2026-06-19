@@ -19,7 +19,7 @@ export default function UniverseSwitcher({
   const href = (id: string) => {
     if (etf) return `/u/${id}/sector/${etf.toLowerCase()}`;
     const sub = pathname.replace(/^\/u\/[^/]+/, ""); // path after /u/<universe>
-    const keep = /^\/(screener|watchlist|market|macro|earnings|compare)(\/|$)/.test(sub) ? sub : "";
+    const keep = /^\/(screener|watchlist|market|macro|earnings|heatmap|compare)(\/|$)/.test(sub) ? sub : "";
     return `/u/${id}${keep}`;
   };
   return (

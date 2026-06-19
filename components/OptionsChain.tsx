@@ -34,6 +34,19 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
   const [loading, setLoading] = useState(true);
   const [allStrikes, setAllStrikes] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [term, setTerm] = useState<{ date: string; dte: number; atmIV: number | null }[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setTerm(null);
+    fetch(`/api/options/${encodeURIComponent(symbol)}?term=1`)
+      .then((r) => r.json())
+      .then((d) => alive && setTerm(d.points || []))
+      .catch(() => alive && setTerm([]));
+    return () => {
+      alive = false;
+    };
+  }, [symbol]);
 
   useEffect(() => {
     let alive = true;
@@ -116,6 +129,23 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
         </button>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="font-semibold text-[#aab2c5]">IV skew · {expiry ?? ""}</span>
+            <span className="flex gap-2 text-[10px]">
+              <span style={{ color: "#60a5fa" }}>● calls</span>
+              <span style={{ color: "#f472b6" }}>● puts</span>
+            </span>
+          </div>
+          <SkewChart calls={data.calls} puts={data.puts} underlying={data.underlying} />
+        </div>
+        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
+          <div className="mb-1 text-xs font-semibold text-[#aab2c5]">IV term structure · ATM by expiry</div>
+          <TermChart term={term} />
+        </div>
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
         <table className="w-full min-w-[760px] text-xs">
           <thead>
@@ -168,5 +198,76 @@ function Cell({ v, itm, bold }: { v: string; itm?: boolean; bold?: boolean }) {
     >
       {v}
     </td>
+  );
+}
+
+const CW = 500, CH = 170, ML = 32, MR = 8, MT = 8, MB = 18;
+
+function yGrid(vMin: number, vMax: number, y: (v: number) => number) {
+  return [0, 0.5, 1].map((f, i) => {
+    const v = vMin + f * (vMax - vMin);
+    return (
+      <g key={i}>
+        <line x1={ML} x2={CW - MR} y1={y(v)} y2={y(v)} stroke="#1a1f2b" />
+        <text x={ML - 4} y={y(v) + 3} textAnchor="end" fontSize={9} fill="#5b6478">{(v * 100).toFixed(0)}%</text>
+      </g>
+    );
+  });
+}
+
+function SkewChart({ calls, puts, underlying }: { calls: Opt[]; puts: Opt[]; underlying: number | null }) {
+  const all = [...calls, ...puts].filter((o) => o.iv != null && o.iv > 0);
+  if (all.length < 3) return <div className="py-6 text-center text-xs text-[#8b93a7]">No IV data for this expiry.</div>;
+  const strikes = all.map((o) => o.strike);
+  const ivs = all.map((o) => o.iv as number);
+  const sMin = Math.min(...strikes), sMax = Math.max(...strikes);
+  let vMin = Math.min(...ivs), vMax = Math.max(...ivs);
+  const pad = (vMax - vMin) * 0.1 || 0.02;
+  vMin -= pad; vMax += pad;
+  const x = (s: number) => ML + ((s - sMin) / (sMax - sMin || 1)) * (CW - ML - MR);
+  const y = (v: number) => MT + (1 - (v - vMin) / (vMax - vMin || 1)) * (CH - MT - MB);
+  const line = (arr: Opt[], color: string) => {
+    let p = "";
+    for (const o of arr.filter((o) => o.iv != null && o.iv > 0).sort((a, b) => a.strike - b.strike))
+      p += `${p ? "L" : "M"}${x(o.strike).toFixed(1)} ${y(o.iv as number).toFixed(1)}`;
+    return <path d={p} fill="none" stroke={color} strokeWidth={1.4} />;
+  };
+  return (
+    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }}>
+      {yGrid(vMin, vMax, y)}
+      {underlying != null && underlying >= sMin && underlying <= sMax && (
+        <line x1={x(underlying)} x2={x(underlying)} y1={MT} y2={CH - MB} stroke="#5b6478" strokeDasharray="3 3" />
+      )}
+      {line(calls, "#60a5fa")}
+      {line(puts, "#f472b6")}
+      <text x={CW - MR} y={CH - 5} textAnchor="end" fontSize={9} fill="#5b6478">strike →</text>
+    </svg>
+  );
+}
+
+function TermChart({ term }: { term: { date: string; dte: number; atmIV: number | null }[] | null }) {
+  if (term === null) return <div className="py-6 text-center text-xs text-[#8b93a7]">Loading term structure…</div>;
+  const pts = term.filter((p) => p.atmIV != null);
+  if (pts.length < 2) return <div className="py-6 text-center text-xs text-[#8b93a7]">Not enough expiries.</div>;
+  const dtes = pts.map((p) => p.dte), ivs = pts.map((p) => p.atmIV as number);
+  const dMin = Math.min(...dtes), dMax = Math.max(...dtes);
+  let vMin = Math.min(...ivs), vMax = Math.max(...ivs);
+  const pad = (vMax - vMin) * 0.12 || 0.02;
+  vMin -= pad; vMax += pad;
+  const x = (d: number) => ML + ((d - dMin) / (dMax - dMin || 1)) * (CW - ML - MR);
+  const y = (v: number) => MT + (1 - (v - vMin) / (vMax - vMin || 1)) * (CH - MT - MB);
+  let path = "";
+  for (const p of pts) path += `${path ? "L" : "M"}${x(p.dte).toFixed(1)} ${y(p.atmIV as number).toFixed(1)}`;
+  return (
+    <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }}>
+      {yGrid(vMin, vMax, y)}
+      <path d={path} fill="none" stroke="#60a5fa" strokeWidth={1.6} />
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(p.dte)} cy={y(p.atmIV as number)} r={2.6} fill="#60a5fa" />
+          <text x={x(p.dte)} y={CH - 5} textAnchor="middle" fontSize={8} fill="#5b6478">{p.dte}d</text>
+        </g>
+      ))}
+    </svg>
   );
 }

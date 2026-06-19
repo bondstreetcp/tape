@@ -29,6 +29,12 @@ constituent compared on one chart.
 - **Macro dashboard** (Macro tab) — the U.S. **Treasury yield curve** (now vs 1
   month / 1 year ago) plus Fed Funds, CPI & core CPI (YoY), unemployment, real
   GDP, and IG/HY credit spreads — from the free **FRED** API (no key needed).
+- **Earnings calendar** (Earnings tab) — upcoming reports across the universe +
+  watchlist, grouped by day with before-open/after-close timing and forward EPS.
+- **News** — per-ticker headlines on every stock page and a market-wide feed on
+  the Market Monitor (Yahoo).
+- **Market heatmap** (Heatmap tab) — a finviz-style treemap of the whole
+  universe grouped by sector, sized by market cap and colored by return.
 - **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
   everywhere; the treemap recolors and charts re-slice instantly.
 - **Industry line-chart comparison** — click an industry (a chip on the sector
@@ -71,7 +77,8 @@ constituent compared on one chart.
     a paid data product — wire a transcript API key to surface them here too.
   - **Options:** the full **options chain** (Yahoo) — calls / puts by strike for
     any listed expiry, with bid/ask, volume, open interest, and implied
-    volatility; ATM row highlighted, in-the-money contracts shaded.
+    volatility; ATM row highlighted, in-the-money contracts shaded. Plus an **IV
+    skew** (IV by strike) and **term-structure** (ATM IV by expiry) chart.
   - **Profile:** business summary, key facts, executives & comp, upcoming
     earnings/ex-dividend dates, and dividend history.
 

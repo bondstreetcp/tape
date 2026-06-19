@@ -39,6 +39,7 @@ export default function AppHeader({
           <nav className="flex items-center gap-0.5 text-sm">
             <NavLink href={base} label="Home" exact />
             <NavLink href={`${base}/screener`} label="Screener" />
+            <NavLink href={`${base}/heatmap`} label="Heatmap" />
             <NavLink href={`${base}/market`} label="Markets" />
             <NavLink href={`${base}/macro`} label="Macro" />
             <NavLink href={`${base}/earnings`} label="Earnings" />
