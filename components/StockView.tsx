@@ -15,6 +15,7 @@ import WatchStar from "./WatchStar";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
+const CompareChart = dynamic(() => import("./CompareChart"), { ssr: false });
 
 export default function StockView({
   universe,
@@ -33,7 +34,20 @@ export default function StockView({
 }) {
   const [tf, setTf] = useState<TimeframeKey>("1y");
   const [chartMode, setChartMode] = useState<"line" | "candles">("line");
+  const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
+  const [compareInput, setCompareInput] = useState("");
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
+
+  const addCompare = () => {
+    const s = compareInput.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+    if (s && s !== row.symbol && !compareSymbols.includes(s) && compareSymbols.length < 5) {
+      setCompareSymbols((p) => [...p, s]);
+    }
+    setCompareInput("");
+  };
+  const removeCompare = (s: string) => setCompareSymbols((p) => p.filter((x) => x !== s));
+  const comparing = compareSymbols.length > 0;
+  const CMP_COLORS = ["#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
 
   const windowChange = useMemo(() => {
     const pts = sliceSeries(intraday, daily, tf, now);
@@ -102,23 +116,57 @@ export default function StockView({
 
       {/* hero: price chart + technical indicators */}
       <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-        <div className="mb-2 flex justify-end">
-          <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5 text-xs font-medium">
-            {(["line", "candles"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setChartMode(m)}
-                className={
-                  "rounded-md px-2.5 py-1 capitalize transition-colors " +
-                  (chartMode === m ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")
-                }
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-[#8b93a7]">Compare:</span>
+            <span className="rounded-md border border-[#2a2e39] bg-[#0b0e14] px-1.5 py-0.5 font-mono text-xs" style={{ color: "#60a5fa" }}>
+              {row.symbol}
+            </span>
+            {compareSymbols.map((s, i) => (
+              <span
+                key={s}
+                className="inline-flex items-center gap-1 rounded-md border border-[#2a2e39] bg-[#0b0e14] px-1.5 py-0.5 font-mono text-xs"
+                style={{ color: CMP_COLORS[i % CMP_COLORS.length] }}
               >
-                {m}
-              </button>
+                {s}
+                <button onClick={() => removeCompare(s)} className="text-[#8b93a7] hover:text-[#e6e9f0]" title="Remove">×</button>
+              </span>
             ))}
+            <input
+              value={compareInput}
+              onChange={(e) => setCompareInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addCompare(); }}
+              placeholder="+ ticker (e.g. KO)"
+              className="w-32 rounded-md border border-[#2a2e39] bg-[#0b0e14] px-2 py-1 text-xs outline-none placeholder:text-[#5b6478] focus:border-[#3a4256]"
+            />
           </div>
+          {!comparing && (
+            <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5 text-xs font-medium">
+              {(["line", "candles"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setChartMode(m)}
+                  className={
+                    "rounded-md px-2.5 py-1 capitalize transition-colors " +
+                    (chartMode === m ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")
+                  }
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        {chartMode === "candles" ? (
+        {comparing ? (
+          <CompareChart
+            mainSymbol={row.symbol}
+            mainDaily={daily}
+            mainIntraday={intraday}
+            compareSymbols={compareSymbols}
+            tf={tf}
+            now={now}
+          />
+        ) : chartMode === "candles" ? (
           <CandleChart symbol={row.symbol} tf={tf} now={now} />
         ) : daily.length === 0 && intraday.length === 0 ? (
           <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
@@ -131,6 +179,7 @@ export default function StockView({
             tf={tf}
             now={now}
             up={(windowChange ?? 0) >= 0}
+            symbol={row.symbol}
           />
         )}
       </section>

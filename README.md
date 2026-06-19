@@ -42,8 +42,10 @@ constituent compared on one chart.
   **MACD** and **RSI** as sub-panels. Computed over the **full price history**
   then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
   Every constituent has a **dedicated stock page** (its own timeframe, a
-  **line / candlestick toggle** with OHLC readout + volume panel, and the full
-  indicator set), reachable from a treemap tile or any comparison legend.
+  **line / candlestick toggle** with OHLC readout, a **volume panel**, and the
+  full indicator set) plus a **Compare box** to overlay any other ticker(s)
+  rebased to % for relative performance (e.g. PEP vs KO) — reachable from a
+  treemap tile or any comparison legend.
 - **Company financials & analytics** — from a stock page, open a FactSet-style
   page with four tabs:
   - **Statements:** quarterly & annual income statement, balance sheet, and cash

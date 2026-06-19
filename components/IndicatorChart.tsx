@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   Bar,
@@ -74,14 +74,30 @@ export default function IndicatorChart({
   tf,
   now,
   up,
+  symbol,
 }: {
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   tf: TimeframeKey;
   now: number;
   up: boolean;
+  symbol?: string;
 }) {
   const [enabled, setEnabled] = useState<Set<IndicatorId>>(new Set(["sma50"]));
+
+  // Volume isn't in the stored close-only series — fetch OHLCV on demand.
+  const [ohlc, setOhlc] = useState<{ daily: any[]; intraday: any[] } | null>(null);
+  useEffect(() => {
+    if (!symbol) return;
+    let alive = true;
+    fetch(`/api/ohlc/${encodeURIComponent(symbol)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && d && setOhlc({ daily: d.daily || [], intraday: d.intraday || [] }))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [symbol]);
 
   const toggle = (id: IndicatorId) =>
     setEnabled((prev) => {
@@ -106,6 +122,18 @@ export default function IndicatorChart({
   }, [intraday, daily, tf, now, source]);
 
   const points = useMemo(() => source.slice(windowStart), [source, windowStart]);
+
+  const volumeData = useMemo(() => {
+    if (!ohlc) return null;
+    const src = tf === "1d" || tf === "1w" ? ohlc.intraday : ohlc.daily;
+    if (!src?.length || points.length < 2) return null;
+    const t0 = points[0].t;
+    const t1 = points[points.length - 1].t;
+    const rows = src
+      .filter((b: any) => b.t >= t0 && b.t <= t1 && b.v != null)
+      .map((b: any) => ({ t: b.t, v: b.v, vup: b.c >= b.o }));
+    return rows.length ? rows : null;
+  }, [ohlc, tf, points]);
 
   const { priceData, lineSeries } = useMemo(() => {
     const cols: Record<string, (number | null)[]> = {};
@@ -232,6 +260,35 @@ export default function IndicatorChart({
             </ComposedChart>
           </ResponsiveContainer>
 
+          {volumeData && (
+            <Panel title="Volume">
+              <ResponsiveContainer width="100%" height={84}>
+                <ComposedChart data={volumeData} margin={{ top: 4, right: 12, bottom: 0, left: 4 }}>
+                  <CartesianGrid stroke="#1f2430" vertical={false} />
+                  {xAxis}
+                  <YAxis
+                    orientation="right"
+                    tick={{ fill: "#8b93a7", fontSize: 10 }}
+                    stroke="#2a2e39"
+                    width={48}
+                    tickFormatter={fmtVolAxis}
+                  />
+                  <Tooltip
+                    isAnimationActive={false}
+                    contentStyle={tipStyle}
+                    formatter={(v: any) => [fmtVolAxis(v), "Volume"]}
+                    labelFormatter={() => ""}
+                  />
+                  <Bar dataKey="v" isAnimationActive={false}>
+                    {volumeData.map((d, i) => (
+                      <Cell key={i} fill={d.vup ? "#22c55e" : "#ef4444"} fillOpacity={0.5} />
+                    ))}
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Panel>
+          )}
+
           {macdData && (
             <Panel title="MACD (12, 26, 9)">
               <ResponsiveContainer width="100%" height={130}>
@@ -283,6 +340,15 @@ const tipStyle = {
   borderRadius: 6,
   fontSize: 12,
 };
+
+function fmtVolAxis(v: number): string {
+  if (v == null) return "";
+  const a = Math.abs(v);
+  if (a >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${(v / 1e6).toFixed(0)}M`;
+  if (a >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  return `${v}`;
+}
 
 function Chip({
   active,

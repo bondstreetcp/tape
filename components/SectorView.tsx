@@ -146,6 +146,7 @@ export default function SectorView({
           tf={tf}
           now={now}
           up={(windowChange ?? 0) >= 0}
+          symbol={meta.etf}
         />
       </section>
 
