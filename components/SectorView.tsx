@@ -1,19 +1,18 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { slugify } from "@/lib/slug";
 import type { SectorMeta } from "@/lib/sectors";
-import type { SectorAgg, SectorSeries, StockRow, StockSeries } from "@/lib/types";
+import type { SectorAgg, SectorSeries, StockRow } from "@/lib/types";
 import { TIMEFRAMES, COLOR_CLAMP, type TimeframeKey } from "@/lib/timeframes";
 import { returnColor, trendColor } from "@/lib/color";
-import { fmtPct, fmtMarketCap, fmtPrice, fmtDateTime } from "@/lib/format";
+import { fmtPct, fmtMarketCap, fmtDateTime } from "@/lib/format";
 import {
   matchesFilter,
   sliceSeries,
   seriesChangePct,
-  xyToPoints,
   isNearHigh,
   isNearLow,
   type HighLowFilter,
@@ -51,7 +50,6 @@ export default function SectorView({
   const [tf, setTf] = useState<TimeframeKey>("1d");
   const [filter, setFilter] = useState<HighLowFilter>("all");
   const [threshold, setThreshold] = useState(2);
-  const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
 
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
@@ -90,10 +88,6 @@ export default function SectorView({
     const matching = stocks.filter((s) => matchesFilter(s, filter, threshold)).length;
     return { high, low, matching };
   }, [stocks, threshold, filter]);
-
-  const selectedRow = selected
-    ? stocks.find((s) => s.symbol === selected) ?? null
-    : null;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -234,21 +228,14 @@ export default function SectorView({
           tf={tf}
           filter={filter}
           threshold={threshold}
-          selected={selected}
-          onSelect={setSelected}
+          selected={null}
+          onSelect={(sym) =>
+            sym && router.push(`/u/${universe}/stock/${encodeURIComponent(sym)}`)
+          }
           onIndustryClick={goToIndustry}
         />
       </section>
 
-      {selectedRow && (
-        <StockDetail
-          row={selectedRow}
-          tf={tf}
-          now={now}
-          universe={universe}
-          onClose={() => setSelected(null)}
-        />
-      )}
     </main>
   );
 }
@@ -269,138 +256,3 @@ function ColorLegend({ tf }: { tf: TimeframeKey }) {
   );
 }
 
-function StockDetail({
-  row,
-  tf,
-  now,
-  universe,
-  onClose,
-}: {
-  row: StockRow;
-  tf: TimeframeKey;
-  now: number;
-  universe: string;
-  onClose: () => void;
-}) {
-  const [series, setSeries] = useState<StockSeries | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setSeries(null);
-    fetch(`/api/series/${encodeURIComponent(row.symbol)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (active) {
-          setSeries(d);
-          setLoading(false);
-        }
-      })
-      .catch(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [row.symbol]);
-
-  const fullDaily = useMemo(() => (series ? xyToPoints(series.daily) : []), [series]);
-  const fullIntraday = useMemo(
-    () => (series ? xyToPoints(series.intraday) : []),
-    [series],
-  );
-  const points = useMemo(
-    () => sliceSeries(fullIntraday, fullDaily, tf, now),
-    [fullIntraday, fullDaily, tf, now],
-  );
-  const change = seriesChangePct(points);
-
-  const span = row.fiftyTwoWeekHigh - row.fiftyTwoWeekLow;
-  const pos =
-    span > 0
-      ? Math.min(100, Math.max(0, ((row.price - row.fiftyTwoWeekLow) / span) * 100))
-      : 50;
-
-  return (
-    <section className="mt-4 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}`}
-              className="font-mono text-lg font-bold hover:text-[#60a5fa]"
-            >
-              {row.symbol}
-            </Link>
-            <span className="text-sm text-[#8b93a7]">{row.name}</span>
-            <Link
-              href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}`}
-              className="rounded border border-[#2563eb]/50 bg-[#2563eb]/15 px-2 py-0.5 text-xs font-medium text-[#93c5fd] hover:bg-[#2563eb]/25"
-            >
-              full chart + indicators ↗
-            </Link>
-          </div>
-          <div className="mt-0.5 text-xs text-[#8b93a7]">
-            {row.industry} · {fmtMarketCap(row.marketCap)} cap
-          </div>
-        </div>
-        <button onClick={onClose} className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]">
-          ✕
-        </button>
-      </div>
-
-      {/* per-stock price chart with indicators */}
-      <div className="mt-3">
-        {loading ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
-            Loading {row.symbol} price history…
-          </div>
-        ) : (
-          <IndicatorChart
-            daily={fullDaily}
-            intraday={fullIntraday}
-            tf={tf}
-            now={now}
-            up={(change ?? 0) >= 0}
-          />
-        )}
-      </div>
-
-      {/* 52-week range bar */}
-      <div className="mt-4">
-        <div className="mb-1 flex items-center justify-between text-xs text-[#8b93a7]">
-          <span>52-wk low ${fmtPrice(row.fiftyTwoWeekLow)}</span>
-          <span className="font-semibold text-[#e6e9f0]">${fmtPrice(row.price)}</span>
-          <span>52-wk high ${fmtPrice(row.fiftyTwoWeekHigh)}</span>
-        </div>
-        <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[#6b7280] to-[#22c55e]">
-          <div
-            className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-white shadow"
-            style={{ left: `calc(${pos}% - 2px)` }}
-          />
-        </div>
-        <div className="mt-1 flex justify-between text-[11px] text-[#8b93a7]">
-          <span className="text-[#ef4444]">+{row.pctFromLow.toFixed(1)}% above low</span>
-          <span className="text-[#22c55e]">{row.pctFromHigh.toFixed(1)}% from high</span>
-        </div>
-      </div>
-
-      {/* timeframe returns */}
-      <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-8">
-        {TIMEFRAMES.map((t) => (
-          <div
-            key={t.key}
-            className="rounded-lg border border-[#2a2e39] bg-[#0b0e14] px-2 py-2 text-center"
-          >
-            <div className="text-[11px] text-[#8b93a7]">{t.label}</div>
-            <div
-              className="mt-0.5 text-sm font-semibold tabular-nums"
-              style={{ color: trendColor(row.returns[t.key]) }}
-            >
-              {fmtPct(row.returns[t.key], 1)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
