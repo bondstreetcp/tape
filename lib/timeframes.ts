@@ -13,6 +13,13 @@ export const TIMEFRAMES: { key: TimeframeKey; label: string }[] = [
 
 export const TIMEFRAME_KEYS: TimeframeKey[] = TIMEFRAMES.map((t) => t.key);
 
+/** Validate a string (e.g. from a `?tf=` query param) as a TimeframeKey. */
+export function parseTimeframe(v: string | null | undefined): TimeframeKey | null {
+  return v && (TIMEFRAME_KEYS as string[]).includes(v)
+    ? (v as TimeframeKey)
+    : null;
+}
+
 // Approximate trading-day lookbacks used to compute returns from a daily close series.
 export const LOOKBACK_TRADING_DAYS: Record<
   Exclude<TimeframeKey, "ytd" | "1d">,

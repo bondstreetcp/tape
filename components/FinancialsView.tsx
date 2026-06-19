@@ -142,6 +142,40 @@ export default function FinancialsView({
   const cell = (p: FinPeriod, r: RowSpec): number | null =>
     r.derived ? r.derived(p) : fld(p, r.field);
 
+  // Forward-year consensus estimate column for the income statement (annual).
+  const estPeriod = useMemo<FinPeriod | null>(() => {
+    if (stmt !== "income" || type !== "annual" || !stats) return null;
+    const lastActual = chrono[chrono.length - 1];
+    if (!lastActual) return null;
+    const estYear = new Date(lastActual.date).getFullYear() + 1;
+    const trend =
+      stats.estimates.find((e) => e.endDate && new Date(e.endDate).getFullYear() === estYear) ??
+      stats.estimates.find((e) => e.period === "0y" || e.period === "+1y") ??
+      null;
+    const lastRev = fld(lastActual, "totalRevenue");
+    const revEst =
+      trend?.revAvg ??
+      (lastRev != null && stats.revenueGrowth != null ? lastRev * (1 + stats.revenueGrowth) : null);
+    const epsEst = trend?.epsAvg ?? stats.forwardEps;
+    const lastShares = fld(lastActual, "dilutedAverageShares");
+    const niEst = epsEst != null && lastShares != null ? epsEst * lastShares : null;
+    if (revEst == null && epsEst == null) return null;
+    return {
+      date: `${estYear}-12-31`,
+      __est: 1,
+      totalRevenue: revEst,
+      netIncome: niEst,
+      netIncomeCommonStockholders: niEst,
+      dilutedEPS: epsEst,
+      dilutedAverageShares: lastShares,
+    } as FinPeriod;
+  }, [stmt, type, stats, chrono]);
+
+  const displayPeriods = useMemo(
+    () => (estPeriod ? [estPeriod, ...periods] : periods),
+    [estPeriod, periods],
+  );
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="mb-4">
@@ -239,9 +273,15 @@ export default function FinancialsView({
                     <th className="sticky left-0 z-10 bg-[#131722] px-4 py-3 text-left font-medium">
                       {STATEMENTS[stmt].label}
                     </th>
-                    {periods.map((p) => (
-                      <th key={p.date} className="px-4 py-3 text-right font-medium tabular-nums">
-                        {periodLabel(p.date, type)}
+                    {displayPeriods.map((p) => (
+                      <th
+                        key={p.date}
+                        className={
+                          "px-4 py-3 text-right font-medium tabular-nums " +
+                          (p.__est ? "text-[#60a5fa]" : "")
+                        }
+                      >
+                        {p.__est ? `${periodLabel(p.date, type)}E` : periodLabel(p.date, type)}
                       </th>
                     ))}
                   </tr>
@@ -264,7 +304,7 @@ export default function FinancialsView({
                       >
                         {r.label}
                       </td>
-                      {periods.map((p) => {
+                      {displayPeriods.map((p) => {
                         const v = cell(p, r);
                         const neg = v != null && v < 0 && r.kind !== "pct";
                         return (
@@ -273,7 +313,8 @@ export default function FinancialsView({
                             className={
                               "px-4 py-2 text-right tabular-nums " +
                               (r.bold ? "font-semibold " : "") +
-                              (neg ? "text-[#ef4444]" : "")
+                              (p.__est ? "bg-[#10182a] text-[#93c5fd] " : "") +
+                              (neg && !p.__est ? "text-[#ef4444]" : "")
                             }
                           >
                             {fmtCell(v, r.kind)}
@@ -289,6 +330,14 @@ export default function FinancialsView({
           <p className="mt-3 text-[11px] text-[#8b93a7]">
             Source: Yahoo Finance fundamentals · {type} · most recent period on the
             left · fetched live and cached for 24h.
+            {estPeriod && (
+              <>
+                {" · "}
+                <span className="text-[#60a5fa]">FY…E</span> = consensus estimate
+                (revenue from consensus growth, EPS forward, net income ≈ EPS ×
+                shares); other lines aren&apos;t consensus-estimated.
+              </>
+            )}
           </p>
         </>
       )}

@@ -33,7 +33,8 @@ constituent compared on one chart.
 - **Company financials & analytics** — from a stock page, open a FactSet-style
   page with four tabs:
   - **Statements:** quarterly & annual income statement, balance sheet, and cash
-    flow (with margins and a revenue/net-income trend).
+    flow (with margins and a revenue/net-income trend). The annual income
+    statement adds a forward-year **FY…E consensus-estimate** column.
   - **Estimates & Stats:** analyst **consensus** (rating distribution, mean
     target & upside, forward EPS, est. earnings/revenue growth), **earnings
     surprise** history, **recent analyst actions** (upgrades/downgrades + target

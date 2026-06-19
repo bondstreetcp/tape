@@ -2,11 +2,11 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { slugify } from "@/lib/slug";
 import type { SectorMeta } from "@/lib/sectors";
 import type { SectorAgg, SectorSeries, StockRow } from "@/lib/types";
-import { TIMEFRAMES, COLOR_CLAMP, type TimeframeKey } from "@/lib/timeframes";
+import { TIMEFRAMES, COLOR_CLAMP, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { returnColor, trendColor } from "@/lib/color";
 import { fmtPct, fmtMarketCap, fmtDateTime } from "@/lib/format";
 import {
@@ -47,7 +47,10 @@ export default function SectorView({
   generatedAt: string;
   universe: string;
 }) {
-  const [tf, setTf] = useState<TimeframeKey>("1d");
+  const searchParams = useSearchParams();
+  const [tf, setTf] = useState<TimeframeKey>(
+    () => parseTimeframe(searchParams.get("tf")) ?? "1d",
+  );
   const [filter, setFilter] = useState<HighLowFilter>("all");
   const [threshold, setThreshold] = useState(2);
   const router = useRouter();
@@ -68,7 +71,9 @@ export default function SectorView({
   }, [stocks]);
 
   const goToIndustry = (industry: string) =>
-    router.push(`/u/${universe}/sector/${meta.etf.toLowerCase()}/${slugify(industry)}`);
+    router.push(
+      `/u/${universe}/sector/${meta.etf.toLowerCase()}/${slugify(industry)}?tf=${tf}`,
+    );
 
   const chartPoints = useMemo(() => {
     if (!series) return [];
@@ -154,7 +159,7 @@ export default function SectorView({
             </span>
           </div>
           <Link
-            href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/compare`}
+            href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/compare?tf=${tf}`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
           >
             ⇄ Compare sub-industries
@@ -164,7 +169,7 @@ export default function SectorView({
           {industries.map((ind) => (
             <Link
               key={ind.slug}
-              href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/${ind.slug}`}
+              href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/${ind.slug}?tf=${tf}`}
               className="group inline-flex items-center gap-2 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm transition-colors hover:border-[#3a4256] hover:bg-[#1a1f2e]"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#60a5fa]">

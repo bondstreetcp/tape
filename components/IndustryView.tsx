@@ -2,9 +2,10 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { SectorMeta } from "@/lib/sectors";
 import type { SectorSeries, StockRow, StockSeries } from "@/lib/types";
-import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { buildComparison, xyToPoints, isNearHigh, isNearLow } from "@/lib/compute";
 import { colorFor, ETF_LINE_COLOR } from "@/lib/palette";
 import { trendColor } from "@/lib/color";
@@ -33,7 +34,10 @@ export default function IndustryView({
   generatedAt: string;
   universe: string;
 }) {
-  const [tf, setTf] = useState<TimeframeKey>("3m");
+  const searchParams = useSearchParams();
+  const [tf, setTf] = useState<TimeframeKey>(
+    () => parseTimeframe(searchParams.get("tf")) ?? "3m",
+  );
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
 
@@ -102,13 +106,19 @@ export default function IndustryView({
       {/* breadcrumb + header */}
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
+          <Link
+            href={`/u/${universe}/sector/${meta.etf.toLowerCase()}?tf=${tf}`}
+            className="mb-1.5 inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+          >
+            ← Back to {meta.name}
+          </Link>
           <div className="flex items-center gap-2 text-sm text-[#8b93a7]">
             <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
             </Link>
             <span>/</span>
             <Link
-              href={`/u/${universe}/sector/${meta.etf.toLowerCase()}`}
+              href={`/u/${universe}/sector/${meta.etf.toLowerCase()}?tf=${tf}`}
               className="hover:text-[#e6e9f0]"
             >
               {meta.etf} {meta.name}
