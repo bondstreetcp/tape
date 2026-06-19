@@ -186,6 +186,7 @@ export default function IndustryView({
                 onToggle={() => toggle(r.symbol)}
                 onHover={() => setHighlight(r.symbol)}
                 onLeave={() => setHighlight(null)}
+                href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`}
               />
             ))}
           </div>
@@ -209,6 +210,7 @@ function LegendRow({
   onHover,
   onLeave,
   isRef,
+  href,
 }: {
   symbol: string;
   name: string;
@@ -220,35 +222,49 @@ function LegendRow({
   onHover: () => void;
   onLeave: () => void;
   isRef?: boolean;
+  href?: string;
 }) {
   return (
-    <button
-      onClick={onToggle}
+    <div
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       className={
-        "flex w-full items-center gap-2 border-b border-[#1f2430] px-3 py-2 text-left transition-colors hover:bg-[#1a1f2e] " +
-        (hidden ? "opacity-40" : "") +
-        (isRef ? " bg-[#0f1420]" : "")
+        "flex items-center gap-2 border-b border-[#1f2430] px-3 py-2 transition-colors hover:bg-[#1a1f2e] " +
+        (hidden ? "opacity-40 " : "") +
+        (isRef ? "bg-[#0f1420]" : "")
       }
     >
-      <span
-        className="h-2.5 w-2.5 shrink-0 rounded-sm"
-        style={{ background: color, outline: isRef ? "1px dashed #8b93a7" : "none" }}
-      />
-      <span className="w-12 shrink-0 font-mono text-sm font-semibold">{symbol}</span>
-      <span className="min-w-0 flex-1 truncate text-xs text-[#8b93a7]">{name}</span>
-      {near && (
-        <span className={near === "high" ? "text-[#22c55e]" : "text-[#ef4444]"}>
-          {near === "high" ? "▲" : "▼"}
-        </span>
-      )}
+      <button
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+      >
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-sm"
+          style={{ background: color, outline: isRef ? "1px dashed #8b93a7" : "none" }}
+        />
+        <span className="w-12 shrink-0 font-mono text-sm font-semibold">{symbol}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-[#8b93a7]">{name}</span>
+        {near && (
+          <span className={near === "high" ? "text-[#22c55e]" : "text-[#ef4444]"}>
+            {near === "high" ? "▲" : "▼"}
+          </span>
+        )}
+      </button>
       <span
         className="w-16 shrink-0 text-right text-sm tabular-nums"
         style={{ color: trendColor(end) }}
       >
         {fmtPct(end, 1)}
       </span>
-    </button>
+      {href && (
+        <Link
+          href={href}
+          className="shrink-0 text-[#8b93a7] hover:text-[#60a5fa]"
+          title="Open full chart + indicators"
+        >
+          ↗
+        </Link>
+      )}
+    </div>
   );
 }

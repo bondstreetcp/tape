@@ -1,0 +1,154 @@
+"use client";
+import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import type { SeriesPoint, StockRow } from "@/lib/types";
+import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { sliceSeries, seriesChangePct } from "@/lib/compute";
+import { slugify } from "@/lib/slug";
+import { trendColor } from "@/lib/color";
+import { fmtPct, fmtPrice, fmtMarketCap, fmtDateTime } from "@/lib/format";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
+import TimeframeSelector from "./TimeframeSelector";
+import UniverseSwitcher from "./UniverseSwitcher";
+
+const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
+
+export default function StockView({
+  universe,
+  row,
+  sectorName,
+  daily,
+  intraday,
+  generatedAt,
+}: {
+  universe: string;
+  row: StockRow;
+  sectorName: string;
+  daily: SeriesPoint[];
+  intraday: SeriesPoint[];
+  generatedAt: string;
+}) {
+  const [tf, setTf] = useState<TimeframeKey>("1y");
+  const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
+
+  const windowChange = useMemo(() => {
+    const pts = sliceSeries(intraday, daily, tf, now);
+    return seriesChangePct(pts);
+  }, [intraday, daily, tf, now]);
+
+  const span = row.fiftyTwoWeekHigh - row.fiftyTwoWeekLow;
+  const pos =
+    span > 0
+      ? Math.min(100, Math.max(0, ((row.price - row.fiftyTwoWeekLow) / span) * 100))
+      : 50;
+
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-[#8b93a7]">
+            <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
+              {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
+            </Link>
+            <span>/</span>
+            <Link
+              href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
+              className="hover:text-[#e6e9f0]"
+            >
+              {row.etf} {sectorName}
+            </Link>
+            <span>/</span>
+            <Link
+              href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
+              className="hover:text-[#e6e9f0]"
+            >
+              {row.industry}
+            </Link>
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline gap-3">
+            <h1 className="font-mono text-2xl font-bold">{row.symbol}</h1>
+            <span className="text-lg text-[#aab2c5]">{row.name}</span>
+            <span className="font-mono text-xl tabular-nums">${fmtPrice(row.price)}</span>
+            <span
+              className="text-lg font-semibold tabular-nums"
+              style={{ color: trendColor(windowChange ?? row.returns[tf]) }}
+            >
+              {fmtPct(windowChange ?? row.returns[tf])}{" "}
+              <span className="text-xs font-normal text-[#8b93a7]">
+                {TIMEFRAMES.find((t) => t.key === tf)?.label}
+              </span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-[#8b93a7]">
+            {fmtMarketCap(row.marketCap)} cap · as of {fmtDateTime(generatedAt)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <UniverseSwitcher current={universe} etf={row.etf} />
+          <TimeframeSelector value={tf} onChange={setTf} />
+        </div>
+      </div>
+
+      {/* hero: price chart + technical indicators */}
+      <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+        {daily.length === 0 && intraday.length === 0 ? (
+          <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
+            No price history for {row.symbol}.
+          </div>
+        ) : (
+          <IndicatorChart
+            daily={daily}
+            intraday={intraday}
+            tf={tf}
+            now={now}
+            up={(windowChange ?? 0) >= 0}
+          />
+        )}
+      </section>
+
+      {/* 52-week range */}
+      <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+        <div className="mb-1 flex items-center justify-between text-xs text-[#8b93a7]">
+          <span>52-wk low ${fmtPrice(row.fiftyTwoWeekLow)}</span>
+          <span className="font-semibold text-[#e6e9f0]">${fmtPrice(row.price)}</span>
+          <span>52-wk high ${fmtPrice(row.fiftyTwoWeekHigh)}</span>
+        </div>
+        <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[#6b7280] to-[#22c55e]">
+          <div
+            className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-white shadow"
+            style={{ left: `calc(${pos}% - 2px)` }}
+          />
+        </div>
+        <div className="mt-1 flex justify-between text-[11px] text-[#8b93a7]">
+          <span className="text-[#ef4444]">+{row.pctFromLow.toFixed(1)}% above low</span>
+          <span className="text-[#22c55e]">{row.pctFromHigh.toFixed(1)}% from high</span>
+        </div>
+      </section>
+
+      {/* timeframe returns */}
+      <section className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {TIMEFRAMES.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTf(t.key)}
+            className={
+              "rounded-lg border px-2 py-2 text-center transition-colors " +
+              (t.key === tf
+                ? "border-[#2563eb] bg-[#2563eb]/15"
+                : "border-[#2a2e39] bg-[#0b0e14] hover:border-[#3a4256]")
+            }
+          >
+            <div className="text-[11px] text-[#8b93a7]">{t.label}</div>
+            <div
+              className="mt-0.5 text-sm font-semibold tabular-nums"
+              style={{ color: trendColor(row.returns[t.key]) }}
+            >
+              {fmtPct(row.returns[t.key], 1)}
+            </div>
+          </button>
+        ))}
+      </section>
+    </main>
+  );
+}

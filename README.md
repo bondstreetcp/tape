@@ -28,6 +28,8 @@ constituent compared on one chart.
   Bollinger Bands** as overlays on any single-stock or sector-ETF chart, plus
   **MACD** and **RSI** as sub-panels. Computed over the **full price history**
   then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
+  Every constituent has a **dedicated stock page** (its own timeframe + the full
+  indicator set), reachable from a treemap tile or any comparison legend.
 - **Sector & sub-industry comparison** — from the home page, compare the SPDR
   sectors head-to-head (XLK vs XLY vs XLI …); from any sector, compare its
   sub-industries as cap-weighted indexes rebased to % (with the whole sector

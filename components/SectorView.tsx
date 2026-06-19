@@ -245,6 +245,7 @@ export default function SectorView({
           row={selectedRow}
           tf={tf}
           now={now}
+          universe={universe}
           onClose={() => setSelected(null)}
         />
       )}
@@ -272,11 +273,13 @@ function StockDetail({
   row,
   tf,
   now,
+  universe,
   onClose,
 }: {
   row: StockRow;
   tf: TimeframeKey;
   now: number;
+  universe: string;
   onClose: () => void;
 }) {
   const [series, setSeries] = useState<StockSeries | null>(null);
@@ -321,9 +324,20 @@ function StockDetail({
     <section className="mt-4 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-lg font-bold">{row.symbol}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}`}
+              className="font-mono text-lg font-bold hover:text-[#60a5fa]"
+            >
+              {row.symbol}
+            </Link>
             <span className="text-sm text-[#8b93a7]">{row.name}</span>
+            <Link
+              href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}`}
+              className="rounded border border-[#2563eb]/50 bg-[#2563eb]/15 px-2 py-0.5 text-xs font-medium text-[#93c5fd] hover:bg-[#2563eb]/25"
+            >
+              full chart + indicators ↗
+            </Link>
           </div>
           <div className="mt-0.5 text-xs text-[#8b93a7]">
             {row.industry} · {fmtMarketCap(row.marketCap)} cap
