@@ -88,6 +88,17 @@ npm run dev                 # http://localhost:3000  → redirects to /u/sp500
 
 > Testing quickly? `LIMIT=60 npm run refresh-data` builds a subset of the union.
 
+### Optional: real Russell 3000 (iShares IWV)
+
+The broad universe defaults to the **S&P 1500** stand-in. To use the *actual*
+Russell 3000, download the holdings from the
+[iShares IWV fund page](https://www.ishares.com/us/products/239714/ishares-russell-3000-etf)
+(**Holdings → Detailed Holdings and Analytics → Download**), save the file as
+`data/iwv-holdings.csv`, then re-run `npm run fetch-constituents` followed by
+`npm run refresh-data`. A `russell3000` universe is built from that file
+(iShares blocks automated fetching, so this one CSV is grabbed by hand; it
+changes only quarterly). See `scripts/iwv.ts`.
+
 ## How data works
 
 All prices come from Yahoo Finance via [`yahoo-finance2`](https://github.com/gadicc/node-yahoo-finance2)
