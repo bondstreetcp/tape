@@ -83,6 +83,12 @@ export default function StockView({
           <p className="mt-1 text-xs text-[#8b93a7]">
             {fmtMarketCap(row.marketCap)} cap · as of {fmtDateTime(generatedAt)}
           </p>
+          <Link
+            href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}/financials`}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+          >
+            ▦ Quarterly &amp; annual financials →
+          </Link>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <UniverseSwitcher current={universe} etf={row.etf} />
