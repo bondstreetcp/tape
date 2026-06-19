@@ -4,6 +4,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { getFinancials } from "@/lib/financials";
 import { getCompanyStats } from "@/lib/companyStats";
+import { getCompanyProfile } from "@/lib/companyProfile";
 import FinancialsView from "@/components/FinancialsView";
 
 // Financials change quarterly — fetch live from Yahoo and cache each company for 24h.
@@ -22,9 +23,10 @@ export default async function FinancialsPage({
   const row = snapshot?.stocks.find((s) => s.symbol === SYM) ?? null;
   const meta = row ? ETF_TO_SECTOR[row.etf] : null;
 
-  const [financials, stats] = await Promise.all([
+  const [financials, stats, profile] = await Promise.all([
     getFinancials(SYM),
     getCompanyStats(SYM),
+    getCompanyProfile(SYM),
   ]);
 
   return (
@@ -36,6 +38,7 @@ export default async function FinancialsPage({
       sectorName={meta?.name ?? row?.sector ?? null}
       financials={financials}
       stats={stats}
+      profile={profile}
     />
   );
 }

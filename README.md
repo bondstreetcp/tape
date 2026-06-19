@@ -31,14 +31,18 @@ constituent compared on one chart.
   Every constituent has a **dedicated stock page** (its own timeframe + the full
   indicator set), reachable from a treemap tile or any comparison legend.
 - **Company financials & analytics** — from a stock page, open a FactSet-style
-  page with two tabs:
+  page with four tabs:
   - **Statements:** quarterly & annual income statement, balance sheet, and cash
     flow (with margins and a revenue/net-income trend).
   - **Estimates & Stats:** analyst **consensus** (rating distribution, mean
     target & upside, forward EPS, est. earnings/revenue growth), **earnings
-    surprise** history, **valuation** (P/E, PEG, P/S, P/B, EV/EBITDA, beta),
-    **profitability** (margins, ROE/ROA), **financial health** (debt/equity,
-    liquidity, dividends), and **ownership/short interest**.
+    surprise** history, **recent analyst actions** (upgrades/downgrades + target
+    changes), **valuation** (P/E, PEG, P/S, P/B, EV/EBITDA, beta),
+    **profitability** (margins, ROE/ROA), **financial health**, and short interest.
+  - **Ownership:** top institutional holders (% held, value, change) and recent
+    insider transactions.
+  - **Profile:** business summary, key facts, executives & comp, upcoming
+    earnings/ex-dividend dates, and dividend history.
 
   All fetched live from Yahoo on demand and cached 24h (not baked into the snapshot).
 - **Sector & sub-industry comparison** — from the home page, compare the SPDR
