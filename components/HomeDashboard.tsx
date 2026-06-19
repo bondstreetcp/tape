@@ -10,6 +10,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
+import SearchBox from "./SearchBox";
 
 export default function HomeDashboard({
   snapshot,
@@ -20,6 +21,11 @@ export default function HomeDashboard({
 }) {
   const [tf, setTf] = useState<TimeframeKey>("1d");
   const [threshold, setThreshold] = useState(2);
+
+  const searchList = useMemo(
+    () => snapshot.stocks.map((s) => ({ symbol: s.symbol, name: s.name })),
+    [snapshot],
+  );
 
   const sectorStats = useMemo(() => {
     return snapshot.sectors
@@ -63,14 +69,29 @@ export default function HomeDashboard({
               {breadth.total} constituents · {snapshot.sectors.length} sectors · as of{" "}
               {fmtDateTime(snapshot.generatedAt)}
             </p>
-            <Link
-              href={`/u/${universe}/compare`}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
-            >
-              ⇄ Compare sectors (XLK vs XLY vs XLI …)
-            </Link>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link
+                href={`/u/${universe}/screener`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+              >
+                ⊞ Screener
+              </Link>
+              <Link
+                href={`/u/${universe}/compare`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+              >
+                ⇄ Compare sectors
+              </Link>
+              <Link
+                href={`/u/${universe}/watchlist`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256]"
+              >
+                ★ Watchlist
+              </Link>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <SearchBox universe={universe} stocks={searchList} />
             <UniverseSwitcher current={universe} />
             <TimeframeSelector value={tf} onChange={setTf} />
           </div>
@@ -80,16 +101,12 @@ export default function HomeDashboard({
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <Stat label="Advancing" value={`${breadth.up}`} color="#22c55e" />
             <Stat label="Declining" value={`${breadth.down}`} color="#ef4444" />
-            <Stat
-              label="Near 52-wk high"
-              value={`${breadth.nearHigh}`}
-              color="#22c55e"
-            />
-            <Stat
-              label="Near 52-wk low"
-              value={`${breadth.nearLow}`}
-              color="#ef4444"
-            />
+            <Link href={`/u/${universe}/screener?filter=high`} className="hover:underline" title="Open in screener">
+              <Stat label="Near 52-wk high" value={`${breadth.nearHigh}`} color="#22c55e" />
+            </Link>
+            <Link href={`/u/${universe}/screener?filter=low`} className="hover:underline" title="Open in screener">
+              <Stat label="Near 52-wk low" value={`${breadth.nearLow}`} color="#ef4444" />
+            </Link>
           </div>
           <ThresholdSelector value={threshold} onChange={setThreshold} />
         </div>

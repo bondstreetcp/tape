@@ -15,6 +15,11 @@ export interface StockRow {
   fiftyTwoWeekLow: number;
   pctFromHigh: number; // (price/high - 1) * 100, <= 0
   pctFromLow: number; // (price/low - 1) * 100, >= 0
+  // valuation snapshot (from Yahoo quote; optional so older snapshots still load)
+  trailingPE?: number | null;
+  forwardPE?: number | null;
+  priceToBook?: number | null;
+  dividendYield?: number | null; // fraction, e.g. 0.012 = 1.2%
 }
 
 export interface SectorAgg {

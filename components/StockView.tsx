@@ -11,6 +11,7 @@ import { fmtPct, fmtPrice, fmtMarketCap, fmtDateTime } from "@/lib/format";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
+import WatchStar from "./WatchStar";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 
@@ -91,6 +92,7 @@ export default function StockView({
           </Link>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <WatchStar symbol={row.symbol} withLabel />
           <UniverseSwitcher current={universe} etf={row.etf} />
           <TimeframeSelector value={tf} onChange={setTf} />
         </div>

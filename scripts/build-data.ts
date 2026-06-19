@@ -72,7 +72,14 @@ interface Metric {
   low: number;
   pctFromHigh: number;
   pctFromLow: number;
+  trailingPE: number | null;
+  forwardPE: number | null;
+  priceToBook: number | null;
+  dividendYield: number | null;
 }
+
+const qnum = (v: any): number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
 
 function chunk<T>(arr: T[], n: number): T[][] {
   const out: T[][] = [];
@@ -295,6 +302,10 @@ async function main() {
       low,
       pctFromHigh: high ? (price / high - 1) * 100 : 0,
       pctFromLow: low ? (price / low - 1) * 100 : 0,
+      trailingPE: qnum(q?.trailingPE),
+      forwardPE: qnum(q?.forwardPE),
+      priceToBook: qnum(q?.priceToBook),
+      dividendYield: qnum(q?.trailingAnnualDividendYield),
     });
 
     if (++done % 100 === 0) console.log(`  ${done}/${allSymbols.length}`);
@@ -358,6 +369,10 @@ async function main() {
         fiftyTwoWeekLow: m.low,
         pctFromHigh: m.pctFromHigh,
         pctFromLow: m.pctFromLow,
+        trailingPE: m.trailingPE,
+        forwardPE: m.forwardPE,
+        priceToBook: m.priceToBook,
+        dividendYield: m.dividendYield,
       });
     }
     const sectors: SectorAgg[] = SECTORS.map((s) => {
