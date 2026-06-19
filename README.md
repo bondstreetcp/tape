@@ -45,6 +45,9 @@ constituent compared on one chart.
     surprise** history, **recent analyst actions** (upgrades/downgrades + target
     changes), **valuation** (P/E, PEG, P/S, P/B, EV/EBITDA, beta),
     **profitability** (margins, ROE/ROA), **financial health**, and short interest.
+  - **Peers:** the company vs its sub-industry peers on valuation (P/E, fwd P/E,
+    P/B, yield), returns, and market cap — company highlighted, with a peer
+    median; sortable, straight from the snapshot (no extra fetching).
   - **Ownership:** top institutional holders (% held, value, change) and recent
     insider transactions.
   - **Profile:** business summary, key facts, executives & comp, upcoming

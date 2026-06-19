@@ -4,9 +4,11 @@ import Link from "next/link";
 import type { FinPeriod, Financials } from "@/lib/financials";
 import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import type { StockRow } from "@/lib/types";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
+import PeerComparison from "./PeerComparison";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
 interface RowSpec {
@@ -118,6 +120,8 @@ export default function FinancialsView({
   financials,
   stats,
   profile,
+  peers,
+  peerGroup,
 }: {
   universe: string;
   symbol: string;
@@ -127,9 +131,11 @@ export default function FinancialsView({
   financials: Financials;
   stats: CompanyStatsData | null;
   profile: CompanyProfile | null;
+  peers: StockRow[];
+  peerGroup: string | null;
 }) {
   const [view, setView] = useState<
-    "statements" | "stats" | "ownership" | "profile"
+    "statements" | "stats" | "ownership" | "profile" | "peers"
   >("statements");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
@@ -215,18 +221,21 @@ export default function FinancialsView({
           options={[
             { key: "statements", label: "Statements" },
             { key: "stats", label: "Estimates & Stats" },
+            { key: "peers", label: "Peers" },
             { key: "ownership", label: "Ownership" },
             { key: "profile", label: "Profile" },
           ]}
           value={view}
           onChange={(v) =>
-            setView(v as "statements" | "stats" | "ownership" | "profile")
+            setView(v as "statements" | "stats" | "ownership" | "profile" | "peers")
           }
         />
       </div>
 
       {view === "stats" ? (
         <CompanyStats stats={stats} />
+      ) : view === "peers" ? (
+        <PeerComparison universe={universe} symbol={symbol} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
         <OwnershipPanel profile={profile} />
       ) : view === "profile" ? (

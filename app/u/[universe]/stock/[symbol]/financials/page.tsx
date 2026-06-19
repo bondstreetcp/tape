@@ -6,6 +6,7 @@ import { getFinancials } from "@/lib/financials";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getCompanyProfile } from "@/lib/companyProfile";
 import FinancialsView from "@/components/FinancialsView";
+import type { StockRow } from "@/lib/types";
 
 // Financials change quarterly — fetch live from Yahoo and cache each company for 24h.
 export const revalidate = 86400;
@@ -23,6 +24,26 @@ export default async function FinancialsPage({
   const row = snapshot?.stocks.find((s) => s.symbol === SYM) ?? null;
   const meta = row ? ETF_TO_SECTOR[row.etf] : null;
 
+  // Peers from the snapshot (no extra fetching): same sub-industry, falling back
+  // to the whole sector when the sub-industry is too small.
+  let peers: StockRow[] = [];
+  let peerGroup: string | null = null;
+  if (row && snapshot) {
+    const sub = snapshot.stocks.filter(
+      (s) => s.etf === row.etf && s.industry === row.industry,
+    );
+    if (sub.length >= 4) {
+      peers = sub;
+      peerGroup = row.industry;
+    } else {
+      peers = snapshot.stocks.filter((s) => s.etf === row.etf);
+      peerGroup = meta?.name ?? row.sector;
+    }
+    peers = [...peers]
+      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+      .slice(0, 30);
+  }
+
   const [financials, stats, profile] = await Promise.all([
     getFinancials(SYM),
     getCompanyStats(SYM),
@@ -39,6 +60,8 @@ export default async function FinancialsPage({
       financials={financials}
       stats={stats}
       profile={profile}
+      peers={peers}
+      peerGroup={peerGroup}
     />
   );
 }
