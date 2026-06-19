@@ -56,6 +56,10 @@ constituent compared on one chart.
     change) with an ownership breakdown, plus **insider activity from SEC EDGAR
     Form 4s** — a Bloomberg-style price chart with green/red insider buy/sell
     markers and an infinite-scroll transaction history back to ~2003.
+  - **Filings & Calls:** every material SEC filing (10-K/Q, 8-K, proxy, …) from
+    EDGAR, with **earnings releases** (8-K item 2.02) highlighted and readable
+    **inline**. Full earnings-call / investor-day / conference *transcripts* are
+    a paid data product — wire a transcript API key to surface them here too.
   - **Profile:** business summary, key facts, executives & comp, upcoming
     earnings/ex-dividend dates, and dividend history.
 

@@ -9,6 +9,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
+import FilingsView from "./FilingsView";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
 interface RowSpec {
@@ -135,7 +136,7 @@ export default function FinancialsView({
   peerGroup: string | null;
 }) {
   const [view, setView] = useState<
-    "statements" | "stats" | "ownership" | "profile" | "peers"
+    "statements" | "stats" | "ownership" | "profile" | "peers" | "filings"
   >("statements");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
@@ -143,11 +144,11 @@ export default function FinancialsView({
   // Deep-link the active tab via ?tab= (e.g. shareable ownership/insider view).
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t && ["statements", "stats", "peers", "ownership", "profile"].includes(t)) {
-      setView(t as "statements" | "stats" | "ownership" | "profile" | "peers");
+    if (t && ["statements", "stats", "peers", "ownership", "profile", "filings"].includes(t)) {
+      setView(t as "statements" | "stats" | "ownership" | "profile" | "peers" | "filings");
     }
   }, []);
-  const changeView = (v: "statements" | "stats" | "ownership" | "profile" | "peers") => {
+  const changeView = (v: "statements" | "stats" | "ownership" | "profile" | "peers" | "filings") => {
     setView(v);
     const u = new URL(window.location.href);
     u.searchParams.set("tab", v);
@@ -263,11 +264,12 @@ export default function FinancialsView({
             { key: "stats", label: "Estimates & Stats" },
             { key: "peers", label: "Peers" },
             { key: "ownership", label: "Ownership" },
+            { key: "filings", label: "Filings & Calls" },
             { key: "profile", label: "Profile" },
           ]}
           value={view}
           onChange={(v) =>
-            changeView(v as "statements" | "stats" | "ownership" | "profile" | "peers")
+            changeView(v as "statements" | "stats" | "ownership" | "profile" | "peers" | "filings")
           }
         />
       </div>
@@ -278,6 +280,8 @@ export default function FinancialsView({
         <PeerComparison universe={universe} symbol={symbol} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
         <OwnershipPanel profile={profile} symbol={symbol} />
+      ) : view === "filings" ? (
+        <FilingsView symbol={symbol} />
       ) : view === "profile" ? (
         <ProfilePanel profile={profile} />
       ) : !hasData ? (
