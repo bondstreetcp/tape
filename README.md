@@ -73,11 +73,17 @@ and writes static JSON:
 The app only reads those files, so browsing is instant and never hits Yahoo's
 rate limits. Re-run `npm run refresh-data` after market close to refresh.
 
-### Keeping it fresh automatically
+### Automatic daily refresh (deployed)
 
-Schedule the refresh after each US market close — e.g. a Windows Task Scheduler
-job running `npm run refresh-data` around 4:30pm ET on weekdays. The running app
-picks up new data on the next page load.
+`.github/workflows/refresh-data.yml` runs the fetch on GitHub's runners every
+weekday at 22:00 UTC (after the US close), commits the updated data, and pushes —
+which makes Vercel auto-redeploy with fresh prices. No secrets or extra services
+needed; it uses the repo's built-in token. Trigger it manually anytime from the
+repo's **Actions → Refresh market data → Run workflow**.
+
+> The fetch runs on GitHub Actions (not Vercel) because Vercel's serverless
+> functions have a strict time limit and a read-only filesystem, while the full
+> ~1,650-symbol pull takes several minutes and must write the data files.
 
 ## Project layout
 
