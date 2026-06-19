@@ -26,6 +26,9 @@ constituent compared on one chart.
 - **Market monitor** (Markets tab) — a cross-asset board: major **equity
   indices, Treasury yields, FX, commodities, and crypto** with price and %
   change, color-coded, refreshed on a short cache window.
+- **Macro dashboard** (Macro tab) — the U.S. **Treasury yield curve** (now vs 1
+  month / 1 year ago) plus Fed Funds, CPI & core CPI (YoY), unemployment, real
+  GDP, and IG/HY credit spreads — from the free **FRED** API (no key needed).
 - **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
   everywhere; the treemap recolors and charts re-slice instantly.
 - **Industry line-chart comparison** — click an industry (a chip on the sector
