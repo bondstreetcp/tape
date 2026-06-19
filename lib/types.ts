@@ -20,6 +20,8 @@ export interface StockRow {
   forwardPE?: number | null;
   priceToBook?: number | null;
   dividendYield?: number | null; // fraction, e.g. 0.012 = 1.2%
+  fiftyDayAverage?: number | null;
+  twoHundredDayAverage?: number | null;
 }
 
 export interface SectorAgg {

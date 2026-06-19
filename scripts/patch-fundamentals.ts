@@ -60,6 +60,8 @@ async function main() {
       st.forwardPE = qnum(q.forwardPE);
       st.priceToBook = qnum(q.priceToBook);
       st.dividendYield = qnum(q.trailingAnnualDividendYield);
+      st.fiftyDayAverage = qnum(q.fiftyDayAverage);
+      st.twoHundredDayAverage = qnum(q.twoHundredDayAverage);
       patched++;
     }
     await fs.writeFile(

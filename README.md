@@ -20,7 +20,9 @@ constituent compared on one chart.
   52-week proximity, market cap, P/E, forward P/E, P/B, dividend yield, and
   sector. Quick presets for stocks near their 52-week high/low.
 - **Ticker search** to jump straight to any stock, and a **watchlist** (★,
-  saved in your browser) you can fill from the screener or any stock page.
+  saved in your browser) you can fill from the screener or any stock page. The
+  watchlist shows **signal badges** per name — at/near 52-week high or low,
+  above/below the 200-day MA, and golden/death cross — plus a summary count.
 - **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
   everywhere; the treemap recolors and charts re-slice instantly.
 - **Industry line-chart comparison** — click an industry (a chip on the sector

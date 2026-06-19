@@ -10,6 +10,7 @@ import { trendColor } from "@/lib/color";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { useWatchlist } from "@/lib/watchlist";
+import { computeSignals, TONE_BG, TONE_FG } from "@/lib/signals";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 
@@ -46,6 +47,18 @@ export default function WatchlistView({
 
   const missing = list.length - rows.length;
 
+  const summary = useMemo(() => {
+    let high = 0, low = 0, below200 = 0, near200 = 0;
+    for (const s of rows) {
+      const sigs = computeSignals(s);
+      if (sigs.some((x) => x.key === "high")) high++;
+      if (sigs.some((x) => x.key === "low")) low++;
+      if (sigs.some((x) => x.key === "ma200" && x.tone === "down")) below200++;
+      if (sigs.some((x) => x.key === "cross")) near200++;
+    }
+    return { high, low, below200, near200 };
+  }, [rows]);
+
   return (
     <main className="mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -65,6 +78,16 @@ export default function WatchlistView({
           <TimeframeSelector value={tf} onChange={setTf} />
         </div>
       </div>
+
+      {rows.length > 0 && summary.high + summary.low + summary.near200 + summary.below200 > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[#8b93a7]">Signals:</span>
+          {summary.high > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.up, color: TONE_FG.up }}>{summary.high} at/near 52w high</span>}
+          {summary.low > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.down, color: TONE_FG.down }}>{summary.low} at/near 52w low</span>}
+          {summary.near200 > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.neutral, color: TONE_FG.neutral }}>{summary.near200} near 200d MA</span>}
+          {summary.below200 > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.down, color: TONE_FG.down }}>{summary.below200} below 200d MA</span>}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-10 text-center">
@@ -92,6 +115,7 @@ export default function WatchlistView({
                 <th className="px-3 py-2 text-right font-medium">% fr Low</th>
                 <th className="px-3 py-2 text-right font-medium">Mkt Cap</th>
                 <th className="px-3 py-2 text-right font-medium">P/E</th>
+                <th className="px-3 py-2 text-left font-medium">Signals</th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +145,20 @@ export default function WatchlistView({
                   <td className="px-3 py-1.5 text-right tabular-nums">+{s.pctFromLow.toFixed(1)}%</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{fmtMarketCap(s.marketCap)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{s.trailingPE == null ? "—" : s.trailingPE.toFixed(1)}</td>
+                  <td className="px-3 py-1.5 text-left">
+                    <div className="flex flex-wrap gap-1">
+                      {computeSignals(s).map((sig) => (
+                        <span
+                          key={sig.key}
+                          title={sig.label}
+                          className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{ background: TONE_BG[sig.tone], color: TONE_FG[sig.tone] }}
+                        >
+                          {sig.short}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

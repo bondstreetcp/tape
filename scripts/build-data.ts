@@ -76,6 +76,8 @@ interface Metric {
   forwardPE: number | null;
   priceToBook: number | null;
   dividendYield: number | null;
+  fiftyDayAverage: number | null;
+  twoHundredDayAverage: number | null;
 }
 
 const qnum = (v: any): number | null =>
@@ -306,6 +308,8 @@ async function main() {
       forwardPE: qnum(q?.forwardPE),
       priceToBook: qnum(q?.priceToBook),
       dividendYield: qnum(q?.trailingAnnualDividendYield),
+      fiftyDayAverage: qnum(q?.fiftyDayAverage),
+      twoHundredDayAverage: qnum(q?.twoHundredDayAverage),
     });
 
     if (++done % 100 === 0) console.log(`  ${done}/${allSymbols.length}`);
@@ -373,6 +377,8 @@ async function main() {
         forwardPE: m.forwardPE,
         priceToBook: m.priceToBook,
         dividendYield: m.dividendYield,
+        fiftyDayAverage: m.fiftyDayAverage,
+        twoHundredDayAverage: m.twoHundredDayAverage,
       });
     }
     const sectors: SectorAgg[] = SECTORS.map((s) => {
