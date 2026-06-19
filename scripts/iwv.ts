@@ -1,11 +1,15 @@
 /**
- * Parser for an iShares IWV (Russell 3000 ETF) holdings CSV, used to build the
- * optional `russell3000` universe. Kept separate from fetch-constituents so it
- * can be unit-tested without running the Wikipedia scrape.
+ * Parser for an iShares IWV (Russell 3000 ETF) holdings export, used to build the
+ * optional `russell3000` universe. Handles both the plain-CSV download and the
+ * "fund.xls" download, which is actually a SpreadsheetML (Office XML) workbook.
+ * Kept separate from fetch-constituents so it can be unit-tested.
  *
- * Download the CSV from the IWV fund page on ishares.com ("Detailed Holdings and
- * Analytics" → Holdings → download) and save it as `data/iwv-holdings.csv`.
+ * Get the file from the IWV fund page on ishares.com (Holdings → "Detailed
+ * Holdings and Analytics" → Download) and save it as data/iwv-holdings.xls
+ * (or .csv).
  */
+import * as cheerio from "cheerio";
+
 export interface Entry {
   symbol: string;
   name: string;
@@ -49,37 +53,67 @@ export function parseCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
+/** Rows from a SpreadsheetML (Office XML) workbook — iShares' "fund.xls". */
+function rowsFromSpreadsheetML(xml: string): string[][] {
+  // Strip the "ss:" namespace prefix so tags/attrs are plain (Row/Cell/Data/Index).
+  const $ = cheerio.load(xml.replace(/ss:/g, ""), { xmlMode: true });
+  const rows: string[][] = [];
+  $("Row").each((_, row) => {
+    const cells: string[] = [];
+    let idx = 0;
+    $(row)
+      .children("Cell")
+      .each((_, cell) => {
+        const ix = $(cell).attr("Index"); // sparse cells skip columns
+        if (ix) {
+          const n = parseInt(ix, 10) - 1;
+          while (idx < n) { cells.push(""); idx++; }
+        }
+        cells.push($(cell).children("Data").first().text().trim());
+        idx++;
+      });
+    rows.push(cells);
+  });
+  return rows;
+}
+
+/** Normalize either format into rows of string cells. */
+export function toRows(text: string): string[][] {
+  const t = text.trimStart();
+  if (t.startsWith("<?xml") || t.includes("urn:schemas-microsoft-com:office:spreadsheet"))
+    return rowsFromSpreadsheetML(text);
+  return text.split(/\r?\n/).map(parseCsvLine);
+}
+
 /**
- * Parse IWV holdings text into classified entries. Sub-industry isn't in the CSV,
- * so symbols already in the GICS map keep their real sub-industry; the rest fall
- * back to sector-level grouping.
+ * Parse IWV holdings rows into classified entries. Sub-industry isn't in the
+ * file, so symbols already in the GICS map keep their real sub-industry; the rest
+ * fall back to sector-level grouping.
  */
-export function parseIWV(text: string, gics: Gics): Entry[] {
-  const lines = text.split(/\r?\n/);
+export function parseIWV(rows: string[][], gics: Gics): Entry[] {
   let hi = -1;
   let cols: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const cells = parseCsvLine(lines[i]).map((c) => c.toLowerCase());
-    if (cells.includes("ticker") && (cells.includes("asset class") || cells.includes("sector"))) {
+  for (let i = 0; i < rows.length; i++) {
+    const c = rows[i].map((x) => x.toLowerCase());
+    if (c.includes("ticker") && (c.includes("asset class") || c.includes("sector"))) {
       hi = i;
-      cols = cells;
+      cols = c;
       break;
     }
   }
-  if (hi < 0) throw new Error("iwv-holdings.csv: header row (Ticker,…) not found");
+  if (hi < 0) throw new Error("IWV holdings: header row (Ticker,…) not found");
   const ix = (n: string) => cols.indexOf(n);
   const tI = ix("ticker"), nI = ix("name"), sI = ix("sector"), aI = ix("asset class");
 
   const out: Entry[] = [];
-  for (let i = hi + 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const cells = parseCsvLine(lines[i]);
-    if (cells.length <= tI) continue;
+  for (let i = hi + 1; i < rows.length; i++) {
+    const cells = rows[i];
+    if (!cells || cells.length <= tI) continue;
     if (aI >= 0 && cells[aI] && cells[aI].toLowerCase() !== "equity") continue; // skip cash/futures
-    const symbol = norm(cells[tI]);
+    const symbol = norm(cells[tI] || "");
     if (!symbol || !/[A-Z]/.test(symbol) || /^(USD|CASH|MARGIN|XTSLA)/.test(symbol)) continue;
     const g = gics.get(symbol);
-    const rawSec = sI >= 0 ? cells[sI] : "";
+    const rawSec = sI >= 0 ? cells[sI] || "" : "";
     const ish = ISHARES_SECTOR_TO_GICS[rawSec] || rawSec;
     out.push({
       symbol,
@@ -88,6 +122,6 @@ export function parseIWV(text: string, gics: Gics): Entry[] {
       industry: g?.industry || ish || "Other",
     });
   }
-  if (out.length < 500) throw new Error(`iwv-holdings.csv: only parsed ${out.length} equities — wrong file?`);
+  if (out.length < 500) throw new Error(`IWV holdings: only parsed ${out.length} equities — wrong file/sheet?`);
   return out;
 }
