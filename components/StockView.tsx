@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { SeriesPoint, StockRow } from "@/lib/types";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { sliceSeries, seriesChangePct } from "@/lib/compute";
 import { slugify } from "@/lib/slug";
 import { trendColor } from "@/lib/color";
@@ -33,7 +34,7 @@ export default function StockView({
   intraday: SeriesPoint[];
   generatedAt: string;
 }) {
-  const [tf, setTf] = useState<TimeframeKey>("1y");
+  const [tf, setTf] = usePersistedTimeframe(null, "1y");
   const [chartMode, setChartMode] = useState<"line" | "candles">("line");
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
   const [compareInput, setCompareInput] = useState("");

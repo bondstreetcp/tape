@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StockRow } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { useSearchParams } from "next/navigation";
 import { fmtPct, fmtMarketCap, fmtPrice, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
@@ -26,9 +27,7 @@ export default function WatchlistView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { list, has, toggle } = useWatchlist();
-  const [tf, setTf] = useState<TimeframeKey>(
-    () => parseTimeframe(searchParams.get("tf")) ?? "1d",
-  );
+  const [tf, setTf] = usePersistedTimeframe(searchParams.get("tf"), "1d");
 
   const bySymbol = useMemo(() => {
     const m = new Map<string, StockRow>();

@@ -7,6 +7,7 @@ import { slugify } from "@/lib/slug";
 import type { SectorMeta } from "@/lib/sectors";
 import type { SectorAgg, SectorSeries, StockRow } from "@/lib/types";
 import { TIMEFRAMES, COLOR_CLAMP, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { returnColor, trendColor } from "@/lib/color";
 import { fmtPct, fmtMarketCap, fmtDateTime } from "@/lib/format";
 import {
@@ -48,9 +49,7 @@ export default function SectorView({
   universe: string;
 }) {
   const searchParams = useSearchParams();
-  const [tf, setTf] = useState<TimeframeKey>(
-    () => parseTimeframe(searchParams.get("tf")) ?? "1d",
-  );
+  const [tf, setTf] = usePersistedTimeframe(searchParams.get("tf"), "1d");
   const [filter, setFilter] = useState<HighLowFilter>("all");
   const [threshold, setThreshold] = useState(2);
   const router = useRouter();

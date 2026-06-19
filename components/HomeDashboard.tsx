@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Snapshot } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { returnColor, trendColor } from "@/lib/color";
 import { fmtPct, fmtDateTime } from "@/lib/format";
 import { isNearHigh, isNearLow } from "@/lib/compute";
@@ -18,7 +19,7 @@ export default function HomeDashboard({
   snapshot: Snapshot;
   universe: string;
 }) {
-  const [tf, setTf] = useState<TimeframeKey>("1d");
+  const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
 
   const sectorStats = useMemo(() => {

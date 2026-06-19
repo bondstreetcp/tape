@@ -17,10 +17,12 @@ export default function UniverseSwitcher({
   const router = useRouter();
   const pathname = usePathname();
   const href = (id: string) => {
-    if (etf) return `/u/${id}/sector/${etf.toLowerCase()}`;
-    const sub = pathname.replace(/^\/u\/[^/]+/, ""); // path after /u/<universe>
-    const keep = /^\/(screener|watchlist|market|macro|earnings|heatmap|compare)(\/|$)/.test(sub) ? sub : "";
-    return `/u/${id}${keep}`;
+    const sub = pathname.replace(/^\/u\/[^/]+/, ""); // full path after /u/<universe>
+    // a specific stock may not exist in another universe — fall back to its sector,
+    // but otherwise keep the same view (sector, sub-industry, screener, compare…).
+    // The timeframe persists separately via usePersistedTimeframe (localStorage).
+    if (etf && sub.startsWith("/stock/")) return `/u/${id}/sector/${etf.toLowerCase()}`;
+    return `/u/${id}${sub}`;
   };
   return (
     <label className="inline-flex items-center gap-2">

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StockRow } from "@/lib/types";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { SECTORS } from "@/lib/sectors";
 import { fmtDateTime } from "@/lib/format";
@@ -21,7 +22,7 @@ export default function MarketHeatmapView({
   generatedAt: string;
 }) {
   const router = useRouter();
-  const [tf, setTf] = useState<TimeframeKey>("1d");
+  const [tf, setTf] = usePersistedTimeframe(null, "1d");
 
   // Cap very large universes to the top names by cap so the map stays legible.
   const shown = useMemo(() => {

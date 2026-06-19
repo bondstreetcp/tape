@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { StockRow } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { fmtPct, fmtMarketCap, fmtPrice, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 import { SECTORS, ETF_TO_SECTOR } from "@/lib/sectors";
@@ -45,9 +46,7 @@ export default function ScreenerView({
   const router = useRouter();
   const { has, toggle } = useWatchlist();
 
-  const [tf, setTf] = useState<TimeframeKey>(
-    () => parseTimeframe(searchParams.get("tf")) ?? "1d",
-  );
+  const [tf, setTf] = usePersistedTimeframe(searchParams.get("tf"), "1d");
   const initFilter = searchParams.get("filter");
   const [hl, setHl] = useState<"all" | "high" | "low">(
     initFilter === "high" || initFilter === "low" ? initFilter : "all",

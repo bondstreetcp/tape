@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { XY } from "@/lib/types";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { buildComparison, xyToPoints } from "@/lib/compute";
 import { colorFor } from "@/lib/palette";
 import { trendColor } from "@/lib/color";
@@ -32,7 +33,7 @@ export default function SectorCompareView({
   sectors: SectorLine[];
   generatedAt: string;
 }) {
-  const [tf, setTf] = useState<TimeframeKey>("ytd");
+  const [tf, setTf] = usePersistedTimeframe(null, "ytd");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
 

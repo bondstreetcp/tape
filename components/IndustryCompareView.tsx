@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import type { SectorMeta } from "@/lib/sectors";
 import type { SectorSeries, XY } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
+import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { buildComparison, xyToPoints } from "@/lib/compute";
 import { colorFor, ETF_LINE_COLOR } from "@/lib/palette";
 import { trendColor } from "@/lib/color";
@@ -40,9 +41,7 @@ export default function IndustryCompareView({
   generatedAt: string;
 }) {
   const searchParams = useSearchParams();
-  const [tf, setTf] = useState<TimeframeKey>(
-    () => parseTimeframe(searchParams.get("tf")) ?? "3m",
-  );
+  const [tf, setTf] = usePersistedTimeframe(searchParams.get("tf"), "3m");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
 
