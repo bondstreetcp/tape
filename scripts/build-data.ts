@@ -78,6 +78,9 @@ interface Metric {
   dividendYield: number | null;
   fiftyDayAverage: number | null;
   twoHundredDayAverage: number | null;
+  earningsDate: string | null;
+  earningsEstimate: boolean;
+  epsForward: number | null;
 }
 
 const qnum = (v: any): number | null =>
@@ -310,6 +313,9 @@ async function main() {
       dividendYield: qnum(q?.trailingAnnualDividendYield),
       fiftyDayAverage: qnum(q?.fiftyDayAverage),
       twoHundredDayAverage: qnum(q?.twoHundredDayAverage),
+      earningsDate: q?.earningsTimestampStart ? new Date(q.earningsTimestampStart).toISOString() : null,
+      earningsEstimate: !!q?.isEarningsDateEstimate,
+      epsForward: qnum(q?.epsForward),
     });
 
     if (++done % 100 === 0) console.log(`  ${done}/${allSymbols.length}`);
@@ -385,6 +391,9 @@ async function main() {
         dividendYield: m.dividendYield,
         fiftyDayAverage: m.fiftyDayAverage,
         twoHundredDayAverage: m.twoHundredDayAverage,
+        earningsDate: m.earningsDate,
+        earningsEstimate: m.earningsEstimate,
+        epsForward: m.epsForward,
       });
     }
     const sectors: SectorAgg[] = SECTORS.map((s) => {

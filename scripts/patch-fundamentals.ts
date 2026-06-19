@@ -62,6 +62,9 @@ async function main() {
       st.dividendYield = qnum(q.trailingAnnualDividendYield);
       st.fiftyDayAverage = qnum(q.fiftyDayAverage);
       st.twoHundredDayAverage = qnum(q.twoHundredDayAverage);
+      st.earningsDate = q.earningsTimestampStart ? new Date(q.earningsTimestampStart).toISOString() : null;
+      st.earningsEstimate = !!q.isEarningsDateEstimate;
+      st.epsForward = qnum(q.epsForward);
       patched++;
     }
     await fs.writeFile(
