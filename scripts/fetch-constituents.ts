@@ -6,21 +6,15 @@
  *   nasdaq100    — Nasdaq-100         (Wikipedia tickers; GICS via cross-reference)
  *   russell1000  — Russell 1000       (Wikipedia, GICS)
  *   sp1500       — S&P 500 + 400 + 600 (Wikipedia, GICS) — broad large/mid/small cap
+ *   russell3000  — optional; built only if data/iwv-holdings.csv (an iShares IWV
+ *                  holdings export) is present. See scripts/iwv.ts for the source.
  *
  * Run with:  npm run fetch-constituents
- * (The true Russell 3000 holdings aren't available from free sources, so the
- *  broad "S&P 1500" stands in for it.)
  */
 import { promises as fs } from "fs";
 import path from "path";
 import * as cheerio from "cheerio";
-
-interface Entry {
-  symbol: string;
-  name: string;
-  sector: string;
-  industry: string;
-}
+import { type Entry, norm, parseIWV } from "./iwv";
 
 interface SourceCfg {
   name: string;
@@ -73,14 +67,6 @@ const SOURCES: Record<string, SourceCfg> = {
     industryCol: -1,
   },
 };
-
-function norm(sym: string): string {
-  return sym
-    .trim()
-    .toUpperCase()
-    .replace(/\./g, "-")
-    .replace(/[^A-Z0-9-]/g, "");
-}
 
 async function parseSource(cfg: SourceCfg): Promise<Entry[]> {
   const res = await fetch(cfg.url, {
@@ -167,6 +153,19 @@ async function main() {
     russell1000: dedupe(r1000),
     sp1500: dedupe([...sp500, ...sp400, ...sp600]),
   };
+
+  // Optional real Russell 3000 — only if an iShares IWV holdings CSV is present.
+  const iwvPath = path.join(process.cwd(), "data", "iwv-holdings.csv");
+  try {
+    const csv = await fs.readFile(iwvPath, "utf8");
+    const r3000 = parseIWV(csv, gics);
+    const m = new Map<string, Entry>();
+    for (const e of r3000) if (!m.has(e.symbol)) m.set(e.symbol, e);
+    universes.russell3000 = [...m.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+    console.log(`  Russell 3000: ${universes.russell3000.length} (from iwv-holdings.csv)`);
+  } catch (e: any) {
+    if (e?.code !== "ENOENT") console.warn(`  Russell 3000 skipped: ${e.message}`);
+  }
 
   const dir = path.join(process.cwd(), "data", "constituents");
   await fs.mkdir(dir, { recursive: true });
