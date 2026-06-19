@@ -64,6 +64,9 @@ constituent compared on one chart.
     EDGAR, with **earnings releases** (8-K item 2.02) highlighted and readable
     **inline**. Full earnings-call / investor-day / conference *transcripts* are
     a paid data product — wire a transcript API key to surface them here too.
+  - **Options:** the full **options chain** (Yahoo) — calls / puts by strike for
+    any listed expiry, with bid/ask, volume, open interest, and implied
+    volatility; ATM row highlighted, in-the-money contracts shaded.
   - **Profile:** business summary, key facts, executives & comp, upcoming
     earnings/ex-dividend dates, and dividend history.
 
