@@ -41,6 +41,7 @@ export default function AppHeader({
             <NavLink href={`${base}/screener`} label="Screener" />
             <NavLink href={`${base}/market`} label="Markets" />
             <NavLink href={`${base}/macro`} label="Macro" />
+            <NavLink href={`${base}/earnings`} label="Earnings" />
             <NavLink href={`${base}/compare`} label="Compare" />
             <NavLink href={`${base}/watchlist`} label="★" />
           </nav>

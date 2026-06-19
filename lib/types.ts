@@ -22,6 +22,10 @@ export interface StockRow {
   dividendYield?: number | null; // fraction, e.g. 0.012 = 1.2%
   fiftyDayAverage?: number | null;
   twoHundredDayAverage?: number | null;
+  // next earnings (from the quote)
+  earningsDate?: string | null; // ISO; earningsTimestampStart
+  earningsEstimate?: boolean; // date is an estimate, not confirmed
+  epsForward?: number | null;
 }
 
 export interface SectorAgg {
