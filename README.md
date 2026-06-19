@@ -23,6 +23,9 @@ constituent compared on one chart.
   saved in your browser) you can fill from the screener or any stock page. The
   watchlist shows **signal badges** per name — at/near 52-week high or low,
   above/below the 200-day MA, and golden/death cross — plus a summary count.
+- **Market monitor** (Markets tab) — a cross-asset board: major **equity
+  indices, Treasury yields, FX, commodities, and crypto** with price and %
+  change, color-coded, refreshed on a short cache window.
 - **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
   everywhere; the treemap recolors and charts re-slice instantly.
 - **Industry line-chart comparison** — click an industry (a chip on the sector
