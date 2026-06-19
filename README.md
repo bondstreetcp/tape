@@ -16,6 +16,11 @@ constituent compared on one chart.
   ~1,500-name S&P 1500 stands in for it.)
 - **11 sector ETFs** (XLK, XLV, XLF, XLY, XLC, XLI, XLP, XLE, XLU, XLRE, XLB) as
   entry points, sorted by performance and color-coded.
+- **Screener** — sort/filter the whole universe by return (any timeframe),
+  52-week proximity, market cap, P/E, forward P/E, P/B, dividend yield, and
+  sector. Quick presets for stocks near their 52-week high/low.
+- **Ticker search** to jump straight to any stock, and a **watchlist** (★,
+  saved in your browser) you can fill from the screener or any stock page.
 - **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
   everywhere; the treemap recolors and charts re-slice instantly.
 - **Industry line-chart comparison** — click an industry (a chip on the sector
