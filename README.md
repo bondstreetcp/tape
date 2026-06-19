@@ -27,6 +27,10 @@ constituent compared on one chart.
 - **Technical indicators** — toggle **SMA (20/50/200), EMA (12/26), Bollinger
   Bands** as overlays on any single-stock or sector-ETF chart, plus **MACD** and
   **RSI** as sub-panels. Computed client-side, so they add no data cost.
+- **Sub-industry comparison** — from any sector, compare its sub-industries
+  head-to-head as cap-weighted indexes rebased to % (with the whole sector
+  overlaid). Toggle the legend to isolate, e.g., *Managed Health Care vs Health
+  Care Equipment*.
 - **Treemap heatmap** per sector: market-cap-weighted boxes grouped by GICS
   sub-industry, green→red by the selected timeframe's return.
 - **52-week high/low highlighting** — badges (▲/▼) on stocks within a chosen

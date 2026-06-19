@@ -146,11 +146,19 @@ export default function SectorView({
 
       {/* industries — drill into a multi-line comparison */}
       <section className="mb-5">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-sm font-medium text-[#aab2c5]">Industries</span>
-          <span className="text-xs text-[#8b93a7]">
-            click any for a line chart comparing all its constituents
-          </span>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[#aab2c5]">Industries</span>
+            <span className="text-xs text-[#8b93a7]">
+              click any for a line chart of its constituents
+            </span>
+          </div>
+          <Link
+            href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/compare`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+          >
+            ⇄ Compare sub-industries
+          </Link>
         </div>
         <div className="flex flex-wrap gap-2">
           {industries.map((ind) => (
