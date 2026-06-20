@@ -11,6 +11,10 @@ import { getNews } from "./news";
 import { getFinancials, type FinPeriod } from "./financials";
 
 const KEY = process.env.GEMINI_API_KEY;
+// gemini-2.5-flash with REASONING enabled (thinkingConfig below) — much sharper than
+// flash with thinking off, and unlike 2.5-pro it works on the free API tier (pro
+// returns HTTP 429 / quota there). Set GEMINI_MODEL=gemini-2.5-pro once the key has a
+// paid/billing tier for the most capable model.
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 export const askConfigured = () => !!KEY;
@@ -80,7 +84,7 @@ export async function askGemini(
   const system =
     `You are a sharp, helpful equity-research analyst answering questions about ${ctx.name}. ` +
     `Use the DATA below for the company's fundamentals (cite specific numbers), AND search the web for current information — recent news, this week's developments, latest analyst sentiment, current events — so answers are up to date, not limited to filings. ` +
-    `Answer in 3–6 sentences. Do NOT just say you need more data — combine the data, the web, and your own knowledge; if one figure is missing, reason around it. ` +
+    `Lead with the direct answer, then back it with specifics — a focused paragraph or two, going deeper only when the question genuinely warrants it. Be analytical and concrete (numbers, drivers, comparisons), not generic. Do NOT just say you need more data — combine the data, the web, and your own knowledge; if one figure is missing, reason around it. ` +
     `This is a multi-turn conversation: treat each new question as a follow-up that may refer to earlier ones. ` +
     `Explain and analyze freely, but don't give a personalized buy/sell/hold recommendation.\n\n` +
     `=== DATA on ${ctx.name} ===\n${ctx.text}\n=== END DATA ===`;
@@ -99,11 +103,12 @@ export async function askGemini(
       systemInstruction: { parts: [{ text: system }] },
       contents,
       // Google Search grounding so the answer reflects current web info, not just
-      // the filing context. gemini-2.5-flash also "thinks" by default which ate
-      // the output budget and truncated answers — cap thinking and give the answer
-      // real room.
+      // the filing context. ENABLE dynamic reasoning (thinkingBudget -1) for sharper
+      // analysis — thinking shares the output budget, so give it a large
+      // maxOutputTokens so the reasoning can't truncate the final answer (the old
+      // thinkingBudget:0 disabled reasoning, which is why answers felt shallow).
       tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1100, thinkingConfig: { thinkingBudget: 0 } },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: -1 } },
     }),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);

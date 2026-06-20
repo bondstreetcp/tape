@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { askConfigured, gatherContext, askGemini } from "@/lib/ask";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60; // 2.5 Pro + reasoning is slower than Flash
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
