@@ -16,6 +16,8 @@ import WatchStar from "./WatchStar";
 import NewsFeed from "./NewsFeed";
 import StockExtras from "./StockExtras";
 import AskAI from "./AskAI";
+import KeyStatsStrip from "./KeyStatsStrip";
+import type { CompanyStats } from "@/lib/companyStats";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -25,6 +27,7 @@ export default function StockView({
   universe,
   row,
   sectorName,
+  stats,
   daily,
   intraday,
   generatedAt,
@@ -32,6 +35,7 @@ export default function StockView({
   universe: string;
   row: StockRow;
   sectorName: string;
+  stats: CompanyStats | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -130,6 +134,10 @@ export default function StockView({
           <UniverseSwitcher current={universe} etf={row.etf} />
           <TimeframeSelector value={tf} onChange={setTf} />
         </div>
+      </div>
+
+      <div className="mb-5">
+        <KeyStatsStrip stats={stats} row={row} />
       </div>
 
       {/* hero: price chart + technical indicators */}
