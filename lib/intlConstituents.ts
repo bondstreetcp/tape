@@ -119,6 +119,7 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "WSP.TO", "NTR.TO", "FNV.TO", "WPM.TO", "AEM.TO", "ABX.TO", "TECK-B.TO", "CCO.TO",
       "SHOP.TO", "CSU.TO", "OTEX.TO", "ATD.TO", "L.TO", "DOL.TO", "QSR.TO", "MRU.TO",
       "BCE.TO", "T.TO", "RCI-B.TO", "FTS.TO", "EMA.TO", "H.TO", "TRI.TO",
+      "ATZ.TO", "GRGD.TO",
     ],
   },
 ];
