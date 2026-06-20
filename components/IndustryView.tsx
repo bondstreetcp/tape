@@ -14,6 +14,7 @@ import { fmtPct, fmtDateTime } from "@/lib/format";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
+import IndustryExtras from "./IndustryExtras";
 import type { SeriesDef } from "./MultiLineChart";
 
 const MultiLineChart = dynamic(() => import("./MultiLineChart"), { ssr: false });
@@ -204,6 +205,10 @@ export default function IndustryView({
             Click a row to hide/show its line · hover to highlight.
           </p>
         </aside>
+      </div>
+
+      <div className="mt-5">
+        <IndustryExtras stocks={stocks} tf={tf} universe={universe} label={industry} />
       </div>
     </main>
   );

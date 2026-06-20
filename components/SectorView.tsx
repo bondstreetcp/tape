@@ -24,6 +24,7 @@ import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import Treemap from "./Treemap";
 import { useIsLight } from "./useIsLight";
+import IndustryExtras from "./IndustryExtras";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 
@@ -242,6 +243,9 @@ export default function SectorView({
         />
       </section>
 
+      <div className="mt-5">
+        <IndustryExtras stocks={stocks} tf={tf} universe={universe} label={meta.name} />
+      </div>
     </main>
   );
 }
