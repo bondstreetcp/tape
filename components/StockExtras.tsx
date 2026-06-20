@@ -25,12 +25,14 @@ function actionMeta(a: string) {
 
 export default function StockExtras({ symbol }: { symbol: string }) {
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="space-y-3">
+      <AnalystRatings symbol={symbol} />
       <EarningsReactions symbol={symbol} />
-      <AnalystActions symbol={symbol} />
     </div>
   );
 }
+
+const usd = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(v < 10 ? 2 : 0)}`);
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -85,7 +87,7 @@ function EarningsReactions({ symbol }: { symbol: string }) {
   );
 }
 
-function AnalystActions({ symbol }: { symbol: string }) {
+function AnalystRatings({ symbol }: { symbol: string }) {
   const [data, setData] = useState<Ratings | null | "err">(null);
   useEffect(() => {
     let a = true;
@@ -96,46 +98,85 @@ function AnalystActions({ symbol }: { symbol: string }) {
       .catch(() => a && setData("err"));
     return () => { a = false; };
   }, [symbol]);
+
   return (
-    <Card title="Recent analyst actions">
+    <Card title="Analyst ratings & price targets">
       {data == null ? (
         <Muted>Loading…</Muted>
       ) : data === "err" || !data.changes.length ? (
         <Muted>No recent rating changes.</Muted>
       ) : (
         <>
+          {/* consensus header — Bloomberg ANR-style summary */}
           {(data.consensus || data.targetMean != null) && (
-            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-3)]">
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs">
               {data.consensus && (
-                <span>
+                <span className="text-[var(--text-3)]">
                   Consensus <span className="font-semibold capitalize text-[var(--text)]">{data.consensus.replace(/_/g, " ")}</span>
+                  {data.numAnalysts != null ? <span className="text-[var(--text-4)]"> · {data.numAnalysts} analysts</span> : null}
                 </span>
               )}
-              {data.numAnalysts != null && <span>· {data.numAnalysts} analysts</span>}
               {data.targetMean != null && (
-                <span>
-                  · avg target <span className="font-semibold text-[var(--text)]">${data.targetMean.toFixed(0)}</span>
-                  {data.price ? <span style={{ color: col(data.targetMean / data.price - 1) }}> ({pct(data.targetMean / data.price - 1)})</span> : null}
+                <span className="text-[var(--text-3)]">
+                  Avg target <span className="font-semibold text-[var(--text)]">{usd(data.targetMean)}</span>
+                  {data.price ? <span className="font-medium" style={{ color: col(data.targetMean / data.price - 1) }}> ({pct(data.targetMean / data.price - 1)} vs {usd(data.price)})</span> : null}
                 </span>
+              )}
+              {data.targetLow != null && data.targetHigh != null && (
+                <span className="text-[var(--text-4)]">Range {usd(data.targetLow)}–{usd(data.targetHigh)}</span>
               )}
             </div>
           )}
-          <div className="space-y-0.5">
-            {data.changes.map((c, i) => {
-              const m = actionMeta(c.action);
-              return (
-                <div key={i} className="flex items-center gap-2 border-t border-[var(--divider)] py-1 text-xs">
-                  <span className="w-[64px] shrink-0 tabular-nums text-[var(--text-3)]">{c.date}</span>
-                  <span className="flex-1 truncate text-[var(--text-2)]">{c.firm}</span>
-                  <span className="shrink-0 font-medium" style={{ color: m.color }}>{m.label}</span>
-                  <span className="w-[118px] shrink-0 truncate text-right text-[var(--text-3)]">
-                    {c.toGrade || ""}
-                    {c.targetTo != null ? ` · $${c.targetTo.toFixed(0)}` : ""}
-                  </span>
-                </div>
-              );
-            })}
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[460px] text-xs">
+              <thead>
+                <tr className="text-[var(--text-3)]">
+                  <th className="py-1 pr-2 text-left font-medium">Date</th>
+                  <th className="py-1 pr-2 text-left font-medium">Firm</th>
+                  <th className="py-1 pr-2 text-left font-medium">Action</th>
+                  <th className="py-1 pr-2 text-left font-medium">Rating</th>
+                  <th className="py-1 text-right font-medium">Price target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.changes.map((c, i) => {
+                  const m = actionMeta(c.action);
+                  const ratingChanged = c.fromGrade && c.toGrade && c.fromGrade !== c.toGrade;
+                  const ptChanged = c.targetFrom != null && c.targetTo != null && c.targetFrom !== c.targetTo;
+                  return (
+                    <tr key={i} className="border-t border-[var(--divider)] align-top">
+                      <td className="py-1.5 pr-2 tabular-nums text-[var(--text-3)] whitespace-nowrap">{c.date}</td>
+                      <td className="py-1.5 pr-2 text-[var(--text-2)]">{c.firm}</td>
+                      <td className="py-1.5 pr-2 font-medium whitespace-nowrap" style={{ color: m.color }}>{m.label}</td>
+                      <td className="py-1.5 pr-2 text-[var(--text-2)] whitespace-nowrap">
+                        {ratingChanged ? (
+                          <span><span className="text-[var(--text-4)]">{c.fromGrade}</span> → <span className="font-medium text-[var(--text)]">{c.toGrade}</span></span>
+                        ) : (
+                          <span className="font-medium text-[var(--text)]">{c.toGrade || "—"}</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums whitespace-nowrap">
+                        {c.targetTo == null && c.targetFrom == null ? (
+                          <span className="text-[var(--text-4)]">—</span>
+                        ) : ptChanged ? (
+                          <span>
+                            <span className="text-[var(--text-4)]">{usd(c.targetFrom)}</span>{" "}
+                            <span style={{ color: col((c.targetTo ?? 0) - (c.targetFrom ?? 0)) }}>→ {usd(c.targetTo)}</span>
+                          </span>
+                        ) : (
+                          <span className="font-medium text-[var(--text)]">{usd(c.targetTo ?? c.targetFrom)}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+          <p className="mt-2 text-[11px] text-[var(--text-4)]">
+            Firm-level ratings &amp; price targets via Yahoo/Refinitiv. Individual analyst names aren&apos;t in the free feed.
+          </p>
         </>
       )}
     </Card>

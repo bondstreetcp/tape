@@ -64,7 +64,7 @@ export async function getRatings(symbol: string): Promise<Ratings | null> {
         }))
         .filter((c: RatingChange) => c.firm && c.date)
         .sort((a: RatingChange, b: RatingChange) => b.date.localeCompare(a.date))
-        .slice(0, 12),
+        .slice(0, 24),
     };
   } catch {
     return null;
