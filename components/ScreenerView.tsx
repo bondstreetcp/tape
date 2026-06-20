@@ -80,6 +80,10 @@ export default function ScreenerView({
   const [expanding, setExpanding] = useState(false); // operating margin expanding YoY
   const [dsoRising, setDsoRising] = useState(false); // ballooning DSO
   const [profitable, setProfitable] = useState(false);
+  const [maxPE, setMaxPE] = useState<number | null>(null);
+  const [minYld, setMinYld] = useState<number | null>(null);
+  const [minRoe, setMinRoe] = useState<number | null>(null);
+  const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
 
   const columns: Col[] = useMemo(() => {
     const base: Col[] = [
@@ -125,6 +129,10 @@ export default function ScreenerView({
     if (expanding) r = r.filter((s) => (s.fund?.opMarginChg ?? -Infinity) > 0);
     if (dsoRising) r = r.filter((s) => (s.fund?.dsoChg ?? -Infinity) > 0);
     if (profitable) r = r.filter((s) => (s.fund?.netMargin ?? -Infinity) > 0);
+    if (maxPE != null) r = r.filter((s) => s.trailingPE != null && s.trailingPE > 0 && s.trailingPE <= maxPE);
+    if (minYld != null) r = r.filter((s) => (s.dividendYield ?? 0) >= minYld);
+    if (minRoe != null) r = r.filter((s) => (s.fund?.roe ?? -Infinity) >= minRoe);
+    if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -141,7 +149,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -220,6 +228,31 @@ export default function ScreenerView({
         <div className="ml-auto">
           <TimeframeSelector value={tf} onChange={setTf} />
         </div>
+      </div>
+
+      {/* valuation & quality filters */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[var(--text-3)]">Valuation &amp; quality:</span>
+        <select value={maxPE == null ? "" : String(maxPE)} onChange={(e) => setMaxPE(e.target.value === "" ? null : Number(e.target.value))} className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none">
+          <option value="">P/E: any</option>
+          <option value="15">P/E ≤ 15</option>
+          <option value="25">P/E ≤ 25</option>
+          <option value="40">P/E ≤ 40</option>
+        </select>
+        <select value={minYld == null ? "" : String(minYld)} onChange={(e) => setMinYld(e.target.value === "" ? null : Number(e.target.value))} className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none">
+          <option value="">Div yield: any</option>
+          <option value="0.0001">Yield &gt; 0%</option>
+          <option value="0.02">Yield ≥ 2%</option>
+          <option value="0.04">Yield ≥ 4%</option>
+        </select>
+        <select value={minRoe == null ? "" : String(minRoe)} onChange={(e) => setMinRoe(e.target.value === "" ? null : Number(e.target.value))} className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none">
+          <option value="">ROE: any</option>
+          <option value="0.15">ROE ≥ 15%</option>
+          <option value="0.25">ROE ≥ 25%</option>
+        </select>
+        <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
+          Above 200-day avg
+        </button>
       </div>
 
       {/* fundamentals filters + column set */}
