@@ -8,7 +8,8 @@ const SUGGESTIONS = [
   "What are the key risks?",
 ];
 
-interface State { loading: boolean; answer?: string | null; error?: string; configured?: boolean }
+interface Source { title: string; uri: string }
+interface State { loading: boolean; answer?: string | null; error?: string; configured?: boolean; sources?: Source[] }
 
 export default function AskAI({ symbol, name }: { symbol: string; name?: string }) {
   const [q, setQ] = useState("");
@@ -22,7 +23,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
     const u = new URLSearchParams({ q: question, name: label });
     fetch(`/api/ask/${encodeURIComponent(symbol)}?${u.toString().replace(/\+/g, "%20")}`)
       .then((r) => r.json())
-      .then((d) => setS({ loading: false, answer: d.answer, error: d.error, configured: d.configured }))
+      .then((d) => setS({ loading: false, answer: d.answer, error: d.error, configured: d.configured, sources: d.sources }))
       .catch((e) => setS({ loading: false, error: String(e), configured: true }));
   };
 
@@ -62,7 +63,19 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       {s.answer && (
         <>
           <div className="mt-3 whitespace-pre-wrap rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] leading-relaxed text-[var(--text-body)]">{s.answer}</div>
-          <p className="mt-1.5 text-[10px] text-[var(--text-4)]">AI-generated from this app&apos;s data (profile, financials, recent news). Not investment advice — verify before relying on it.</p>
+          {s.sources && s.sources.length > 0 && (
+            <div className="mt-2">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--text-4)]">Web sources</div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.sources.map((src, i) => (
+                  <a key={i} href={src.uri} target="_blank" rel="noreferrer" title={src.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[#60a5fa] hover:border-[var(--border-strong)]">
+                    {src.title} ↗
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="mt-1.5 text-[10px] text-[var(--text-4)]">AI-generated from this app&apos;s data plus live web search. Not investment advice — verify before relying on it.</p>
         </>
       )}
       {s.error && s.configured !== false && <div className="mt-2 text-xs text-[#ef4444]">Couldn&apos;t get an answer: {s.error}</div>}

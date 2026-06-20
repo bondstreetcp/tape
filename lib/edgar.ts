@@ -197,6 +197,7 @@ const KEY_FORMS = new Set(Object.keys(FORM_LABEL));
 export interface Filing {
   form: string;
   date: string;
+  acceptance: string; // acceptanceDateTime (ET) — hour tells before-open vs after-close
   acc: string;
   doc: string;
   items: string;
@@ -227,6 +228,7 @@ export async function getFilings(symbol: string, offset = 0, limit = 30): Promis
     all.push({
       form,
       date: r.filingDate[i],
+      acceptance: r.acceptanceDateTime?.[i] || "",
       acc: r.accessionNumber[i],
       doc: r.primaryDocument[i],
       items,

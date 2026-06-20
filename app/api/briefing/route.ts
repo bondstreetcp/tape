@@ -19,10 +19,14 @@ function authed(req: Request): boolean {
 }
 
 export async function GET(req: Request) {
-  if (!PW) return NextResponse.json({ configured: false });
-  if (!authed(req)) return NextResponse.json({ needAuth: true }, { status: 401 });
-  const briefings = await getBriefings();
-  return NextResponse.json({ briefings, fetchedAt: new Date().toISOString() });
+  // Demo mode: when no BRIEFING_PASSWORD is configured, serve the briefing openly
+  // (no gate) instead of locking it — so it works without env setup. Set a
+  // password to re-enable the private gate.
+  if (!PW || authed(req)) {
+    const briefings = await getBriefings();
+    return NextResponse.json({ briefings, fetchedAt: new Date().toISOString() });
+  }
+  return NextResponse.json({ needAuth: true }, { status: 401 });
 }
 
 export async function POST(req: Request) {
