@@ -3,7 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
+import type { VolOil } from "@/lib/curves";
 import { fmtDateTime } from "@/lib/format";
+import CurveChart from "./CurveChart";
 
 const VBW = 1000, MT = 22, MB = 24, ML = 44, MR = 14, H = 300;
 const PH = H - MT - MB;
@@ -80,12 +82,14 @@ export default function MacroDashboard({
   asOf,
   calendar,
   keyConfigured,
+  volOil,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
   asOf: string;
   calendar: EconEvent[];
   keyConfigured: boolean;
+  volOil?: VolOil;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -119,6 +123,17 @@ export default function MacroDashboard({
         </div>
         <YieldCurve curve={curve} />
       </section>
+
+      {volOil && (volOil.vix.length > 1 || volOil.oil.length > 1) && (
+        <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {volOil.vix.length > 1 && (
+            <CurveChart id="vix" points={volOil.vix} color="#a855f7" unit="" title="VIX term structure" subtitle="CBOE S&P 500 implied volatility, 9-day → 1-year · live" />
+          )}
+          {volOil.oil.length > 1 && (
+            <CurveChart id="oil" points={volOil.oil} color="#f59e0b" unit="" title="WTI crude futures curve" subtitle="Front-month → ~10 months out (NYMEX, $/bbl) · live" />
+          )}
+        </div>
+      )}
 
       {groups.map((g) => (
         <section key={g} className="mb-5">
