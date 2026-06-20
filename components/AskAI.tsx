@@ -29,10 +29,16 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
 
   return (
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-2">
         <h3 className="text-sm font-semibold text-[var(--text-2)]">Ask AI about {label}</h3>
-        <span className="rounded bg-[#2563eb]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#93c5fd]">Gemini</span>
+        <span className="inline-flex items-center gap-1 rounded bg-[#2563eb]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#93c5fd]">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          Gemini · web search
+        </span>
       </div>
+      <p className="mb-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+        Searches the live web for current news &amp; events plus this company&apos;s financials — like Google Finance&apos;s Ask Gemini.
+      </p>
       <form onSubmit={(e) => { e.preventDefault(); ask(q); }} className="flex flex-wrap items-center gap-2">
         <input
           value={q}
@@ -41,9 +47,16 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
           className="min-w-[240px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
         />
         <button type="submit" disabled={s.loading} className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
-          {s.loading ? "Thinking…" : "Ask"}
+          {s.loading ? "Searching…" : "Ask"}
         </button>
       </form>
+
+      {s.loading && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-3)]">
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--text-4)] border-t-transparent" />
+          Searching the web for the latest on {label}…
+        </div>
+      )}
 
       {!s.loading && s.answer == null && !s.error && s.configured !== false && (
         <div className="mt-2 flex flex-wrap gap-1.5">
