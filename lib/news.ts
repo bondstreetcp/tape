@@ -16,6 +16,10 @@ const BLOCK = [
   "benzinga", "talkmarkets", "barchart", "stocknews", "defense world", "watcher guru", "coinpedia",
   "financhill", "stockhouse", "value the markets", "modern readers", "stock region", "market chronicles",
   "fintel", "directorstalk", "etf trends", "pulse 2.0", "invezz",
+  // dropped per request: Seeking Alpha + more low-signal aggregators / SEO mills
+  "seeking alpha", "seekingalpha", "moomoo", "tikr", "vingegroup", "tradingview", "stocktitan",
+  "the street", "thestreet", "ainvest", "coinspeaker", "timothy sykes", "wallstreetzen", "markets insider",
+  "simplywall", "simply wall",
 ];
 
 // Clickbait / promo / non-news headline patterns.
@@ -32,18 +36,24 @@ const TITLE_BLOCK = [
   /\bmotley fool\b/i, /\bzacks\b/i, /\bcould (soar|double|triple|surge|skyrocket)\b/i,
   /what you should know/i, /\breach \$?\d[\d,.]*\b/i, /'s portfolio\b/i, /\bmoves [+-]?\d/i,
   /\bhedge funds?\b.*\b(buying|loading|piling)/i,
+  /top \w+ (stock|pick)\b/i, /top stock in\b/i, /\bin .*('s)? portfolio\b/i, /\b(griffin|buffett|burry|ackman|tepper)\b/i,
 ];
 
-// Reputable outlets surfaced first (recency preserved within each tier).
+// Top-tier wire services & major financial press — surfaced first.
+const TOP = [
+  "associated press", "ap news", "apnews", "reuters", "bloomberg", "wall street journal", "wsj",
+  "financial times", "cnbc", "barron", "marketwatch", "the new york times", "the economist", "npr",
+];
+// Other reputable outlets — surfaced after the top tier.
 const PREFERRED = [
-  "reuters", "bloomberg", "cnbc", "wall street journal", "barron", "financial times", "associated press",
-  "marketwatch", "yahoo finance", "investing.com", "forbes", "business insider", "axios", "the new york times",
-  "seeking alpha", "9to5mac", "techcrunch", "the verge", "ars technica", "fortune", "the information",
+  "yahoo finance", "investing.com", "forbes", "business insider", "axios", "fortune", "the information",
+  "morningstar", "9to5mac", "techcrunch", "the verge", "ars technica", "reuters", "guardian", "cnn",
 ];
 
 const lc = (s: string) => s.toLowerCase();
 const isBlocked = (pub: string) => BLOCK.some((b) => lc(pub).includes(b));
 const isClickbait = (title: string) => TITLE_BLOCK.some((re) => re.test(title));
+const isTop = (pub: string) => TOP.some((p) => lc(pub).includes(p));
 const isPreferred = (pub: string) => PREFERRED.some((p) => lc(pub).includes(p));
 
 /** News from Google News RSS (better source mix than Yahoo's search). `query`
@@ -74,10 +84,12 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
         tickers: [],
       });
     });
-    // Two tiers: reputable outlets first, then the rest — recency preserved within each.
-    const pref = out.filter((o) => isPreferred(o.publisher));
-    const rest = out.filter((o) => !isPreferred(o.publisher));
-    return [...pref, ...rest].slice(0, count);
+    // Three tiers: wire services & major press first, then other reputable
+    // outlets, then the rest — recency preserved within each tier.
+    const top = out.filter((o) => isTop(o.publisher));
+    const pref = out.filter((o) => !isTop(o.publisher) && isPreferred(o.publisher));
+    const rest = out.filter((o) => !isTop(o.publisher) && !isPreferred(o.publisher));
+    return [...top, ...pref, ...rest].slice(0, count);
   } catch {
     return [];
   }
