@@ -15,6 +15,13 @@ import ValuationBands from "./ValuationBands";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
 import OptionsChain from "./OptionsChain";
+import StockOverview from "./StockOverview";
+import KeyStatsStrip from "./KeyStatsStrip";
+import WatchStar from "./WatchStar";
+import UniverseSwitcher from "./UniverseSwitcher";
+import type { SeriesPoint } from "@/lib/types";
+import { fmtPrice, fmtPct } from "@/lib/format";
+import { trendColor } from "@/lib/color";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
 interface RowSpec {
@@ -129,6 +136,10 @@ export default function FinancialsView({
   profile,
   peers,
   peerGroup,
+  row,
+  daily,
+  intraday,
+  generatedAt,
 }: {
   universe: string;
   symbol: string;
@@ -140,16 +151,20 @@ export default function FinancialsView({
   profile: CompanyProfile | null;
   peers: StockRow[];
   peerGroup: string | null;
+  row: StockRow | null;
+  daily: SeriesPoint[];
+  intraday: SeriesPoint[];
+  generatedAt: string;
 }) {
-  type View = "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options" | "docsearch";
-  const [view, setView] = useState<View>("statements");
+  type View = "overview" | "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options" | "docsearch";
+  const [view, setView] = useState<View>("overview");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
   // Active tab: ?tab= deep-link wins, else the last tab you used (so switching
   // companies keeps you on the same view — e.g. compare Statements across names).
   useEffect(() => {
-    const valid = ["statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"];
+    const valid = ["overview", "statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"];
     const t = new URLSearchParams(window.location.search).get("tab");
     let next = t && valid.includes(t) ? t : null;
     if (!next) {
@@ -158,7 +173,7 @@ export default function FinancialsView({
         if (saved && valid.includes(saved)) next = saved;
       } catch {}
     }
-    if (next && next !== "statements") setView(next as View);
+    if (next && next !== "overview") setView(next as View);
   }, []);
   const changeView = (v: View) => {
     setView(v);
@@ -257,23 +272,29 @@ export default function FinancialsView({
             {symbol}
           </Link>
         </div>
-        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-bold">
-            <span className="font-mono">{symbol}</span>{" "}
-            <span className="text-lg font-normal text-[var(--text-2)]">{name} — Financials</span>
-          </h1>
-          <Link
-            href={`/u/${universe}/stock/${encodeURIComponent(symbol)}`}
-            className="text-sm text-[#60a5fa] hover:underline"
-          >
-            ← price chart & indicators
-          </Link>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h1 className="font-mono text-2xl font-bold">{symbol}</h1>
+            <span className="text-lg text-[var(--text-2)]">{name}</span>
+            {row && <span className="font-mono text-xl tabular-nums">${fmtPrice(row.price)}</span>}
+            {row && (
+              <span className="text-sm font-semibold tabular-nums" style={{ color: trendColor(row.returns["1d"]) }}>
+                {fmtPct(row.returns["1d"])} <span className="font-normal text-[var(--text-3)]">1D</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <WatchStar symbol={symbol} withLabel />
+            {etf && <UniverseSwitcher current={universe} etf={etf} />}
+          </div>
         </div>
+        {row && <div className="mt-3"><KeyStatsStrip stats={stats} row={row} /></div>}
       </div>
 
       <div className="mb-4">
         <Segmented
           options={[
+            { key: "overview", label: "Overview" },
             { key: "statements", label: "Statements" },
             { key: "stats", label: "Estimates & Stats" },
             { key: "peers", label: "Peers" },
@@ -288,7 +309,13 @@ export default function FinancialsView({
         />
       </div>
 
-      {view === "stats" ? (
+      {view === "overview" ? (
+        row ? (
+          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} />
+        ) : (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">No overview data for {symbol}.</div>
+        )
+      ) : view === "stats" ? (
         <div className="space-y-4">
           <CompanyStats stats={stats} />
           <EarningsMultipleChart symbol={symbol} />

@@ -1,23 +1,16 @@
 "use client";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import type { SeriesPoint, StockRow } from "@/lib/types";
-import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
+import { TIMEFRAMES } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { sliceSeries, seriesChangePct } from "@/lib/compute";
-import { slugify } from "@/lib/slug";
 import { trendColor } from "@/lib/color";
-import { fmtPct, fmtPrice, fmtMarketCap, fmtDateTime } from "@/lib/format";
-import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { fmtPct, fmtPrice } from "@/lib/format";
 import TimeframeSelector from "./TimeframeSelector";
-import UniverseSwitcher from "./UniverseSwitcher";
-import WatchStar from "./WatchStar";
 import NewsFeed from "./NewsFeed";
 import StockExtras from "./StockExtras";
 import AskAI from "./AskAI";
-import KeyStatsStrip from "./KeyStatsStrip";
-import type { CompanyStats } from "@/lib/companyStats";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -34,19 +27,18 @@ const COMPARE_PRESETS: { label: string; sym: string }[] = [
   { label: "BTC", sym: "BTC-USD" },
 ];
 
-export default function StockView({
-  universe,
+const CMP_COLORS = ["#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
+
+/** Overview tab of the unified ticker page: price chart (+ technicals, candles,
+ *  cross-asset compare), 52-week range, timeframe returns, AskAI, earnings/analyst
+ *  reactions, and news. */
+export default function StockOverview({
   row,
-  sectorName,
-  stats,
   daily,
   intraday,
   generatedAt,
 }: {
-  universe: string;
   row: StockRow;
-  sectorName: string;
-  stats: CompanyStats | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -66,7 +58,6 @@ export default function StockView({
   };
   const removeCompare = (s: string) => setCompareSymbols((p) => p.filter((x) => x !== s));
   const comparing = compareSymbols.length > 0;
-  const CMP_COLORS = ["#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
 
   const windowChange = useMemo(() => {
     const pts = sliceSeries(intraday, daily, tf, now);
@@ -74,81 +65,16 @@ export default function StockView({
   }, [intraday, daily, tf, now]);
 
   const span = row.fiftyTwoWeekHigh - row.fiftyTwoWeekLow;
-  const pos =
-    span > 0
-      ? Math.min(100, Math.max(0, ((row.price - row.fiftyTwoWeekLow) / span) * 100))
-      : 50;
+  const pos = span > 0 ? Math.min(100, Math.max(0, ((row.price - row.fiftyTwoWeekLow) / span) * 100)) : 50;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="mb-1.5 flex flex-wrap items-center gap-2">
-            <Link
-              href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
-            >
-              ← {row.etf} {sectorName} heatmap
-            </Link>
-            <Link
-              href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
-            >
-              ⇄ {row.industry} peers
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-3)]">
-            <Link href={`/u/${universe}`} className="hover:text-[var(--text)]">
-              {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
-            </Link>
-            <span>/</span>
-            <Link
-              href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
-              className="hover:text-[var(--text)]"
-            >
-              {row.etf} {sectorName}
-            </Link>
-            <span>/</span>
-            <Link
-              href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
-              className="hover:text-[var(--text)]"
-            >
-              {row.industry}
-            </Link>
-          </div>
-          <div className="mt-1 flex flex-wrap items-baseline gap-3">
-            <h1 className="font-mono text-2xl font-bold">{row.symbol}</h1>
-            <span className="text-lg text-[var(--text-2)]">{row.name}</span>
-            <span className="font-mono text-xl tabular-nums">${fmtPrice(row.price)}</span>
-            <span
-              className="text-lg font-semibold tabular-nums"
-              style={{ color: trendColor(windowChange ?? row.returns[tf]) }}
-            >
-              {fmtPct(windowChange ?? row.returns[tf])}{" "}
-              <span className="text-xs font-normal text-[var(--text-3)]">
-                {TIMEFRAMES.find((t) => t.key === tf)?.label}
-              </span>
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-[var(--text-3)]">
-            {fmtMarketCap(row.marketCap)} cap · as of {fmtDateTime(generatedAt)}
-          </p>
-          <Link
-            href={`/u/${universe}/stock/${encodeURIComponent(row.symbol)}/financials`}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
-          >
-            ▦ Quarterly &amp; annual financials →
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <WatchStar symbol={row.symbol} withLabel />
-          <UniverseSwitcher current={universe} etf={row.etf} />
-          <TimeframeSelector value={tf} onChange={setTf} />
-        </div>
-      </div>
-
-      <div className="mb-5">
-        <KeyStatsStrip stats={stats} row={row} />
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-lg font-semibold tabular-nums" style={{ color: trendColor(windowChange ?? row.returns[tf]) }}>
+          {fmtPct(windowChange ?? row.returns[tf])}{" "}
+          <span className="text-xs font-normal text-[var(--text-3)]">over {TIMEFRAMES.find((t) => t.key === tf)?.label}</span>
+        </span>
+        <TimeframeSelector value={tf} onChange={setTf} />
       </div>
 
       {/* hero: price chart + technical indicators */}
@@ -193,10 +119,7 @@ export default function StockView({
                 <button
                   key={m}
                   onClick={() => setChartMode(m)}
-                  className={
-                    "rounded-md px-2.5 py-1 capitalize transition-colors " +
-                    (chartMode === m ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
-                  }
+                  className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (chartMode === m ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
                 >
                   {m}
                 </button>
@@ -205,29 +128,13 @@ export default function StockView({
           )}
         </div>
         {comparing ? (
-          <CompareChart
-            mainSymbol={row.symbol}
-            mainDaily={daily}
-            mainIntraday={intraday}
-            compareSymbols={compareSymbols}
-            tf={tf}
-            now={now}
-          />
+          <CompareChart mainSymbol={row.symbol} mainDaily={daily} mainIntraday={intraday} compareSymbols={compareSymbols} tf={tf} now={now} />
         ) : chartMode === "candles" ? (
           <CandleChart symbol={row.symbol} tf={tf} now={now} />
         ) : daily.length === 0 && intraday.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-[var(--text-3)]">
-            No price history for {row.symbol}.
-          </div>
+          <div className="flex h-[300px] items-center justify-center text-sm text-[var(--text-3)]">No price history for {row.symbol}.</div>
         ) : (
-          <IndicatorChart
-            daily={daily}
-            intraday={intraday}
-            tf={tf}
-            now={now}
-            up={(windowChange ?? 0) >= 0}
-            symbol={row.symbol}
-          />
+          <IndicatorChart daily={daily} intraday={intraday} tf={tf} now={now} up={(windowChange ?? 0) >= 0} symbol={row.symbol} />
         )}
       </section>
 
@@ -239,10 +146,7 @@ export default function StockView({
           <span>52-wk high ${fmtPrice(row.fiftyTwoWeekHigh)}</span>
         </div>
         <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[#6b7280] to-[#22c55e]">
-          <div
-            className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-white shadow"
-            style={{ left: `calc(${pos}% - 2px)` }}
-          />
+          <div className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-white shadow" style={{ left: `calc(${pos}% - 2px)` }} />
         </div>
         <div className="mt-1 flex justify-between text-[11px] text-[var(--text-3)]">
           <span className="text-[#ef4444]">+{row.pctFromLow.toFixed(1)}% above low</span>
@@ -256,38 +160,19 @@ export default function StockView({
           <button
             key={t.key}
             onClick={() => setTf(t.key)}
-            className={
-              "rounded-lg border px-2 py-2 text-center transition-colors " +
-              (t.key === tf
-                ? "border-[#2563eb] bg-[#2563eb]/15"
-                : "border-[var(--border)] bg-[var(--bg)] hover:border-[var(--border-strong)]")
-            }
+            className={"rounded-lg border px-2 py-2 text-center transition-colors " + (t.key === tf ? "border-[#2563eb] bg-[#2563eb]/15" : "border-[var(--border)] bg-[var(--bg)] hover:border-[var(--border-strong)]")}
           >
             <div className="text-[11px] text-[var(--text-3)]">{t.label}</div>
-            <div
-              className="mt-0.5 text-sm font-semibold tabular-nums"
-              style={{ color: trendColor(row.returns[t.key]) }}
-            >
+            <div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: trendColor(row.returns[t.key]) }}>
               {fmtPct(row.returns[t.key], 1)}
             </div>
           </button>
         ))}
       </section>
 
-      {/* ask AI */}
-      <section className="mt-5">
-        <AskAI symbol={row.symbol} name={row.name} />
-      </section>
-
-      {/* earnings reaction + analyst actions */}
-      <section className="mt-5">
-        <StockExtras symbol={row.symbol} />
-      </section>
-
-      {/* news */}
-      <section className="mt-5">
-        <NewsFeed query={row.symbol} title={`${row.symbol} — recent news`} count={10} />
-      </section>
-    </main>
+      <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>
+      <section className="mt-5"><StockExtras symbol={row.symbol} /></section>
+      <section className="mt-5"><NewsFeed query={row.symbol} title={`${row.symbol} — recent news`} count={10} /></section>
+    </div>
   );
 }
