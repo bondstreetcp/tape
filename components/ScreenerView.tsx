@@ -85,6 +85,7 @@ export default function ScreenerView({
   const [minRoe, setMinRoe] = useState<number | null>(null);
   const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
   const [magic, setMagic] = useState(false); // Greenblatt magic formula
+  const [magicCount, setMagicCount] = useState(30); // how many names the magic list shows
 
   // Magic Formula (Greenblatt): rank every name by earnings yield and by return
   // on capital, sum the two ranks, take the best ~30 — good companies at cheap
@@ -104,9 +105,9 @@ export default function ScreenerView({
     const ranked = valid
       .map((s) => ({ sym: s.symbol, score: ey.get(s.symbol)! + roc.get(s.symbol)! }))
       .sort((a, b) => a.score - b.score)
-      .slice(0, 30);
+      .slice(0, magicCount);
     return new Map(ranked.map((r, i) => [r.sym, i]));
-  }, [magic, stocks]);
+  }, [magic, stocks, magicCount]);
 
   const columns: Col[] = useMemo(() => {
     const base: Col[] = [
@@ -291,11 +292,23 @@ export default function ScreenerView({
             if (next) { setSortKey("magic"); setSortDir("asc"); }
             else if (sortKey === "magic") { setSortKey("cap"); setSortDir("desc"); }
           }}
-          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, top 30 shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes). Click a column header to re-sort the 30 names."
+          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, the best N shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes). Choose how many names with the Top-N selector; click a column header to re-sort them."
           className={"rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors " + (magic ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
         >
           ✦ Magic Formula
         </button>
+        {magic && (
+          <select
+            value={magicCount}
+            onChange={(e) => setMagicCount(Number(e.target.value))}
+            title="How many names the Magic Formula list shows"
+            className="rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]"
+          >
+            {[20, 30, 40, 50, 75, 100].map((n) => (
+              <option key={n} value={n}>Top {n}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* fundamentals filters + column set */}
