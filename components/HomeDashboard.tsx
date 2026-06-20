@@ -117,7 +117,7 @@ export default function HomeDashboard({
             <Link
               key={sec.etf}
               href={`/u/${universe}/sector/${sec.etf.toLowerCase()}`}
-              className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
+              className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
               style={{ background: returnColor(r, tf, light) }}
             >
               <div className="flex items-start justify-between">
