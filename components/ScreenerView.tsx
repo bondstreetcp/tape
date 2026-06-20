@@ -158,8 +158,10 @@ export default function ScreenerView({
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
     if (magicRank) r = r.filter((s) => magicRank.has(s.symbol));
 
-    // When Magic Formula is on, order by the magic rank (best first) rather than a column.
-    if (magicRank) return [...r].sort((a, b) => (magicRank.get(a.symbol) ?? 999) - (magicRank.get(b.symbol) ?? 999));
+    // When Magic Formula is on, order by the magic rank (best first) by default —
+    // but only until the user clicks a column header (which sets sortKey to that
+    // column, overriding the magic order while keeping the top-30 filter).
+    if (magicRank && sortKey === "magic") return [...r].sort((a, b) => (magicRank.get(a.symbol) ?? 999) - (magicRank.get(b.symbol) ?? 999));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -281,8 +283,15 @@ export default function ScreenerView({
           Above 200-day avg
         </button>
         <button
-          onClick={() => setMagic((v) => !v)}
-          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, top 30 shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes)."
+          onClick={() => {
+            const next = !magic;
+            setMagic(next);
+            // Default to the magic-rank order when turning it on; restore a normal
+            // column sort when turning it off (or if magic sort was active).
+            if (next) { setSortKey("magic"); setSortDir("asc"); }
+            else if (sortKey === "magic") { setSortKey("cap"); setSortDir("desc"); }
+          }}
+          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, top 30 shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes). Click a column header to re-sort the 30 names."
           className={"rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors " + (magic ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
         >
           ✦ Magic Formula
