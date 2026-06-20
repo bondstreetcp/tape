@@ -15,6 +15,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 import WatchStar from "./WatchStar";
 import NewsFeed from "./NewsFeed";
 import StockExtras from "./StockExtras";
+import AskAI from "./AskAI";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -242,6 +243,11 @@ export default function StockView({
             </div>
           </button>
         ))}
+      </section>
+
+      {/* ask AI */}
+      <section className="mt-5">
+        <AskAI symbol={row.symbol} name={row.name} />
       </section>
 
       {/* earnings reaction + analyst actions */}
