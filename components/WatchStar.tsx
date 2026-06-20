@@ -20,7 +20,7 @@ export default function WatchStar({
         "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors " +
         (on
           ? "border-[#fbbf24]/50 bg-[#fbbf24]/10 text-[#fbbf24]"
-          : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")
+          : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
       }
     >
       <svg width={size} height={size} viewBox="0 0 24 24" fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">

@@ -18,8 +18,8 @@ const ACTION: Record<string, { label: string; color: string }> = {
   up: { label: "Upgrade", color: "#22c55e" },
   down: { label: "Downgrade", color: "#ef4444" },
   init: { label: "Initiate", color: "#60a5fa" },
-  main: { label: "Maintain", color: "#8b93a7" },
-  reit: { label: "Reiterate", color: "#8b93a7" },
+  main: { label: "Maintain", color: "var(--text-3)" },
+  reit: { label: "Reiterate", color: "var(--text-3)" },
 };
 
 const PAGE = 30;
@@ -57,47 +57,47 @@ export default function AnalystFeed({ universe }: { universe: string }) {
 
   return (
     <section className="mt-6">
-      <h2 className="mb-2 text-sm font-semibold text-[#aab2c5]">
-        Recent analyst actions <span className="font-normal text-[#8b93a7]">· largest names</span>
+      <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">
+        Recent analyst actions <span className="font-normal text-[var(--text-3)]">· largest names</span>
       </h2>
-      <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
+      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         {actions === null ? (
-          <div className="p-6 text-center text-sm text-[#8b93a7]">Loading analyst actions…</div>
+          <div className="p-6 text-center text-sm text-[var(--text-3)]">Loading analyst actions…</div>
         ) : actions.length === 0 ? (
-          <div className="p-6 text-center text-sm text-[#8b93a7]">No recent rating changes.</div>
+          <div className="p-6 text-center text-sm text-[var(--text-3)]">No recent rating changes.</div>
         ) : (
-          <div className="max-h-[460px] divide-y divide-[#1f2430] overflow-y-auto">
+          <div className="max-h-[460px] divide-y divide-[var(--divider)] overflow-y-auto">
             {actions.slice(0, visible).map((a, i) => {
-              const meta = ACTION[a.action] || { label: a.action || "—", color: "#8b93a7" };
+              const meta = ACTION[a.action] || { label: a.action || "—", color: "var(--text-3)" };
               return (
                 <div
                   key={i}
                   onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(a.symbol)}/financials?tab=stats`)}
-                  className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2 text-sm transition-colors hover:bg-[#1a1f2e]"
+                  className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2 text-sm transition-colors hover:bg-[var(--surface-hover)]"
                 >
                   <span className="w-14 font-mono font-semibold">{a.symbol}</span>
                   <span className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ background: meta.color + "22", color: meta.color }}>
                     {meta.label}
                   </span>
-                  <span className="text-[#aab2c5]">{a.firm}</span>
+                  <span className="text-[var(--text-2)]">{a.firm}</span>
                   {(a.fromGrade || a.toGrade) && (
-                    <span className="text-xs text-[#8b93a7]">
+                    <span className="text-xs text-[var(--text-3)]">
                       {a.fromGrade ? `${a.fromGrade} → ` : ""}
                       {a.toGrade}
                     </span>
                   )}
                   {a.targetTo != null && (
-                    <span className="text-xs text-[#8b93a7]">
+                    <span className="text-xs text-[var(--text-3)]">
                       PT {a.targetFrom != null ? `$${a.targetFrom.toFixed(0)} → ` : ""}
-                      <span className="text-[#aab2c5]">${a.targetTo.toFixed(0)}</span>
+                      <span className="text-[var(--text-2)]">${a.targetTo.toFixed(0)}</span>
                     </span>
                   )}
-                  <span className="ml-auto text-[11px] tabular-nums text-[#5b6478]">{a.date}</span>
+                  <span className="ml-auto text-[11px] tabular-nums text-[var(--text-4)]">{a.date}</span>
                 </div>
               );
             })}
             <div ref={sentinel} />
-            <div className="px-4 py-2 text-center text-[11px] text-[#5b6478]">
+            <div className="px-4 py-2 text-center text-[11px] text-[var(--text-4)]">
               {visible < actions.length ? `Scroll for more — showing ${visible} of ${actions.length}` : `All ${actions.length} recent actions shown`}
             </div>
           </div>

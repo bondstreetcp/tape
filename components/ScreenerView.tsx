@@ -157,11 +157,11 @@ export default function ScreenerView({
     <main className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/u/${universe}`} className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]">
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
             ← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">Screener</h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {stocks.length} constituents · as of {fmtDateTime(generatedAt)}
           </p>
         </div>
@@ -174,12 +174,12 @@ export default function ScreenerView({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter by symbol or name…"
-          className="w-48 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2 text-sm outline-none placeholder:text-[#5b6478] focus:border-[#3a4256]"
+          className="w-48 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
         />
         <select
           value={sectorEtf}
           onChange={(e) => setSectorEtf(e.target.value)}
-          className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2 text-sm outline-none"
+          className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
         >
           <option value="all">All sectors</option>
           {SECTORS.map((s) => (
@@ -189,18 +189,18 @@ export default function ScreenerView({
         <select
           value={capMin}
           onChange={(e) => setCapMin(Number(e.target.value))}
-          className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2 text-sm outline-none"
+          className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
         >
           {CAP_OPTIONS.map((o) => (
             <option key={o.v} value={o.v}>{o.label}</option>
           ))}
         </select>
-        <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
           {([["all", "All"], ["high", "Near 52w high"], ["low", "Near 52w low"]] as const).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setHl(k)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (hl === k ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (hl === k ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {label}
             </button>
@@ -210,7 +210,7 @@ export default function ScreenerView({
           <select
             value={threshold}
             onChange={(e) => setThreshold(Number(e.target.value))}
-            className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-2 py-2 text-xs outline-none"
+            className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-xs outline-none"
           >
             {[1, 2, 5, 10].map((t) => (
               <option key={t} value={t}>within {t}%</option>
@@ -224,31 +224,31 @@ export default function ScreenerView({
 
       {/* fundamentals filters + column set */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-[#8b93a7]">Fundamentals:</span>
+        <span className="text-xs font-medium text-[var(--text-3)]">Fundamentals:</span>
         <select
           value={minRevG == null ? "" : String(minRevG)}
           onChange={(e) => setMinRevG(e.target.value === "" ? null : Number(e.target.value))}
-          className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-2 py-1.5 text-xs outline-none"
+          className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none"
         >
           {REV_OPTS.map((o) => (
             <option key={o.label} value={o.v == null ? "" : String(o.v)}>{o.label}</option>
           ))}
         </select>
-        <button onClick={() => setExpanding((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (expanding ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")}>
+        <button onClick={() => setExpanding((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (expanding ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
           Margins expanding
         </button>
-        <button onClick={() => setDsoRising((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (dsoRising ? "border-[#ef4444] bg-[#ef4444]/15 text-[#fca5a5]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")} title="Days sales outstanding rising YoY — receivables outrunning revenue">
+        <button onClick={() => setDsoRising((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (dsoRising ? "border-[#ef4444] bg-[#ef4444]/15 text-[#fca5a5]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Days sales outstanding rising YoY — receivables outrunning revenue">
           DSO rising 🚩
         </button>
-        <button onClick={() => setProfitable((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (profitable ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")}>
+        <button onClick={() => setProfitable((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (profitable ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
           Profitable
         </button>
-        <div className="ml-auto inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+        <div className="ml-auto inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
           {(["valuation", "fundamentals"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setColSet(k)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors " + (colSet === k ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors " + (colSet === k ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {k} cols
             </button>
@@ -257,30 +257,30 @@ export default function ScreenerView({
       </div>
 
       {colSet === "fundamentals" && (
-        <p className="-mt-1 mb-3 text-[11px] leading-relaxed text-[#5b6478]">
-          Fundamentals are <span className="text-[#8b93a7]">annual — most recently reported fiscal year vs. the year before</span>.{" "}
-          <span className="font-medium text-[#8b93a7]">Rev Gr</span> is that 1-year revenue growth;{" "}
-          <span className="font-medium text-[#8b93a7]">Δ Op Mgn</span> / <span className="font-medium text-[#8b93a7]">Δ DSO</span> are the
+        <p className="-mt-1 mb-3 text-[11px] leading-relaxed text-[var(--text-4)]">
+          Fundamentals are <span className="text-[var(--text-3)]">annual — most recently reported fiscal year vs. the year before</span>.{" "}
+          <span className="font-medium text-[var(--text-3)]">Rev Gr</span> is that 1-year revenue growth;{" "}
+          <span className="font-medium text-[var(--text-3)]">Δ Op Mgn</span> / <span className="font-medium text-[var(--text-3)]">Δ DSO</span> are the
           year-over-year change (margins in points, DSO in days). The “Margins expanding / DSO rising” filters use the same basis.
         </p>
       )}
 
-      <div className="mb-2 text-xs text-[#8b93a7]">
+      <div className="mb-2 text-xs text-[var(--text-3)]">
         Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}
         {filtered.length > LIMIT && ` (first ${LIMIT} — refine filters or sort)`} · click a row to open
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[920px] text-sm">
           <thead>
-            <tr className="border-b border-[#2a2e39] text-[#8b93a7]">
+            <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
               <th className="w-8 px-2 py-2"></th>
               {columns.map((c) => (
                 <th
                   key={c.key}
                   onClick={() => onSort(c.key, c.num)}
                   className={
-                    "cursor-pointer select-none px-3 py-2 font-medium whitespace-nowrap hover:text-[#e6e9f0] " +
+                    "cursor-pointer select-none px-3 py-2 font-medium whitespace-nowrap hover:text-[var(--text)] " +
                     (c.align === "right" ? "text-right" : "text-left")
                   }
                 >
@@ -295,14 +295,14 @@ export default function ScreenerView({
               <tr
                 key={s.symbol}
                 onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`)}
-                className="cursor-pointer border-b border-[#1f2430] transition-colors hover:bg-[#1a1f2e]"
+                className="cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
               >
                 <td className="px-2 py-1.5 text-center">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggle(s.symbol); }}
                     title={has(s.symbol) ? "Remove from watchlist" : "Add to watchlist"}
                     className="align-middle"
-                    style={{ color: has(s.symbol) ? "#fbbf24" : "#3a4150" }}
+                    style={{ color: has(s.symbol) ? "#fbbf24" : "var(--border-strong)" }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill={has(s.symbol) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" strokeLinejoin="round" />
@@ -317,7 +317,7 @@ export default function ScreenerView({
                       className={
                         "px-3 py-1.5 whitespace-nowrap " +
                         (c.align === "right" ? "text-right tabular-nums " : "text-left ") +
-                        (c.key === "symbol" ? "font-mono font-semibold" : c.key === "name" ? "max-w-[16rem] truncate text-[#aab2c5]" : c.key === "etf" ? "text-[#8b93a7]" : "")
+                        (c.key === "symbol" ? "font-mono font-semibold" : c.key === "name" ? "max-w-[16rem] truncate text-[var(--text-2)]" : c.key === "etf" ? "text-[var(--text-3)]" : "")
                       }
                       style={c.color ? { color: c.color(v) } : undefined}
                     >

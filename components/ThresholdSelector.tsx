@@ -12,9 +12,9 @@ export default function ThresholdSelector({
   label?: string;
 }) {
   return (
-    <div className="inline-flex items-center gap-2 text-sm text-[#8b93a7]">
+    <div className="inline-flex items-center gap-2 text-sm text-[var(--text-3)]">
       <span>{label}</span>
-      <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+      <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
         {OPTIONS.map((o) => {
           const active = o === value;
           return (
@@ -25,7 +25,7 @@ export default function ThresholdSelector({
                 "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
                 (active
                   ? "bg-[#2563eb] text-white"
-                  : "text-[#8b93a7] hover:text-[#e6e9f0]")
+                  : "text-[var(--text-3)] hover:text-[var(--text)]")
               }
             >
               {o}%

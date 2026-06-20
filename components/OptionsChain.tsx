@@ -94,12 +94,12 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
   }, [expiry]);
 
   if (loading && !data) {
-    return <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">Loading options chain…</div>;
+    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">Loading options chain…</div>;
   }
   if (!data || (data.expirations.length === 0 && data.calls.length === 0)) {
     return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
-        No listed options for {symbol}.{err && <div className="mt-1 text-[11px] text-[#5b6478]">{err}</div>}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
+        No listed options for {symbol}.{err && <div className="mt-1 text-[11px] text-[var(--text-4)]">{err}</div>}
       </div>
     );
   }
@@ -108,31 +108,31 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <label className="flex items-center gap-2">
-          <span className="text-[#8b93a7]">Expiry</span>
+          <span className="text-[var(--text-3)]">Expiry</span>
           <select
             value={expiry ?? ""}
             onChange={(e) => setExpiry(e.target.value)}
-            className="rounded-lg border border-[#2a2e39] bg-[#131722] px-2 py-1 text-sm outline-none focus:border-[#3a4256]"
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm outline-none focus:border-[var(--border-strong)]"
           >
             {data.expirations.map((d) => (
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
         </label>
-        {dte != null && <span className="text-[#8b93a7]">{dte}d to expiry</span>}
+        {dte != null && <span className="text-[var(--text-3)]">{dte}d to expiry</span>}
         {data.underlying != null && (
-          <span className="text-[#aab2c5]">Underlying <span className="font-mono font-semibold text-[#e6e9f0]">${data.underlying.toFixed(2)}</span></span>
+          <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">${data.underlying.toFixed(2)}</span></span>
         )}
-        {atmIv != null && <span className="text-[#aab2c5]">ATM IV <span className="font-semibold text-[#e6e9f0]">{iv(atmIv)}</span></span>}
+        {atmIv != null && <span className="text-[var(--text-2)]">ATM IV <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
         <button onClick={() => setAllStrikes((v) => !v)} className="ml-auto text-xs text-[#60a5fa] hover:underline">
           {allStrikes ? "Show near-the-money" : "Show all strikes"}
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="font-semibold text-[#aab2c5]">IV skew · {expiry ?? ""}</span>
+            <span className="font-semibold text-[var(--text-2)]">IV skew · {expiry ?? ""}</span>
             <span className="flex gap-2 text-[10px]">
               <span style={{ color: "#60a5fa" }}>● calls</span>
               <span style={{ color: "#f472b6" }}>● puts</span>
@@ -140,21 +140,21 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
           </div>
           <SkewChart calls={data.calls} puts={data.puts} underlying={data.underlying} />
         </div>
-        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
-          <div className="mb-1 text-xs font-semibold text-[#aab2c5]">IV term structure · ATM by expiry</div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="mb-1 text-xs font-semibold text-[var(--text-2)]">IV term structure · ATM by expiry</div>
           <TermChart term={term} />
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[760px] text-xs">
           <thead>
-            <tr className="border-b border-[#2a2e39] text-[#8b93a7]">
+            <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
               <th colSpan={6} className="bg-[#0f2a1a]/30 px-2 py-1.5 text-center font-semibold text-[#22c55e]">CALLS</th>
               <th className="px-2 py-1.5 text-center font-semibold">Strike</th>
               <th colSpan={6} className="bg-[#2a1414]/30 px-2 py-1.5 text-center font-semibold text-[#ef4444]">PUTS</th>
             </tr>
-            <tr className="border-b border-[#2a2e39] text-[10px] text-[#5b6478]">
+            <tr className="border-b border-[var(--border)] text-[10px] text-[var(--text-4)]">
               {["OI", "Vol", "IV", "Bid", "Ask", "Last"].map((h) => <th key={"c" + h} className="px-2 py-1 text-right font-medium">{h}</th>)}
               <th className="px-2 py-1 text-center font-medium"></th>
               {["Last", "Bid", "Ask", "IV", "Vol", "OI"].map((h) => <th key={"p" + h} className="px-2 py-1 text-right font-medium">{h}</th>)}
@@ -162,14 +162,14 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.strike} className={"border-b border-[#1f2430] " + (r.isAtm ? "bg-[#10182a]" : "")}>
+              <tr key={r.strike} className={"border-b border-[var(--divider)] " + (r.isAtm ? "bg-[var(--surface-3)]" : "")}>
                 <Cell v={big(r.call?.oi ?? null)} itm={r.call?.itm} />
                 <Cell v={big(r.call?.vol ?? null)} itm={r.call?.itm} />
                 <Cell v={iv(r.call?.iv ?? null)} itm={r.call?.itm} />
                 <Cell v={px(r.call?.bid ?? null)} itm={r.call?.itm} />
                 <Cell v={px(r.call?.ask ?? null)} itm={r.call?.itm} />
                 <Cell v={px(r.call?.last ?? null)} itm={r.call?.itm} bold />
-                <td className={"px-2 py-1 text-center font-mono font-semibold tabular-nums " + (r.isAtm ? "text-[#93c5fd]" : "text-[#e6e9f0]")}>
+                <td className={"px-2 py-1 text-center font-mono font-semibold tabular-nums " + (r.isAtm ? "text-[#93c5fd]" : "text-[var(--text)]")}>
                   {r.strike}
                 </td>
                 <Cell v={px(r.put?.last ?? null)} itm={r.put?.itm} bold />
@@ -183,7 +183,7 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-[#5b6478]">
+      <p className="text-[11px] text-[var(--text-4)]">
         In-the-money contracts shaded · ATM row highlighted · OI = open interest · IV = implied volatility. Quotes via Yahoo (may be delayed).
       </p>
     </div>
@@ -193,8 +193,8 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
 function Cell({ v, itm, bold }: { v: string; itm?: boolean; bold?: boolean }) {
   return (
     <td
-      className={"px-2 py-1 text-right tabular-nums " + (bold ? "font-semibold text-[#e6e9f0] " : "text-[#aab2c5] ")}
-      style={itm ? { background: "#1a2030" } : undefined}
+      className={"px-2 py-1 text-right tabular-nums " + (bold ? "font-semibold text-[var(--text)] " : "text-[var(--text-2)] ")}
+      style={itm ? { background: "var(--surface-hover)" } : undefined}
     >
       {v}
     </td>
@@ -208,8 +208,8 @@ function yGrid(vMin: number, vMax: number, y: (v: number) => number) {
     const v = vMin + f * (vMax - vMin);
     return (
       <g key={i}>
-        <line x1={ML} x2={CW - MR} y1={y(v)} y2={y(v)} stroke="#1a1f2b" />
-        <text x={ML - 4} y={y(v) + 3} textAnchor="end" fontSize={9} fill="#5b6478">{(v * 100).toFixed(0)}%</text>
+        <line x1={ML} x2={CW - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" />
+        <text x={ML - 4} y={y(v) + 3} textAnchor="end" fontSize={9} fill="var(--text-4)">{(v * 100).toFixed(0)}%</text>
       </g>
     );
   });
@@ -217,7 +217,7 @@ function yGrid(vMin: number, vMax: number, y: (v: number) => number) {
 
 function SkewChart({ calls, puts, underlying }: { calls: Opt[]; puts: Opt[]; underlying: number | null }) {
   const all = [...calls, ...puts].filter((o) => o.iv != null && o.iv > 0);
-  if (all.length < 3) return <div className="py-6 text-center text-xs text-[#8b93a7]">No IV data for this expiry.</div>;
+  if (all.length < 3) return <div className="py-6 text-center text-xs text-[var(--text-3)]">No IV data for this expiry.</div>;
   const strikes = all.map((o) => o.strike);
   const ivs = all.map((o) => o.iv as number);
   const sMin = Math.min(...strikes), sMax = Math.max(...strikes);
@@ -236,19 +236,19 @@ function SkewChart({ calls, puts, underlying }: { calls: Opt[]; puts: Opt[]; und
     <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }}>
       {yGrid(vMin, vMax, y)}
       {underlying != null && underlying >= sMin && underlying <= sMax && (
-        <line x1={x(underlying)} x2={x(underlying)} y1={MT} y2={CH - MB} stroke="#5b6478" strokeDasharray="3 3" />
+        <line x1={x(underlying)} x2={x(underlying)} y1={MT} y2={CH - MB} stroke="var(--text-4)" strokeDasharray="3 3" />
       )}
       {line(calls, "#60a5fa")}
       {line(puts, "#f472b6")}
-      <text x={CW - MR} y={CH - 5} textAnchor="end" fontSize={9} fill="#5b6478">strike →</text>
+      <text x={CW - MR} y={CH - 5} textAnchor="end" fontSize={9} fill="var(--text-4)">strike →</text>
     </svg>
   );
 }
 
 function TermChart({ term }: { term: { date: string; dte: number; atmIV: number | null }[] | null }) {
-  if (term === null) return <div className="py-6 text-center text-xs text-[#8b93a7]">Loading term structure…</div>;
+  if (term === null) return <div className="py-6 text-center text-xs text-[var(--text-3)]">Loading term structure…</div>;
   const pts = term.filter((p) => p.atmIV != null);
-  if (pts.length < 2) return <div className="py-6 text-center text-xs text-[#8b93a7]">Not enough expiries.</div>;
+  if (pts.length < 2) return <div className="py-6 text-center text-xs text-[var(--text-3)]">Not enough expiries.</div>;
   const dtes = pts.map((p) => p.dte), ivs = pts.map((p) => p.atmIV as number);
   const dMin = Math.min(...dtes), dMax = Math.max(...dtes);
   let vMin = Math.min(...ivs), vMax = Math.max(...ivs);
@@ -265,7 +265,7 @@ function TermChart({ term }: { term: { date: string; dte: number; atmIV: number 
       {pts.map((p, i) => (
         <g key={i}>
           <circle cx={x(p.dte)} cy={y(p.atmIV as number)} r={2.6} fill="#60a5fa" />
-          <text x={x(p.dte)} y={CH - 5} textAnchor="middle" fontSize={8} fill="#5b6478">{p.dte}d</text>
+          <text x={x(p.dte)} y={CH - 5} textAnchor="middle" fontSize={8} fill="var(--text-4)">{p.dte}d</text>
         </g>
       ))}
     </svg>

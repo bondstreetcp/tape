@@ -30,7 +30,7 @@ export default async function SectorPage({
   if (stocks.length === 0) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16 text-center">
-        <Link href={`/u/${universe}`} className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]">
+        <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
           ← All sectors
         </Link>
         <p className="mt-6 text-lg">

@@ -60,8 +60,8 @@ const overlayCloses = (id: OverlayId, c: number[]) => {
       const b = bollinger(c, 20, 2);
       return {
         keys: [
-          ["bb_u", b.upper, "#8b93a7", true],
-          ["bb_l", b.lower, "#8b93a7", true],
+          ["bb_u", b.upper, "var(--text-3)", true],
+          ["bb_l", b.lower, "var(--text-3)", true],
         ] as const,
       };
     }
@@ -182,8 +182,8 @@ export default function IndicatorChart({
       scale="time"
       domain={["dataMin", "dataMax"]}
       tickFormatter={fmt}
-      tick={{ fill: "#8b93a7", fontSize: 11 }}
-      stroke="#2a2e39"
+      tick={{ fill: "var(--text-3)", fontSize: 11 }}
+      stroke="var(--border)"
       minTickGap={48}
     />
   );
@@ -202,7 +202,7 @@ export default function IndicatorChart({
             {o.label}
           </Chip>
         ))}
-        <span className="mx-1 text-[#3a4150]">|</span>
+        <span className="mx-1 text-[var(--border-strong)]">|</span>
         {PANELS.map((p) => (
           <Chip key={p.id} active={enabled.has(p.id)} onClick={() => toggle(p.id)}>
             {p.label}
@@ -211,7 +211,7 @@ export default function IndicatorChart({
       </div>
 
       {points.length < 2 ? (
-        <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
+        <div className="flex h-[300px] items-center justify-center text-sm text-[var(--text-3)]">
           No price data for this range.
         </div>
       ) : (
@@ -224,13 +224,13 @@ export default function IndicatorChart({
                   <stop offset="100%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#1f2430" vertical={false} />
+              <CartesianGrid stroke="var(--divider)" vertical={false} />
               {xAxis}
               <YAxis
                 orientation="right"
                 domain={["auto", "auto"]}
-                tick={{ fill: "#8b93a7", fontSize: 11 }}
-                stroke="#2a2e39"
+                tick={{ fill: "var(--text-3)", fontSize: 11 }}
+                stroke="var(--border)"
                 tickFormatter={(v: number) => `$${v.toFixed(0)}`}
                 width={48}
               />
@@ -264,12 +264,12 @@ export default function IndicatorChart({
             <Panel title="Volume">
               <ResponsiveContainer width="100%" height={84}>
                 <ComposedChart data={volumeData} margin={{ top: 4, right: 12, bottom: 0, left: 4 }}>
-                  <CartesianGrid stroke="#1f2430" vertical={false} />
+                  <CartesianGrid stroke="var(--divider)" vertical={false} />
                   {xAxis}
                   <YAxis
                     orientation="right"
-                    tick={{ fill: "#8b93a7", fontSize: 10 }}
-                    stroke="#2a2e39"
+                    tick={{ fill: "var(--text-3)", fontSize: 10 }}
+                    stroke="var(--border)"
                     width={48}
                     tickFormatter={fmtVolAxis}
                   />
@@ -293,10 +293,10 @@ export default function IndicatorChart({
             <Panel title="MACD (12, 26, 9)">
               <ResponsiveContainer width="100%" height={130}>
                 <ComposedChart data={macdData} margin={{ top: 4, right: 12, bottom: 0, left: 4 }}>
-                  <CartesianGrid stroke="#1f2430" vertical={false} />
+                  <CartesianGrid stroke="var(--divider)" vertical={false} />
                   {xAxis}
-                  <YAxis orientation="right" tick={{ fill: "#8b93a7", fontSize: 10 }} stroke="#2a2e39" width={48} />
-                  <ReferenceLine y={0} stroke="#3a4150" />
+                  <YAxis orientation="right" tick={{ fill: "var(--text-3)", fontSize: 10 }} stroke="var(--border)" width={48} />
+                  <ReferenceLine y={0} stroke="var(--border-strong)" />
                   <Tooltip isAnimationActive={false} contentStyle={tipStyle} />
                   <Bar dataKey="hist" isAnimationActive={false}>
                     {macdData.map((d, i) => (
@@ -317,9 +317,9 @@ export default function IndicatorChart({
             <Panel title="RSI (14)">
               <ResponsiveContainer width="100%" height={110}>
                 <ComposedChart data={rsiData} margin={{ top: 4, right: 12, bottom: 0, left: 4 }}>
-                  <CartesianGrid stroke="#1f2430" vertical={false} />
+                  <CartesianGrid stroke="var(--divider)" vertical={false} />
                   {xAxis}
-                  <YAxis orientation="right" domain={[0, 100]} ticks={[30, 50, 70]} tick={{ fill: "#8b93a7", fontSize: 10 }} stroke="#2a2e39" width={48} />
+                  <YAxis orientation="right" domain={[0, 100]} ticks={[30, 50, 70]} tick={{ fill: "var(--text-3)", fontSize: 10 }} stroke="var(--border)" width={48} />
                   <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" />
                   <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" />
                   <Tooltip isAnimationActive={false} contentStyle={tipStyle} />
@@ -335,8 +335,8 @@ export default function IndicatorChart({
 }
 
 const tipStyle = {
-  background: "#0b0e14",
-  border: "1px solid #2a2e39",
+  background: "var(--bg)",
+  border: "1px solid var(--border)",
   borderRadius: 6,
   fontSize: 12,
 };
@@ -367,14 +367,14 @@ function Chip({
       className={
         "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors " +
         (active
-          ? "border-[#3a4256] bg-[#1a1f2e] text-[#e6e9f0]"
-          : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")
+          ? "border-[var(--border-strong)] bg-[var(--surface-hover)] text-[var(--text)]"
+          : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
       }
     >
       {color && (
         <span
           className="h-2 w-2 rounded-sm"
-          style={{ background: active ? color : "#3a4150" }}
+          style={{ background: active ? color : "var(--border-strong)" }}
         />
       )}
       {children}
@@ -384,8 +384,8 @@ function Chip({
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mt-2 border-t border-[#1f2430] pt-2">
-      <div className="mb-1 text-xs text-[#8b93a7]">{title}</div>
+    <div className="mt-2 border-t border-[var(--divider)] pt-2">
+      <div className="mb-1 text-xs text-[var(--text-3)]">{title}</div>
       {children}
     </div>
   );
@@ -400,8 +400,8 @@ function PriceTip({ active, payload, label, tf, series }: any) {
       ? d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
       : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   return (
-    <div className="rounded-md border border-[#2a2e39] bg-[#0b0e14] px-3 py-2 text-xs shadow-lg">
-      <div className="text-[#8b93a7]">{dateStr}</div>
+    <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs shadow-lg">
+      <div className="text-[var(--text-3)]">{dateStr}</div>
       <div className="font-mono text-sm font-semibold">${fmtPrice(price)}</div>
       {series.map((s: any) => {
         const v = payload.find((p: any) => p.dataKey === s.key)?.value;

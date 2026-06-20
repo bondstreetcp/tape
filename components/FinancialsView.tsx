@@ -239,27 +239,27 @@ export default function FinancialsView({
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="mb-4">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-[#8b93a7]">
-          <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-3)]">
+          <Link href={`/u/${universe}`} className="hover:text-[var(--text)]">
             {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
           </Link>
           {etf && (
             <>
               <span>/</span>
-              <Link href={`/u/${universe}/sector/${etf.toLowerCase()}`} className="hover:text-[#e6e9f0]">
+              <Link href={`/u/${universe}/sector/${etf.toLowerCase()}`} className="hover:text-[var(--text)]">
                 {etf} {sectorName}
               </Link>
             </>
           )}
           <span>/</span>
-          <Link href={`/u/${universe}/stock/${encodeURIComponent(symbol)}`} className="hover:text-[#e6e9f0]">
+          <Link href={`/u/${universe}/stock/${encodeURIComponent(symbol)}`} className="hover:text-[var(--text)]">
             {symbol}
           </Link>
         </div>
         <div className="mt-1 flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="text-2xl font-bold">
             <span className="font-mono">{symbol}</span>{" "}
-            <span className="text-lg font-normal text-[#aab2c5]">{name} — Financials</span>
+            <span className="text-lg font-normal text-[var(--text-2)]">{name} — Financials</span>
           </h1>
           <Link
             href={`/u/${universe}/stock/${encodeURIComponent(symbol)}`}
@@ -305,7 +305,7 @@ export default function FinancialsView({
       ) : view === "profile" ? (
         <ProfilePanel profile={profile} />
       ) : !hasData ? (
-        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
           No financial data available for {symbol}.
         </div>
       ) : (
@@ -335,15 +335,15 @@ export default function FinancialsView({
 
           {/* statement table */}
           {periods.length === 0 ? (
-            <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-6 text-sm text-[#8b93a7]">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-[var(--text-3)]">
               No {type} data.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
-                  <tr className="border-b border-[#2a2e39] text-[#8b93a7]">
-                    <th className="sticky left-0 z-10 bg-[#131722] px-4 py-3 text-left font-medium">
+                  <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
+                    <th className="sticky left-0 z-10 bg-[var(--surface)] px-4 py-3 text-left font-medium">
                       {STATEMENTS[stmt].label}
                     </th>
                     {displayPeriods.map((p) => (
@@ -367,14 +367,14 @@ export default function FinancialsView({
                     <tr
                       key={r.label}
                       className={
-                        "border-b border-[#1f2430] " +
-                        (r.kind === "pct" ? "text-[#8b93a7]" : "")
+                        "border-b border-[var(--divider)] " +
+                        (r.kind === "pct" ? "text-[var(--text-3)]" : "")
                       }
                     >
                       <td
                         className={
-                          "sticky left-0 z-10 bg-[#131722] px-4 py-2 text-left " +
-                          (r.bold ? "font-semibold text-[#e6e9f0]" : "text-[#aab2c5]") +
+                          "sticky left-0 z-10 bg-[var(--surface)] px-4 py-2 text-left " +
+                          (r.bold ? "font-semibold text-[var(--text)]" : "text-[var(--text-2)]") +
                           (r.kind === "pct" ? " pl-7 text-xs italic" : "")
                         }
                       >
@@ -391,7 +391,7 @@ export default function FinancialsView({
                             className={
                               "px-4 py-2 text-right tabular-nums " +
                               (r.bold ? "font-semibold " : "") +
-                              (p.__est ? "bg-[#10182a] text-[#93c5fd] " : "") +
+                              (p.__est ? "bg-[var(--surface-3)] text-[#93c5fd] " : "") +
                               (neg && !p.__est ? "text-[#ef4444]" : "")
                             }
                           >
@@ -410,7 +410,7 @@ export default function FinancialsView({
               </table>
             </div>
           )}
-          <p className="mt-3 text-[11px] text-[#8b93a7]">
+          <p className="mt-3 text-[11px] text-[var(--text-3)]">
             Source: Yahoo Finance fundamentals · {type} · most recent period on the
             left · fetched live and cached for 24h.
             {estPeriods.length > 0 && (
@@ -462,16 +462,16 @@ function DuPontPanel({ periods }: { periods: FinPeriod[] }) {
   const driver = label ? `ROE ${dRoe >= 0 ? "rose" : "fell"} ${Math.abs(dRoe * 100).toFixed(1)} pts vs. the prior year — mostly ${top[1] >= 0 ? "higher" : "lower"} ${label}.` : "";
 
   return (
-    <section className="mt-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-      <h3 className="mb-1 text-sm font-semibold text-[#aab2c5]">ROE decomposition (DuPont) · annual</h3>
-      <p className="mb-3 text-[11px] leading-relaxed text-[#5b6478]">
-        ROE = <span className="text-[#8b93a7]">net margin</span> × <span className="text-[#8b93a7]">asset turnover</span> ×{" "}
-        <span className="text-[#8b93a7]">equity multiplier</span> — shows whether returns come from profitability, efficiency, or leverage.
+    <section className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h3 className="mb-1 text-sm font-semibold text-[var(--text-2)]">ROE decomposition (DuPont) · annual</h3>
+      <p className="mb-3 text-[11px] leading-relaxed text-[var(--text-4)]">
+        ROE = <span className="text-[var(--text-3)]">net margin</span> × <span className="text-[var(--text-3)]">asset turnover</span> ×{" "}
+        <span className="text-[var(--text-3)]">equity multiplier</span> — shows whether returns come from profitability, efficiency, or leverage.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[460px] text-sm">
           <thead>
-            <tr className="text-[#8b93a7]">
+            <tr className="text-[var(--text-3)]">
               <th className="py-1 text-left font-medium">Year</th>
               <th className="py-1 text-right font-medium">Net margin</th>
               <th className="py-1 text-right font-medium">× Asset turnover</th>
@@ -481,18 +481,18 @@ function DuPontPanel({ periods }: { periods: FinPeriod[] }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.date} className="border-t border-[#1f2430]">
-                <td className="py-1 text-left text-[#aab2c5]">{new Date(r.date).getFullYear()}</td>
+              <tr key={r.date} className="border-t border-[var(--divider)]">
+                <td className="py-1 text-left text-[var(--text-2)]">{new Date(r.date).getFullYear()}</td>
                 <td className="py-1 text-right tabular-nums">{(r.netMargin * 100).toFixed(1)}%</td>
                 <td className="py-1 text-right tabular-nums">{r.turnover.toFixed(2)}×</td>
                 <td className="py-1 text-right tabular-nums">{r.leverage.toFixed(2)}×</td>
-                <td className="py-1 text-right font-semibold tabular-nums text-[#e6e9f0]">{(r.roe * 100).toFixed(1)}%</td>
+                <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">{(r.roe * 100).toFixed(1)}%</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {driver && <p className="mt-2 text-[11px] text-[#8b93a7]">{driver}</p>}
+      {driver && <p className="mt-2 text-[11px] text-[var(--text-3)]">{driver}</p>}
     </section>
   );
 }
@@ -507,14 +507,14 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+    <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
       {options.map((o) => (
         <button
           key={o.key}
           onClick={() => onChange(o.key)}
           className={
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-            (o.key === value ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")
+            (o.key === value ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
           }
         >
           {o.label}
@@ -538,8 +538,8 @@ function TrendBars({
   }));
   const maxRev = Math.max(1, ...data.map((d) => (d.rev ? Math.abs(d.rev) : 0)));
   return (
-    <div className="mb-4 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-      <div className="mb-3 flex items-center gap-4 text-xs text-[#8b93a7]">
+    <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-3 flex items-center gap-4 text-xs text-[var(--text-3)]">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#60a5fa]" /> Revenue
         </span>
@@ -550,7 +550,7 @@ function TrendBars({
       <div className="flex h-40 items-end gap-2">
         {data.map((d) => (
           <div key={d.label} className="flex flex-1 flex-col items-center justify-end gap-1">
-            <div className="text-[10px] tabular-nums text-[#8b93a7]">
+            <div className="text-[10px] tabular-nums text-[var(--text-3)]">
               {d.rev ? fmtBig(d.rev) : ""}
             </div>
             <div className="flex h-28 w-full items-end justify-center gap-1">
@@ -565,7 +565,7 @@ function TrendBars({
                 title={`Net Income ${fmtBig(d.ni)}`}
               />
             </div>
-            <div className="text-[10px] tabular-nums text-[#aab2c5]">{d.label}</div>
+            <div className="text-[10px] tabular-nums text-[var(--text-2)]">{d.label}</div>
           </div>
         ))}
       </div>

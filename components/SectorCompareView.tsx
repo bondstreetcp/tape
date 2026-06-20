@@ -83,12 +83,12 @@ export default function SectorCompareView({
         <div>
           <Link
             href={`/u/${universe}`}
-            className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]"
+            className="text-sm text-[var(--text-3)] hover:text-[var(--text)]"
           >
             ← {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">Sector relative performance</h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {sectors.length} sectors · SPDR sector ETFs rebased to % · as of{" "}
             {fmtDateTime(generatedAt)}
           </p>
@@ -100,7 +100,7 @@ export default function SectorCompareView({
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        <section className="min-w-0 flex-1 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+        <section className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <MultiLineChart
             rows={rows}
             series={chartSeries}
@@ -113,33 +113,33 @@ export default function SectorCompareView({
 
         <aside className="w-full shrink-0 lg:w-72">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-[#aab2c5]">
+            <span className="text-xs font-medium text-[var(--text-2)]">
               {TIMEFRAMES.find((t) => t.key === tf)?.label} performance
             </span>
             <div className="flex gap-1 text-xs">
               <button
                 onClick={() => setHidden(new Set())}
-                className="rounded border border-[#2a2e39] px-2 py-0.5 text-[#8b93a7] hover:text-[#e6e9f0]"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]"
               >
                 All
               </button>
               <button
                 onClick={() => setHidden(new Set(sectors.map((s) => s.etf)))}
-                className="rounded border border-[#2a2e39] px-2 py-0.5 text-[#8b93a7] hover:text-[#e6e9f0]"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]"
               >
                 None
               </button>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
             {legend.map((s) => (
               <div
                 key={s.etf}
                 onMouseEnter={() => setHighlight(s.etf)}
                 onMouseLeave={() => setHighlight(null)}
                 className={
-                  "flex items-center gap-2 border-b border-[#1f2430] px-3 py-2 transition-colors hover:bg-[#1a1f2e] " +
+                  "flex items-center gap-2 border-b border-[var(--divider)] px-3 py-2 transition-colors hover:bg-[var(--surface-hover)] " +
                   (hidden.has(s.etf) ? "opacity-40" : "")
                 }
               >
@@ -152,7 +152,7 @@ export default function SectorCompareView({
                     style={{ background: colorByEtf[s.etf] }}
                   />
                   <span className="font-mono text-sm font-semibold">{s.etf}</span>
-                  <span className="min-w-0 truncate text-xs text-[#8b93a7]">
+                  <span className="min-w-0 truncate text-xs text-[var(--text-3)]">
                     {s.name}
                   </span>
                 </button>
@@ -164,7 +164,7 @@ export default function SectorCompareView({
                 </span>
                 <Link
                   href={`/u/${universe}/sector/${s.etf.toLowerCase()}`}
-                  className="shrink-0 text-[#8b93a7] hover:text-[#60a5fa]"
+                  className="shrink-0 text-[var(--text-3)] hover:text-[#60a5fa]"
                   title="Open sector"
                 >
                   ↗
@@ -172,7 +172,7 @@ export default function SectorCompareView({
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-[#8b93a7]">
+          <p className="mt-2 text-[11px] text-[var(--text-3)]">
             Click a row to hide/show · hover to highlight · ↗ opens the sector.
           </p>
         </aside>

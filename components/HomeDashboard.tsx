@@ -62,7 +62,7 @@ export default function HomeDashboard({
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sector"} Screener
             </h1>
-            <p className="mt-1 text-sm text-[#8b93a7]">
+            <p className="mt-1 text-sm text-[var(--text-3)]">
               {breadth.total} constituents · {snapshot.sectors.length} sectors · as of{" "}
               {fmtDateTime(snapshot.generatedAt)}
             </p>
@@ -81,7 +81,7 @@ export default function HomeDashboard({
               </Link>
               <Link
                 href={`/u/${universe}/watchlist`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)]"
               >
                 ★ Watchlist
               </Link>
@@ -93,7 +93,7 @@ export default function HomeDashboard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#2a2e39] bg-[#131722] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <Stat label="Advancing" value={`${breadth.up}`} color="#22c55e" />
             <Stat label="Declining" value={`${breadth.down}`} color="#ef4444" />
@@ -115,7 +115,7 @@ export default function HomeDashboard({
             <Link
               key={sec.etf}
               href={`/u/${universe}/sector/${sec.etf.toLowerCase()}`}
-              className="group relative overflow-hidden rounded-xl border border-[#2a2e39] p-4 transition-transform hover:-translate-y-0.5 hover:border-[#3a4256]"
+              className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
               style={{ background: returnColor(r, tf) }}
             >
               <div className="flex items-start justify-between">
@@ -145,7 +145,7 @@ export default function HomeDashboard({
 
       <AnalystFeed universe={universe} />
 
-      <p className="mt-6 text-center text-xs text-[#8b93a7]">
+      <p className="mt-6 text-center text-xs text-[var(--text-3)]">
         Click a sector to see its constituents grouped by industry, with a price
         chart and 52-week high/low highlighting.
       </p>
@@ -164,7 +164,7 @@ function Stat({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-[#8b93a7]">{label}</span>
+      <span className="text-[var(--text-3)]">{label}</span>
       <span className="font-semibold tabular-nums" style={{ color }}>
         {value}
       </span>

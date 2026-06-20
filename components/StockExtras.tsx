@@ -17,9 +17,9 @@ function actionMeta(a: string) {
     case "up": return { label: "Upgrade", color: "#22c55e" };
     case "down": return { label: "Downgrade", color: "#ef4444" };
     case "init": return { label: "Initiate", color: "#60a5fa" };
-    case "reit": return { label: "Reiterate", color: "#8b93a7" };
-    case "main": return { label: "Maintain", color: "#8b93a7" };
-    default: return { label: a || "Update", color: "#8b93a7" };
+    case "reit": return { label: "Reiterate", color: "var(--text-3)" };
+    case "main": return { label: "Maintain", color: "var(--text-3)" };
+    default: return { label: a || "Update", color: "var(--text-3)" };
   }
 }
 
@@ -34,13 +34,13 @@ export default function StockExtras({ symbol }: { symbol: string }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-      <h3 className="mb-3 text-sm font-semibold text-[#aab2c5]">{title}</h3>
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h3 className="mb-3 text-sm font-semibold text-[var(--text-2)]">{title}</h3>
       {children}
     </section>
   );
 }
-const Muted = ({ children }: { children: React.ReactNode }) => <div className="py-2 text-xs text-[#8b93a7]">{children}</div>;
+const Muted = ({ children }: { children: React.ReactNode }) => <div className="py-2 text-xs text-[var(--text-3)]">{children}</div>;
 
 function EarningsReactions({ symbol }: { symbol: string }) {
   const [data, setData] = useState<Reaction[] | null | "err">(null);
@@ -62,7 +62,7 @@ function EarningsReactions({ symbol }: { symbol: string }) {
       ) : (
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[#8b93a7]">
+            <tr className="text-[var(--text-3)]">
               <th className="py-1 text-left font-medium">Reported</th>
               <th className="py-1 text-right font-medium">EPS surprise</th>
               <th className="py-1 text-right font-medium">Next-day move</th>
@@ -70,8 +70,8 @@ function EarningsReactions({ symbol }: { symbol: string }) {
           </thead>
           <tbody>
             {data.map((e, i) => (
-              <tr key={i} className="border-t border-[#1f2430]">
-                <td className="py-1 text-left tabular-nums text-[#aab2c5]">{e.date}</td>
+              <tr key={i} className="border-t border-[var(--divider)]">
+                <td className="py-1 text-left tabular-nums text-[var(--text-2)]">{e.date}</td>
                 <td className="py-1 text-right tabular-nums" style={{ color: col(e.surprise) }}>
                   {e.surprise == null ? "—" : pct(e.surprise)}
                 </td>
@@ -105,16 +105,16 @@ function AnalystActions({ symbol }: { symbol: string }) {
       ) : (
         <>
           {(data.consensus || data.targetMean != null) && (
-            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8b93a7]">
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-3)]">
               {data.consensus && (
                 <span>
-                  Consensus <span className="font-semibold capitalize text-[#e6e9f0]">{data.consensus.replace(/_/g, " ")}</span>
+                  Consensus <span className="font-semibold capitalize text-[var(--text)]">{data.consensus.replace(/_/g, " ")}</span>
                 </span>
               )}
               {data.numAnalysts != null && <span>· {data.numAnalysts} analysts</span>}
               {data.targetMean != null && (
                 <span>
-                  · avg target <span className="font-semibold text-[#e6e9f0]">${data.targetMean.toFixed(0)}</span>
+                  · avg target <span className="font-semibold text-[var(--text)]">${data.targetMean.toFixed(0)}</span>
                   {data.price ? <span style={{ color: col(data.targetMean / data.price - 1) }}> ({pct(data.targetMean / data.price - 1)})</span> : null}
                 </span>
               )}
@@ -124,11 +124,11 @@ function AnalystActions({ symbol }: { symbol: string }) {
             {data.changes.map((c, i) => {
               const m = actionMeta(c.action);
               return (
-                <div key={i} className="flex items-center gap-2 border-t border-[#1f2430] py-1 text-xs">
-                  <span className="w-[64px] shrink-0 tabular-nums text-[#8b93a7]">{c.date}</span>
-                  <span className="flex-1 truncate text-[#aab2c5]">{c.firm}</span>
+                <div key={i} className="flex items-center gap-2 border-t border-[var(--divider)] py-1 text-xs">
+                  <span className="w-[64px] shrink-0 tabular-nums text-[var(--text-3)]">{c.date}</span>
+                  <span className="flex-1 truncate text-[var(--text-2)]">{c.firm}</span>
                   <span className="shrink-0 font-medium" style={{ color: m.color }}>{m.label}</span>
-                  <span className="w-[118px] shrink-0 truncate text-right text-[#8b93a7]">
+                  <span className="w-[118px] shrink-0 truncate text-right text-[var(--text-3)]">
                     {c.toGrade || ""}
                     {c.targetTo != null ? ` · $${c.targetTo.toFixed(0)}` : ""}
                   </span>

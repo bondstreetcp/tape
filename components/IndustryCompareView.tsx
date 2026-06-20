@@ -101,18 +101,18 @@ export default function IndustryCompareView({
         <div>
           <Link
             href={`/u/${universe}/sector/${meta.etf.toLowerCase()}?tf=${tf}`}
-            className="mb-1.5 inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+            className="mb-1.5 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
           >
             ← Back to {meta.name}
           </Link>
-          <div className="flex items-center gap-2 text-sm text-[#8b93a7]">
-            <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
+            <Link href={`/u/${universe}`} className="hover:text-[var(--text)]">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
             </Link>
             <span>/</span>
             <Link
               href={`/u/${universe}/sector/${meta.etf.toLowerCase()}?tf=${tf}`}
-              className="hover:text-[#e6e9f0]"
+              className="hover:text-[var(--text)]"
             >
               {meta.etf} {meta.name}
             </Link>
@@ -120,7 +120,7 @@ export default function IndustryCompareView({
           <h1 className="mt-1 text-2xl font-bold">
             {meta.name} — industry relative performance
           </h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {industries.length} sub-industries · each line = a cap-weighted index
             rebased to % · dashed white = {meta.etf} (whole sector) · as of{" "}
             {fmtDateTime(generatedAt)}
@@ -133,7 +133,7 @@ export default function IndustryCompareView({
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        <section className="min-w-0 flex-1 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+        <section className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <MultiLineChart
             rows={rows}
             series={chartSeries}
@@ -145,26 +145,26 @@ export default function IndustryCompareView({
 
         <aside className="w-full shrink-0 lg:w-80">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-[#aab2c5]">
+            <span className="text-xs font-medium text-[var(--text-2)]">
               {TIMEFRAMES.find((t) => t.key === tf)?.label} performance
             </span>
             <div className="flex gap-1 text-xs">
               <button
                 onClick={() => setHidden(new Set())}
-                className="rounded border border-[#2a2e39] px-2 py-0.5 text-[#8b93a7] hover:text-[#e6e9f0]"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]"
               >
                 All
               </button>
               <button
                 onClick={() => setHidden(new Set(allKeys))}
-                className="rounded border border-[#2a2e39] px-2 py-0.5 text-[#8b93a7] hover:text-[#e6e9f0]"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]"
               >
                 None
               </button>
             </div>
           </div>
 
-          <div className="max-h-[440px] overflow-y-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+          <div className="max-h-[440px] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
             <Row
               label={`${meta.name} (whole sector)`}
               color={ETF_LINE_COLOR}
@@ -192,7 +192,7 @@ export default function IndustryCompareView({
               />
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-[#8b93a7]">
+          <p className="mt-2 text-[11px] text-[var(--text-3)]">
             Click a row to hide/show · hover to highlight · the ↗ opens that
             sub-industry's constituents.
           </p>
@@ -230,19 +230,19 @@ function Row({
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       className={
-        "flex items-center gap-2 border-b border-[#1f2430] px-3 py-2 transition-colors hover:bg-[#1a1f2e] " +
+        "flex items-center gap-2 border-b border-[var(--divider)] px-3 py-2 transition-colors hover:bg-[var(--surface-hover)] " +
         (hidden ? "opacity-40 " : "") +
-        (isRef ? "bg-[#0f1420]" : "")
+        (isRef ? "bg-[var(--bg)]" : "")
       }
     >
       <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
         <span
           className="h-2.5 w-2.5 shrink-0 rounded-sm"
-          style={{ background: color, outline: isRef ? "1px dashed #8b93a7" : "none" }}
+          style={{ background: color, outline: isRef ? "1px dashed var(--text-3)" : "none" }}
         />
         <span className="min-w-0">
           <span className="block truncate text-sm">{label}</span>
-          <span className="block text-[11px] text-[#8b93a7]">{meta}</span>
+          <span className="block text-[11px] text-[var(--text-3)]">{meta}</span>
         </span>
       </button>
       <span
@@ -253,7 +253,7 @@ function Row({
       </span>
       <Link
         href={href}
-        className="shrink-0 text-[#8b93a7] hover:text-[#60a5fa]"
+        className="shrink-0 text-[var(--text-3)] hover:text-[#60a5fa]"
         title="Open constituents"
       >
         ↗

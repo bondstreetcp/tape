@@ -98,16 +98,16 @@ export default function SectorView({
       {/* header */}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-sm text-[#8b93a7]">
-            <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
+            <Link href={`/u/${universe}`} className="hover:text-[var(--text)]">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
             </Link>
             <span>/</span>
-            <span className="text-[#aab2c5]">{meta.name}</span>
+            <span className="text-[var(--text-2)]">{meta.name}</span>
           </div>
           <div className="mt-1 flex items-center gap-3">
             <h1 className="font-mono text-2xl font-bold">{meta.etf}</h1>
-            <span className="text-lg text-[#aab2c5]">{meta.name}</span>
+            <span className="text-lg text-[var(--text-2)]">{meta.name}</span>
             <span
               className="text-lg font-semibold tabular-nums"
               style={{ color: trendColor(sectorReturn) }}
@@ -115,7 +115,7 @@ export default function SectorView({
               {fmtPct(sectorReturn)}
             </span>
           </div>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {stocks.length} constituents · {fmtMarketCap(sector?.marketCap)} total
             cap · as of {fmtDateTime(generatedAt)}
           </p>
@@ -127,9 +127,9 @@ export default function SectorView({
       </div>
 
       {/* price chart with indicators */}
-      <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+      <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-[#aab2c5]">
+          <h2 className="text-sm font-medium text-[var(--text-2)]">
             {meta.etf} price · {TIMEFRAMES.find((t) => t.key === tf)?.label}
           </h2>
           <span
@@ -153,8 +153,8 @@ export default function SectorView({
       <section className="mb-5">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[#aab2c5]">Industries</span>
-            <span className="text-xs text-[#8b93a7]">
+            <span className="text-sm font-medium text-[var(--text-2)]">Industries</span>
+            <span className="text-xs text-[var(--text-3)]">
               click any for a line chart of its constituents
             </span>
           </div>
@@ -170,7 +170,7 @@ export default function SectorView({
             <Link
               key={ind.slug}
               href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/${ind.slug}?tf=${tf}`}
-              className="group inline-flex items-center gap-2 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm transition-colors hover:border-[#3a4256] hover:bg-[#1a1f2e]"
+              className="group inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#60a5fa]">
                 <polyline
@@ -182,7 +182,7 @@ export default function SectorView({
                 />
               </svg>
               <span>{ind.name}</span>
-              <span className="text-xs text-[#8b93a7]">{ind.count}</span>
+              <span className="text-xs text-[var(--text-3)]">{ind.count}</span>
             </Link>
           ))}
         </div>
@@ -203,12 +203,12 @@ export default function SectorView({
                   "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors " +
                   (active
                     ? "border-[#2563eb] bg-[#2563eb]/20 text-white"
-                    : "border-[#2a2e39] bg-[#131722] text-[#8b93a7] hover:text-[#e6e9f0]")
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
                 }
               >
                 {f.label}
                 {count != null && (
-                  <span className="ml-1.5 text-xs text-[#8b93a7]">{count}</span>
+                  <span className="ml-1.5 text-xs text-[var(--text-3)]">{count}</span>
                 )}
               </button>
             );
@@ -219,7 +219,7 @@ export default function SectorView({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <ColorLegend tf={tf} />
-        <span className="text-xs text-[#8b93a7]">
+        <span className="text-xs text-[var(--text-3)]">
           Box size = market cap · color = {TIMEFRAMES.find((t) => t.key === tf)?.label}{" "}
           return · click an industry label for its line chart · showing{" "}
           {counts.matching}/{stocks.length}
@@ -227,7 +227,7 @@ export default function SectorView({
       </div>
 
       {/* treemap */}
-      <section className="rounded-xl border border-[#2a2e39] bg-[#0b0e14] p-2">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2">
         <Treemap
           stocks={stocks}
           tf={tf}
@@ -249,7 +249,7 @@ function ColorLegend({ tf }: { tf: TimeframeKey }) {
   const clamp = COLOR_CLAMP[tf];
   const stops = [-clamp, -clamp / 2, 0, clamp / 2, clamp];
   return (
-    <div className="flex items-center gap-2 text-xs text-[#8b93a7]">
+    <div className="flex items-center gap-2 text-xs text-[var(--text-3)]">
       <span>-{clamp}%</span>
       <div className="flex h-3 overflow-hidden rounded">
         {stops.map((s, i) => (
