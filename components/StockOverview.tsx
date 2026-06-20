@@ -29,7 +29,8 @@ const COMPARE_PRESETS: { label: string; sym: string }[] = [
   { label: "BTC", sym: "BTC-USD" },
 ];
 
-const CMP_COLORS = ["#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
+const CMP_COLORS = ["#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c", "#fb7185", "#22d3ee", "#a3e635", "#e879f9"];
+const MAX_COMPARE = 8;
 
 /** Overview tab of the unified ticker page: price chart (+ technicals, candles,
  *  cross-asset compare), 52-week range, timeframe returns, AskAI, earnings/analyst
@@ -49,6 +50,7 @@ export default function StockOverview({
   const [chartMode, setChartMode] = useState<"line" | "candles">("line");
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
   const [compareInput, setCompareInput] = useState("");
+  const [inverted, setInverted] = useState<Set<string>>(new Set());
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
   const addCompare = (raw?: string) => {
@@ -56,12 +58,16 @@ export default function StockOverview({
     // Econ overlays are trusted pseudo-symbols ("ECON:housing") — don't uppercase
     // or strip the colon; everything else is a Yahoo ticker.
     const s = input.startsWith(ECON_PREFIX) ? input : input.toUpperCase().replace(/[^A-Z0-9.=^-]/g, "");
-    if (s && s !== row.symbol && !compareSymbols.includes(s) && compareSymbols.length < 5) {
+    if (s && s !== row.symbol && !compareSymbols.includes(s) && compareSymbols.length < MAX_COMPARE) {
       setCompareSymbols((p) => [...p, s]);
     }
     setCompareInput("");
   };
-  const removeCompare = (s: string) => setCompareSymbols((p) => p.filter((x) => x !== s));
+  const removeCompare = (s: string) => {
+    setCompareSymbols((p) => p.filter((x) => x !== s));
+    setInverted((p) => { const n = new Set(p); n.delete(s); return n; });
+  };
+  const toggleInvert = (s: string) => setInverted((p) => { const n = new Set(p); n.has(s) ? n.delete(s) : n.add(s); return n; });
   const comparing = compareSymbols.length > 0;
 
   const windowChange = useMemo(() => {
@@ -96,7 +102,8 @@ export default function StockOverview({
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 font-mono text-xs"
                 style={{ color: CMP_COLORS[i % CMP_COLORS.length] }}
               >
-                {prettySym(s)}
+                {prettySym(s)}{inverted.has(s) && <span className="text-[10px] opacity-70">inv</span>}
+                <button onClick={() => toggleInvert(s)} className="text-[var(--text-3)] hover:text-[var(--text)]" style={inverted.has(s) ? { color: CMP_COLORS[i % CMP_COLORS.length] } : undefined} title="Invert this line (for inverse relationships, e.g. 10Y yield vs REITs)">⇅</button>
                 <button onClick={() => removeCompare(s)} className="text-[var(--text-3)] hover:text-[var(--text)]" title="Remove">×</button>
               </span>
             ))}
@@ -143,7 +150,7 @@ export default function StockOverview({
           )}
         </div>
         {comparing ? (
-          <CompareChart mainSymbol={row.symbol} mainDaily={daily} mainIntraday={intraday} compareSymbols={compareSymbols} tf={tf} now={now} />
+          <CompareChart mainSymbol={row.symbol} mainDaily={daily} mainIntraday={intraday} compareSymbols={compareSymbols} tf={tf} now={now} inverted={inverted} />
         ) : chartMode === "candles" ? (
           <CandleChart symbol={row.symbol} tf={tf} now={now} />
         ) : daily.length === 0 && intraday.length === 0 ? (

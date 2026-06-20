@@ -6,7 +6,7 @@ import { buildComparison } from "@/lib/compute";
 import { ECON_PREFIX, prettySym } from "@/lib/econOverlays";
 import MultiLineChart from "./MultiLineChart";
 
-const COLORS = ["#60a5fa", "#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
+const COLORS = ["#60a5fa", "#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c", "#fb7185", "#22d3ee", "#a3e635", "#e879f9"];
 
 type Bars = { daily: SeriesPoint[]; intraday: SeriesPoint[] };
 
@@ -53,6 +53,7 @@ export default function CompareChart({
   compareSymbols,
   tf,
   now,
+  inverted,
 }: {
   mainSymbol: string;
   mainDaily: SeriesPoint[];
@@ -60,6 +61,7 @@ export default function CompareChart({
   compareSymbols: string[];
   tf: TimeframeKey;
   now: number;
+  inverted?: Set<string>;
 }) {
   const [fetched, setFetched] = useState<Record<string, Bars | null>>({});
   // Track requested symbols in a ref (not state) so this effect depends only on
@@ -75,7 +77,7 @@ export default function CompareChart({
       requested.current.add(sym);
       const url = sym.startsWith(ECON_PREFIX)
         ? `/api/econ-series/${encodeURIComponent(sym.slice(ECON_PREFIX.length))}`
-        : `/api/ohlc/${encodeURIComponent(sym)}`;
+        : `/api/ohlc/${encodeURIComponent(sym)}?years=5`; // full history so it matches any selected timeframe
       fetch(url)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -96,10 +98,15 @@ export default function CompareChart({
       if (f) items.push({ symbol: sym, daily: f.daily, intraday: f.intraday });
     }
     const { rows } = buildComparison(items, tf, now);
-    const series = items.map((it, i) => ({ symbol: it.symbol, color: COLORS[i % COLORS.length], label: prettySym(it.symbol) }));
+    // Inverted series: flip the rebased % so an inverse relationship lines up
+    // visually (e.g. the 10-yr yield vs REITs). Correlation below stays un-flipped.
+    if (inverted && inverted.size) {
+      for (const r of rows) for (const sym of inverted) if (typeof r[sym] === "number") r[sym] = -r[sym];
+    }
+    const series = items.map((it, i) => ({ symbol: it.symbol, color: COLORS[i % COLORS.length], label: prettySym(it.symbol) + (inverted?.has(it.symbol) ? " (inv)" : ""), secondary: !!inverted?.has(it.symbol) }));
     const corr = computeCorr(items);
     return { rows, series, corr };
-  }, [mainSymbol, mainDaily, mainIntraday, compareSymbols, fetched, tf, now]);
+  }, [mainSymbol, mainDaily, mainIntraday, compareSymbols, fetched, tf, now, inverted]);
 
   const loading = compareSymbols.some((s) => fetched[s] === undefined || fetched[s] === null);
 

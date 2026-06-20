@@ -17,6 +17,7 @@ export interface SeriesDef {
   color: string;
   isRef?: boolean;
   label?: string; // friendly display name (e.g. "Housing Starts" for ECON:housing)
+  secondary?: boolean; // plot on the right-hand, independently-scaled y-axis
 }
 
 function tickFmt(tf: TimeframeKey) {
@@ -112,13 +113,14 @@ export default function MultiLineChart({
   }
 
   const visible = series.filter((s) => !hidden.has(s.symbol));
+  const hasSecondary = visible.some((s) => s.secondary);
   const lastIdx = rows.length - 1;
 
   return (
     <ResponsiveContainer width="100%" height={440}>
       <LineChart
         data={rows}
-        margin={{ top: 8, right: showEndLabels ? 52 : 12, bottom: 0, left: 4 }}
+        margin={{ top: 8, right: showEndLabels ? 52 : 12, bottom: 0, left: hasSecondary ? 6 : 4 }}
       >
         <CartesianGrid stroke="var(--divider)" vertical={false} />
         <XAxis
@@ -132,6 +134,7 @@ export default function MultiLineChart({
           minTickGap={48}
         />
         <YAxis
+          yAxisId="right"
           orientation="right"
           domain={["auto", "auto"]}
           tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
@@ -139,7 +142,18 @@ export default function MultiLineChart({
           stroke="var(--border)"
           width={48}
         />
-        <ReferenceLine y={0} stroke="var(--border-strong)" strokeDasharray="3 3" />
+        {hasSecondary && (
+          <YAxis
+            yAxisId="left"
+            orientation="left"
+            domain={["auto", "auto"]}
+            tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
+            tick={{ fill: "var(--text-4)", fontSize: 11 }}
+            stroke="var(--border)"
+            width={44}
+          />
+        )}
+        <ReferenceLine yAxisId="right" y={0} stroke="var(--border-strong)" strokeDasharray="3 3" />
         <Tooltip
           content={<CustomTooltip tf={tf} colors={colorMap} labels={labelMap} />}
           isAnimationActive={false}
@@ -150,6 +164,7 @@ export default function MultiLineChart({
           return (
             <Line
               key={s.symbol}
+              yAxisId={hasSecondary && s.secondary ? "left" : "right"}
               type="monotone"
               dataKey={s.symbol}
               stroke={s.color}
