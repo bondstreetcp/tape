@@ -104,6 +104,8 @@ export interface CompanyStats {
   heldPercentInsiders: number | null;
   heldPercentInstitutions: number | null;
   sharesShort: number | null;
+  sharesShortPriorMonth: number | null;
+  shortPercentOfFloat: number | null;
   shortRatio: number | null;
   floatShares: number | null;
   sharesOutstanding: number | null;
@@ -218,6 +220,8 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
       heldPercentInsiders: num(ks.heldPercentInsiders),
       heldPercentInstitutions: num(ks.heldPercentInstitutions),
       sharesShort: num(ks.sharesShort),
+      sharesShortPriorMonth: num(ks.sharesShortPriorMonth),
+      shortPercentOfFloat: num(ks.shortPercentOfFloat),
       shortRatio: num(ks.shortRatio),
       floatShares: num(ks.floatShares),
       sharesOutstanding: num(ks.sharesOutstanding),
