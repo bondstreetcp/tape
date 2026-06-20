@@ -30,6 +30,17 @@ export async function getTranscriptLinks(query: string, symbol = "", count = 8):
   )}&hl=en-US&gl=US&ceid=US:en`;
   const sym = symbol.toUpperCase();
   const tickerRe = sym ? new RegExp(`\\(${sym}\\)|\\b${sym}\\b`) : null;
+  const nameKw = nameKey(query);
+  // Drop off-topic results: a title that names a *different* company's ticker in
+  // parens, or one that mentions neither this ticker nor the company name.
+  const relevant = (title: string) => {
+    const tk = [...title.matchAll(/\(([A-Z]{1,5})\)/g)].map((m) => m[1]);
+    if (tk.length && sym && !tk.includes(sym)) return false;
+    if (tickerRe && tickerRe.test(title)) return true;
+    if (!nameKw || !title.toLowerCase().includes(nameKw)) return false;
+    // name matched but no ticker — reject same-name entities (e.g. "Apple Hospitality").
+    return !new RegExp(`\\b${nameKw}\\s+(hospitality|realty|reit|trust|financial|bancorp|holdings|industries|properties|partners|capital)\\b`, "i").test(title);
+  };
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" } });
     if (!res.ok) return [];
@@ -44,15 +55,19 @@ export async function getTranscriptLinks(query: string, symbol = "", count = 8):
       const pub = $el.find("pubDate").first().text().trim();
       const low = title.toLowerCase();
       // Must be an actual transcript, not a "highlights"/"key takeaways" recap.
-      if (!link || !low.includes("transcript") || low.includes("highlights") || low.includes("takeaway")) return;
+      if (!link || !low.includes("transcript") || low.includes("highlights") || low.includes("takeaway") || !relevant(title)) return;
       out.push({ title, publisher: source || "News", link, time: pub ? new Date(pub).toISOString() : null });
     });
-    // Rank: results that name the ticker first (avoids same-name companies like
-    // "Apple Hospitality REIT" bleeding into AAPL), then known transcript sources.
+    // Chronological (newest first); ticker-match + known transcript sources break
+    // ties (and keep same-name companies like "Apple Hospitality REIT" down).
     const score = (x: TranscriptLink) =>
       (tickerRe && tickerRe.test(x.title) ? -2 : 0) +
       (GOOD.some((g) => x.publisher.toLowerCase().includes(g)) ? -1 : 0);
-    out.sort((a, b) => score(a) - score(b));
+    out.sort((a, b) => {
+      const ta = a.time ? Date.parse(a.time) : 0;
+      const tb = b.time ? Date.parse(b.time) : 0;
+      return tb - ta || score(a) - score(b);
+    });
     return out.slice(0, count);
   } catch {
     return [];

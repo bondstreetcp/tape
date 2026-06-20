@@ -161,6 +161,30 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
   );
 }
 
+function TranscriptBody({ text }: { text: string }) {
+  const SPK = /^([A-Z][\w.'’-]*(?: [A-Z][\w.'’&-]*){0,4}):\s+([\s\S]+)$/;
+  return (
+    <>
+      {text.split(/\n\n+/).map((p, i) => {
+        const t = p.trim();
+        if (!t) return null;
+        if (t.length < 50 && (t === t.toUpperCase() || /^(prepared remarks|questions?(\s*(and|&)\s*)?answers?|q&a|call participants|operator instructions)\b/i.test(t))) {
+          return <p key={i} className="mb-1.5 mt-3 text-xs font-semibold uppercase tracking-wide text-[#8b93a7]">{t}</p>;
+        }
+        const m = t.match(SPK);
+        if (m && m[1].length <= 34) {
+          return (
+            <p key={i} className="mb-2">
+              <span className="font-semibold text-[#e6e9f0]">{m[1]}</span>: {m[2]}
+            </p>
+          );
+        }
+        return <p key={i} className="mb-2">{t}</p>;
+      })}
+    </>
+  );
+}
+
 function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
   const [links, setLinks] = useState<TranscriptLink[] | null>(null);
   const [full, setFull] = useState<FullTranscript | "loading" | "error" | null>(null);
@@ -206,8 +230,8 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
             {loaded.date ? ` · ${loaded.date}` : ""} ·{" "}
             <a href={loaded.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">source ↗</a>
           </div>
-          <div className="max-h-[480px] overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[#c2c8d4]">
-            {loaded.text}
+          <div className="max-h-[480px] overflow-y-auto pr-1 text-[13px] leading-relaxed text-[#c2c8d4]">
+            <TranscriptBody text={loaded.text} />
           </div>
         </div>
       )}
@@ -242,11 +266,15 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
                 rel="noreferrer"
                 className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[#161b29]"
               >
-                <span className="text-sm text-[#e6e9f0]">{l.title}</span>
-                <span className="shrink-0 whitespace-nowrap text-[11px] text-[#8b93a7]">
-                  {l.publisher}
-                  {l.time ? ` · ${new Date(l.time).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""} ↗
+                <span className="flex min-w-0 items-center gap-2 text-sm text-[#e6e9f0]">
+                  {l.time && (
+                    <span className="shrink-0 whitespace-nowrap rounded bg-[#0b0e14] px-1.5 py-0.5 text-[10px] tabular-nums text-[#8b93a7]">
+                      {new Date(l.time).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                    </span>
+                  )}
+                  <span className="truncate">{l.title}</span>
                 </span>
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-[#8b93a7]">{l.publisher} ↗</span>
               </a>
             </li>
           ))}

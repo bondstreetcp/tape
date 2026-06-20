@@ -145,15 +145,25 @@ export default function FinancialsView({
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
-  // Deep-link the active tab via ?tab= (e.g. shareable ownership/insider view).
+  // Active tab: ?tab= deep-link wins, else the last tab you used (so switching
+  // companies keeps you on the same view — e.g. compare Statements across names).
   useEffect(() => {
+    const valid = ["statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"];
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t && ["statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"].includes(t)) {
-      setView(t as View);
+    let next = t && valid.includes(t) ? t : null;
+    if (!next) {
+      try {
+        const saved = localStorage.getItem("fin.tab");
+        if (saved && valid.includes(saved)) next = saved;
+      } catch {}
     }
+    if (next && next !== "statements") setView(next as View);
   }, []);
   const changeView = (v: View) => {
     setView(v);
+    try {
+      localStorage.setItem("fin.tab", v);
+    } catch {}
     const u = new URL(window.location.href);
     u.searchParams.set("tab", v);
     window.history.replaceState(null, "", u);

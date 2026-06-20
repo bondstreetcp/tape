@@ -218,6 +218,10 @@ export function ProfilePanel({ profile }: { profile: CompanyProfile | null }) {
       </Card>
 
       <Card title="Key Executives" wide>
+        <p className="mb-2 text-[11px] text-[#5b6478]">
+          Dollar figures are each executive&apos;s most recently disclosed <span className="text-[#8b93a7]">total annual compensation</span> (salary
+          + bonus + stock/option awards), where reported.
+        </p>
         {profile.officers.length === 0 ? (
           <Empty />
         ) : (
