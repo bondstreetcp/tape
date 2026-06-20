@@ -14,6 +14,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 import MoversSection from "./MoversSection";
 import AnalystFeed from "./AnalystFeed";
 import { useIsLight } from "./useIsLight";
+import MarketAlert from "./MarketAlert";
 
 export default function HomeDashboard({
   snapshot,
@@ -109,6 +110,8 @@ export default function HomeDashboard({
           <ThresholdSelector value={threshold} onChange={setThreshold} />
         </div>
       </header>
+
+      <MarketAlert />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {sectorStats.map((sec) => {

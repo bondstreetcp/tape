@@ -5,6 +5,7 @@ import type { MarketGroup, Tile } from "@/lib/market";
 import { fmtDateTime } from "@/lib/format";
 import NewsFeed from "./NewsFeed";
 import MarketChartModal from "./MarketChartModal";
+import MarketAlert from "./MarketAlert";
 
 function fmtPrice(t: Tile): string {
   const p = t.price;
@@ -70,6 +71,8 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
           {refreshing ? "Refreshing…" : "↻ Refresh"}
         </button>
       </header>
+
+      <MarketAlert />
 
       {groups.map((g) => (
         <section key={g.name} className="mb-5">
