@@ -54,8 +54,8 @@ function CustomTooltip({ active, payload, label, tf, colors }: any) {
     .sort((a: any, b: any) => b.value - a.value)
     .slice(0, 16);
   return (
-    <div className="rounded-md border border-[#2a2e39] bg-[#0b0e14] px-3 py-2 text-xs shadow-xl">
-      <div className="mb-1 text-[#8b93a7]">{dateStr}</div>
+    <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs shadow-xl">
+      <div className="mb-1 text-[var(--text-3)]">{dateStr}</div>
       <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
         {items.map((p: any) => (
           <div key={p.dataKey} className="contents">
@@ -101,7 +101,7 @@ export default function MultiLineChart({
 
   if (rows.length < 2) {
     return (
-      <div className="flex h-[440px] items-center justify-center text-sm text-[#8b93a7]">
+      <div className="flex h-[440px] items-center justify-center text-sm text-[var(--text-3)]">
         No price history for this range.
       </div>
     );
@@ -116,26 +116,26 @@ export default function MultiLineChart({
         data={rows}
         margin={{ top: 8, right: showEndLabels ? 52 : 12, bottom: 0, left: 4 }}
       >
-        <CartesianGrid stroke="#1f2430" vertical={false} />
+        <CartesianGrid stroke="var(--divider)" vertical={false} />
         <XAxis
           dataKey="t"
           type="number"
           scale="time"
           domain={["dataMin", "dataMax"]}
           tickFormatter={tickFmt(tf)}
-          tick={{ fill: "#8b93a7", fontSize: 11 }}
-          stroke="#2a2e39"
+          tick={{ fill: "var(--text-3)", fontSize: 11 }}
+          stroke="var(--border)"
           minTickGap={48}
         />
         <YAxis
           orientation="right"
           domain={["auto", "auto"]}
           tickFormatter={(v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
-          tick={{ fill: "#8b93a7", fontSize: 11 }}
-          stroke="#2a2e39"
+          tick={{ fill: "var(--text-3)", fontSize: 11 }}
+          stroke="var(--border)"
           width={48}
         />
-        <ReferenceLine y={0} stroke="#3a4150" strokeDasharray="3 3" />
+        <ReferenceLine y={0} stroke="var(--border-strong)" strokeDasharray="3 3" />
         <Tooltip
           content={<CustomTooltip tf={tf} colors={colorMap} />}
           isAnimationActive={false}

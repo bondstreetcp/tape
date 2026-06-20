@@ -26,16 +26,16 @@ export default function UniverseSwitcher({
   };
   return (
     <label className="inline-flex items-center gap-2">
-      <span className="text-xs uppercase tracking-wide text-[#8b93a7]">
+      <span className="text-xs uppercase tracking-wide text-[var(--text-3)]">
         Universe
       </span>
       <select
         value={current}
         onChange={(e) => router.push(href(e.target.value))}
-        className="cursor-pointer rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2 text-sm font-semibold text-[#e6e9f0] outline-none transition-colors hover:border-[#3a4256]"
+        className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--text)] outline-none transition-colors hover:border-[var(--border-strong)]"
       >
         {UNIVERSES.map((u) => (
-          <option key={u.id} value={u.id} className="bg-[#131722]">
+          <option key={u.id} value={u.id} className="bg-[var(--surface)]">
             {u.name}
           </option>
         ))}

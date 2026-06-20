@@ -9,7 +9,7 @@ export default function TimeframeSelector({
   onChange: (tf: TimeframeKey) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#131722] p-1">
+    <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
       {TIMEFRAMES.map((t) => {
         const active = t.key === value;
         return (
@@ -20,7 +20,7 @@ export default function TimeframeSelector({
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
               (active
                 ? "bg-[#2563eb] text-white"
-                : "text-[#8b93a7] hover:text-[#e6e9f0]")
+                : "text-[var(--text-3)] hover:text-[var(--text)]")
             }
           >
             {t.label}

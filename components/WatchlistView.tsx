@@ -62,11 +62,11 @@ export default function WatchlistView({
     <main className="mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/u/${universe}`} className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]">
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
             ← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">★ Watchlist</h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {rows.length} {rows.length === 1 ? "name" : "names"} · saved in this
             browser · as of {fmtDateTime(generatedAt)}
             {missing > 0 && ` · ${missing} not in ${UNIVERSE_BY_ID[universe]?.short ?? universe} (switch universe to see them)`}
@@ -80,7 +80,7 @@ export default function WatchlistView({
 
       {rows.length > 0 && summary.high + summary.low + summary.near200 + summary.below200 > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-[#8b93a7]">Signals:</span>
+          <span className="text-[var(--text-3)]">Signals:</span>
           {summary.high > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.up, color: TONE_FG.up }}>{summary.high} at/near 52w high</span>}
           {summary.low > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.down, color: TONE_FG.down }}>{summary.low} at/near 52w low</span>}
           {summary.near200 > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.neutral, color: TONE_FG.neutral }}>{summary.near200} near 200d MA</span>}
@@ -89,9 +89,9 @@ export default function WatchlistView({
       )}
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-10 text-center">
-          <p className="text-sm text-[#aab2c5]">Your watchlist is empty.</p>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center">
+          <p className="text-sm text-[var(--text-2)]">Your watchlist is empty.</p>
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             Add names with the ★ on the{" "}
             <Link href={`/u/${universe}/screener`} className="text-[#60a5fa] hover:underline">
               screener
@@ -100,10 +100,10 @@ export default function WatchlistView({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
-              <tr className="border-b border-[#2a2e39] text-[#8b93a7]">
+              <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
                 <th className="w-8 px-2 py-2"></th>
                 <th className="px-3 py-2 text-left font-medium">Symbol</th>
                 <th className="px-3 py-2 text-left font-medium">Name</th>
@@ -122,7 +122,7 @@ export default function WatchlistView({
                 <tr
                   key={s.symbol}
                   onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`)}
-                  className="cursor-pointer border-b border-[#1f2430] transition-colors hover:bg-[#1a1f2e]"
+                  className="cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
                 >
                   <td className="px-2 py-1.5 text-center">
                     <button
@@ -136,8 +136,8 @@ export default function WatchlistView({
                     </button>
                   </td>
                   <td className="px-3 py-1.5 text-left font-mono font-semibold">{s.symbol}</td>
-                  <td className="max-w-[16rem] truncate px-3 py-1.5 text-left text-[#aab2c5]">{s.name}</td>
-                  <td className="px-3 py-1.5 text-left text-[#8b93a7]">{ETF_TO_SECTOR[s.etf]?.name ?? s.sector}</td>
+                  <td className="max-w-[16rem] truncate px-3 py-1.5 text-left text-[var(--text-2)]">{s.name}</td>
+                  <td className="px-3 py-1.5 text-left text-[var(--text-3)]">{ETF_TO_SECTOR[s.etf]?.name ?? s.sector}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">${fmtPrice(s.price)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.returns[tf]) }}>{fmtPct(s.returns[tf], 1)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.pctFromHigh) }}>{fmtPct(s.pctFromHigh, 1)}</td>

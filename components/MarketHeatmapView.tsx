@@ -39,11 +39,11 @@ export default function MarketHeatmapView({
     <main className="mx-auto max-w-[100rem] px-4 py-6 sm:px-6">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/u/${universe}`} className="text-sm text-[#8b93a7] hover:text-[#e6e9f0]">
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
             ← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">Market Heatmap</h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {shown.length} names
             {stocks.length > shown.length ? ` (top ${shown.length} by cap of ${stocks.length})` : ""} · grouped by
             sector · as of {fmtDateTime(generatedAt)}
@@ -55,7 +55,7 @@ export default function MarketHeatmapView({
         </div>
       </header>
 
-      <div className="rounded-xl border border-[#2a2e39] bg-[#0b0e14] p-2">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2">
         <Treemap
           stocks={shown}
           tf={tf}
@@ -69,7 +69,7 @@ export default function MarketHeatmapView({
           groupBy="sector"
         />
       </div>
-      <p className="mt-2 text-center text-xs text-[#8b93a7]">
+      <p className="mt-2 text-center text-xs text-[var(--text-3)]">
         Click a sector label to open it · click a tile for the stock · sized by market cap, colored by{" "}
         {TIMEFRAMES.find((t) => t.key === tf)?.label} return.
       </p>

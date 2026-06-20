@@ -38,10 +38,10 @@ function Card({ b, subtitle, url }: { b: Breakdown; subtitle: string; url: strin
   const total = (b.total?.[0] ?? rows.reduce((s, r) => s + (r.latest || 0), 0)) || 1;
   const max = Math.max(...rows.map((r) => r.latest || 0), 1);
   return (
-    <section className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[#aab2c5]">
-          Revenue {subtitle} {b.periods[0] && <span className="font-normal text-[#5b6478]">· FY{b.periods[0]}</span>}
+        <h3 className="text-sm font-semibold text-[var(--text-2)]">
+          Revenue {subtitle} {b.periods[0] && <span className="font-normal text-[var(--text-4)]">· FY{b.periods[0]}</span>}
         </h3>
         <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-[#60a5fa] hover:underline">10-K ↗</a>
       </div>
@@ -52,15 +52,15 @@ function Card({ b, subtitle, url }: { b: Breakdown; subtitle: string; url: strin
           return (
             <div key={i}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="truncate text-[#aab2c5]">{r.name}</span>
+                <span className="truncate text-[var(--text-2)]">{r.name}</span>
                 <span className="shrink-0 tabular-nums">
-                  <span className="text-[#e6e9f0]">{fmtB(r.latest)}</span> <span className="text-[#8b93a7]">{pct.toFixed(0)}%</span>
+                  <span className="text-[var(--text)]">{fmtB(r.latest)}</span> <span className="text-[var(--text-3)]">{pct.toFixed(0)}%</span>
                   {yoy != null && (
                     <span style={{ color: yoy >= 0 ? "#22c55e" : "#ef4444" }}> {yoy >= 0 ? "+" : ""}{yoy.toFixed(0)}%</span>
                   )}
                 </span>
               </div>
-              <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded bg-[#0b0e14]">
+              <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded bg-[var(--bg)]">
                 <div className="h-1.5 rounded bg-[#60a5fa]" style={{ width: `${(r.latest! / max) * 100}%` }} />
               </div>
             </div>

@@ -24,14 +24,14 @@ function TileCard({ t }: { t: Tile }) {
   const signal = t.kind === "rate" ? t.change : t.changePct;
   const has = signal != null;
   const pos = (signal ?? 0) >= 0;
-  const col = !has ? "#8b93a7" : pos ? "#22c55e" : "#ef4444";
+  const col = !has ? "var(--text-3)" : pos ? "#22c55e" : "#ef4444";
   return (
-    <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
       <div className="flex items-baseline justify-between gap-1">
-        <span className="truncate text-xs font-medium text-[#aab2c5]">{t.name}</span>
-        <span className="shrink-0 font-mono text-[10px] text-[#5b6478]">{t.sym}</span>
+        <span className="truncate text-xs font-medium text-[var(--text-2)]">{t.name}</span>
+        <span className="shrink-0 font-mono text-[10px] text-[var(--text-4)]">{t.sym}</span>
       </div>
-      <div className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-[#e6e9f0]">{fmtPrice(t)}</div>
+      <div className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{fmtPrice(t)}</div>
       <div className="text-xs font-medium tabular-nums" style={{ color: col }}>
         {has ? (pos ? "▲" : "▼") : ""} {fmtChange(t)}
       </div>
@@ -52,14 +52,14 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Market Monitor</h1>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             Cross-asset snapshot · indices, rates, FX, commodities &amp; crypto · as of {fmtDateTime(asOf)}
           </p>
         </div>
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm text-[#aab2c5] hover:border-[#3a4256] disabled:opacity-50"
+          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-2)] hover:border-[var(--border-strong)] disabled:opacity-50"
         >
           {refreshing ? "Refreshing…" : "↻ Refresh"}
         </button>
@@ -67,7 +67,7 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
 
       {groups.map((g) => (
         <section key={g.name} className="mb-5">
-          <h2 className="mb-2 text-sm font-semibold text-[#aab2c5]">{g.name}</h2>
+          <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">{g.name}</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {g.tiles.map((t) => (
               <TileCard key={t.sym} t={t} />
@@ -80,7 +80,7 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
         <NewsFeed query="market" title="Market headlines" count={14} />
       </section>
 
-      <p className="mt-2 text-[11px] text-[#5b6478]">
+      <p className="mt-2 text-[11px] text-[var(--text-4)]">
         Quotes via Yahoo (may be delayed). Yields shown as level; change in basis points.
       </p>
     </main>

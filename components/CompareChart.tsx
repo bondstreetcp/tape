@@ -61,7 +61,7 @@ export default function CompareChart({
   return (
     <div>
       <MultiLineChart rows={rows} series={series} tf={tf} hidden={new Set()} highlight={null} showEndLabels />
-      <p className="mt-1 text-center text-[11px] text-[#5b6478]">
+      <p className="mt-1 text-center text-[11px] text-[var(--text-4)]">
         Rebased to % change over the window — compare relative performance.
         {loading && compareSymbols.length > 0 && " · loading…"}
       </p>

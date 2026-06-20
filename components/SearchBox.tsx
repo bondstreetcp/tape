@@ -61,10 +61,10 @@ export default function SearchBox({
           }
         }}
         placeholder="Search ticker or company…"
-        className="w-56 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2 text-sm outline-none placeholder:text-[#5b6478] focus:border-[#3a4256] sm:w-64"
+        className="w-56 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)] sm:w-64"
       />
       {open && matches.length > 0 && (
-        <div className="absolute right-0 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[#2a2e39] bg-[#0b0e14] shadow-xl">
+        <div className="absolute right-0 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-xl">
           {matches.map((m, i) => (
             <button
               key={m.symbol}
@@ -75,11 +75,11 @@ export default function SearchBox({
               onMouseEnter={() => setActive(i)}
               className={
                 "flex w-full items-center gap-2 px-3 py-2 text-left " +
-                (i === active ? "bg-[#1a1f2e]" : "")
+                (i === active ? "bg-[var(--surface-hover)]" : "")
               }
             >
               <span className="w-14 shrink-0 font-mono text-sm font-semibold">{m.symbol}</span>
-              <span className="min-w-0 flex-1 truncate text-xs text-[#8b93a7]">{m.name}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-3)]">{m.name}</span>
             </button>
           ))}
         </div>

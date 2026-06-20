@@ -91,7 +91,7 @@ export default function PeerComparison({
 
   if (peers.length === 0) {
     return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
         No peer data available.
       </div>
     );
@@ -99,21 +99,21 @@ export default function PeerComparison({
 
   return (
     <div>
-      <p className="mb-3 text-sm text-[#8b93a7]">
+      <p className="mb-3 text-sm text-[var(--text-3)]">
         {symbol} vs {peers.length - 1} peers in{" "}
-        <span className="text-[#aab2c5]">{peerGroup}</span> · valuation &amp;
+        <span className="text-[var(--text-2)]">{peerGroup}</span> · valuation &amp;
         performance from the snapshot · click a row to open
       </p>
-      <div className="overflow-x-auto rounded-xl border border-[#2a2e39] bg-[#131722]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[760px] text-sm">
           <thead>
-            <tr className="border-b border-[#2a2e39] text-[#8b93a7]">
+            <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
               {columns.map((c) => (
                 <th
                   key={c.key}
                   onClick={() => onSort(c.key, c.num)}
                   className={
-                    "cursor-pointer select-none px-3 py-2 font-medium whitespace-nowrap hover:text-[#e6e9f0] " +
+                    "cursor-pointer select-none px-3 py-2 font-medium whitespace-nowrap hover:text-[var(--text)] " +
                     (c.align === "right" ? "text-right" : "text-left")
                   }
                 >
@@ -124,7 +124,7 @@ export default function PeerComparison({
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-[#2a2e39] bg-[#0f1420] text-[#8b93a7]">
+            <tr className="border-b border-[var(--border)] bg-[var(--bg)] text-[var(--text-3)]">
               {columns.map((c, i) => (
                 <td key={c.key} className={"px-3 py-1.5 whitespace-nowrap " + (c.align === "right" ? "text-right tabular-nums" : "text-left")}>
                   {i === 0 ? "Peer median" : c.median ? c.fmt(medians[c.key]) : ""}
@@ -138,8 +138,8 @@ export default function PeerComparison({
                   key={s.symbol}
                   onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}/financials`)}
                   className={
-                    "cursor-pointer border-b border-[#1f2430] transition-colors hover:bg-[#1a1f2e] " +
-                    (isCompany ? "bg-[#10182a]" : "")
+                    "cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)] " +
+                    (isCompany ? "bg-[var(--surface-3)]" : "")
                   }
                 >
                   {columns.map((c) => {
@@ -150,7 +150,7 @@ export default function PeerComparison({
                         className={
                           "px-3 py-1.5 whitespace-nowrap " +
                           (c.align === "right" ? "text-right tabular-nums " : "text-left ") +
-                          (c.key === "symbol" ? "font-mono font-semibold " : c.key === "name" ? "max-w-[14rem] truncate text-[#aab2c5] " : "") +
+                          (c.key === "symbol" ? "font-mono font-semibold " : c.key === "name" ? "max-w-[14rem] truncate text-[var(--text-2)] " : "") +
                           (isCompany ? "text-[#93c5fd]" : "")
                         }
                         style={c.color && !isCompany ? { color: c.color(v) } : undefined}

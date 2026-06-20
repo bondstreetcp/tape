@@ -36,11 +36,11 @@ export default function TranscriptIntel({ symbol, name }: { symbol: string; name
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
-      <div className="flex items-center justify-between gap-3 border-b border-[#2a2e39] px-4 py-2.5">
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <div className="min-w-0">
-          <span className="text-sm font-semibold text-[#aab2c5]">Earnings-call intelligence</span>
-          <span className="ml-2 text-[11px] text-[#5b6478]">theme mentions &amp; tone across recent calls</span>
+          <span className="text-sm font-semibold text-[var(--text-2)]">Earnings-call intelligence</span>
+          <span className="ml-2 text-[11px] text-[var(--text-4)]">theme mentions &amp; tone across recent calls</span>
         </div>
         {data == null && (
           <button onClick={() => load(kw)} className="shrink-0 text-xs text-[#60a5fa] hover:underline">
@@ -50,13 +50,13 @@ export default function TranscriptIntel({ symbol, name }: { symbol: string; name
       </div>
 
       {data === "loading" && (
-        <div className="px-4 py-4 text-xs text-[#8b93a7]">Reading the last several earnings calls… (a few seconds)</div>
+        <div className="px-4 py-4 text-xs text-[var(--text-3)]">Reading the last several earnings calls… (a few seconds)</div>
       )}
 
       {data && data !== "loading" && (
         <div className="px-4 py-3">
           {!data.available || data.calls.length < 2 ? (
-            <div className="text-xs text-[#8b93a7]">{data.note || "Not enough transcripts to chart a trend."}</div>
+            <div className="text-xs text-[var(--text-3)]">{data.note || "Not enough transcripts to chart a trend."}</div>
           ) : (
             <>
               <form
@@ -66,17 +66,17 @@ export default function TranscriptIntel({ symbol, name }: { symbol: string; name
                 <input
                   value={kw}
                   onChange={(e) => setKw(e.target.value)}
-                  className="min-w-[220px] flex-1 rounded-lg border border-[#2a2e39] bg-[#0d1117] px-2.5 py-1.5 text-xs text-[#e6e9f0] outline-none focus:border-[#3a4256]"
+                  className="min-w-[220px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
                   placeholder="comma-separated themes, e.g. AI, pricing, China"
                 />
-                <button type="submit" className="rounded-lg border border-[#2a2e39] bg-[#0d1117] px-3 py-1.5 text-xs text-[#aab2c5] hover:border-[#3a4256]">
+                <button type="submit" className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text-2)] hover:border-[var(--border-strong)]">
                   Update
                 </button>
               </form>
 
               <ToneTrend calls={data.calls} />
               <KeywordHeatmap calls={data.calls} keywords={data.keywords} />
-              <p className="mt-2 text-[10px] text-[#5b6478]">
+              <p className="mt-2 text-[10px] text-[var(--text-4)]">
                 Tone = (positive − negative words) ÷ (positive + negative), finance-specific lexicon. Mentions are raw
                 counts per call. Source: The Motley Fool transcripts.
               </p>
@@ -92,7 +92,7 @@ function ToneTrend({ calls }: { calls: CallPoint[] }) {
   const H = 34;
   return (
     <div className="mb-4">
-      <div className="mb-1 text-[11px] font-medium text-[#8b93a7]">Management tone</div>
+      <div className="mb-1 text-[11px] font-medium text-[var(--text-3)]">Management tone</div>
       <div className="flex items-end gap-2">
         {calls.map((c, i) => {
           const up = c.tone >= 0;
@@ -107,7 +107,7 @@ function ToneTrend({ calls }: { calls: CallPoint[] }) {
               <div className="mt-1 font-mono text-[10px] tabular-nums" style={{ color: up ? "#22c55e" : "#ef4444" }}>
                 {c.tone >= 0 ? "+" : ""}{c.tone.toFixed(2)}
               </div>
-              <div className="mt-0.5 max-w-[52px] truncate text-[9px] text-[#5b6478] group-hover:text-[#8b93a7]">{c.quarter}</div>
+              <div className="mt-0.5 max-w-[52px] truncate text-[9px] text-[var(--text-4)] group-hover:text-[var(--text-3)]">{c.quarter}</div>
             </a>
           );
         })}
@@ -121,14 +121,14 @@ function KeywordHeatmap({ calls, keywords }: { calls: CallPoint[]; keywords: str
   for (const k of keywords) maxOf[k] = Math.max(1, ...calls.map((c) => c.keyword[k] || 0));
   return (
     <div className="overflow-x-auto">
-      <div className="mb-1 text-[11px] font-medium text-[#8b93a7]">Theme mentions per call</div>
+      <div className="mb-1 text-[11px] font-medium text-[var(--text-3)]">Theme mentions per call</div>
       <table className="w-full min-w-[420px] border-collapse text-xs">
         <thead>
-          <tr className="text-[#8b93a7]">
+          <tr className="text-[var(--text-3)]">
             <th className="py-1 pr-2 text-left font-medium">Theme</th>
             {calls.map((c, i) => (
               <th key={i} className="px-1 py-1 text-center font-medium">
-                <div className="text-[10px] text-[#aab2c5]">{c.quarter}</div>
+                <div className="text-[10px] text-[var(--text-2)]">{c.quarter}</div>
               </th>
             ))}
             <th className="pl-2 text-right font-medium">Trend</th>
@@ -139,10 +139,10 @@ function KeywordHeatmap({ calls, keywords }: { calls: CallPoint[]; keywords: str
             const first = calls[0]?.keyword[k] || 0;
             const last = calls[calls.length - 1]?.keyword[k] || 0;
             const arrow = last > first * 1.2 ? "↑" : last < first * 0.8 ? "↓" : "→";
-            const ac = arrow === "↑" ? "#22c55e" : arrow === "↓" ? "#ef4444" : "#8b93a7";
+            const ac = arrow === "↑" ? "#22c55e" : arrow === "↓" ? "#ef4444" : "var(--text-3)";
             return (
-              <tr key={k} className="border-t border-[#1f2430]">
-                <td className="py-1 pr-2 text-left text-[#aab2c5]">{k}</td>
+              <tr key={k} className="border-t border-[var(--divider)]">
+                <td className="py-1 pr-2 text-left text-[var(--text-2)]">{k}</td>
                 {calls.map((c, i) => {
                   const v = c.keyword[k] || 0;
                   const intensity = v / maxOf[k];
@@ -152,7 +152,7 @@ function KeywordHeatmap({ calls, keywords }: { calls: CallPoint[]; keywords: str
                         className="inline-block min-w-[26px] rounded px-1 py-0.5 tabular-nums"
                         style={{
                           background: v ? `rgba(96,165,250,${0.12 + intensity * 0.5})` : "transparent",
-                          color: v ? "#e6e9f0" : "#3a4150",
+                          color: v ? "var(--text)" : "var(--border-strong)",
                         }}
                       >
                         {v}

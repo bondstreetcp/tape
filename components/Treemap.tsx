@@ -102,12 +102,12 @@ export default function Treemap({
                 y={gy + 12}
                 fontSize={10}
                 fontWeight={600}
-                fill="#aab2c5"
+                fill="var(--text-2)"
                 onClick={clickable ? () => onIndustryClick!(g.data.name) : undefined}
                 style={{
                   cursor: clickable ? "pointer" : "default",
                   textDecoration: clickable ? "underline" : "none",
-                  textDecorationColor: "#3a4150",
+                  textDecorationColor: "var(--border-strong)",
                 }}
               >
                 {truncate(g.data.name, Math.floor(gw / 6))}
@@ -159,7 +159,7 @@ export default function Treemap({
                   width={w}
                   height={h}
                   fill={fill}
-                  stroke={isSel ? "#ffffff" : near === "high" ? "#22c55e" : near === "low" ? "#ef4444" : "#0b0e14"}
+                  stroke={isSel ? "#ffffff" : near === "high" ? "#22c55e" : near === "low" ? "#ef4444" : "var(--bg)"}
                   strokeWidth={isSel ? 2 : near ? 1.5 : 0.5}
                 />
                 {showTicker && (
@@ -207,7 +207,7 @@ export default function Treemap({
 
       {hover && (
         <div
-          className="pointer-events-none absolute z-10 w-56 -translate-x-1/2 translate-y-2 rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-3 text-xs shadow-xl"
+          className="pointer-events-none absolute z-10 w-56 -translate-x-1/2 translate-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3 text-xs shadow-xl"
           style={{
             left: Math.min(Math.max(hover.x, 110), (width || 0) - 110),
             top: hover.y,
@@ -222,11 +222,11 @@ export default function Treemap({
               {fmtPct(hover.row.returns[tf])}
             </span>
           </div>
-          <div className="mt-0.5 truncate text-[#8b93a7]">{hover.row.name}</div>
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[#aab2c5]">
-            <span className="text-[#8b93a7]">From 52w high</span>
+          <div className="mt-0.5 truncate text-[var(--text-3)]">{hover.row.name}</div>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[var(--text-2)]">
+            <span className="text-[var(--text-3)]">From 52w high</span>
             <span className="text-right tabular-nums">{fmtPct(hover.row.pctFromHigh)}</span>
-            <span className="text-[#8b93a7]">From 52w low</span>
+            <span className="text-[var(--text-3)]">From 52w low</span>
             <span className="text-right tabular-nums">+{hover.row.pctFromLow.toFixed(2)}%</span>
           </div>
         </div>
@@ -241,6 +241,6 @@ function truncate(s: string, max: number) {
 }
 
 function trendText(v: number | null) {
-  if (v == null) return "#8b93a7";
-  return v > 0 ? "#22c55e" : v < 0 ? "#ef4444" : "#8b93a7";
+  if (v == null) return "var(--text-3)";
+  return v > 0 ? "#22c55e" : v < 0 ? "#ef4444" : "var(--text-3)";
 }

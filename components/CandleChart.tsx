@@ -134,10 +134,10 @@ export default function CandleChart({
   };
 
   if (loading) {
-    return <div className="flex h-[320px] items-center justify-center text-sm text-[#8b93a7]">Loading OHLC data…</div>;
+    return <div className="flex h-[320px] items-center justify-center text-sm text-[var(--text-3)]">Loading OHLC data…</div>;
   }
   if (!view) {
-    return <div className="flex h-[320px] items-center justify-center text-sm text-[#8b93a7]">No candle data for this range.</div>;
+    return <div className="flex h-[320px] items-center justify-center text-sm text-[var(--text-3)]">No candle data for this range.</div>;
   }
 
   const hb = view.bars[hover ?? view.n - 1];
@@ -148,11 +148,11 @@ export default function CandleChart({
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-xs tabular-nums">
-          <span className="text-[#8b93a7]">{new Date(hb.t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</span>
+          <span className="text-[var(--text-3)]">{new Date(hb.t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</span>
           <Read label="O" v={hb.o} /><Read label="H" v={hb.h} /><Read label="L" v={hb.l} />
           <span style={{ color: up ? "#22c55e" : "#ef4444" }}>C {fmtPrice(hb.c)}</span>
           <span style={{ color: up ? "#22c55e" : "#ef4444" }}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</span>
-          <span className="text-[#8b93a7]">Vol {fmtVol(hb.v)}</span>
+          <span className="text-[var(--text-3)]">Vol {fmtVol(hb.v)}</span>
         </div>
         <div className="flex items-center gap-1">
           {SMA_DEFS.map((d) => (
@@ -161,8 +161,8 @@ export default function CandleChart({
               onClick={() => setSmaOn((p) => { const n = new Set(p); n.has(d.period) ? n.delete(d.period) : n.add(d.period); return n; })}
               className="rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors"
               style={{
-                borderColor: smaOn.has(d.period) ? d.color : "#2a2e39",
-                color: smaOn.has(d.period) ? d.color : "#8b93a7",
+                borderColor: smaOn.has(d.period) ? d.color : "var(--border)",
+                color: smaOn.has(d.period) ? d.color : "var(--text-3)",
                 background: smaOn.has(d.period) ? d.color + "1a" : "transparent",
               }}
             >
@@ -183,8 +183,8 @@ export default function CandleChart({
         {/* price gridlines */}
         {view.yTicks.map((t, i) => (
           <g key={i}>
-            <line x1={ML} x2={VBW - MR} y1={t.y} y2={t.y} stroke="#1a1f2b" strokeWidth={1} />
-            <text x={VBW - MR + 4} y={t.y + 3} fontSize={10} fill="#5b6478">{t.label}</text>
+            <line x1={ML} x2={VBW - MR} y1={t.y} y2={t.y} stroke="var(--surface-hover)" strokeWidth={1} />
+            <text x={VBW - MR + 4} y={t.y + 3} fontSize={10} fill="var(--text-4)">{t.label}</text>
           </g>
         ))}
         {/* candles */}
@@ -211,16 +211,16 @@ export default function CandleChart({
           const y = view.yV(b.v);
           return <rect key={i} x={x - view.cw / 2} y={y} width={view.cw} height={VOL_TOP + VH - y} fill={b.c >= b.o ? "#26a269" : "#e0533d"} opacity={0.45} />;
         })}
-        <text x={ML} y={VOL_TOP - 4} fontSize={10} fill="#5b6478">Volume</text>
+        <text x={ML} y={VOL_TOP - 4} fontSize={10} fill="var(--text-4)">Volume</text>
         {/* x labels */}
         {view.xTickIdx.map((idx) => (
-          <text key={idx} x={view.x(idx)} y={VBH - 6} fontSize={10} fill="#5b6478" textAnchor="middle">
+          <text key={idx} x={view.x(idx)} y={VBH - 6} fontSize={10} fill="var(--text-4)" textAnchor="middle">
             {xLabel(view.bars[idx].t, tf)}
           </text>
         ))}
         {/* crosshair */}
         {hover != null && (
-          <line x1={view.x(hover)} x2={view.x(hover)} y1={MT} y2={VOL_TOP + VH} stroke="#5b6478" strokeWidth={0.75} strokeDasharray="3 3" />
+          <line x1={view.x(hover)} x2={view.x(hover)} y1={MT} y2={VOL_TOP + VH} stroke="var(--text-4)" strokeWidth={0.75} strokeDasharray="3 3" />
         )}
       </svg>
     </div>
@@ -229,8 +229,8 @@ export default function CandleChart({
 
 function Read({ label, v }: { label: string; v: number }) {
   return (
-    <span className="text-[#aab2c5]">
-      <span className="text-[#5b6478]">{label}</span> {fmtPrice(v)}
+    <span className="text-[var(--text-2)]">
+      <span className="text-[var(--text-4)]">{label}</span> {fmtPrice(v)}
     </span>
   );
 }

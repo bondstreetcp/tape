@@ -98,12 +98,12 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
               ? `Search ${name || ticker}'s filings — e.g. "data center", buyback, China`
               : 'Search every company\'s filings — e.g. "generative AI", tariff'
           }
-          className="min-w-[240px] flex-1 rounded-lg border border-[#2a2e39] bg-[#0d1117] px-3 py-2 text-sm text-[#e6e9f0] outline-none placeholder:text-[#5b6478] focus:border-[#3a4256]"
+          className="min-w-[240px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
         />
         <select
           value={forms}
           onChange={(e) => setForms(e.target.value)}
-          className="rounded-lg border border-[#2a2e39] bg-[#0d1117] px-2 py-2 text-sm text-[#aab2c5] outline-none focus:border-[#3a4256]"
+          className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 py-2 text-sm text-[var(--text-2)] outline-none focus:border-[var(--border-strong)]"
         >
           {FORM_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>{f.label}</option>
@@ -113,21 +113,21 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
           Search
         </button>
       </form>
-      <p className="text-[11px] text-[#5b6478]">
+      <p className="text-[11px] text-[var(--text-4)]">
         Full-text search of SEC EDGAR filings since 2001{ticker ? " + this company's recent earnings calls" : ""}. Wrap a phrase in &quot;quotes&quot; for an exact match.
       </p>
 
       {submitted && ticker && !submitted.all && calls && calls !== "loading" && calls.length > 0 && (
-        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
-          <div className="mb-2 text-xs font-semibold text-[#aab2c5]">In recent earnings calls</div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="mb-2 text-xs font-semibold text-[var(--text-2)]">In recent earnings calls</div>
           <div className="space-y-2">
             {calls.map((c, i) => (
-              <a key={i} href={c.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-[#1f2430] bg-[#0d1117] px-3 py-2 hover:border-[#2a3346]">
+              <a key={i} href={c.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] px-3 py-2 hover:border-[#2a3346]">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-medium text-[#e6e9f0]">{c.title}</span>
-                  <span className="shrink-0 whitespace-nowrap text-[#8b93a7]">{c.count}× · {c.date} ↗</span>
+                  <span className="truncate font-medium text-[var(--text)]">{c.title}</span>
+                  <span className="shrink-0 whitespace-nowrap text-[var(--text-3)]">{c.count}× · {c.date} ↗</span>
                 </div>
-                <div className="mt-1 text-[13px] leading-relaxed text-[#c2c8d4]">{highlight(c.snippet, submitted.q)}</div>
+                <div className="mt-1 text-[13px] leading-relaxed text-[var(--text-body)]">{highlight(c.snippet, submitted.q)}</div>
               </a>
             ))}
           </div>
@@ -136,20 +136,20 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
 
       {submitted &&
         (loading && !data ? (
-          <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
             Searching EDGAR…
           </div>
         ) : !data || data.total === 0 ? (
-          <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
             <div>No filings {ticker && !submitted.all ? `from ${name || ticker} ` : ""}match &quot;{submitted.q}&quot;.</div>
-            <div className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#5b6478]">
+            <div className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[var(--text-4)]">
               This searches the text of SEC filings (10-K / 10-Q / 8-K / proxies), not news. Filings use formal wording — try the
-              filing term (e.g. <span className="text-[#8b93a7]">repurchase</span>, not buyback), remove the quotes, or widen the form filter.
+              filing term (e.g. <span className="text-[var(--text-3)]">repurchase</span>, not buyback), remove the quotes, or widen the form filter.
             </div>
             {ticker && !submitted.all && (
               <button
                 onClick={() => onSearch(undefined, true)}
-                className="mt-3 rounded-lg border border-[#2a2e39] bg-[#0d1117] px-3 py-1.5 text-xs text-[#60a5fa] hover:border-[#3a4256]"
+                className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[#60a5fa] hover:border-[var(--border-strong)]"
               >
                 Search all companies for &quot;{submitted.q}&quot; →
               </button>
@@ -157,15 +157,15 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
           </div>
         ) : (
           <>
-            <div className="text-xs text-[#8b93a7]">
-              <span className="font-semibold text-[#aab2c5]">{data.total >= 10000 ? "10,000+" : data.total.toLocaleString()}</span>{" "}
-              filings mention <span className="text-[#e6e9f0]">&quot;{data.rewroteTo || submitted.q}&quot;</span>
+            <div className="text-xs text-[var(--text-3)]">
+              <span className="font-semibold text-[var(--text-2)]">{data.total >= 10000 ? "10,000+" : data.total.toLocaleString()}</span>{" "}
+              filings mention <span className="text-[var(--text)]">&quot;{data.rewroteTo || submitted.q}&quot;</span>
               {ticker && !submitted.all ? "" : " across all companies"}
             </div>
             {data.rewroteTo && (
-              <div className="-mt-1 text-[11px] text-[#5b6478]">
+              <div className="-mt-1 text-[11px] text-[var(--text-4)]">
                 Few filings literally say &quot;{submitted.q}&quot; — showing the filing term{" "}
-                <span className="text-[#8b93a7]">&quot;{data.rewroteTo}&quot;</span>.
+                <span className="text-[var(--text-3)]">&quot;{data.rewroteTo}&quot;</span>.
               </div>
             )}
             <div className="space-y-2">
@@ -176,7 +176,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
             {visible < data.hits.length ? (
               <button
                 onClick={() => setVisible((v) => v + 12)}
-                className="w-full rounded-lg border border-[#2a2e39] bg-[#131722] py-2 text-sm text-[#aab2c5] hover:border-[#3a4256]"
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 text-sm text-[var(--text-2)] hover:border-[var(--border-strong)]"
               >
                 Show more results
               </button>
@@ -184,7 +184,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
               <button
                 onClick={() => { run(submitted.q, submitted.forms, data.nextFrom!, true, submitted.all); setVisible((v) => v + 12); }}
                 disabled={loading}
-                className="w-full rounded-lg border border-[#2a2e39] bg-[#131722] py-2 text-sm text-[#aab2c5] hover:border-[#3a4256] disabled:opacity-50"
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 text-sm text-[var(--text-2)] hover:border-[var(--border-strong)] disabled:opacity-50"
               >
                 {loading ? "Loading…" : "Load more from EDGAR"}
               </button>
@@ -214,27 +214,27 @@ function ResultRow({ hit, q, showCompany }: { hit: DocHit; q: string; showCompan
   }, [hit.url, q]);
 
   return (
-    <div className="rounded-xl border border-[#2a2e39] bg-[#131722] px-4 py-3">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="rounded bg-[#1a1f2e] px-1.5 py-0.5 font-medium text-[#aab2c5]">{hit.form}</span>
+        <span className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 font-medium text-[var(--text-2)]">{hit.form}</span>
         {showCompany && (
-          <span className="font-semibold text-[#e6e9f0]">
+          <span className="font-semibold text-[var(--text)]">
             {hit.name}
-            {hit.ticker ? <span className="text-[#8b93a7]"> ({hit.ticker})</span> : null}
+            {hit.ticker ? <span className="text-[var(--text-3)]"> ({hit.ticker})</span> : null}
           </span>
         )}
-        <span className="tabular-nums text-[#8b93a7]">{hit.date}</span>
+        <span className="tabular-nums text-[var(--text-3)]">{hit.date}</span>
         <a href={hit.url} target="_blank" rel="noreferrer" className="ml-auto text-[#60a5fa] hover:underline">
           Open on EDGAR ↗
         </a>
       </div>
-      <div className="mt-1.5 text-[13px] leading-relaxed text-[#c2c8d4]">
+      <div className="mt-1.5 text-[13px] leading-relaxed text-[var(--text-body)]">
         {snip === "loading" ? (
-          <span className="text-[#5b6478]">Loading match…</span>
+          <span className="text-[var(--text-4)]">Loading match…</span>
         ) : snip ? (
           highlight(snip, q)
         ) : (
-          <span className="text-[#5b6478]">Match in filing — open on EDGAR to view.</span>
+          <span className="text-[var(--text-4)]">Match in filing — open on EDGAR to view.</span>
         )}
       </div>
     </div>

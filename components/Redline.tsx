@@ -32,18 +32,18 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
-      <div className="flex items-center justify-between gap-3 border-b border-[#2a2e39] px-4 py-2.5">
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <div className="min-w-0">
-          <span className="text-sm font-semibold text-[#aab2c5]">Risk Factors — what changed</span>
-          <span className="ml-2 text-[11px] text-[#5b6478]">{form === "10-Q" ? "quarter over quarter" : "year over year"}</span>
+          <span className="text-sm font-semibold text-[var(--text-2)]">Risk Factors — what changed</span>
+          <span className="ml-2 text-[11px] text-[var(--text-4)]">{form === "10-Q" ? "quarter over quarter" : "year over year"}</span>
         </div>
-        <div className="inline-flex shrink-0 rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5" title="Compare the two most recent filings of this type">
+        <div className="inline-flex shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5" title="Compare the two most recent filings of this type">
           {(["10-K", "10-Q"] as const).map((f) => (
             <button
               key={f}
               onClick={() => load(f)}
-              className={"rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (data !== null && form === f ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+              className={"rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (data !== null && form === f ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {f}
             </button>
@@ -52,10 +52,10 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
       </div>
 
       {data == null && (
-        <div className="px-4 py-4 text-xs text-[#8b93a7]">Pick <b>10-K</b> (annual) or <b>10-Q</b> (quarterly) to diff the Risk Factors of the two most recent filings.</div>
+        <div className="px-4 py-4 text-xs text-[var(--text-3)]">Pick <b>10-K</b> (annual) or <b>10-Q</b> (quarterly) to diff the Risk Factors of the two most recent filings.</div>
       )}
       {data === "loading" && (
-        <div className="px-4 py-4 text-xs text-[#8b93a7]">Diffing the two most recent {form} filings… (a few seconds)</div>
+        <div className="px-4 py-4 text-xs text-[var(--text-3)]">Diffing the two most recent {form} filings… (a few seconds)</div>
       )}
 
       {data && data !== "loading" && (
@@ -63,24 +63,24 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
           {data.available ? (
             <>
               <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <span className="font-semibold text-[#e6e9f0]">{form === "10-Q" ? `${data.fromDate} → ${data.toDate}` : `FY${yr(data.fromDate)} → FY${yr(data.toDate)}`}</span>
-                <span><b className="text-[#22c55e]">+{data.added}</b> <span className="text-[#8b93a7]">new</span></span>
-                <span><b className="text-[#ef4444]">−{data.removed}</b> <span className="text-[#8b93a7]">removed</span></span>
-                <span className="text-[#8b93a7]">~{data.reworded} reworded</span>
+                <span className="font-semibold text-[var(--text)]">{form === "10-Q" ? `${data.fromDate} → ${data.toDate}` : `FY${yr(data.fromDate)} → FY${yr(data.toDate)}`}</span>
+                <span><b className="text-[#22c55e]">+{data.added}</b> <span className="text-[var(--text-3)]">new</span></span>
+                <span><b className="text-[#ef4444]">−{data.removed}</b> <span className="text-[var(--text-3)]">removed</span></span>
+                <span className="text-[var(--text-3)]">~{data.reworded} reworded</span>
                 <span className="ml-auto text-[11px]">
                   <a href={data.fromUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">old ↗</a>
                   {" · "}
                   <a href={data.toUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">new ↗</a>
                 </span>
               </div>
-              {data.note && <div className="mb-2 text-[11px] text-[#5b6478]">{data.note}</div>}
+              {data.note && <div className="mb-2 text-[11px] text-[var(--text-4)]">{data.note}</div>}
               {data.added === 0 && data.removed === 0 ? (
-                <div className="py-3 text-xs text-[#8b93a7]">No substantive additions or removals — only reworded language.</div>
+                <div className="py-3 text-xs text-[var(--text-3)]">No substantive additions or removals — only reworded language.</div>
               ) : (
                 <div className="max-h-[520px] space-y-1 overflow-y-auto pr-1">
                   {data.blocks.map((b, i) =>
                     b.type === "gap" ? (
-                      <div key={i} className="py-1 text-center text-[10px] text-[#3a4150]">⋯ {b.count} unchanged ⋯</div>
+                      <div key={i} className="py-1 text-center text-[10px] text-[var(--border-strong)]">⋯ {b.count} unchanged ⋯</div>
                     ) : (
                       <div
                         key={i}
@@ -99,7 +99,7 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
               )}
             </>
           ) : (
-            <div className="text-xs text-[#8b93a7]">
+            <div className="text-xs text-[var(--text-3)]">
               {data.note || "Couldn't generate a redline."}
               {(data.fromUrl || data.toUrl) && (
                 <div className="mt-2">

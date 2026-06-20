@@ -71,51 +71,51 @@ export default function StockView({
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <Link
               href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
             >
               ← {row.etf} {sectorName} heatmap
             </Link>
             <Link
               href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-sm font-medium text-[#aab2c5] transition-colors hover:border-[#3a4256] hover:text-[#e6e9f0]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
             >
               ⇄ {row.industry} peers
             </Link>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-[#8b93a7]">
-            <Link href={`/u/${universe}`} className="hover:text-[#e6e9f0]">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-3)]">
+            <Link href={`/u/${universe}`} className="hover:text-[var(--text)]">
               {UNIVERSE_BY_ID[universe]?.name ?? "Sectors"}
             </Link>
             <span>/</span>
             <Link
               href={`/u/${universe}/sector/${row.etf.toLowerCase()}`}
-              className="hover:text-[#e6e9f0]"
+              className="hover:text-[var(--text)]"
             >
               {row.etf} {sectorName}
             </Link>
             <span>/</span>
             <Link
               href={`/u/${universe}/sector/${row.etf.toLowerCase()}/${slugify(row.industry)}`}
-              className="hover:text-[#e6e9f0]"
+              className="hover:text-[var(--text)]"
             >
               {row.industry}
             </Link>
           </div>
           <div className="mt-1 flex flex-wrap items-baseline gap-3">
             <h1 className="font-mono text-2xl font-bold">{row.symbol}</h1>
-            <span className="text-lg text-[#aab2c5]">{row.name}</span>
+            <span className="text-lg text-[var(--text-2)]">{row.name}</span>
             <span className="font-mono text-xl tabular-nums">${fmtPrice(row.price)}</span>
             <span
               className="text-lg font-semibold tabular-nums"
               style={{ color: trendColor(windowChange ?? row.returns[tf]) }}
             >
               {fmtPct(windowChange ?? row.returns[tf])}{" "}
-              <span className="text-xs font-normal text-[#8b93a7]">
+              <span className="text-xs font-normal text-[var(--text-3)]">
                 {TIMEFRAMES.find((t) => t.key === tf)?.label}
               </span>
             </span>
           </div>
-          <p className="mt-1 text-xs text-[#8b93a7]">
+          <p className="mt-1 text-xs text-[var(--text-3)]">
             {fmtMarketCap(row.marketCap)} cap · as of {fmtDateTime(generatedAt)}
           </p>
           <Link
@@ -133,21 +133,21 @@ export default function StockView({
       </div>
 
       {/* hero: price chart + technical indicators */}
-      <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+      <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-[#8b93a7]">Compare:</span>
-            <span className="rounded-md border border-[#2a2e39] bg-[#0b0e14] px-1.5 py-0.5 font-mono text-xs" style={{ color: "#60a5fa" }}>
+            <span className="text-xs text-[var(--text-3)]">Compare:</span>
+            <span className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 font-mono text-xs" style={{ color: "#60a5fa" }}>
               {row.symbol}
             </span>
             {compareSymbols.map((s, i) => (
               <span
                 key={s}
-                className="inline-flex items-center gap-1 rounded-md border border-[#2a2e39] bg-[#0b0e14] px-1.5 py-0.5 font-mono text-xs"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 font-mono text-xs"
                 style={{ color: CMP_COLORS[i % CMP_COLORS.length] }}
               >
                 {s}
-                <button onClick={() => removeCompare(s)} className="text-[#8b93a7] hover:text-[#e6e9f0]" title="Remove">×</button>
+                <button onClick={() => removeCompare(s)} className="text-[var(--text-3)] hover:text-[var(--text)]" title="Remove">×</button>
               </span>
             ))}
             <input
@@ -155,18 +155,18 @@ export default function StockView({
               onChange={(e) => setCompareInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addCompare(); }}
               placeholder="+ ticker (e.g. KO)"
-              className="w-32 rounded-md border border-[#2a2e39] bg-[#0b0e14] px-2 py-1 text-xs outline-none placeholder:text-[#5b6478] focus:border-[#3a4256]"
+              className="w-32 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
             />
           </div>
           {!comparing && (
-            <div className="inline-flex rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5 text-xs font-medium">
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
               {(["line", "candles"] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setChartMode(m)}
                   className={
                     "rounded-md px-2.5 py-1 capitalize transition-colors " +
-                    (chartMode === m ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")
+                    (chartMode === m ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
                   }
                 >
                   {m}
@@ -187,7 +187,7 @@ export default function StockView({
         ) : chartMode === "candles" ? (
           <CandleChart symbol={row.symbol} tf={tf} now={now} />
         ) : daily.length === 0 && intraday.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-[#8b93a7]">
+          <div className="flex h-[300px] items-center justify-center text-sm text-[var(--text-3)]">
             No price history for {row.symbol}.
           </div>
         ) : (
@@ -203,10 +203,10 @@ export default function StockView({
       </section>
 
       {/* 52-week range */}
-      <section className="mb-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
-        <div className="mb-1 flex items-center justify-between text-xs text-[#8b93a7]">
+      <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="mb-1 flex items-center justify-between text-xs text-[var(--text-3)]">
           <span>52-wk low ${fmtPrice(row.fiftyTwoWeekLow)}</span>
-          <span className="font-semibold text-[#e6e9f0]">${fmtPrice(row.price)}</span>
+          <span className="font-semibold text-[var(--text)]">${fmtPrice(row.price)}</span>
           <span>52-wk high ${fmtPrice(row.fiftyTwoWeekHigh)}</span>
         </div>
         <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[#6b7280] to-[#22c55e]">
@@ -215,7 +215,7 @@ export default function StockView({
             style={{ left: `calc(${pos}% - 2px)` }}
           />
         </div>
-        <div className="mt-1 flex justify-between text-[11px] text-[#8b93a7]">
+        <div className="mt-1 flex justify-between text-[11px] text-[var(--text-3)]">
           <span className="text-[#ef4444]">+{row.pctFromLow.toFixed(1)}% above low</span>
           <span className="text-[#22c55e]">{row.pctFromHigh.toFixed(1)}% from high</span>
         </div>
@@ -231,10 +231,10 @@ export default function StockView({
               "rounded-lg border px-2 py-2 text-center transition-colors " +
               (t.key === tf
                 ? "border-[#2563eb] bg-[#2563eb]/15"
-                : "border-[#2a2e39] bg-[#0b0e14] hover:border-[#3a4256]")
+                : "border-[var(--border)] bg-[var(--bg)] hover:border-[var(--border-strong)]")
             }
           >
-            <div className="text-[11px] text-[#8b93a7]">{t.label}</div>
+            <div className="text-[11px] text-[var(--text-3)]">{t.label}</div>
             <div
               className="mt-0.5 text-sm font-semibold tabular-nums"
               style={{ color: trendColor(row.returns[t.key]) }}

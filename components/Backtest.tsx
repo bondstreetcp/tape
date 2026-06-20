@@ -33,13 +33,13 @@ export default function Backtest({ universe }: { universe: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex flex-wrap rounded-lg border border-[#2a2e39] bg-[#131722] p-0.5">
+        <div className="inline-flex flex-wrap rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
           {STRATS.map((s) => (
             <button
               key={s}
               onClick={() => setStrategy(s)}
               title={strategyLabel(s)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (strategy === s ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (strategy === s ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {strategyLabel(s).split(" (")[0]}
             </button>
@@ -54,7 +54,7 @@ export default function Backtest({ universe }: { universe: string }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <Metric label="Strategy total" value={fmtPct(result.metrics.stratTotal)} color={result.metrics.stratTotal >= result.metrics.benchTotal ? "#22c55e" : "#e6e9f0"} />
+            <Metric label="Strategy total" value={fmtPct(result.metrics.stratTotal)} color={result.metrics.stratTotal >= result.metrics.benchTotal ? "#22c55e" : "var(--text)"} />
             <Metric label="Benchmark total" value={fmtPct(result.metrics.benchTotal)} />
             <Metric label="CAGR" value={fmtPct(result.metrics.stratCagr)} />
             <Metric label="Max drawdown" value={fmtPct(result.metrics.maxDD)} color="#ef4444" />
@@ -64,16 +64,16 @@ export default function Backtest({ universe }: { universe: string }) {
           <EquityChart result={result} />
 
           {strategy !== "equal" && result.holdingsLast.length > 0 && (
-            <div className="text-xs text-[#8b93a7]">
-              <span className="font-medium text-[#aab2c5]">Current holdings:</span> {result.holdingsLast.slice(0, 25).join(", ")}
+            <div className="text-xs text-[var(--text-3)]">
+              <span className="font-medium text-[var(--text-2)]">Current holdings:</span> {result.holdingsLast.slice(0, 25).join(", ")}
               {result.holdingsLast.length > 25 ? "…" : ""}
             </div>
           )}
 
-          <p className="text-[11px] leading-relaxed text-[#5b6478]">
+          <p className="text-[11px] leading-relaxed text-[var(--text-4)]">
             Monthly rebalance, equal-weight, drawn from the top {matrix.symbols.length} names by market cap; benchmark is the cap-weighted
             group. {result.metrics.months} months. Price signals only — no fundamental look-ahead. Uses <em>today’s</em> constituents, so
-            results carry <span className="text-[#8b93a7]">survivorship bias</span> (delisted names are absent) — treat as indicative, not a track record.
+            results carry <span className="text-[var(--text-3)]">survivorship bias</span> (delisted names are absent) — treat as indicative, not a track record.
           </p>
         </>
       )}
@@ -100,23 +100,23 @@ function EquityChart({ result }: { result: BacktestResult }) {
   });
   const yTicks = [yMin, (yMin + yMax) / 2, yMax].map((v) => ({ y: y(v), label: Math.round(v).toString() }));
   return (
-    <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
-      <div className="mb-1 flex items-center gap-4 text-[11px] text-[#8b93a7]">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="mb-1 flex items-center gap-4 text-[11px] text-[var(--text-3)]">
         <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4" style={{ background: "#60a5fa" }} /> Strategy</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4" style={{ background: "#5b6478" }} /> Benchmark (cap-weighted)</span>
-        <span className="text-[#5b6478]">· growth of 100</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4" style={{ background: "var(--text-4)" }} /> Benchmark (cap-weighted)</span>
+        <span className="text-[var(--text-4)]">· growth of 100</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
         {yTicks.map((t, i) => (
           <g key={i}>
-            <line x1={ML} x2={W - MR} y1={t.y} y2={t.y} stroke="#1a1f2b" />
-            <text x={ML - 6} y={t.y + 3} textAnchor="end" fontSize={10} fill="#5b6478">{t.label}</text>
+            <line x1={ML} x2={W - MR} y1={t.y} y2={t.y} stroke="var(--surface-hover)" />
+            <text x={ML - 6} y={t.y + 3} textAnchor="end" fontSize={10} fill="var(--text-4)">{t.label}</text>
           </g>
         ))}
         {yearTicks.map((t, i) => (
-          <text key={i} x={t.x} y={H - 7} textAnchor="middle" fontSize={10} fill="#5b6478">{t.label}</text>
+          <text key={i} x={t.x} y={H - 7} textAnchor="middle" fontSize={10} fill="var(--text-4)">{t.label}</text>
         ))}
-        <path d={path(bench)} fill="none" stroke="#5b6478" strokeWidth={1.4} />
+        <path d={path(bench)} fill="none" stroke="var(--text-4)" strokeWidth={1.4} />
         <path d={path(strat)} fill="none" stroke="#60a5fa" strokeWidth={1.9} />
       </svg>
     </div>
@@ -124,24 +124,24 @@ function EquityChart({ result }: { result: BacktestResult }) {
 }
 
 function Box({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">{children}</div>;
+  return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">{children}</div>;
 }
 function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="rounded-lg border border-[#2a2e39] bg-[#131722] px-3 py-2">
-      <div className="text-[10px] text-[#8b93a7]">{label}</div>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+      <div className="text-[10px] text-[var(--text-3)]">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</div>
     </div>
   );
 }
 function Select({ label, value, onChange, opts, suffix }: { label: string; value: number; onChange: (v: number) => void; opts: number[]; suffix?: string }) {
   return (
-    <label className="flex items-center gap-1.5 text-xs text-[#8b93a7]">
+    <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]">
       {label}
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded-lg border border-[#2a2e39] bg-[#131722] px-2 py-1.5 text-xs text-[#e6e9f0] outline-none focus:border-[#3a4256]"
+        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
       >
         {opts.map((o) => (
           <option key={o} value={o}>{o}{suffix}</option>

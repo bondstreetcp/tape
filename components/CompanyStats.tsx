@@ -35,7 +35,7 @@ const RATING_LABEL: Record<string, string> = {
 export default function CompanyStats({ stats }: { stats: CompanyStats | null }) {
   if (!stats) {
     return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
         No estimate or statistics data available.
       </div>
     );
@@ -78,7 +78,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
         {s.estimates.length > 0 && (
           <table className="mt-3 w-full text-xs">
             <thead>
-              <tr className="text-[#8b93a7]">
+              <tr className="text-[var(--text-3)]">
                 <th className="py-1 text-left font-medium">Period</th>
                 <th className="py-1 text-right font-medium">EPS est.</th>
                 <th className="py-1 text-right font-medium"># </th>
@@ -87,10 +87,10 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
             </thead>
             <tbody>
               {s.estimates.map((e) => (
-                <tr key={e.period} className="border-t border-[#1f2430]">
-                  <td className="py-1 text-left text-[#aab2c5]">{periodName(e.period)}</td>
+                <tr key={e.period} className="border-t border-[var(--divider)]">
+                  <td className="py-1 text-left text-[var(--text-2)]">{periodName(e.period)}</td>
                   <td className="py-1 text-right tabular-nums">{price(e.epsAvg)}</td>
-                  <td className="py-1 text-right tabular-nums text-[#8b93a7]">{e.epsAnalysts ?? "—"}</td>
+                  <td className="py-1 text-right tabular-nums text-[var(--text-3)]">{e.epsAnalysts ?? "—"}</td>
                   <td className="py-1 text-right tabular-nums">{big(e.revAvg)}</td>
                 </tr>
               ))}
@@ -111,7 +111,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
           <BeatSummary surprises={s.surprises} />
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-[#8b93a7]">
+              <tr className="text-[var(--text-3)]">
                 <th className="py-1 text-left font-medium">Quarter</th>
                 <th className="py-1 text-right font-medium">Estimate</th>
                 <th className="py-1 text-right font-medium">Actual</th>
@@ -120,8 +120,8 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
             </thead>
             <tbody>
               {s.surprises.slice(-6).reverse().map((e, i) => (
-                <tr key={i} className="border-t border-[#1f2430]">
-                  <td className="py-1 text-left text-[#aab2c5]">{e.quarter}</td>
+                <tr key={i} className="border-t border-[var(--divider)]">
+                  <td className="py-1 text-left text-[var(--text-2)]">{e.quarter}</td>
                   <td className="py-1 text-right tabular-nums">{price(e.estimate)}</td>
                   <td className="py-1 text-right tabular-nums">{price(e.actual)}</td>
                   <td className="py-1 text-right tabular-nums" style={{ color: trend(e.surprisePercent) }}>
@@ -141,7 +141,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-xs">
               <thead>
-                <tr className="text-[#8b93a7]">
+                <tr className="text-[var(--text-3)]">
                   <th className="py-1 text-left font-medium">Date</th>
                   <th className="py-1 text-left font-medium">Firm</th>
                   <th className="py-1 text-left font-medium">Action</th>
@@ -152,13 +152,13 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
                 {s.ratingChanges.map((c, i) => {
                   const m = actionMeta(c.action);
                   return (
-                    <tr key={i} className="border-t border-[#1f2430]">
-                      <td className="py-1 pr-3 text-left text-[#8b93a7]">{c.date}</td>
-                      <td className="py-1 pr-3 text-left text-[#aab2c5]">{c.firm}</td>
+                    <tr key={i} className="border-t border-[var(--divider)]">
+                      <td className="py-1 pr-3 text-left text-[var(--text-3)]">{c.date}</td>
+                      <td className="py-1 pr-3 text-left text-[var(--text-2)]">{c.firm}</td>
                       <td className="py-1 pr-3 text-left">
                         <span style={{ color: m.color }}>{m.label}</span>
                         {c.toGrade && (
-                          <span className="text-[#8b93a7]">
+                          <span className="text-[var(--text-3)]">
                             {" · "}
                             {c.fromGrade && c.fromGrade !== c.toGrade ? `${c.fromGrade} → ` : ""}
                             {c.toGrade}
@@ -168,7 +168,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
                       <td className="py-1 text-right tabular-nums">
                         {c.targetTo != null ? `$${c.targetTo.toFixed(0)}` : "—"}
                         {c.targetFrom != null && c.targetTo != null && c.targetFrom !== c.targetTo && (
-                          <span className="text-[10px] text-[#8b93a7]"> (was ${c.targetFrom.toFixed(0)})</span>
+                          <span className="text-[10px] text-[var(--text-3)]"> (was ${c.targetFrom.toFixed(0)})</span>
                         )}
                       </td>
                     </tr>
@@ -248,10 +248,10 @@ function BeatSummary({ surprises }: { surprises: import("@/lib/companyStats").Su
   const avg = recent.reduce((a, e) => a + (e.surprisePercent ?? 0), 0) / recent.length;
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-      <span className="text-[#aab2c5]">
-        Beat in <span className="font-semibold text-[#e6e9f0]">{beats} of {recent.length}</span> recent quarters
+      <span className="text-[var(--text-2)]">
+        Beat in <span className="font-semibold text-[var(--text)]">{beats} of {recent.length}</span> recent quarters
       </span>
-      <span className="text-[#8b93a7]">
+      <span className="text-[var(--text-3)]">
         avg surprise{" "}
         <span className="font-semibold tabular-nums" style={{ color: trend(avg) }}>
           {avg >= 0 ? "+" : ""}{(avg * 100).toFixed(1)}%
@@ -274,17 +274,17 @@ function EstimateRevisions({ estimates }: { estimates: import("@/lib/companyStat
       ? { t: "Estimates trending higher ↑", c: "#22c55e" }
       : falling && !rising
         ? { t: "Estimates trending lower ↓", c: "#ef4444" }
-        : { t: "Estimates steady", c: "#8b93a7" };
+        : { t: "Estimates steady", c: "var(--text-3)" };
   return (
     <Section title="Estimate Revisions (consensus EPS)" wide>
       <div className="mb-2 text-xs">
         <span className="font-semibold" style={{ color: signal.c }}>{signal.t}</span>
-        <span className="text-[#8b93a7]"> · where consensus sits now vs. 30–90 days ago, and how many analysts moved each way</span>
+        <span className="text-[var(--text-3)]"> · where consensus sits now vs. 30–90 days ago, and how many analysts moved each way</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[460px] text-xs">
           <thead>
-            <tr className="text-[#8b93a7]">
+            <tr className="text-[var(--text-3)]">
               <th className="py-1 text-left font-medium">Period</th>
               <th className="py-1 text-right font-medium">EPS now</th>
               <th className="py-1 text-right font-medium">vs 30d</th>
@@ -297,8 +297,8 @@ function EstimateRevisions({ estimates }: { estimates: import("@/lib/companyStat
               const d30 = e.epsCurrent != null && e.eps30dAgo ? e.epsCurrent / e.eps30dAgo - 1 : null;
               const d90 = e.epsCurrent != null && e.eps90dAgo ? e.epsCurrent / e.eps90dAgo - 1 : null;
               return (
-                <tr key={e.period} className="border-t border-[#1f2430]">
-                  <td className="py-1 text-left text-[#aab2c5]">{periodName(e.period)}</td>
+                <tr key={e.period} className="border-t border-[var(--divider)]">
+                  <td className="py-1 text-left text-[var(--text-2)]">{periodName(e.period)}</td>
                   <td className="py-1 text-right tabular-nums">{price(e.epsCurrent)}</td>
                   <td className="py-1 text-right tabular-nums" style={{ color: trend(d30) }}>{deltaPct(d30)}</td>
                   <td className="py-1 text-right tabular-nums" style={{ color: trend(d90) }}>{deltaPct(d90)}</td>
@@ -330,8 +330,8 @@ function periodName(p: string): string {
 
 function Section({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className={"rounded-xl border border-[#2a2e39] bg-[#131722] p-4" + (wide ? " lg:col-span-2" : "")}>
-      <h3 className="mb-3 text-sm font-semibold text-[#aab2c5]">{title}</h3>
+    <div className={"rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4" + (wide ? " lg:col-span-2" : "")}>
+      <h3 className="mb-3 text-sm font-semibold text-[var(--text-2)]">{title}</h3>
       {children}
     </div>
   );
@@ -342,9 +342,9 @@ function actionMeta(action: string) {
     case "up": return { label: "Upgrade", color: "#22c55e" };
     case "down": return { label: "Downgrade", color: "#ef4444" };
     case "init": return { label: "Initiate", color: "#60a5fa" };
-    case "reit": return { label: "Reiterate", color: "#8b93a7" };
-    case "main": return { label: "Maintain", color: "#8b93a7" };
-    default: return { label: action || "Update", color: "#8b93a7" };
+    case "reit": return { label: "Reiterate", color: "var(--text-3)" };
+    case "main": return { label: "Maintain", color: "var(--text-3)" };
+    default: return { label: action || "Update", color: "var(--text-3)" };
   }
 }
 function Grid({ children }: { children: React.ReactNode }) {
@@ -352,8 +352,8 @@ function Grid({ children }: { children: React.ReactNode }) {
 }
 function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 border-b border-[#1f2430] py-1.5">
-      <span className="text-xs text-[#8b93a7]">{label}</span>
+    <div className="flex items-baseline justify-between gap-2 border-b border-[var(--divider)] py-1.5">
+      <span className="text-xs text-[var(--text-3)]">{label}</span>
       <span className="text-sm font-medium tabular-nums" style={color ? { color } : undefined}>
         {value}
       </span>
@@ -362,8 +362,8 @@ function Metric({ label, value, color }: { label: string; value: string; color?:
 }
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="rounded-lg border border-[#2a2e39] bg-[#0b0e14] px-2 py-2">
-      <div className="text-[10px] text-[#8b93a7]">{label}</div>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-2">
+      <div className="text-[10px] text-[var(--text-3)]">{label}</div>
       <div className="mt-0.5 text-sm font-semibold tabular-nums" style={color ? { color } : undefined}>
         {value}
       </div>
@@ -371,7 +371,7 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 function Empty() {
-  return <div className="py-2 text-xs text-[#8b93a7]">Not available.</div>;
+  return <div className="py-2 text-xs text-[var(--text-3)]">Not available.</div>;
 }
 
 function RatingBar({ r }: { r: import("@/lib/companyStats").RatingDist }) {
@@ -379,7 +379,7 @@ function RatingBar({ r }: { r: import("@/lib/companyStats").RatingDist }) {
   const segs = [
     { n: r.strongBuy, c: "#15803d", label: "Strong Buy" },
     { n: r.buy, c: "#22c55e", label: "Buy" },
-    { n: r.hold, c: "#8b93a7", label: "Hold" },
+    { n: r.hold, c: "var(--text-3)", label: "Hold" },
     { n: r.sell, c: "#fb923c", label: "Sell" },
     { n: r.strongSell, c: "#ef4444", label: "Strong Sell" },
   ];
@@ -390,7 +390,7 @@ function RatingBar({ r }: { r: import("@/lib/companyStats").RatingDist }) {
           <div key={i} style={{ width: `${(s.n / total) * 100}%`, background: s.c }} title={`${s.label}: ${s.n}`} />
         ))}
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[#8b93a7]">
+      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-3)]">
         {segs.map((s, i) => (
           <span key={i} className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-sm" style={{ background: s.c }} />
@@ -418,10 +418,10 @@ function TargetBar({ low, mean, high, price }: { low: number | null; mean: numbe
           <div className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-[#fbbf24] shadow" style={{ left: `calc(${pPrice}% - 2px)` }} title="Current price" />
         )}
       </div>
-      <div className="mt-1 flex justify-between text-[10px] text-[#8b93a7]">
+      <div className="mt-1 flex justify-between text-[10px] text-[var(--text-3)]">
         <span>low ${low.toFixed(0)}</span>
         <span className="text-[#fbbf24]">▮ price</span>
-        <span className="text-[#e6e9f0]">▮ target</span>
+        <span className="text-[var(--text)]">▮ target</span>
         <span>high ${high.toFixed(0)}</span>
       </div>
     </div>

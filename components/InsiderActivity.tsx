@@ -18,7 +18,7 @@ const CODE_LABEL: Record<string, string> = {
   P: "Buy", S: "Sell", A: "Award", M: "Exercise", F: "Tax w/h",
   G: "Gift", X: "Exercise", C: "Conversion", D: "Disposed to issuer", W: "Will/Inherit",
 };
-const KIND_COLOR = { buy: "#22c55e", sell: "#ef4444", other: "#8b93a7" } as const;
+const KIND_COLOR = { buy: "#22c55e", sell: "#ef4444", other: "var(--text-3)" } as const;
 
 type RangeKey = "1y" | "2y" | "5y" | "10y" | "all";
 const RANGES: { key: RangeKey; label: string; years: number }[] = [
@@ -143,7 +143,7 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
         Loading insider filings from SEC EDGAR…
       </div>
     );
@@ -151,9 +151,9 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
 
   if (!cik || (txns.length === 0 && total === 0)) {
     return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
         No SEC Form 4 insider filings found for {symbol}.
-        {err && <div className="mt-1 text-[11px] text-[#5b6478]">{err}</div>}
+        {err && <div className="mt-1 text-[11px] text-[var(--text-4)]">{err}</div>}
       </div>
     );
   }
@@ -161,19 +161,19 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
   return (
     <div className="space-y-4">
       {/* Price chart with insider buy/sell markers */}
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#aab2c5]">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-2)]">
             Insider activity vs price
-            {loadingMore && <span className="text-[11px] font-normal text-[#5b6478]">loading activity…</span>}
+            {loadingMore && <span className="text-[11px] font-normal text-[var(--text-4)]">loading activity…</span>}
           </h3>
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8b93a7]">
-            <div className="inline-flex rounded-md border border-[#2a2e39] bg-[#0b0e14] p-0.5">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-[var(--text-3)]">
+            <div className="inline-flex rounded-md border border-[var(--border)] bg-[var(--bg)] p-0.5">
               {RANGES.map((r) => (
                 <button
                   key={r.key}
                   onClick={() => setRange(r.key)}
-                  className={"rounded px-1.5 py-0.5 font-medium " + (range === r.key ? "bg-[#2563eb] text-white" : "hover:text-[#e6e9f0]")}
+                  className={"rounded px-1.5 py-0.5 font-medium " + (range === r.key ? "bg-[#2563eb] text-white" : "hover:text-[var(--text)]")}
                 >
                   {r.label}
                 </button>
@@ -191,14 +191,14 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
           <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }} preserveAspectRatio="none">
             {chart.yTicks.map((tk) => (
               <g key={tk.y}>
-                <line x1={M.l} x2={CW - M.r} y1={tk.y} y2={tk.y} stroke="#1f2430" strokeWidth={1} />
-                <text x={M.l - 6} y={tk.y + 3} textAnchor="end" fontSize={10} fill="#5b6478">{tk.label}</text>
+                <line x1={M.l} x2={CW - M.r} y1={tk.y} y2={tk.y} stroke="var(--divider)" strokeWidth={1} />
+                <text x={M.l - 6} y={tk.y + 3} textAnchor="end" fontSize={10} fill="var(--text-4)">{tk.label}</text>
               </g>
             ))}
             {chart.xTicks.map((tk) => (
-              <text key={tk.x} x={tk.x} y={CH - 6} textAnchor="middle" fontSize={10} fill="#5b6478">{tk.label}</text>
+              <text key={tk.x} x={tk.x} y={CH - 6} textAnchor="middle" fontSize={10} fill="var(--text-4)">{tk.label}</text>
             ))}
-            <path d={chart.path} fill="none" stroke="#3a4256" strokeWidth={1.25} />
+            <path d={chart.path} fill="none" stroke="var(--border-strong)" strokeWidth={1.25} />
             {chart.markers.map((mk, i) => (
               <g key={i}>
                 <title>{mk.tip}</title>
@@ -211,15 +211,15 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
             ))}
           </svg>
         ) : (
-          <div className="py-6 text-center text-xs text-[#8b93a7]">Price history unavailable for the marker overlay.</div>
+          <div className="py-6 text-center text-xs text-[var(--text-3)]">Price history unavailable for the marker overlay.</div>
         )}
       </div>
 
       {/* Transaction list */}
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2a2e39] px-4 py-2.5 text-xs text-[#8b93a7]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5 text-xs text-[var(--text-3)]">
           <span>
-            <span className="font-semibold text-[#aab2c5]">{txns.length}</span> transactions loaded
+            <span className="font-semibold text-[var(--text-2)]">{txns.length}</span> transactions loaded
             {" · "}
             <span className="text-[#22c55e]">{counts.buy} buys</span>{" / "}
             <span className="text-[#ef4444]">{counts.sell} sells</span>{" / "}
@@ -236,8 +236,8 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
         </div>
         <div className="max-h-[460px] overflow-y-auto">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-[#131722]">
-              <tr className="text-[#8b93a7]">
+            <thead className="sticky top-0 bg-[var(--surface)]">
+              <tr className="text-[var(--text-3)]">
                 <th className="px-3 py-2 text-left font-medium">Date</th>
                 <th className="px-3 py-2 text-left font-medium">Insider</th>
                 <th className="px-3 py-2 text-left font-medium">Type</th>
@@ -248,11 +248,11 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
             </thead>
             <tbody>
               {txns.map((t, i) => (
-                <tr key={i} className="border-t border-[#1f2430]">
-                  <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[#aab2c5]">{t.date}</td>
+                <tr key={i} className="border-t border-[var(--divider)]">
+                  <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-[var(--text-2)]">{t.date}</td>
                   <td className="px-3 py-1.5">
-                    <div className="text-[#e6e9f0]">{titleCase(t.insider)}</div>
-                    <div className="text-[10px] text-[#8b93a7]">{t.role}</div>
+                    <div className="text-[var(--text)]">{titleCase(t.insider)}</div>
+                    <div className="text-[10px] text-[var(--text-3)]">{t.role}</div>
                   </td>
                   <td className="px-3 py-1.5">
                     <span
@@ -265,20 +265,20 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: t.acquired ? "#22c55e" : "#ef4444" }}>
                     {t.acquired ? "+" : "−"}{fmtSh(t.shares)}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[#aab2c5]">{t.price != null ? `$${t.price.toFixed(2)}` : "—"}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[#aab2c5]">{fmtVal(t.value)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-2)]">{t.price != null ? `$${t.price.toFixed(2)}` : "—"}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--text-2)]">{fmtVal(t.value)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div ref={sentinel} />
-          <div className="px-4 py-3 text-center text-xs text-[#8b93a7]">
+          <div className="px-4 py-3 text-center text-xs text-[var(--text-3)]">
             {nextOffset != null ? (
-              <button onClick={loadMore} disabled={loadingMore} className="rounded-md border border-[#2a2e39] px-3 py-1.5 hover:border-[#3a4256] disabled:opacity-50">
+              <button onClick={loadMore} disabled={loadingMore} className="rounded-md border border-[var(--border)] px-3 py-1.5 hover:border-[var(--border-strong)] disabled:opacity-50">
                 {loadingMore ? "Loading…" : "Load older filings"}
               </button>
             ) : (
-              <span className="text-[#5b6478]">All structured Form 4 filings loaded (SEC EDGAR, ~2003–present).</span>
+              <span className="text-[var(--text-4)]">All structured Form 4 filings loaded (SEC EDGAR, ~2003–present).</span>
             )}
           </div>
         </div>
