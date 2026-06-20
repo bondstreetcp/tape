@@ -10,6 +10,7 @@ import CompanyStats from "./CompanyStats";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
+import DocSearch from "./DocSearch";
 import OptionsChain from "./OptionsChain";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
@@ -137,20 +138,19 @@ export default function FinancialsView({
   peers: StockRow[];
   peerGroup: string | null;
 }) {
-  const [view, setView] = useState<
-    "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options"
-  >("statements");
+  type View = "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options" | "docsearch";
+  const [view, setView] = useState<View>("statements");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
 
   // Deep-link the active tab via ?tab= (e.g. shareable ownership/insider view).
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t && ["statements", "stats", "peers", "ownership", "profile", "filings", "options"].includes(t)) {
-      setView(t as "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options");
+    if (t && ["statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"].includes(t)) {
+      setView(t as View);
     }
   }, []);
-  const changeView = (v: "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options") => {
+  const changeView = (v: View) => {
     setView(v);
     const u = new URL(window.location.href);
     u.searchParams.set("tab", v);
@@ -266,13 +266,12 @@ export default function FinancialsView({
             { key: "peers", label: "Peers" },
             { key: "ownership", label: "Ownership" },
             { key: "filings", label: "Filings & Calls" },
+            { key: "docsearch", label: "Doc Search" },
             { key: "options", label: "Options" },
             { key: "profile", label: "Profile" },
           ]}
           value={view}
-          onChange={(v) =>
-            changeView(v as "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options")
-          }
+          onChange={(v) => changeView(v as View)}
         />
       </div>
 
@@ -284,6 +283,8 @@ export default function FinancialsView({
         <OwnershipPanel profile={profile} symbol={symbol} />
       ) : view === "filings" ? (
         <FilingsView symbol={symbol} name={name} />
+      ) : view === "docsearch" ? (
+        <DocSearch ticker={symbol} name={name} />
       ) : view === "options" ? (
         <OptionsChain symbol={symbol} />
       ) : view === "profile" ? (
