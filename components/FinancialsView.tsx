@@ -12,6 +12,7 @@ import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
 import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
+import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
 import OptionsChain from "./OptionsChain";
 
@@ -290,6 +291,7 @@ export default function FinancialsView({
       {view === "stats" ? (
         <div className="space-y-4">
           <CompanyStats stats={stats} />
+          <EarningsMultipleChart symbol={symbol} />
           <ValuationBands symbol={symbol} />
         </div>
       ) : view === "peers" ? (
