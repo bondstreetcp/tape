@@ -3,6 +3,7 @@ import { loadSnapshot, loadSymbolSeries } from "@/lib/data";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { xyToPoints } from "@/lib/compute";
+import { getCompanyStats } from "@/lib/companyStats";
 import StockView from "@/components/StockView";
 import SetupNotice from "@/components/SetupNotice";
 
@@ -23,7 +24,10 @@ export default async function StockPage({
   const row = snapshot.stocks.find((s) => s.symbol === SYM);
   if (!row) notFound();
 
-  const xy = await loadSymbolSeries(SYM);
+  const [xy, stats] = await Promise.all([
+    loadSymbolSeries(SYM),
+    getCompanyStats(SYM).catch(() => null),
+  ]);
   const meta = ETF_TO_SECTOR[row.etf] ?? null;
 
   return (
@@ -31,6 +35,7 @@ export default async function StockPage({
       universe={universe}
       row={row}
       sectorName={meta?.name ?? row.sector}
+      stats={stats}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}
