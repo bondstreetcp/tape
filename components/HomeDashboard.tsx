@@ -13,6 +13,7 @@ import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MoversSection from "./MoversSection";
 import AnalystFeed from "./AnalystFeed";
+import { useIsLight } from "./useIsLight";
 
 export default function HomeDashboard({
   snapshot,
@@ -23,6 +24,7 @@ export default function HomeDashboard({
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
+  const light = useIsLight();
 
   const sectorStats = useMemo(() => {
     return snapshot.sectors
@@ -116,7 +118,7 @@ export default function HomeDashboard({
               key={sec.etf}
               href={`/u/${universe}/sector/${sec.etf.toLowerCase()}`}
               className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
-              style={{ background: returnColor(r, tf) }}
+              style={{ background: returnColor(r, tf, light) }}
             >
               <div className="flex items-start justify-between">
                 <div>

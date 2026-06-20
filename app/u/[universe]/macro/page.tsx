@@ -1,4 +1,4 @@
-import { getMacro } from "@/lib/fred";
+import { getMacroCached } from "@/lib/macroData";
 import { getEconCalendar, econKeyConfigured } from "@/lib/econCalendar";
 import MacroDashboard from "@/components/MacroDashboard";
 
@@ -6,7 +6,7 @@ import MacroDashboard from "@/components/MacroDashboard";
 export const revalidate = 3600;
 
 export default async function MacroPage() {
-  const [macro, calendar] = await Promise.all([getMacro(), getEconCalendar()]);
+  const [macro, calendar] = await Promise.all([getMacroCached(), getEconCalendar()]);
   return (
     <MacroDashboard
       curve={macro.curve}

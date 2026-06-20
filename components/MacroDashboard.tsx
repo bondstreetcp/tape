@@ -110,7 +110,7 @@ export default function MacroDashboard({
 
       <section className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[var(--text-2)]">U.S. Treasury Yield Curve</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-3)]">U.S. Treasury Yield Curve</h2>
           <div className="flex items-center gap-3 text-[11px] text-[var(--text-3)]">
             <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4" style={{ background: "#60a5fa" }} /> now</span>
             <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-[var(--text-3)]" /> 1mo ago</span>
@@ -122,7 +122,7 @@ export default function MacroDashboard({
 
       {groups.map((g) => (
         <section key={g} className="mb-5">
-          <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">{g}</h2>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--text-3)]">{g}</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {indicators.filter((i) => i.group === g).map((i) => <IndCard key={i.key} ind={i} />)}
           </div>

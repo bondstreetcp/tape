@@ -8,6 +8,7 @@ import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { fmtPct } from "@/lib/format";
 import { isNearHigh, isNearLow, matchesFilter, type HighLowFilter } from "@/lib/compute";
 import { useElementWidth } from "./useElementWidth";
+import { useIsLight } from "./useIsLight";
 
 interface NodeData {
   name: string;
@@ -37,6 +38,7 @@ export default function Treemap({
   groupBy?: "industry" | "sector";
 }) {
   const { ref, width } = useElementWidth<HTMLDivElement>();
+  const light = useIsLight();
   const [hover, setHover] = useState<{ row: StockRow; x: number; y: number } | null>(
     null,
   );
@@ -106,7 +108,7 @@ export default function Treemap({
                   ? "low"
                   : null;
             const isSel = selected === row.symbol;
-            const fill = returnColor(row.returns[tf], tf);
+            const fill = returnColor(row.returns[tf], tf, light);
 
             const showTicker = w > 26 && h > 14;
             const showPct = w > 40 && h > 30;

@@ -23,6 +23,7 @@ import TimeframeSelector from "./TimeframeSelector";
 import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import Treemap from "./Treemap";
+import { useIsLight } from "./useIsLight";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 
@@ -246,6 +247,7 @@ export default function SectorView({
 }
 
 function ColorLegend({ tf }: { tf: TimeframeKey }) {
+  const light = useIsLight();
   const clamp = COLOR_CLAMP[tf];
   const stops = [-clamp, -clamp / 2, 0, clamp / 2, clamp];
   return (
@@ -253,7 +255,7 @@ function ColorLegend({ tf }: { tf: TimeframeKey }) {
       <span>-{clamp}%</span>
       <div className="flex h-3 overflow-hidden rounded">
         {stops.map((s, i) => (
-          <div key={i} style={{ background: returnColor(s, tf), width: 26, height: "100%" }} />
+          <div key={i} style={{ background: returnColor(s, tf, light), width: 26, height: "100%" }} />
         ))}
       </div>
       <span>+{clamp}%</span>
