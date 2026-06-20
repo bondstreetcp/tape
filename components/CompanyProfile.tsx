@@ -66,6 +66,62 @@ function HolderTable({ holders }: { holders: Holder[] }) {
   );
 }
 
+function OwnershipActivity({ profile }: { profile: CompanyProfile }) {
+  const all = [...profile.institutions, ...profile.funds].filter((h) => h.change != null && h.name);
+  if (all.length < 3) return null;
+  const adders = all.filter((h) => (h.change ?? 0) > 0.001);
+  const trimmers = all.filter((h) => (h.change ?? 0) < -0.001);
+  const topAdds = [...adders].sort((a, b) => (b.change ?? 0) - (a.change ?? 0)).slice(0, 4);
+  const topTrims = [...trimmers].sort((a, b) => (a.change ?? 0) - (b.change ?? 0)).slice(0, 4);
+  const tone =
+    adders.length > trimmers.length * 1.3
+      ? { t: "net accumulating", c: "#22c55e" }
+      : trimmers.length > adders.length * 1.3
+        ? { t: "net trimming", c: "#ef4444" }
+        : { t: "mixed", c: "#8b93a7" };
+  return (
+    <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h3 className="text-sm font-semibold text-[#aab2c5]">Position changes — latest 13F quarter</h3>
+        <span className="text-xs font-medium" style={{ color: tone.c }}>{tone.t}</span>
+      </div>
+      <div className="mb-3 text-xs">
+        <span className="font-semibold text-[#22c55e]">{adders.length} added</span>
+        <span className="text-[#5b6478]"> · </span>
+        <span className="font-semibold text-[#ef4444]">{trimmers.length} trimmed</span>
+        <span className="text-[#5b6478]"> of {all.length} top holders with disclosed changes</span>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ChangeList title="Biggest adds" holders={topAdds} />
+        <ChangeList title="Biggest trims" holders={topTrims} />
+      </div>
+    </div>
+  );
+}
+
+function ChangeList({ title, holders }: { title: string; holders: Holder[] }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-medium text-[#8b93a7]">{title}</div>
+      {holders.length === 0 ? (
+        <div className="text-xs text-[#5b6478]">None.</div>
+      ) : (
+        <div className="space-y-0.5">
+          {holders.map((h, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 text-xs">
+              <span className="truncate text-[#aab2c5]">{h.name}</span>
+              <span className="shrink-0 font-medium tabular-nums" style={{ color: (h.change ?? 0) >= 0 ? "#22c55e" : "#ef4444" }}>
+                {(h.change ?? 0) >= 0 ? "+" : ""}
+                {((h.change ?? 0) * 100).toFixed(0)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -89,6 +145,8 @@ export function OwnershipPanel({ profile, symbol }: { profile: CompanyProfile | 
           />
         </div>
       )}
+
+      {profile && <OwnershipActivity profile={profile} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title={`Institutional Holders${profile?.institutions.length ? ` (top ${profile.institutions.length})` : ""}`}>
