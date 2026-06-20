@@ -22,7 +22,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        <ThemeManager />
+        {children}
+      </body>
     </html>
   );
 }

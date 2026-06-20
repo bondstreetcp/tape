@@ -1,20 +1,28 @@
 "use client";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 
 /**
- * Belt-and-suspenders theme persistence: re-asserts the saved theme on `<html>`
- * after every route change, so nothing (a server re-render, router.refresh, a
- * stale streamed shell) can leave the page on the wrong theme. The initial paint
- * is still handled by the inline <head> script in layout.tsx (no FOUC).
+ * Bulletproof theme persistence. The inline <head> script in layout.tsx sets the
+ * theme on first paint; this keeps it stuck. A MutationObserver on <html>'s class
+ * re-syncs to the saved preference if anything ever clears it (a server re-render,
+ * router.refresh, a streamed shell) — independent of navigation events, which is
+ * why this is an observer rather than a usePathname effect (root-layout client
+ * children don't reliably re-render on route change). It only acts on a mismatch,
+ * so it never fights the toggle and can't loop.
  */
 export default function ThemeManager() {
-  const pathname = usePathname();
   useEffect(() => {
-    try {
-      const light = localStorage.getItem("theme") === "light";
-      document.documentElement.classList.toggle("light", light);
-    } catch {}
-  }, [pathname]);
+    const apply = () => {
+      try {
+        const light = localStorage.getItem("theme") === "light";
+        const el = document.documentElement;
+        if (light !== el.classList.contains("light")) el.classList.toggle("light", light);
+      } catch {}
+    };
+    apply();
+    const obs = new MutationObserver(apply);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
   return null;
 }
