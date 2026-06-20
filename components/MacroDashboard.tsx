@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
+import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
 
@@ -153,54 +154,81 @@ function IndicatorDetail({ ind, onClose }: { ind: MacroInd; onClose: () => void 
   );
 }
 
-// Recent reported GDP prints + the Atlanta Fed GDPNow nowcast for the quarter in
-// progress — "historical + the estimate" ahead of the next GDP release.
-function GdpOutlook({ gdp, gdpNow }: { gdp?: MacroInd; gdpNow: { value: number; asOf: string } | null }) {
-  const hist = (gdp?.history ?? []).slice(-8);
-  if (hist.length < 2 && !gdpNow) return null;
-  const qLabel = (d: string) => {
+// Recent prints for one economic release — bars for changes/rates, a line for
+// levels — plus (for GDP) the Atlanta Fed GDPNow nowcast as a highlighted "est" bar.
+function ReleaseDetail({ r }: { r: ReleaseData }) {
+  const hist = r.history;
+  if (hist.length < 2) return null;
+  const dec = r.unit === "K" ? 0 : r.unit === "M" ? 2 : 1;
+  const sign = r.chart === "bar";
+  const fmt = (v: number | null) => (v == null ? "—" : `${sign && v >= 0 ? "+" : ""}${v.toFixed(dec)}${r.unit}`);
+  const lab = (d: string) => {
     const [y, m] = d.split("-").map(Number);
-    return `Q${Math.floor((m - 1) / 3) + 1} '${String(y).slice(2)}`;
+    if (r.key === "gdp") return `Q${Math.floor((m - 1) / 3) + 1}'${String(y).slice(2)}`;
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short" }) + `'${String(y).slice(2)}`;
   };
-  type Bar = { label: string; value: number; est?: boolean };
-  const bars: Bar[] = hist.map(([d, v]) => ({ label: qLabel(d), value: v }));
-  if (gdpNow) bars.push({ label: qLabel(gdpNow.asOf), value: gdpNow.value, est: true });
-  const vals = bars.map((b) => b.value);
-  const hi = Math.max(0.5, ...vals), lo = Math.min(0, ...vals);
-  const span = hi - lo || 1;
-  const W = 480, H = 132, MB = 22, MT = 16;
-  const bw = W / bars.length;
-  const y = (v: number) => MT + ((hi - v) / span) * (H - MT - MB);
-  const zeroY = y(0);
-  return (
-    <div className="mb-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-xs font-semibold text-[var(--text-2)]">
-          Real GDP growth — recent prints{gdpNow ? <> &amp; the <span className="text-[#f59e0b]">Atlanta Fed GDPNow</span> estimate</> : ""}
-        </h3>
-        {gdpNow && (
-          <span className="font-mono text-sm font-semibold tabular-nums text-[#f59e0b]">
-            {gdpNow.value >= 0 ? "+" : ""}{gdpNow.value.toFixed(1)}% est · {qLabel(gdpNow.asOf)}
-          </span>
-        )}
-      </div>
+  const W = 520, H = 116, ML = 8, MR = 8, MT = 12, MB = 16;
+
+  let chart: React.ReactNode;
+  if (r.chart === "bar") {
+    const bars: { d: string; v: number; est?: boolean }[] = hist.map(([d, v]) => ({ d, v }));
+    if (r.nowcast != null) bars.push({ d: "est", v: r.nowcast, est: true });
+    const vals = bars.map((b) => b.v);
+    const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+    const span = hi - lo || 1;
+    const bw = (W - ML - MR) / bars.length;
+    const y = (v: number) => MT + ((hi - v) / span) * (H - MT - MB);
+    const zeroY = y(0);
+    const every = Math.ceil(bars.length / 9);
+    chart = (
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
-        <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1} />
+        <line x1={ML} x2={W - MR} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1} />
         {bars.map((b, i) => {
-          const cx = i * bw + bw / 2;
-          const top = Math.min(y(b.value), zeroY);
-          const h = Math.max(1, Math.abs(y(b.value) - zeroY));
-          const col = b.est ? "#f59e0b" : b.value >= 0 ? "#22c55e" : "#ef4444";
+          const cx = ML + i * bw + bw / 2;
+          const top = Math.min(y(b.v), zeroY);
+          const h = Math.max(1, Math.abs(y(b.v) - zeroY));
+          const col = b.est ? "#f59e0b" : b.v >= 0 ? "#22c55e" : "#ef4444";
+          const last = i === bars.length - 1;
           return (
             <g key={i}>
-              <rect x={cx - bw * 0.3} y={top} width={bw * 0.6} height={h} rx={1.5} fill={col} fillOpacity={b.est ? 0.5 : 0.85} stroke={b.est ? col : "none"} strokeWidth={b.est ? 1 : 0} strokeDasharray={b.est ? "3 2" : undefined} />
-              <text x={cx} y={b.value >= 0 ? top - 3 : top + h + 9} textAnchor="middle" fontSize={9} fill="var(--text-3)" className="tabular-nums">{b.value >= 0 ? "+" : ""}{b.value.toFixed(1)}</text>
-              <text x={cx} y={H - 6} textAnchor="middle" fontSize={8.5} fill="var(--text-4)">{b.label}</text>
+              <rect x={cx - bw * 0.32} y={top} width={bw * 0.64} height={h} rx={1.5} fill={col} fillOpacity={b.est ? 0.5 : 0.85} stroke={b.est ? col : "none"} strokeWidth={b.est ? 1 : 0} strokeDasharray={b.est ? "3 2" : undefined} />
+              {(last || b.est) && <text x={cx} y={b.v >= 0 ? top - 3 : top + h + 9} textAnchor="middle" fontSize={9} fill="var(--text-3)" className="tabular-nums">{b.v >= 0 ? "+" : ""}{b.v.toFixed(dec)}</text>}
+              {(last || b.est || i % every === 0) && <text x={cx} y={H - 4} textAnchor="middle" fontSize={8} fill="var(--text-4)">{b.est ? "est" : lab(b.d)}</text>}
             </g>
           );
         })}
       </svg>
-      <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--text-4)]">Annualized quarter-over-quarter %. Green/red = reported actuals; amber (dashed) = Atlanta Fed GDPNow nowcast for the quarter now in progress — the running estimate ahead of the next GDP release.</p>
+    );
+  } else {
+    const n = hist.length;
+    const vals = hist.map((h) => h[1]);
+    let hi = Math.max(...vals), lo = Math.min(...vals);
+    const pad = (hi - lo) * 0.12 || 1; hi += pad; lo -= pad;
+    const x = (i: number) => ML + (i / Math.max(1, n - 1)) * (W - ML - MR);
+    const y = (v: number) => MT + ((hi - v) / (hi - lo || 1)) * (H - MT - MB);
+    const line = hist.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(h[1]).toFixed(1)}`).join("");
+    const area = `${line}L${x(n - 1).toFixed(1)} ${(H - MB).toFixed(1)}L${x(0).toFixed(1)} ${(H - MB).toFixed(1)}Z`;
+    chart = (
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+        <defs><linearGradient id={`rg-${r.key}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#60a5fa" stopOpacity={0.16} /><stop offset="100%" stopColor="#60a5fa" stopOpacity={0} /></linearGradient></defs>
+        <path d={area} fill={`url(#rg-${r.key})`} />
+        <path d={line} fill="none" stroke="#60a5fa" strokeWidth={1.8} />
+        <circle cx={x(n - 1)} cy={y(hist[n - 1][1])} r={2.5} fill="#60a5fa" />
+        <text x={ML} y={H - 4} fontSize={8} fill="var(--text-4)">{lab(hist[0][0])}</text>
+        <text x={W - MR} y={H - 4} textAnchor="end" fontSize={8} fill="var(--text-4)">{lab(hist[n - 1][0])}</text>
+      </svg>
+    );
+  }
+
+  return (
+    <div className="pb-1">
+      <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px]">
+        <span className="text-[var(--text-4)]">{r.hint}</span>
+        <span className="text-[var(--text-3)]">Latest <span className="font-mono font-semibold tabular-nums text-[var(--text)]">{fmt(r.latest)}</span>{r.latestDate ? ` · ${r.latestDate}` : ""}</span>
+        <span className="text-[var(--text-3)]">Prior <span className="font-mono tabular-nums">{fmt(r.prior)}</span></span>
+        {r.nowcast != null && <span className="font-semibold text-[#f59e0b]">GDPNow est <span className="font-mono tabular-nums">{fmt(r.nowcast)}</span></span>}
+      </div>
+      {chart}
     </div>
   );
 }
@@ -212,7 +240,7 @@ export default function MacroDashboard({
   calendar,
   keyConfigured,
   volOil,
-  gdpNow,
+  releases,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -220,11 +248,18 @@ export default function MacroDashboard({
   calendar: EconEvent[];
   keyConfigured: boolean;
   volOil?: VolOil;
-  gdpNow?: { value: number; asOf: string } | null;
+  releases?: Record<string, ReleaseData>;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [detail, setDetail] = useState<MacroInd | null>(null);
+  const [openRows, setOpenRows] = useState<Set<number>>(new Set());
+  const toggleRow = (i: number) =>
+    setOpenRows((s) => {
+      const n = new Set(s);
+      n.has(i) ? n.delete(i) : n.add(i);
+      return n;
+    });
   const groups = [...new Set(indicators.map((i) => i.group))];
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -278,23 +313,39 @@ export default function MacroDashboard({
 
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>
-        <GdpOutlook gdp={indicators.find((i) => i.key === "gdp")} gdpNow={gdpNow ?? null} />
         {calendar.length === 0 ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
         ) : (
           <>
+            <p className="mb-1.5 text-[11px] text-[var(--text-4)]">Click a release to see its recent prints{releases?.gdp?.nowcast != null ? " (and the Atlanta Fed nowcast for GDP)" : ""}.</p>
             <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-              {calendar.map((e, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0">
-                  <span className="text-[var(--text)]">
-                    {e.label}
-                    {e.approx && <span className="ml-1 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
-                  </span>
-                  <span className="tabular-nums text-[var(--text-3)]">
-                    {new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                  </span>
-                </div>
-              ))}
+              {calendar.map((e, i) => {
+                const rel = releases?.[LABEL_TO_RELEASE[e.label] ?? ""];
+                const open = openRows.has(i);
+                const dec = rel ? (rel.unit === "K" ? 0 : rel.unit === "M" ? 2 : 1) : 1;
+                const latestStr = rel && rel.latest != null ? `${rel.chart === "bar" && rel.latest >= 0 ? "+" : ""}${rel.latest.toFixed(dec)}${rel.unit}` : null;
+                return (
+                  <div key={i} className="border-b border-[var(--divider)] last:border-0">
+                    <button
+                      onClick={() => rel && toggleRow(i)}
+                      disabled={!rel}
+                      className={"flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm transition-colors " + (rel ? "hover:bg-[var(--surface-hover)]" : "cursor-default")}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5 text-[var(--text)]">
+                        <span className="w-2.5 shrink-0 text-[10px] text-[var(--text-4)]">{rel ? (open ? "▾" : "▸") : ""}</span>
+                        <span className="truncate">{e.label}</span>
+                        {e.approx && <span className="shrink-0 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
+                        {rel?.nowcast != null && <span className="shrink-0 rounded bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]">est {rel.nowcast >= 0 ? "+" : ""}{rel.nowcast.toFixed(1)}%</span>}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3 tabular-nums">
+                        {latestStr && <span className="hidden font-mono text-xs text-[var(--text-3)] sm:inline" title="Most recent print">{latestStr}</span>}
+                        <span className="text-[var(--text-3)]">{new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
+                      </span>
+                    </button>
+                    {open && rel && <div className="px-4">{<ReleaseDetail r={rel} />}</div>}
+                  </div>
+                );
+              })}
             </div>
             {!keyConfigured && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-4)]">
