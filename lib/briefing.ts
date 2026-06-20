@@ -132,10 +132,12 @@ async function fetchOne(src: (typeof SOURCES)[number]): Promise<Briefing | null>
   }
 }
 
-// In-process cache: the PDFs refresh once each morning, so a few hours is plenty
-// and avoids re-fetching/re-parsing ~2 MB on every page load.
+// In-process cache. Each fetch always pulls whatever PDF is live at the URL, so
+// the briefing is never older than the cache window — The Day Ahead publishes at
+// ~4pm ET and Morning News Call pre-market, so a 30-min window picks up the new
+// edition promptly without re-parsing ~2 MB on every page load.
 let cache: { at: number; data: Briefing[] } | null = null;
-const TTL = 2 * 60 * 60 * 1000;
+const TTL = 30 * 60 * 1000;
 
 export async function getBriefings(): Promise<Briefing[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;

@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import ThemeManager from "@/components/ThemeManager";
 
 export const metadata: Metadata = {
   title: "S&P 500 Sector Screener",
