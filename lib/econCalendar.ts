@@ -27,10 +27,62 @@ export interface EconEvent {
   date: string; // YYYY-MM-DD
   label: string;
   name: string; // full FRED release name
+  approx?: boolean; // computed from the typical schedule (no FRED key) rather than the exact release date
+}
+
+const DAY = 86_400_000;
+const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+// Typical day-of-month for the major monthly releases (data for the prior month).
+// Approximate — exact dates come from the FRED key path above.
+const MONTHLY: [number, string, string][] = [
+  [4, "JOLTS", "Job Openings and Labor Turnover Survey"],
+  [12, "CPI", "Consumer Price Index"],
+  [13, "PPI", "Producer Price Index"],
+  [14, "Consumer sentiment (prelim)", "University of Michigan Consumer Sentiment"],
+  [16, "Retail sales", "Advance Monthly Sales for Retail Trade"],
+  [17, "Industrial production", "Industrial Production"],
+  [18, "Housing starts", "New Residential Construction"],
+  [25, "Durable goods", "Advance Durable Goods Orders"],
+  [27, "GDP", "Gross Domestic Product"],
+  [28, "PCE / personal income", "Personal Income and Outlays"],
+];
+
+const weekdayAdjust = (ms: number) => {
+  const dow = new Date(ms).getUTCDay();
+  return dow === 6 ? ms - DAY : dow === 0 ? ms + DAY : ms; // Sat→Fri, Sun→Mon
+};
+function firstFriday(year: number, month: number): number {
+  const first = Date.UTC(year, month, 1);
+  return first + ((5 - new Date(first).getUTCDay() + 7) % 7) * DAY;
+}
+
+/** Key-free fallback: upcoming US releases from their typical schedule. Weekly
+ *  jobless claims (Thursdays) and the jobs report (1st Friday) are exact; the
+ *  monthly indicators are approximate (`approx`). */
+function computeSchedule(days: number): EconEvent[] {
+  const now = new Date();
+  const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const end = start + days * DAY;
+  const out: EconEvent[] = [];
+  for (let t = start; t <= end; t += DAY) {
+    if (new Date(t).getUTCDay() === 4) out.push({ date: iso(t), label: "Jobless claims", name: "Unemployment Insurance Weekly Claims" });
+  }
+  for (let m = 0; m <= 2; m++) {
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + m;
+    const ff = firstFriday(year, month);
+    if (ff >= start && ff <= end) out.push({ date: iso(ff), label: "Jobs report (NFP)", name: "Employment Situation" });
+    for (const [dom, label, name] of MONTHLY) {
+      const adj = weekdayAdjust(Date.UTC(year, month, dom));
+      if (adj >= start && adj <= end) out.push({ date: iso(adj), label, name, approx: true });
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label)).slice(0, 40);
 }
 
 export async function getEconCalendar(days = 45): Promise<EconEvent[]> {
-  if (!KEY) return [];
+  if (!KEY) return computeSchedule(days); // key-free approximate schedule
   const today = new Date().toISOString().slice(0, 10);
   const end = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
   try {
