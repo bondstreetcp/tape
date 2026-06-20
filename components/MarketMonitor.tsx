@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { MarketGroup, Tile } from "@/lib/market";
 import { fmtDateTime } from "@/lib/format";
 import NewsFeed from "./NewsFeed";
+import MarketChartModal from "./MarketChartModal";
 
 function fmtPrice(t: Tile): string {
   const p = t.price;
@@ -20,13 +21,17 @@ function fmtChange(t: Tile): string {
   return t.changePct == null ? "—" : `${t.changePct >= 0 ? "+" : ""}${t.changePct.toFixed(2)}%`;
 }
 
-function TileCard({ t }: { t: Tile }) {
+function TileCard({ t, onClick }: { t: Tile; onClick: () => void }) {
   const signal = t.kind === "rate" ? t.change : t.changePct;
   const has = signal != null;
   const pos = (signal ?? 0) >= 0;
   const col = !has ? "var(--text-3)" : pos ? "#22c55e" : "#ef4444";
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+    <button
+      onClick={onClick}
+      title={`View ${t.name} history`}
+      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+    >
       <div className="flex items-baseline justify-between gap-1">
         <span className="truncate text-xs font-medium text-[var(--text-2)]">{t.name}</span>
         <span className="shrink-0 font-mono text-[10px] text-[var(--text-4)]">{t.sym}</span>
@@ -35,13 +40,14 @@ function TileCard({ t }: { t: Tile }) {
       <div className="text-xs font-medium tabular-nums" style={{ color: col }}>
         {has ? (pos ? "▲" : "▼") : ""} {fmtChange(t)}
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[]; asOf: string }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [active, setActive] = useState<Tile | null>(null);
   const refresh = () => {
     setRefreshing(true);
     router.refresh();
@@ -70,7 +76,7 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
           <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">{g.name}</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {g.tiles.map((t) => (
-              <TileCard key={t.sym} t={t} />
+              <TileCard key={t.sym} t={t} onClick={() => setActive(t)} />
             ))}
           </div>
         </section>
@@ -81,8 +87,10 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
       </section>
 
       <p className="mt-2 text-[11px] text-[var(--text-4)]">
-        Quotes via Yahoo (may be delayed). Yields shown as level; change in basis points.
+        Quotes via Yahoo (may be delayed). Yields shown as level; change in basis points. Click any tile for its historical chart.
       </p>
+
+      {active && <MarketChartModal tile={active} onClose={() => setActive(null)} />}
     </main>
   );
 }
