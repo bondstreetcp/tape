@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-interface Pulse { level: "alert" | "warn" | null; head?: string; text?: string; asOf?: string }
+interface Pulse { level: "alert" | null; head?: string; text?: string; asOf?: string }
 
 /** Data-driven market banner: shows quantified stress (sharp index moves or a vol
  *  spike) and stays hidden when markets are calm — so when it appears it actually
@@ -26,12 +26,11 @@ export default function MarketAlert() {
   }, []);
 
   if (dismissed || !pulse || !pulse.level) return null;
-  const alert = pulse.level === "alert";
-  const c = alert ? "#ef4444" : "#f59e0b";
+  const c = "#ef4444";
   return (
     <div className="mb-4 flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: `${c}66`, backgroundColor: `${c}1a` }}>
       <span className="flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: c }}>
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" /> {alert ? "Alert" : "Watch"}
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-white" /> Alert
       </span>
       <div className="min-w-0 flex-1 truncate text-sm text-[var(--text)]">
         {pulse.head && <span className="font-semibold">{pulse.head}</span>}

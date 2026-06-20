@@ -27,19 +27,15 @@ export async function GET() {
     }
     const vix = m.get("^VIX");
 
-    let level: "alert" | "warn" | null = null;
+    // Only flag genuine stress — a sharp sell-off or a real volatility spike. No
+    // "watch"/"risk-on rally" noise on ordinary days (the banner stays hidden).
+    let level: "alert" | null = null;
     let head = "";
     if (eq.length) {
       const worst = Math.min(...eq.map(([, q]) => q.pct!));
-      const best = Math.max(...eq.map(([, q]) => q.pct!));
       if (worst <= -1.5) { level = "alert"; head = "Risk-off"; }
-      else if (worst <= -0.8) { level = "warn"; head = "Equities under pressure"; }
-      else if (best >= 1.5) { level = "warn"; head = "Risk-on rally"; }
     }
-    const vixHot = vix != null && vix.price >= 30;
-    const vixWarm = vix != null && (vix.price >= 22 || (vix.pct ?? 0) >= 12);
-    if (vixHot) { level = "alert"; if (!head) head = "Volatility spike"; }
-    else if (vixWarm) { level = level ?? "warn"; if (!head) head = "Elevated volatility"; }
+    if (vix != null && (vix.price >= 30 || (vix.pct ?? 0) >= 20)) { level = "alert"; if (!head) head = "Volatility spike"; }
 
     if (!level) return NextResponse.json({ level: null });
 
