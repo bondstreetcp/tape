@@ -23,6 +23,7 @@ export default function MarketHeatmapView({
 }) {
   const router = useRouter();
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
+  const intl = !!UNIVERSE_BY_ID[universe]?.international;
 
   // Cap very large universes to the top names by cap so the map stays legible.
   const shown = useMemo(() => {
@@ -65,8 +66,8 @@ export default function MarketHeatmapView({
           onSelect={(s) => {
             if (s) router.push(`/u/${universe}/stock/${encodeURIComponent(s)}`);
           }}
-          onIndustryClick={goSector}
-          groupBy="sector"
+          onIndustryClick={intl ? undefined : goSector}
+          groupBy={intl ? "nativeSector" : "sector"}
         />
       </div>
       <p className="mt-2 text-center text-xs text-[var(--text-3)]">

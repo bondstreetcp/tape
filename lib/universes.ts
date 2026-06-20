@@ -7,6 +7,10 @@ export interface UniverseMeta {
   /** Whether we fetch per-stock intraday data (enables 1D/1W comparison lines). */
   intraday: boolean;
   note?: string;
+  /** International index: the home page shows the index chart + a constituent
+   *  heatmap instead of US-GICS sector buckets. */
+  international?: boolean;
+  indexSymbol?: string; // Yahoo symbol for the headline index (for the chart)
 }
 
 export const UNIVERSES: UniverseMeta[] = [
@@ -37,6 +41,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "CAC 40 (France)",
     short: "CAC 40",
     intraday: false,
+    international: true,
+    indexSymbol: "^FCHI",
     note: "France's CAC 40 — Euronext Paris. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -44,6 +50,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "AEX (Netherlands)",
     short: "AEX",
     intraday: false,
+    international: true,
+    indexSymbol: "^AEX",
     note: "The Amsterdam AEX index — Euronext Amsterdam. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -51,6 +59,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "KOSPI (Korea)",
     short: "KOSPI",
     intraday: false,
+    international: true,
+    indexSymbol: "^KS11",
     note: "Major KOSPI constituents — Korea Exchange. Prices in KRW. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -58,6 +68,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "Nikkei 225 (Japan)",
     short: "Nikkei",
     intraday: false,
+    international: true,
+    indexSymbol: "^N225",
     note: "Major Nikkei 225 constituents — Tokyo Stock Exchange. Prices in JPY. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -65,6 +77,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "FTSE 100 (UK)",
     short: "FTSE 100",
     intraday: false,
+    international: true,
+    indexSymbol: "^FTSE",
     note: "Major FTSE 100 constituents — London Stock Exchange. Prices in GBp. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -72,6 +86,8 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "DAX (Germany)",
     short: "DAX",
     intraday: false,
+    international: true,
+    indexSymbol: "^GDAXI",
     note: "Major DAX constituents — Deutsche Börse. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
 ];

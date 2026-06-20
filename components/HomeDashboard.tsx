@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Snapshot } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
@@ -15,6 +16,8 @@ import MoversSection from "./MoversSection";
 import AnalystFeed from "./AnalystFeed";
 import { useIsLight } from "./useIsLight";
 import MarketAlert from "./MarketAlert";
+import Treemap from "./Treemap";
+import IndexChart from "./IndexChart";
 
 export default function HomeDashboard({
   snapshot,
@@ -26,6 +29,9 @@ export default function HomeDashboard({
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
   const light = useIsLight();
+  const router = useRouter();
+  const meta = UNIVERSE_BY_ID[universe];
+  const intl = !!meta?.international;
 
   const sectorStats = useMemo(() => {
     return snapshot.sectors
@@ -66,7 +72,7 @@ export default function HomeDashboard({
               {UNIVERSE_BY_ID[universe]?.name ?? "Markets"}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-3)]">
-              {breadth.total} constituents · {snapshot.sectors.length} sectors · as of{" "}
+              {breadth.total} constituents{intl ? "" : ` · ${snapshot.sectors.length} sectors`} · as of{" "}
               {fmtDateTime(snapshot.generatedAt)}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -113,47 +119,71 @@ export default function HomeDashboard({
 
       <MarketAlert />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {sectorStats.map((sec) => {
-          const r = sec.returns[tf];
-          return (
-            <Link
-              key={sec.etf}
-              href={`/u/${universe}/sector/${sec.etf.toLowerCase()}`}
-              className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
-              style={{ background: returnColor(r, tf, light) }}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-mono text-lg font-bold leading-none">
-                    {sec.etf}
+      {intl ? (
+        // International indices: show the index chart + a constituent heatmap
+        // (grouped by sector NAME), not US-GICS sector buckets.
+        <div className="flex flex-col gap-3">
+          {meta?.indexSymbol && <IndexChart symbol={meta.indexSymbol} name={meta.name} />}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2">
+            <Treemap
+              stocks={snapshot.stocks}
+              tf={tf}
+              filter="all"
+              threshold={threshold}
+              selected={null}
+              onSelect={(s) => { if (s) router.push(`/u/${universe}/stock/${encodeURIComponent(s)}`); }}
+              groupBy="nativeSector"
+            />
+          </div>
+          <p className="text-center text-xs text-[var(--text-3)]">
+            All constituents — sized by market cap, colored by {tf.toUpperCase()} return, grouped by sector. Click a tile to open the stock.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {sectorStats.map((sec) => {
+            const r = sec.returns[tf];
+            return (
+              <Link
+                key={sec.etf}
+                href={`/u/${universe}/sector/${sec.etf.toLowerCase()}`}
+                className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
+                style={{ background: returnColor(r, tf, light) }}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-mono text-lg font-bold leading-none">
+                      {sec.etf}
+                    </div>
+                    <div className="mt-1 text-xs text-white/70">{sec.name}</div>
                   </div>
-                  <div className="mt-1 text-xs text-white/70">{sec.name}</div>
+                  <div className="text-right text-2xl font-semibold tabular-nums">
+                    {fmtPct(r, 2)}
+                  </div>
                 </div>
-                <div className="text-right text-2xl font-semibold tabular-nums">
-                  {fmtPct(r, 2)}
+                <div className="mt-5 flex items-center justify-between text-xs text-white/80">
+                  <span>{sec.count} stocks</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-[#bbf7d0]">▲ {sec.nearHigh}</span>
+                    <span className="text-[#fecaca]">▼ {sec.nearLow}</span>
+                  </span>
                 </div>
-              </div>
-              <div className="mt-5 flex items-center justify-between text-xs text-white/80">
-                <span>{sec.count} stocks</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-[#bbf7d0]">▲ {sec.nearHigh}</span>
-                  <span className="text-[#fecaca]">▼ {sec.nearLow}</span>
-                </span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       <MoversSection universe={universe} stocks={snapshot.stocks} tf={tf} />
 
       <AnalystFeed universe={universe} />
 
-      <p className="mt-6 text-center text-xs text-[var(--text-3)]">
-        Click a sector to see its constituents grouped by industry, with a price
-        chart and 52-week high/low highlighting.
-      </p>
+      {!intl && (
+        <p className="mt-6 text-center text-xs text-[var(--text-3)]">
+          Click a sector to see its constituents grouped by industry, with a price
+          chart and 52-week high/low highlighting.
+        </p>
+      )}
     </main>
   );
 }

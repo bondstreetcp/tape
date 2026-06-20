@@ -35,7 +35,7 @@ export default function Treemap({
   selected: string | null;
   onSelect: (symbol: string | null) => void;
   onIndustryClick?: (industry: string) => void;
-  groupBy?: "industry" | "sector";
+  groupBy?: "industry" | "sector" | "nativeSector";
 }) {
   const { ref, width } = useElementWidth<HTMLDivElement>();
   const light = useIsLight();
@@ -46,7 +46,11 @@ export default function Treemap({
   const root = useMemo(() => {
     const byIndustry = new Map<string, StockRow[]>();
     const keyOf = (s: StockRow) =>
-      groupBy === "sector" ? ETF_TO_SECTOR[s.etf]?.name ?? s.sector ?? "Other" : s.industry || "Other";
+      groupBy === "nativeSector"
+        ? s.sector || "Other" // the stock's own (e.g. local-market) sector name
+        : groupBy === "sector"
+          ? ETF_TO_SECTOR[s.etf]?.name ?? s.sector ?? "Other"
+          : s.industry || "Other";
     for (const s of stocks) {
       const k = keyOf(s);
       if (!byIndustry.has(k)) byIndustry.set(k, []);
