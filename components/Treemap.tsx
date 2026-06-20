@@ -88,33 +88,6 @@ export default function Treemap({
     <div ref={ref} className="relative w-full" style={{ height: HEIGHT }}>
       {width > 0 && (
         <svg width={width} height={HEIGHT} className="block">
-          {/* industry group labels */}
-          {groups.map((g) => {
-            const gx = (g as any).x0;
-            const gy = (g as any).y0;
-            const gw = (g as any).x1 - (g as any).x0;
-            if (gw < 40) return null;
-            const clickable = !!onIndustryClick;
-            return (
-              <text
-                key={`g-${g.data.name}`}
-                x={gx + 5}
-                y={gy + 12}
-                fontSize={10}
-                fontWeight={600}
-                fill="var(--text-2)"
-                onClick={clickable ? () => onIndustryClick!(g.data.name) : undefined}
-                style={{
-                  cursor: clickable ? "pointer" : "default",
-                  textDecoration: clickable ? "underline" : "none",
-                  textDecorationColor: "var(--border-strong)",
-                }}
-              >
-                {truncate(g.data.name, Math.floor(gw / 6))}
-              </text>
-            );
-          })}
-
           {/* leaves */}
           {leaves.map((leaf) => {
             const row = leaf.data.row!;
@@ -200,6 +173,36 @@ export default function Treemap({
                   </text>
                 )}
               </g>
+            );
+          })}
+
+          {/* industry group labels — rendered last so they sit on top of the tiles */}
+          {groups.map((g) => {
+            const gx = (g as any).x0;
+            const gy = (g as any).y0;
+            const gw = (g as any).x1 - (g as any).x0;
+            if (gw < 40) return null;
+            const clickable = !!onIndustryClick;
+            return (
+              <text
+                key={`g-${g.data.name}`}
+                x={gx + 5}
+                y={gy + 12}
+                fontSize={10}
+                fontWeight={700}
+                fill="#ffffff"
+                stroke="rgba(0,0,0,0.55)"
+                strokeWidth={2.4}
+                paintOrder="stroke"
+                onClick={clickable ? () => onIndustryClick!(g.data.name) : undefined}
+                style={{
+                  cursor: clickable ? "pointer" : "default",
+                  textDecoration: clickable ? "underline" : "none",
+                  textDecorationColor: "rgba(255,255,255,0.5)",
+                }}
+              >
+                {truncate(g.data.name, Math.floor(gw / 6))}
+              </text>
             );
           })}
         </svg>

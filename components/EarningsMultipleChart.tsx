@@ -88,12 +88,17 @@ function EMChart({ d }: { d: EM }) {
           <text x={ML - 6} y={y(v) + 3} textAnchor="end" fontSize={11} fill="var(--text-4)">{usd(v)}</text>
         </g>
       ))}
-      {years.map((yr, i) => (
-        <text key={i} x={x(yr.i)} y={H - 6} textAnchor="middle" fontSize={11} fill="var(--text-4)">{yr.label}</text>
-      ))}
       <path d={band} fill="#f59e0b" opacity={0.1} />
       <path d={line((p) => p.fair)} fill="none" stroke="#f59e0b" strokeWidth={1.8} />
       <path d={line((p) => p.price)} fill="none" stroke="var(--text)" strokeWidth={1.6} />
+      {/* x-axis: baseline, year ticks + labels */}
+      <line x1={ML} x2={W - MR} y1={H - MB} y2={H - MB} stroke="var(--border-strong)" strokeWidth={1} />
+      {years.map((yr, i) => (
+        <g key={i}>
+          <line x1={x(yr.i)} x2={x(yr.i)} y1={H - MB} y2={H - MB + 4} stroke="var(--text-4)" strokeWidth={1} />
+          <text x={x(yr.i)} y={H - 4} textAnchor={i === 0 ? "start" : "middle"} fontSize={11} fill="var(--text-3)">{yr.label}</text>
+        </g>
+      ))}
     </svg>
   );
 }
