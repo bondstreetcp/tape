@@ -11,6 +11,7 @@ import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
 import DocSearch from "./DocSearch";
+import ValuationBands from "./ValuationBands";
 import OptionsChain from "./OptionsChain";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
@@ -276,7 +277,10 @@ export default function FinancialsView({
       </div>
 
       {view === "stats" ? (
-        <CompanyStats stats={stats} />
+        <div className="space-y-4">
+          <CompanyStats stats={stats} />
+          <ValuationBands symbol={symbol} />
+        </div>
       ) : view === "peers" ? (
         <PeerComparison universe={universe} symbol={symbol} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
