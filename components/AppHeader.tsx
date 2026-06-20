@@ -45,6 +45,7 @@ export default function AppHeader({
             <NavLink href={`${base}/research`} label="Research" />
             <NavLink href={`${base}/earnings`} label="Earnings" />
             <NavLink href={`${base}/compare`} label="Compare" />
+            <NavLink href={`${base}/backtest`} label="Backtest" />
             <NavLink href={`${base}/watchlist`} label="★" />
           </nav>
         </div>
