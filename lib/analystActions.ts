@@ -30,7 +30,7 @@ async function pool<T>(items: T[], size: number, fn: (x: T) => Promise<void>) {
 }
 
 /** Recent analyst rating changes across the largest names in a universe. */
-export async function getAnalystActions(universe: string, topN = 90, days = 30): Promise<AnalystAction[]> {
+export async function getAnalystActions(universe: string, topN = 140, days = 45): Promise<AnalystAction[]> {
   const snap = await loadSnapshot(universe);
   if (!snap) return [];
   const top = [...snap.stocks].sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, topN);
@@ -60,5 +60,5 @@ export async function getAnalystActions(universe: string, topN = 90, days = 30):
     }
   });
   out.sort((a, b) => b.date.localeCompare(a.date));
-  return out.slice(0, 80);
+  return out.slice(0, 250);
 }
