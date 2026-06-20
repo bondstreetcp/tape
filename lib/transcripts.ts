@@ -122,14 +122,24 @@ async function fetchTranscript(symbol: string, c: { url: string; date: string })
     const $ = cheerio.load(await pres.text());
     const body = $(".article-body").first();
     if (!body.length) return null;
-    const NOISE = /^Image source:|Need a quote from a Motley Fool analyst|^Advertisement$/i;
-    const parts: string[] = [];
+    const NOISE = /^Image source:|Need a quote from a Motley Fool analyst|^Advertisement$|^Continue\b|^Duration:/i;
+    let parts: string[] = [];
     body.find("p, h2, h3").each((_, el) => {
       const t = $(el).text().replace(/\s+/g, " ").trim();
       if (t && !NOISE.test(t)) parts.push(t);
     });
+    // Drop The Motley Fool's framing (Image source / DATE / AI-written
+    // TAKEAWAYS / RISKS / SUMMARY) that precedes the call. Anchor on the first
+    // real speaker turn ("Operator:" / "Jane Doe: <40+ chars>") so management's
+    // prepared remarks are kept (formats vary — Apple omits the operator open).
+    const speaker = /^(operator|[A-Z][\w.'’-]*(?: [A-Z][\w.'’-]*){0,3}):\s+\S.{50,}/;
+    const start = parts.findIndex((p) => speaker.test(p));
+    if (start > 0 && start < parts.length - 8) parts = parts.slice(start);
     let text = parts.join("\n\n");
-    const cut = text.search(/This article is a transcript|This article represents the opinion|Motley Fool has positions/i);
+    // Cut the trailing promo / disclosure boilerplate.
+    const cut = text.search(
+      /This article is a transcript|This article represents the opinion|Motley Fool has positions|Should you invest \$|stocks we like better than|Stock Advisor|premium investing service|has a disclosure policy/i,
+    );
     if (cut > 2000) text = text.slice(0, cut).trim();
     if (text.length < 600) return null;
     const title = ($('meta[property="og:title"]').attr("content") || "").replace(/\s*\|\s*The Motley Fool.*$/i, "").trim();
