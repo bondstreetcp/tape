@@ -1,10 +1,19 @@
 import { getMacro } from "@/lib/fred";
+import { getEconCalendar, econKeyConfigured } from "@/lib/econCalendar";
 import MacroDashboard from "@/components/MacroDashboard";
 
 // FRED data updates daily/monthly — cache for an hour.
 export const revalidate = 3600;
 
 export default async function MacroPage() {
-  const macro = await getMacro();
-  return <MacroDashboard curve={macro.curve} indicators={macro.indicators} asOf={macro.asOf} />;
+  const [macro, calendar] = await Promise.all([getMacro(), getEconCalendar()]);
+  return (
+    <MacroDashboard
+      curve={macro.curve}
+      indicators={macro.indicators}
+      asOf={macro.asOf}
+      calendar={calendar}
+      keyConfigured={econKeyConfigured()}
+    />
+  );
 }

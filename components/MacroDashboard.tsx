@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CurvePoint, MacroInd } from "@/lib/fred";
+import type { EconEvent } from "@/lib/econCalendar";
 import { fmtDateTime } from "@/lib/format";
 
 const VBW = 1000, MT = 22, MB = 24, ML = 44, MR = 14, H = 300;
@@ -77,10 +78,14 @@ export default function MacroDashboard({
   curve,
   indicators,
   asOf,
+  calendar,
+  keyConfigured,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
   asOf: string;
+  calendar: EconEvent[];
+  keyConfigured: boolean;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -123,6 +128,30 @@ export default function MacroDashboard({
           </div>
         </section>
       ))}
+
+      <section className="mb-5">
+        <h2 className="mb-2 text-sm font-semibold text-[#aab2c5]">Upcoming US economic releases</h2>
+        {!keyConfigured ? (
+          <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4 text-xs leading-relaxed text-[#8b93a7]">
+            Add a free <span className="font-mono text-[#aab2c5]">FRED_API_KEY</span> environment variable to show the
+            release calendar (CPI, jobs report, GDP, PCE, retail sales, jobless claims…). Get one at
+            <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer" className="ml-1 text-[#60a5fa] hover:underline">fredaccount.stlouisfed.org/apikeys</a>.
+          </div>
+        ) : calendar.length === 0 ? (
+          <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-4 text-xs text-[#8b93a7]">No upcoming releases found.</div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
+            {calendar.map((e, i) => (
+              <div key={i} className="flex items-center justify-between border-b border-[#1f2430] px-4 py-2 text-sm last:border-0">
+                <span className="text-[#e6e9f0]">{e.label}</span>
+                <span className="tabular-nums text-[#8b93a7]">
+                  {new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <p className="mt-2 text-[11px] text-[#5b6478]">
         Source: Federal Reserve Economic Data (FRED). Spreads in percentage points; OAS = option-adjusted spread.
