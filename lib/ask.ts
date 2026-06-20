@@ -71,19 +71,33 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
 export interface AskSource { title: string; uri: string }
 export interface AskResult { answer: string; sources: AskSource[] }
 
-export async function askGemini(question: string, ctx: { name: string; text: string }): Promise<AskResult | null> {
+export async function askGemini(
+  question: string,
+  ctx: { name: string; text: string },
+  history: { q: string; a: string }[] = [],
+): Promise<AskResult | null> {
   if (!KEY) return null;
-  const prompt =
-    `You are a sharp, helpful equity-research analyst. Give a direct, substantive answer to the user's question about ${ctx.name}. ` +
-    `Use the DATA below for the company's fundamentals (cite specific numbers), AND search the web for current information — recent news, this week's developments, latest analyst sentiment, current events affecting the company — so the answer is up to date, not limited to filings. ` +
-    `Write 3–6 sentences. Do NOT just say you need more data — combine the data, the web, and your own knowledge into your best analytical answer; if one figure is missing, reason around it. ` +
+  const system =
+    `You are a sharp, helpful equity-research analyst answering questions about ${ctx.name}. ` +
+    `Use the DATA below for the company's fundamentals (cite specific numbers), AND search the web for current information — recent news, this week's developments, latest analyst sentiment, current events — so answers are up to date, not limited to filings. ` +
+    `Answer in 3–6 sentences. Do NOT just say you need more data — combine the data, the web, and your own knowledge; if one figure is missing, reason around it. ` +
+    `This is a multi-turn conversation: treat each new question as a follow-up that may refer to earlier ones. ` +
     `Explain and analyze freely, but don't give a personalized buy/sell/hold recommendation.\n\n` +
-    `=== DATA on ${ctx.name} ===\n${ctx.text}\n=== END DATA ===\n\nQUESTION: ${question}`;
+    `=== DATA on ${ctx.name} ===\n${ctx.text}\n=== END DATA ===`;
+  // Prior Q&A as conversation turns so follow-ups have context.
+  const contents = [
+    ...history.flatMap((h) => [
+      { role: "user", parts: [{ text: h.q }] },
+      { role: "model", parts: [{ text: h.a }] },
+    ]),
+    { role: "user", parts: [{ text: question }] },
+  ];
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
       // Google Search grounding so the answer reflects current web info, not just
       // the filing context. gemini-2.5-flash also "thinks" by default which ate
       // the output budget and truncated answers — cap thinking and give the answer
