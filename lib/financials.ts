@@ -1,4 +1,5 @@
 import YahooFinance from "yahoo-finance2";
+import { getEdgarQuarterly } from "./edgarFinancials";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
@@ -88,10 +89,25 @@ async function fetchType(
   }
 }
 
+/**
+ * Merge EDGAR's deep quarterly history with Yahoo's recent quarters. Keyed by
+ * the period-end month (the two sources occasionally differ by a couple of days),
+ * Yahoo wins where they overlap (richer field set + freshest), EDGAR fills the
+ * years Yahoo doesn't serve. Keeps the most recent ~20 quarters (≈5 years).
+ */
+function mergeQuarterly(edgar: FinPeriod[], yahoo: FinPeriod[]): FinPeriod[] {
+  const key = (d: string) => d.slice(0, 7); // YYYY-MM
+  const byKey = new Map<string, FinPeriod>();
+  for (const p of edgar) byKey.set(key(p.date), p);
+  for (const p of yahoo) byKey.set(key(p.date), { ...(byKey.get(key(p.date)) || {}), ...p });
+  return [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-20);
+}
+
 export async function getFinancials(symbol: string): Promise<Financials> {
-  const [annual, quarterly] = await Promise.all([
+  const [annual, quarterly, edgarQ] = await Promise.all([
     fetchType(symbol, "annual"),
     fetchType(symbol, "quarterly"),
+    getEdgarQuarterly(symbol).catch(() => [] as FinPeriod[]),
   ]);
-  return { annual, quarterly };
+  return { annual, quarterly: edgarQ.length ? mergeQuarterly(edgarQ, quarterly) : quarterly };
 }
