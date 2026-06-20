@@ -28,6 +28,7 @@ export interface EconEvent {
   label: string;
   name: string; // full FRED release name
   approx?: boolean; // computed from the typical schedule (no FRED key) rather than the exact release date
+  estimate?: import("./econEstimates").EconEstimate | null; // consensus, attached by the page
 }
 
 const DAY = 86_400_000;

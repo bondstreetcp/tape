@@ -5,6 +5,7 @@ import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
 import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
+import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
 
@@ -167,7 +168,8 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
     if (r.key === "gdp") return `Q${Math.floor((m - 1) / 3) + 1}'${String(y).slice(2)}`;
     return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short" }) + `'${String(y).slice(2)}`;
   };
-  const W = 520, H = 116, ML = 8, MR = 8, MT = 12, MB = 16;
+  const W = 520, H = 124, ML = 38, MR = 10, MT = 12, MB = 16;
+  const axisFmt = (v: number) => `${v.toFixed(dec)}${r.unit}`;
 
   let chart: React.ReactNode;
   if (r.chart === "bar") {
@@ -180,9 +182,16 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
     const y = (v: number) => MT + ((hi - v) / span) * (H - MT - MB);
     const zeroY = y(0);
     const every = Math.ceil(bars.length / 9);
+    const yvals = Array.from({ length: 4 }, (_, k) => lo + (k / 3) * (hi - lo));
     chart = (
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
-        <line x1={ML} x2={W - MR} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1} />
+        {yvals.map((v, k) => (
+          <g key={"y" + k}>
+            <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" strokeWidth={1} />
+            <text x={ML - 4} y={y(v) + 3} textAnchor="end" fontSize={8} fill="var(--text-4)" className="tabular-nums">{axisFmt(v)}</text>
+          </g>
+        ))}
+        <line x1={ML} x2={W - MR} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1.2} />
         {bars.map((b, i) => {
           const cx = ML + i * bw + bw / 2;
           const top = Math.min(y(b.v), zeroY);
@@ -208,8 +217,15 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
     const y = (v: number) => MT + ((hi - v) / (hi - lo || 1)) * (H - MT - MB);
     const line = hist.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(h[1]).toFixed(1)}`).join("");
     const area = `${line}L${x(n - 1).toFixed(1)} ${(H - MB).toFixed(1)}L${x(0).toFixed(1)} ${(H - MB).toFixed(1)}Z`;
+    const yvals = Array.from({ length: 4 }, (_, k) => lo + (k / 3) * (hi - lo));
     chart = (
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+        {yvals.map((v, k) => (
+          <g key={"y" + k}>
+            <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" strokeWidth={1} />
+            <text x={ML - 4} y={y(v) + 3} textAnchor="end" fontSize={8} fill="var(--text-4)" className="tabular-nums">{axisFmt(v)}</text>
+          </g>
+        ))}
         <defs><linearGradient id={`rg-${r.key}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#60a5fa" stopOpacity={0.16} /><stop offset="100%" stopColor="#60a5fa" stopOpacity={0} /></linearGradient></defs>
         <path d={area} fill={`url(#rg-${r.key})`} />
         <path d={line} fill="none" stroke="#60a5fa" strokeWidth={1.8} />
@@ -229,6 +245,17 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
         {r.nowcast != null && <span className="font-semibold text-[#f59e0b]">GDPNow est <span className="font-mono tabular-nums">{fmt(r.nowcast)}</span></span>}
       </div>
       {chart}
+    </div>
+  );
+}
+
+// Consensus economist estimate for an upcoming release (ForexFactory).
+function ConsensusLine({ est }: { est: EconEstimate }) {
+  return (
+    <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-[#60a5fa]/30 bg-[#60a5fa]/[0.06] px-2.5 py-1.5 text-[11px]">
+      <span className="font-semibold text-[#60a5fa]">Consensus {est.forecast}</span>
+      <span className="text-[var(--text-3)]">vs prior {est.previous || "—"}</span>
+      <span className="text-[var(--text-4)]">· {est.title} · via ForexFactory</span>
     </div>
   );
 }
@@ -317,7 +344,7 @@ export default function MacroDashboard({
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
         ) : (
           <>
-            <p className="mb-1.5 text-[11px] text-[var(--text-4)]">Click a release to see its recent prints{releases?.gdp?.nowcast != null ? " (and the Atlanta Fed nowcast for GDP)" : ""}.</p>
+            <p className="mb-1.5 text-[11px] text-[var(--text-4)]">Click a release to see its recent prints. <span className="text-[#60a5fa]">cons</span> = consensus estimate (this week, via ForexFactory){releases?.gdp?.nowcast != null ? "; GDP also shows the Atlanta Fed nowcast" : ""}.</p>
             <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
               {calendar.map((e, i) => {
                 const rel = releases?.[LABEL_TO_RELEASE[e.label] ?? ""];
@@ -335,14 +362,20 @@ export default function MacroDashboard({
                         <span className="w-2.5 shrink-0 text-[10px] text-[var(--text-4)]">{rel ? (open ? "▾" : "▸") : ""}</span>
                         <span className="truncate">{e.label}</span>
                         {e.approx && <span className="shrink-0 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
-                        {rel?.nowcast != null && <span className="shrink-0 rounded bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]">est {rel.nowcast >= 0 ? "+" : ""}{rel.nowcast.toFixed(1)}%</span>}
+                        {rel?.nowcast != null && <span className="shrink-0 rounded bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]" title="Atlanta Fed GDPNow nowcast">nowcast {rel.nowcast >= 0 ? "+" : ""}{rel.nowcast.toFixed(1)}%</span>}
+                        {e.estimate && <span className="shrink-0 rounded bg-[#60a5fa]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#60a5fa]" title={`Consensus for "${e.estimate.title}" — via ForexFactory`}>cons {e.estimate.forecast}</span>}
                       </span>
                       <span className="flex shrink-0 items-center gap-3 tabular-nums">
                         {latestStr && <span className="hidden font-mono text-xs text-[var(--text-3)] sm:inline" title="Most recent print">{latestStr}</span>}
                         <span className="text-[var(--text-3)]">{new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
                       </span>
                     </button>
-                    {open && rel && <div className="px-4">{<ReleaseDetail r={rel} />}</div>}
+                    {open && rel && (
+                      <div className="px-4">
+                        {e.estimate && <ConsensusLine est={e.estimate} />}
+                        <ReleaseDetail r={rel} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
