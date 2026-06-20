@@ -53,7 +53,7 @@ function TileCard({ t, onClick }: { t: Tile; onClick: () => void }) {
   return <button onClick={onClick} title={`View ${t.name} history`} className={cls}>{inner}</button>;
 }
 
-export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[]; asOf: string }) {
+export default function MarketMonitor({ groups, asOf, universe }: { groups: MarketGroup[]; asOf: string; universe: string }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [active, setActive] = useState<Tile | null>(null);
@@ -101,7 +101,7 @@ export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[];
         Quotes via Yahoo (may be delayed). Yields shown as level; change in basis points. Click any tile for its historical chart.
       </p>
 
-      {active && <MarketChartModal tile={active} onClose={() => setActive(null)} />}
+      {active && <MarketChartModal tile={active} onClose={() => setActive(null)} universe={universe} />}
     </main>
   );
 }

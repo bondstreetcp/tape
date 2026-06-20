@@ -1,11 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Tile } from "@/lib/market";
+import { INDEX_META } from "@/lib/indices";
 
 interface Bar { t: number; o: number; h: number; l: number; c: number; v: number }
 const RANGES = [["1M", 30], ["6M", 182], ["1Y", 365], ["5Y", 1830]] as const;
 
-export default function MarketChartModal({ tile, onClose }: { tile: Tile; onClose: () => void }) {
+export default function MarketChartModal({ tile, onClose, universe }: { tile: Tile; onClose: () => void; universe: string }) {
+  const hasIndexPage = !!INDEX_META[tile.sym] || tile.kind === "index";
   const [daily, setDaily] = useState<Bar[] | null>(null);
   const [err, setErr] = useState(false);
   const [range, setRange] = useState<number>(365);
@@ -55,7 +58,17 @@ export default function MarketChartModal({ tile, onClose }: { tile: Tile; onClos
               </div>
             )}
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">✕</button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {hasIndexPage && (
+              <Link
+                href={`/u/${universe}/index/${encodeURIComponent(tile.sym)}`}
+                className="rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-2.5 py-1.5 text-xs font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+              >
+                Full page ↗
+              </Link>
+            )}
+            <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">✕</button>
+          </div>
         </div>
 
         <div className="mb-2 inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
