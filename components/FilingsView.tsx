@@ -19,6 +19,14 @@ interface TranscriptLink {
   time: string | null;
 }
 
+interface FullTranscript {
+  title: string;
+  date: string | null;
+  source: string;
+  url: string;
+  text: string;
+}
+
 export default function FilingsView({ symbol, name }: { symbol: string; name?: string }) {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
@@ -151,9 +159,12 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
 
 function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
   const [links, setLinks] = useState<TranscriptLink[] | null>(null);
+  const [full, setFull] = useState<FullTranscript | "loading" | "error" | null>(null);
+
   useEffect(() => {
     let alive = true;
     setLinks(null);
+    setFull(null);
     fetch(`/api/transcripts/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
       .then((r) => r.json())
       .then((d) => alive && setLinks(d.links || []))
@@ -163,11 +174,45 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
     };
   }, [symbol, name]);
 
+  const loadFull = () => {
+    if (full && full !== "error") return; // already loading or loaded
+    setFull("loading");
+    fetch(`/api/transcript-text/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
+      .then((r) => r.json())
+      .then((d) => setFull(d.transcript || "error"))
+      .catch(() => setFull("error"));
+  };
+
+  const loaded = full && full !== "loading" && full !== "error" ? full : null;
+
   return (
     <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
-      <div className="border-b border-[#2a2e39] px-4 py-2.5 text-sm font-semibold text-[#aab2c5]">
-        Earnings-call transcripts
+      <div className="flex items-center justify-between gap-3 border-b border-[#2a2e39] px-4 py-2.5">
+        <span className="text-sm font-semibold text-[#aab2c5]">Earnings-call transcripts</span>
+        <button onClick={loadFull} disabled={full === "loading"} className="text-xs text-[#60a5fa] hover:underline disabled:opacity-60">
+          {full === "loading" ? "Loading…" : loaded ? "↻ Reload full call" : "📄 Read latest call in full"}
+        </button>
       </div>
+
+      {loaded && (
+        <div className="border-b border-[#1f2430] bg-[#0d1117] px-4 py-3">
+          <div className="text-sm font-semibold text-[#e6e9f0]">{loaded.title}</div>
+          <div className="mb-2 text-[11px] text-[#5b6478]">
+            {loaded.source}
+            {loaded.date ? ` · ${loaded.date}` : ""} ·{" "}
+            <a href={loaded.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">source ↗</a>
+          </div>
+          <div className="max-h-[480px] overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[#c2c8d4]">
+            {loaded.text}
+          </div>
+        </div>
+      )}
+      {full === "error" && (
+        <div className="border-b border-[#1f2430] px-4 py-2 text-xs text-[#8b93a7]">
+          Couldn&apos;t load the full transcript automatically — open one of the links below.
+        </div>
+      )}
+
       {links == null ? (
         <div className="px-4 py-4 text-xs text-[#8b93a7]">Finding recent transcripts…</div>
       ) : links.length === 0 ? (
