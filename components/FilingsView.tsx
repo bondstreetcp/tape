@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import RedlineSection from "./Redline";
 
 interface Filing {
   form: string;
@@ -99,6 +100,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
   return (
     <div className="space-y-4">
       <TranscriptLinks symbol={symbol} name={name} />
+      <RedlineSection symbol={symbol} name={name} />
       {loading ? (
         <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">Loading filings from SEC EDGAR…</div>
       ) : !cik || filings.length === 0 ? (
