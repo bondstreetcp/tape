@@ -283,7 +283,7 @@ export default function FinancialsView({
       ) : view === "ownership" ? (
         <OwnershipPanel profile={profile} symbol={symbol} />
       ) : view === "filings" ? (
-        <FilingsView symbol={symbol} />
+        <FilingsView symbol={symbol} name={name} />
       ) : view === "options" ? (
         <OptionsChain symbol={symbol} />
       ) : view === "profile" ? (

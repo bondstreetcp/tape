@@ -12,7 +12,14 @@ interface Filing {
   url: string;
 }
 
-export default function FilingsView({ symbol }: { symbol: string }) {
+interface TranscriptLink {
+  title: string;
+  publisher: string;
+  link: string;
+  time: string | null;
+}
+
+export default function FilingsView({ symbol, name }: { symbol: string; name?: string }) {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [cik, setCik] = useState<string | null>(null);
@@ -81,24 +88,21 @@ export default function FilingsView({ symbol }: { symbol: string }) {
     }
   };
 
-  if (loading) {
-    return <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">Loading filings from SEC EDGAR…</div>;
-  }
-  if (!cik || filings.length === 0) {
-    return (
-      <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
-        No SEC filings found for {symbol}.{err && <div className="mt-1 text-[11px] text-[#5b6478]">{err}</div>}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      <TranscriptLinks symbol={symbol} name={name} />
+      {loading ? (
+        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">Loading filings from SEC EDGAR…</div>
+      ) : !cik || filings.length === 0 ? (
+        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
+          No SEC filings found for {symbol}.{err && <div className="mt-1 text-[11px] text-[#5b6478]">{err}</div>}
+        </div>
+      ) : (
+      <>
       <div className="rounded-xl border border-[#2a2e39] bg-[#0f1726] p-3 text-xs leading-relaxed text-[#8b93a7]">
         <span className="font-semibold text-[#aab2c5]">Earnings releases &amp; material filings</span> straight from SEC EDGAR —
         open an <span className="text-[#22c55e]">earnings release</span> to read management&apos;s results commentary inline.
-        Full earnings-call, investor-day &amp; conference <em>transcripts</em> (with Q&amp;A) are a paid data product;
-        wire a transcript API key and they&apos;ll appear here too.
+        The earnings-call <em>transcripts</em> above link to the full call (with Q&amp;A) on the publisher&apos;s site.
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
@@ -139,6 +143,66 @@ export default function FilingsView({ symbol }: { symbol: string }) {
           )}
         </div>
       </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
+  const [links, setLinks] = useState<TranscriptLink[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setLinks(null);
+    fetch(`/api/transcripts/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
+      .then((r) => r.json())
+      .then((d) => alive && setLinks(d.links || []))
+      .catch(() => alive && setLinks([]));
+    return () => {
+      alive = false;
+    };
+  }, [symbol, name]);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
+      <div className="border-b border-[#2a2e39] px-4 py-2.5 text-sm font-semibold text-[#aab2c5]">
+        Earnings-call transcripts
+      </div>
+      {links == null ? (
+        <div className="px-4 py-4 text-xs text-[#8b93a7]">Finding recent transcripts…</div>
+      ) : links.length === 0 ? (
+        <div className="px-4 py-4 text-xs text-[#8b93a7]">
+          No transcripts found yet. Try a{" "}
+          <a
+            className="text-[#60a5fa] hover:underline"
+            target="_blank"
+            rel="noreferrer"
+            href={`https://news.google.com/search?q=${encodeURIComponent((name || symbol) + " earnings call transcript")}`}
+          >
+            Google News search ↗
+          </a>
+          .
+        </div>
+      ) : (
+        <ul>
+          {links.map((l, i) => (
+            <li key={i} className="border-b border-[#1f2430] last:border-0">
+              <a
+                href={l.link}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[#161b29]"
+              >
+                <span className="text-sm text-[#e6e9f0]">{l.title}</span>
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-[#8b93a7]">
+                  {l.publisher}
+                  {l.time ? ` · ${new Date(l.time).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""} ↗
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
