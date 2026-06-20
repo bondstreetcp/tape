@@ -131,25 +131,30 @@ export default function MacroDashboard({
 
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>
-        {!keyConfigured ? (
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs leading-relaxed text-[var(--text-3)]">
-            Add a free <span className="font-mono text-[var(--text-2)]">FRED_API_KEY</span> environment variable to show the
-            release calendar (CPI, jobs report, GDP, PCE, retail sales, jobless claims…). Get one at
-            <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer" className="ml-1 text-[#60a5fa] hover:underline">fredaccount.stlouisfed.org/apikeys</a>.
-          </div>
-        ) : calendar.length === 0 ? (
+        {calendar.length === 0 ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            {calendar.map((e, i) => (
-              <div key={i} className="flex items-center justify-between border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0">
-                <span className="text-[var(--text)]">{e.label}</span>
-                <span className="tabular-nums text-[var(--text-3)]">
-                  {new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+              {calendar.map((e, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0">
+                  <span className="text-[var(--text)]">
+                    {e.label}
+                    {e.approx && <span className="ml-1 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
+                  </span>
+                  <span className="tabular-nums text-[var(--text-3)]">
+                    {new Date(e.date + "T12:00:00Z").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!keyConfigured && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-4)]">
+                Jobless claims &amp; the jobs report are exact; <span className="text-[var(--text-3)]">≈</span> marks dates estimated from each release&apos;s typical schedule. Add a free{" "}
+                <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">FRED_API_KEY</a> for exact release dates.
+              </p>
+            )}
+          </>
         )}
       </section>
 
