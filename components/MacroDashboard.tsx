@@ -153,6 +153,58 @@ function IndicatorDetail({ ind, onClose }: { ind: MacroInd; onClose: () => void 
   );
 }
 
+// Recent reported GDP prints + the Atlanta Fed GDPNow nowcast for the quarter in
+// progress — "historical + the estimate" ahead of the next GDP release.
+function GdpOutlook({ gdp, gdpNow }: { gdp?: MacroInd; gdpNow: { value: number; asOf: string } | null }) {
+  const hist = (gdp?.history ?? []).slice(-8);
+  if (hist.length < 2 && !gdpNow) return null;
+  const qLabel = (d: string) => {
+    const [y, m] = d.split("-").map(Number);
+    return `Q${Math.floor((m - 1) / 3) + 1} '${String(y).slice(2)}`;
+  };
+  type Bar = { label: string; value: number; est?: boolean };
+  const bars: Bar[] = hist.map(([d, v]) => ({ label: qLabel(d), value: v }));
+  if (gdpNow) bars.push({ label: qLabel(gdpNow.asOf), value: gdpNow.value, est: true });
+  const vals = bars.map((b) => b.value);
+  const hi = Math.max(0.5, ...vals), lo = Math.min(0, ...vals);
+  const span = hi - lo || 1;
+  const W = 480, H = 132, MB = 22, MT = 16;
+  const bw = W / bars.length;
+  const y = (v: number) => MT + ((hi - v) / span) * (H - MT - MB);
+  const zeroY = y(0);
+  return (
+    <div className="mb-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold text-[var(--text-2)]">
+          Real GDP growth — recent prints{gdpNow ? <> &amp; the <span className="text-[#f59e0b]">Atlanta Fed GDPNow</span> estimate</> : ""}
+        </h3>
+        {gdpNow && (
+          <span className="font-mono text-sm font-semibold tabular-nums text-[#f59e0b]">
+            {gdpNow.value >= 0 ? "+" : ""}{gdpNow.value.toFixed(1)}% est · {qLabel(gdpNow.asOf)}
+          </span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+        <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke="var(--border)" strokeWidth={1} />
+        {bars.map((b, i) => {
+          const cx = i * bw + bw / 2;
+          const top = Math.min(y(b.value), zeroY);
+          const h = Math.max(1, Math.abs(y(b.value) - zeroY));
+          const col = b.est ? "#f59e0b" : b.value >= 0 ? "#22c55e" : "#ef4444";
+          return (
+            <g key={i}>
+              <rect x={cx - bw * 0.3} y={top} width={bw * 0.6} height={h} rx={1.5} fill={col} fillOpacity={b.est ? 0.5 : 0.85} stroke={b.est ? col : "none"} strokeWidth={b.est ? 1 : 0} strokeDasharray={b.est ? "3 2" : undefined} />
+              <text x={cx} y={b.value >= 0 ? top - 3 : top + h + 9} textAnchor="middle" fontSize={9} fill="var(--text-3)" className="tabular-nums">{b.value >= 0 ? "+" : ""}{b.value.toFixed(1)}</text>
+              <text x={cx} y={H - 6} textAnchor="middle" fontSize={8.5} fill="var(--text-4)">{b.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--text-4)]">Annualized quarter-over-quarter %. Green/red = reported actuals; amber (dashed) = Atlanta Fed GDPNow nowcast for the quarter now in progress — the running estimate ahead of the next GDP release.</p>
+    </div>
+  );
+}
+
 export default function MacroDashboard({
   curve,
   indicators,
@@ -160,6 +212,7 @@ export default function MacroDashboard({
   calendar,
   keyConfigured,
   volOil,
+  gdpNow,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -167,6 +220,7 @@ export default function MacroDashboard({
   calendar: EconEvent[];
   keyConfigured: boolean;
   volOil?: VolOil;
+  gdpNow?: { value: number; asOf: string } | null;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -224,6 +278,7 @@ export default function MacroDashboard({
 
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>
+        <GdpOutlook gdp={indicators.find((i) => i.key === "gdp")} gdpNow={gdpNow ?? null} />
         {calendar.length === 0 ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
         ) : (
