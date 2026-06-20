@@ -52,7 +52,7 @@ const CURVE: [string, string, number][] = [
 ];
 
 export interface CurvePoint { label: string; mat: number; now: number | null; monthAgo: number | null; yearAgo: number | null }
-export interface MacroInd { key: string; label: string; value: number | null; unit: string; asOf: string | null; group: string }
+export interface MacroInd { key: string; label: string; value: number | null; unit: string; asOf: string | null; group: string; seriesId?: string; history?: [string, number][] }
 export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string }
 
 export async function getMacro(): Promise<Macro> {
@@ -70,17 +70,32 @@ export async function getMacro(): Promise<Macro> {
     yearAgo: onOrBefore(obs, now - 365 * DAY)?.value ?? null,
   }));
 
-  const yoy = async (id: string): Promise<{ v: number | null; asOf: string | null }> => {
-    const o = await fetchSeries(id, new Date(now - 430 * DAY).toISOString().slice(0, 10));
-    const l = last(o);
-    if (!l) return { v: null, asOf: null };
-    const prior = onOrBefore(o, new Date(l.date).getTime() - 360 * DAY);
-    return { v: prior ? (l.value / prior.value - 1) * 100 : null, asOf: l.date };
+  const FIVEY = 5 * 365 * DAY;
+  const downsample = (pairs: [string, number][], n = 90): [string, number][] => {
+    if (pairs.length <= n) return pairs;
+    const step = Math.ceil(pairs.length / n);
+    const out: [string, number][] = [];
+    for (let i = 0; i < pairs.length; i += step) out.push(pairs[i]);
+    if (out[out.length - 1]?.[0] !== pairs[pairs.length - 1][0]) out.push(pairs[pairs.length - 1]);
+    return out;
   };
-  const simple = async (id: string): Promise<{ v: number | null; asOf: string | null }> => {
-    const o = await fetchSeries(id, new Date(now - 150 * DAY).toISOString().slice(0, 10));
+  type Ind = { v: number | null; asOf: string | null; history: [string, number][] };
+  const yoy = async (id: string): Promise<Ind> => {
+    const o = await fetchSeries(id, new Date(now - FIVEY - 400 * DAY).toISOString().slice(0, 10));
     const l = last(o);
-    return { v: l?.value ?? null, asOf: l?.date ?? null };
+    if (!l) return { v: null, asOf: null, history: [] };
+    const prior = onOrBefore(o, new Date(l.date).getTime() - 360 * DAY);
+    const yoyPairs: [string, number][] = [];
+    for (const x of o) {
+      const p = onOrBefore(o, new Date(x.date).getTime() - 360 * DAY);
+      if (p && p.value) yoyPairs.push([x.date, (x.value / p.value - 1) * 100]);
+    }
+    return { v: prior ? (l.value / prior.value - 1) * 100 : null, asOf: l.date, history: downsample(yoyPairs) };
+  };
+  const simple = async (id: string): Promise<Ind> => {
+    const o = await fetchSeries(id, new Date(now - FIVEY).toISOString().slice(0, 10));
+    const l = last(o);
+    return { v: l?.value ?? null, asOf: l?.date ?? null, history: downsample(o.map((x) => [x.date, x.value] as [string, number])) };
   };
 
   const [cpi, core, ff, unrate, t102, hy, ig, gdp] = await Promise.all([
@@ -95,14 +110,14 @@ export async function getMacro(): Promise<Macro> {
   ]);
 
   const indicators: MacroInd[] = [
-    { key: "ff", label: "Fed Funds Rate", value: ff.v, unit: "%", asOf: ff.asOf, group: "Rates" },
-    { key: "t102", label: "10Y–2Y Spread", value: t102.v, unit: "pp", asOf: t102.asOf, group: "Rates" },
-    { key: "cpi", label: "CPI (YoY)", value: cpi.v, unit: "%", asOf: cpi.asOf, group: "Inflation" },
-    { key: "core", label: "Core CPI (YoY)", value: core.v, unit: "%", asOf: core.asOf, group: "Inflation" },
-    { key: "unrate", label: "Unemployment", value: unrate.v, unit: "%", asOf: unrate.asOf, group: "Growth & Jobs" },
-    { key: "gdp", label: "Real GDP (annualized QoQ)", value: gdp.v, unit: "%", asOf: gdp.asOf, group: "Growth & Jobs" },
-    { key: "hy", label: "High-Yield OAS", value: hy.v, unit: "%", asOf: hy.asOf, group: "Credit" },
-    { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit" },
+    { key: "ff", label: "Fed Funds Rate", value: ff.v, unit: "%", asOf: ff.asOf, group: "Rates", seriesId: "FEDFUNDS", history: ff.history },
+    { key: "t102", label: "10Y–2Y Spread", value: t102.v, unit: "pp", asOf: t102.asOf, group: "Rates", seriesId: "T10Y2Y", history: t102.history },
+    { key: "cpi", label: "CPI (YoY)", value: cpi.v, unit: "%", asOf: cpi.asOf, group: "Inflation", seriesId: "CPIAUCSL", history: cpi.history },
+    { key: "core", label: "Core CPI (YoY)", value: core.v, unit: "%", asOf: core.asOf, group: "Inflation", seriesId: "CPILFESL", history: core.history },
+    { key: "unrate", label: "Unemployment", value: unrate.v, unit: "%", asOf: unrate.asOf, group: "Growth & Jobs", seriesId: "UNRATE", history: unrate.history },
+    { key: "gdp", label: "Real GDP (annualized QoQ)", value: gdp.v, unit: "%", asOf: gdp.asOf, group: "Growth & Jobs", seriesId: "A191RL1Q225SBEA", history: gdp.history },
+    { key: "hy", label: "High-Yield OAS", value: hy.v, unit: "%", asOf: hy.asOf, group: "Credit", seriesId: "BAMLH0A0HYM2", history: hy.history },
+    { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit", seriesId: "BAMLC0A0CM", history: ig.history },
   ];
 
   return { curve, indicators, asOf: new Date(now).toISOString() };

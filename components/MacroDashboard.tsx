@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
@@ -63,15 +63,92 @@ function YieldCurve({ curve }: { curve: CurvePoint[] }) {
   );
 }
 
-function IndCard({ ind }: { ind: MacroInd }) {
+function IndCard({ ind, onOpen }: { ind: MacroInd; onOpen: () => void }) {
   const neg = ind.key === "t102" && ind.value != null && ind.value < 0;
+  const has = (ind.history?.length ?? 0) > 1;
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="text-xs text-[var(--text-3)]">{ind.label}</div>
+    <button
+      onClick={onOpen}
+      disabled={!has}
+      title={has ? `${ind.label} — view history` : ind.label}
+      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors enabled:hover:border-[var(--border-strong)] disabled:cursor-default"
+    >
+      <div className="flex items-center justify-between gap-1">
+        <div className="text-xs text-[var(--text-3)]">{ind.label}</div>
+        {has && <span className="text-[10px] text-[var(--text-4)]">↗</span>}
+      </div>
       <div className="mt-1 font-mono text-xl font-semibold tabular-nums" style={{ color: neg ? "#ef4444" : "var(--text)" }}>
         {ind.value == null ? "—" : `${ind.value >= 0 && ind.unit === "pp" ? "+" : ""}${ind.value.toFixed(2)}${ind.unit === "pp" ? " pp" : "%"}`}
       </div>
       <div className="text-[10px] text-[var(--text-4)]">{ind.asOf ?? ""}{neg ? " · inverted" : ""}</div>
+    </button>
+  );
+}
+
+function IndicatorDetail({ ind, onClose }: { ind: MacroInd; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  const h = ind.history || [];
+  const n = h.length;
+  const W = 720, H = 280, ML = 54, MR = 16, MT = 16, MB = 28;
+  const vals = h.map((p) => p[1]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.05 || 1;
+  lo -= pad; hi += pad;
+  const x = (i: number) => ML + (i / Math.max(1, n - 1)) * (W - ML - MR);
+  const y = (v: number) => MT + (1 - (v - lo) / (hi - lo || 1)) * (H - MT - MB);
+  const line = h.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join("");
+  const area = `${line}L${x(n - 1).toFixed(1)} ${(H - MB).toFixed(1)}L${x(0).toFixed(1)} ${(H - MB).toFixed(1)}Z`;
+  const yvals = Array.from({ length: 5 }, (_, i) => lo + (i / 4) * (hi - lo));
+  const years: { i: number; yr: string }[] = [];
+  let ly = "";
+  h.forEach((p, i) => { const yr = p[0].slice(0, 4); if (yr !== ly) { years.push({ i, yr }); ly = yr; } });
+  const sfx = ind.unit === "pp" ? " pp" : "%";
+  const col = "#60a5fa";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-[var(--text)]">{ind.label}</h3>
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+              <span className="font-mono text-2xl font-semibold tabular-nums text-[var(--text)]">{ind.value == null ? "—" : ind.value.toFixed(2) + sfx}</span>
+              <span className="text-xs text-[var(--text-4)]">latest {ind.asOf || ""} · ~5-year history</span>
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">✕</button>
+        </div>
+        {n < 2 ? (
+          <div className="py-16 text-center text-sm text-[var(--text-3)]">No history available.</div>
+        ) : (
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+            {yvals.map((v, i) => (
+              <g key={i}>
+                <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" strokeWidth={1} />
+                <text x={ML - 6} y={y(v) + 3} textAnchor="end" fontSize={11} fill="var(--text-4)">{v.toFixed(1)}{sfx}</text>
+              </g>
+            ))}
+            {years.map((yr, k) => (
+              <text key={k} x={x(yr.i)} y={H - 8} textAnchor={k === 0 ? "start" : "middle"} fontSize={11} fill="var(--text-4)">{yr.yr}</text>
+            ))}
+            <defs>
+              <linearGradient id="indg" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={col} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={col} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <path d={area} fill="url(#indg)" />
+            <path d={line} fill="none" stroke={col} strokeWidth={1.8} />
+          </svg>
+        )}
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[var(--text-4)]">
+          <span>Data from FRED (St. Louis Fed){ind.seriesId ? ` · ${ind.seriesId}` : ""}.</span>
+          {ind.seriesId && <a href={`https://fred.stlouisfed.org/series/${ind.seriesId}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Full series on FRED ↗</a>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -93,6 +170,7 @@ export default function MacroDashboard({
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [detail, setDetail] = useState<MacroInd | null>(null);
   const groups = [...new Set(indicators.map((i) => i.group))];
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -139,7 +217,7 @@ export default function MacroDashboard({
         <section key={g} className="mb-5">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--text-3)]">{g}</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {indicators.filter((i) => i.group === g).map((i) => <IndCard key={i.key} ind={i} />)}
+            {indicators.filter((i) => i.group === g).map((i) => <IndCard key={i.key} ind={i} onOpen={() => setDetail(i)} />)}
           </div>
         </section>
       ))}
@@ -176,6 +254,8 @@ export default function MacroDashboard({
       <p className="mt-2 text-[11px] text-[var(--text-4)]">
         Source: Federal Reserve Economic Data (FRED). Spreads in percentage points; OAS = option-adjusted spread.
       </p>
+
+      {detail && <IndicatorDetail ind={detail} onClose={() => setDetail(null)} />}
     </main>
   );
 }
