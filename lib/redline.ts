@@ -52,20 +52,28 @@ function strip(html: string): string {
     .trim();
 }
 
-function extractRiskFactors(text: string): string {
-  const e1b = [...text.matchAll(/item\s*1b\b/gi)].map((m) => m.index!);
-  if (!e1b.length) return "";
-  const end = e1b[e1b.length - 1];
+function extractRiskFactors(text: string, form = "10-K"): string {
+  const isQ = form === "10-Q";
+  const minLen = isQ ? 250 : MIN;
+  // Section-end anchors: 10-K risk factors end at "Item 1B"; a 10-Q's (Part II,
+  // Item 1A) end at the next Part II item (Item 2 unregistered sales / 5 / 6).
+  const ends = (isQ
+    ? [...text.matchAll(/item\s*2\b|unregistered sales of equity|item\s*5\b|item\s*6\b/gi)]
+    : [...text.matchAll(/item\s*1b\b/gi)]
+  ).map((m) => m.index!).sort((a, b) => a - b);
+  if (!ends.length) return "";
+  const last1b = ends[ends.length - 1];
   const cands: string[] = [];
   for (const m of text.matchAll(/risk factors/gi)) {
     const s = m.index!;
-    if (s >= end - MIN) continue;
     const after = text.slice(s + 12, s + 44);
     if (/^[\s.,)("”'’]*\d/.test(after)) continue; // page number → table of contents
     if (/^[\s.,]*["”'’)(]/.test(after)) continue; // citation paren/quote
     if (!CLEAN.test(after)) continue; // must read like a heading flowing into prose
+    const end = isQ ? ends.find((x) => x > s + minLen) : last1b;
+    if (end == null || end <= s + minLen) continue;
     const seg = text.slice(s, end);
-    if (seg.length >= MIN && seg.length <= MAX) cands.push(seg);
+    if (seg.length >= minLen && seg.length <= MAX) cands.push(seg);
   }
   if (!cands.length) return "";
   return cands.sort((a, b) => a.length - b.length)[0]; // tightest sane section
@@ -138,17 +146,17 @@ function diffSentences(aOrig: string[], bOrig: string[]): { blocks: RedlineBlock
   return { blocks, added, removed, reworded };
 }
 
-async function fetchSection(url: string): Promise<string> {
+async function fetchSection(url: string, form: string): Promise<string> {
   try {
     const res = await fetch(url, { headers: HEADERS });
     if (!res.ok) return "";
-    return extractRiskFactors(strip(await res.text()));
+    return extractRiskFactors(strip(await res.text()), form);
   } catch {
     return "";
   }
 }
 
-export async function getRedline(symbol: string): Promise<Redline> {
+export async function getRedline(symbol: string, form: "10-K" | "10-Q" = "10-K"): Promise<Redline> {
   const base: Redline = {
     available: false, section: "Risk Factors", fromDate: null, toDate: null,
     fromUrl: null, toUrl: null, added: 0, removed: 0, reworded: 0, blocks: [],
@@ -160,16 +168,17 @@ export async function getRedline(symbol: string): Promise<Redline> {
     const r = sub.filings?.recent;
     const tens: { date: string; url: string }[] = [];
     for (let i = 0; i < (r?.form?.length || 0) && tens.length < 2; i++) {
-      if (r.form[i] === "10-K") {
+      if (r.form[i] === form) {
         const acc = r.accessionNumber[i].replace(/-/g, "");
         tens.push({ date: r.filingDate[i], url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${r.primaryDocument[i]}` });
       }
     }
-    if (tens.length < 2) return { ...base, note: "Need two annual reports (10-K) on file to compare. Foreign filers (20-F) aren't supported yet." };
+    if (tens.length < 2)
+      return { ...base, note: `Need two ${form === "10-Q" ? "quarterly reports (10-Q)" : "annual reports (10-K)"} on file to compare.` };
     const [newer, older] = tens;
     base.fromDate = older.date; base.toDate = newer.date; base.fromUrl = older.url; base.toUrl = newer.url;
 
-    const [secNew, secOld] = await Promise.all([fetchSection(newer.url), fetchSection(older.url)]);
+    const [secNew, secOld] = await Promise.all([fetchSection(newer.url, form), fetchSection(older.url, form)]);
     if (!secNew || !secOld)
       return { ...base, note: "Couldn't reliably isolate the Risk Factors section in one of these filings — open them directly below to compare." };
 

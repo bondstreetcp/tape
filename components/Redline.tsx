@@ -20,11 +20,12 @@ const yr = (d: string | null) => (d ? d.slice(0, 4) : "—");
 
 export default function RedlineSection({ symbol }: { symbol: string; name?: string }) {
   const [data, setData] = useState<Redline | "loading" | null>(null);
+  const [form, setForm] = useState<"10-K" | "10-Q">("10-K");
 
-  const load = () => {
-    if (data === "loading") return;
+  const load = (f: "10-K" | "10-Q") => {
+    setForm(f);
     setData("loading");
-    fetch(`/api/redline/${encodeURIComponent(symbol)}`)
+    fetch(`/api/redline/${encodeURIComponent(symbol)}?form=${f}`)
       .then((r) => r.json())
       .then((d: Redline) => setData(d))
       .catch(() => setData(null));
@@ -34,18 +35,27 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
     <div className="overflow-hidden rounded-xl border border-[#2a2e39] bg-[#131722]">
       <div className="flex items-center justify-between gap-3 border-b border-[#2a2e39] px-4 py-2.5">
         <div className="min-w-0">
-          <span className="text-sm font-semibold text-[#aab2c5]">10-K Risk Factors — what changed</span>
-          <span className="ml-2 text-[11px] text-[#5b6478]">year-over-year redline</span>
+          <span className="text-sm font-semibold text-[#aab2c5]">Risk Factors — what changed</span>
+          <span className="ml-2 text-[11px] text-[#5b6478]">{form === "10-Q" ? "quarter over quarter" : "year over year"}</span>
         </div>
-        {data == null && (
-          <button onClick={load} className="shrink-0 text-xs text-[#60a5fa] hover:underline">
-            Compare latest two 10-Ks
-          </button>
-        )}
+        <div className="inline-flex shrink-0 rounded-lg border border-[#2a2e39] bg-[#0b0e14] p-0.5" title="Compare the two most recent filings of this type">
+          {(["10-K", "10-Q"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => load(f)}
+              className={"rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (data !== null && form === f ? "bg-[#2563eb] text-white" : "text-[#8b93a7] hover:text-[#e6e9f0]")}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {data == null && (
+        <div className="px-4 py-4 text-xs text-[#8b93a7]">Pick <b>10-K</b> (annual) or <b>10-Q</b> (quarterly) to diff the Risk Factors of the two most recent filings.</div>
+      )}
       {data === "loading" && (
-        <div className="px-4 py-4 text-xs text-[#8b93a7]">Diffing the two most recent annual reports… (a few seconds)</div>
+        <div className="px-4 py-4 text-xs text-[#8b93a7]">Diffing the two most recent {form} filings… (a few seconds)</div>
       )}
 
       {data && data !== "loading" && (
@@ -53,7 +63,7 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
           {data.available ? (
             <>
               <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <span className="font-semibold text-[#e6e9f0]">FY{yr(data.fromDate)} → FY{yr(data.toDate)}</span>
+                <span className="font-semibold text-[#e6e9f0]">{form === "10-Q" ? `${data.fromDate} → ${data.toDate}` : `FY${yr(data.fromDate)} → FY${yr(data.toDate)}`}</span>
                 <span><b className="text-[#22c55e]">+{data.added}</b> <span className="text-[#8b93a7]">new</span></span>
                 <span><b className="text-[#ef4444]">−{data.removed}</b> <span className="text-[#8b93a7]">removed</span></span>
                 <span className="text-[#8b93a7]">~{data.reworded} reworded</span>
@@ -95,12 +105,12 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
                 <div className="mt-2">
                   {data.fromUrl && (
                     <a href={data.fromUrl} target="_blank" rel="noreferrer" className="mr-3 text-[#60a5fa] hover:underline">
-                      Older 10-K{data.fromDate ? ` (${data.fromDate})` : ""} ↗
+                      Older {form}{data.fromDate ? ` (${data.fromDate})` : ""} ↗
                     </a>
                   )}
                   {data.toUrl && (
                     <a href={data.toUrl} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">
-                      Newer 10-K{data.toDate ? ` (${data.toDate})` : ""} ↗
+                      Newer {form}{data.toDate ? ` (${data.toDate})` : ""} ↗
                     </a>
                   )}
                 </div>
