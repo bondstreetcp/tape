@@ -15,6 +15,7 @@ import ValuationBands from "./ValuationBands";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
 import OptionsChain from "./OptionsChain";
+import DcfPanel from "./DcfPanel";
 import StockOverview from "./StockOverview";
 import KeyStatsStrip from "./KeyStatsStrip";
 import WatchStar from "./WatchStar";
@@ -318,6 +319,7 @@ export default function FinancialsView({
       ) : view === "stats" ? (
         <div className="space-y-4">
           <CompanyStats stats={stats} />
+          <DcfPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} />
           <EarningsMultipleChart symbol={symbol} />
           <ValuationBands symbol={symbol} />
         </div>
