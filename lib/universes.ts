@@ -90,6 +90,15 @@ export const UNIVERSES: UniverseMeta[] = [
     indexSymbol: "^GDAXI",
     note: "Major DAX constituents — Deutsche Börse. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
+  {
+    id: "tsx",
+    name: "S&P/TSX Composite (Canada)",
+    short: "TSX",
+    intraday: false,
+    international: true,
+    indexSymbol: "^GSPTSE",
+    note: "Major S&P/TSX Composite constituents — Toronto Stock Exchange. Prices in CAD. International data via Yahoo (npm run refresh-intl).",
+  },
 ];
 
 export const DEFAULT_UNIVERSE = "sp500";

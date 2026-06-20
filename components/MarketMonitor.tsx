@@ -12,7 +12,7 @@ import MarketAlert from "./MarketAlert";
 // tile opens that index's page instead of the quick chart.
 const INDEX_UNIVERSE: Record<string, string> = {
   "^GSPC": "sp500", "^IXIC": "nasdaq100", "^N225": "nikkei", "^FTSE": "ftse100",
-  "^GDAXI": "dax", "^FCHI": "cac40", "^AEX": "aex", "^KS11": "kospi",
+  "^GDAXI": "dax", "^FCHI": "cac40", "^AEX": "aex", "^KS11": "kospi", "^GSPTSE": "tsx",
 };
 
 function fmtPrice(t: Tile): string {
