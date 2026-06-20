@@ -19,6 +19,7 @@ interface Result {
   nextFrom: number | null;
   rewroteTo?: string;
 }
+interface Call { title: string; date: string | null; url: string; snippet: string; count: number }
 
 const FORM_FILTERS = [
   { label: "All filings", value: "" },
@@ -48,6 +49,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
   const [data, setData] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(12);
+  const [calls, setCalls] = useState<Call[] | "loading" | null>(null);
 
   const run = useCallback(
     (query: string, f: string, from = 0, append = false, all = false) => {
@@ -73,6 +75,16 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
     setVisible(12);
     setData(null);
     run(q, forms, 0, false, all);
+    // also search this company's recent earnings calls
+    setCalls(null);
+    if (ticker && !all) {
+      setCalls("loading");
+      const u = new URLSearchParams({ q, name: name || ticker });
+      fetch(`/api/transcript-search/${encodeURIComponent(ticker)}?${u.toString().replace(/\+/g, "%20")}`)
+        .then((r) => r.json())
+        .then((d) => setCalls(d.matches || []))
+        .catch(() => setCalls([]));
+    }
   };
 
   return (
@@ -102,8 +114,25 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
         </button>
       </form>
       <p className="text-[11px] text-[#5b6478]">
-        Full-text search of SEC EDGAR filings since 2001. Wrap a phrase in &quot;quotes&quot; for an exact match.
+        Full-text search of SEC EDGAR filings since 2001{ticker ? " + this company's recent earnings calls" : ""}. Wrap a phrase in &quot;quotes&quot; for an exact match.
       </p>
+
+      {submitted && ticker && !submitted.all && calls && calls !== "loading" && calls.length > 0 && (
+        <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-3">
+          <div className="mb-2 text-xs font-semibold text-[#aab2c5]">In recent earnings calls</div>
+          <div className="space-y-2">
+            {calls.map((c, i) => (
+              <a key={i} href={c.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-[#1f2430] bg-[#0d1117] px-3 py-2 hover:border-[#2a3346]">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-[#e6e9f0]">{c.title}</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#8b93a7]">{c.count}× · {c.date} ↗</span>
+                </div>
+                <div className="mt-1 text-[13px] leading-relaxed text-[#c2c8d4]">{highlight(c.snippet, submitted.q)}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {submitted &&
         (loading && !data ? (

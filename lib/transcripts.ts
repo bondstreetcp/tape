@@ -96,6 +96,31 @@ export async function getLatestTranscript(symbol: string, name = ""): Promise<Fu
   return cands.length ? fetchTranscript(symbol, cands[0]) : null;
 }
 
+export interface TranscriptMatch { title: string; date: string | null; url: string; snippet: string; count: number }
+
+/** Full-text search within a company's recent earnings calls (so the doc search
+ *  covers transcripts, not just SEC filings). Returns matching calls newest-first
+ *  with a highlighted-context snippet and a hit count. */
+export async function searchTranscripts(symbol: string, name: string, query: string, n = 6): Promise<TranscriptMatch[]> {
+  const q = query.replace(/(^["']|["']$)/g, "").trim();
+  if (q.length < 2) return [];
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const transcripts = await getRecentTranscripts(symbol, name, n);
+  const out: TranscriptMatch[] = [];
+  for (const t of transcripts) {
+    const count = (t.text.match(re) || []).length;
+    if (!count) continue;
+    const i = t.text.toLowerCase().indexOf(q.toLowerCase());
+    const start = Math.max(0, i - 150);
+    const end = Math.min(t.text.length, i + q.length + 230);
+    let snippet = t.text.slice(start, end).replace(/\s+/g, " ").trim();
+    if (start > 0) snippet = "… " + snippet;
+    if (end < t.text.length) snippet += " …";
+    out.push({ title: t.title, date: t.date, url: t.url, snippet, count });
+  }
+  return out;
+}
+
 /** The last `n` earnings-call transcripts (newest first) for trend analysis. */
 export async function getRecentTranscripts(symbol: string, name = "", n = 6): Promise<FullTranscript[]> {
   const cands = (await transcriptCandidates(symbol, name)).slice(0, n);
