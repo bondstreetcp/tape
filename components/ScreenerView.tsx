@@ -256,6 +256,15 @@ export default function ScreenerView({
         </div>
       </div>
 
+      {colSet === "fundamentals" && (
+        <p className="-mt-1 mb-3 text-[11px] leading-relaxed text-[#5b6478]">
+          Fundamentals are <span className="text-[#8b93a7]">annual — most recently reported fiscal year vs. the year before</span>.{" "}
+          <span className="font-medium text-[#8b93a7]">Rev Gr</span> is that 1-year revenue growth;{" "}
+          <span className="font-medium text-[#8b93a7]">Δ Op Mgn</span> / <span className="font-medium text-[#8b93a7]">Δ DSO</span> are the
+          year-over-year change (margins in points, DSO in days). The “Margins expanding / DSO rising” filters use the same basis.
+        </p>
+      )}
+
       <div className="mb-2 text-xs text-[#8b93a7]">
         Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}
         {filtered.length > LIMIT && ` (first ${LIMIT} — refine filters or sort)`} · click a row to open

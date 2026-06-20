@@ -14,6 +14,7 @@ import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import WatchStar from "./WatchStar";
 import NewsFeed from "./NewsFeed";
+import StockExtras from "./StockExtras";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -241,6 +242,11 @@ export default function StockView({
             </div>
           </button>
         ))}
+      </section>
+
+      {/* earnings reaction + analyst actions */}
+      <section className="mt-5">
+        <StockExtras symbol={row.symbol} />
       </section>
 
       {/* news */}
