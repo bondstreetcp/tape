@@ -17,6 +17,7 @@ interface Result {
   hits: DocHit[];
   from: number;
   nextFrom: number | null;
+  rewroteTo?: string;
 }
 
 const FORM_FILTERS = [
@@ -43,18 +44,18 @@ function highlight(text: string, term: string) {
 export default function DocSearch({ ticker, name }: { ticker?: string; name?: string }) {
   const [q, setQ] = useState("");
   const [forms, setForms] = useState("");
-  const [submitted, setSubmitted] = useState<{ q: string; forms: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{ q: string; forms: string; all: boolean } | null>(null);
   const [data, setData] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(12);
 
   const run = useCallback(
-    (query: string, f: string, from = 0, append = false) => {
+    (query: string, f: string, from = 0, append = false, all = false) => {
       if (!query.trim()) return;
       setLoading(true);
       const u = new URLSearchParams({ q: query });
       if (f) u.set("forms", f);
-      if (ticker) u.set("ticker", ticker);
+      if (ticker && !all) u.set("ticker", ticker);
       if (from) u.set("from", String(from));
       fetch(`/api/docsearch?${u.toString().replace(/\+/g, "%20")}`)
         .then((r) => r.json())
@@ -65,13 +66,13 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
     [ticker],
   );
 
-  const onSearch = (e?: React.FormEvent) => {
+  const onSearch = (e?: React.FormEvent, all = false) => {
     e?.preventDefault();
     if (!q.trim()) return;
-    setSubmitted({ q, forms });
+    setSubmitted({ q, forms, all });
     setVisible(12);
     setData(null);
-    run(q, forms);
+    run(q, forms, 0, false, all);
   };
 
   return (
@@ -111,18 +112,36 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
           </div>
         ) : !data || data.total === 0 ? (
           <div className="rounded-xl border border-[#2a2e39] bg-[#131722] p-8 text-center text-sm text-[#8b93a7]">
-            No filings found for &quot;{submitted.q}&quot;{ticker ? ` from ${name || ticker}` : ""}.
+            <div>No filings {ticker && !submitted.all ? `from ${name || ticker} ` : ""}match &quot;{submitted.q}&quot;.</div>
+            <div className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#5b6478]">
+              This searches the text of SEC filings (10-K / 10-Q / 8-K / proxies), not news. Filings use formal wording — try the
+              filing term (e.g. <span className="text-[#8b93a7]">repurchase</span>, not buyback), remove the quotes, or widen the form filter.
+            </div>
+            {ticker && !submitted.all && (
+              <button
+                onClick={() => onSearch(undefined, true)}
+                className="mt-3 rounded-lg border border-[#2a2e39] bg-[#0d1117] px-3 py-1.5 text-xs text-[#60a5fa] hover:border-[#3a4256]"
+              >
+                Search all companies for &quot;{submitted.q}&quot; →
+              </button>
+            )}
           </div>
         ) : (
           <>
             <div className="text-xs text-[#8b93a7]">
               <span className="font-semibold text-[#aab2c5]">{data.total >= 10000 ? "10,000+" : data.total.toLocaleString()}</span>{" "}
-              filings mention <span className="text-[#e6e9f0]">&quot;{submitted.q}&quot;</span>
-              {ticker ? "" : " across all companies"}
+              filings mention <span className="text-[#e6e9f0]">&quot;{data.rewroteTo || submitted.q}&quot;</span>
+              {ticker && !submitted.all ? "" : " across all companies"}
             </div>
+            {data.rewroteTo && (
+              <div className="-mt-1 text-[11px] text-[#5b6478]">
+                Few filings literally say &quot;{submitted.q}&quot; — showing the filing term{" "}
+                <span className="text-[#8b93a7]">&quot;{data.rewroteTo}&quot;</span>.
+              </div>
+            )}
             <div className="space-y-2">
               {data.hits.slice(0, visible).map((h, i) => (
-                <ResultRow key={h.accession + h.filename + i} hit={h} q={submitted.q} showCompany={!ticker} />
+                <ResultRow key={h.accession + h.filename + i} hit={h} q={data.rewroteTo || submitted.q} showCompany={!ticker || submitted.all} />
               ))}
             </div>
             {visible < data.hits.length ? (
@@ -134,7 +153,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
               </button>
             ) : data.nextFrom != null ? (
               <button
-                onClick={() => { run(submitted.q, submitted.forms, data.nextFrom!, true); setVisible((v) => v + 12); }}
+                onClick={() => { run(submitted.q, submitted.forms, data.nextFrom!, true, submitted.all); setVisible((v) => v + 12); }}
                 disabled={loading}
                 className="w-full rounded-lg border border-[#2a2e39] bg-[#131722] py-2 text-sm text-[#aab2c5] hover:border-[#3a4256] disabled:opacity-50"
               >

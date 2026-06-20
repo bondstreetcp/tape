@@ -27,6 +27,7 @@ export interface DocSearchResult {
   hits: DocHit[];
   from: number;
   nextFrom: number | null;
+  rewroteTo?: string; // formal term we fell back to when the literal query was sparse
 }
 
 function parseDisplayName(dn: string): { name: string; ticker: string | null } {
@@ -41,6 +42,48 @@ function parseDisplayName(dn: string): { name: string; ticker: string | null } {
 
 const PAGE = 100; // EFTS returns up to 100 hits per page
 
+// SEC filings use formal language, so a literal search for a colloquial term
+// often comes back near-empty. Map the common ones to the term filings actually
+// use (AlphaSense-style "smart synonyms").
+const SYNONYMS: Record<string, string> = {
+  buyback: "repurchase", buybacks: "repurchase", "share buyback": "share repurchase",
+  layoffs: "restructuring", layoff: "restructuring", "job cuts": "workforce reduction",
+  "self-driving": "autonomous", "self driving": "autonomous",
+  ev: "electric vehicle", evs: "electric vehicle", chips: "semiconductor", chip: "semiconductor",
+  weed: "cannabis", marijuana: "cannabis", covid: "COVID-19", coronavirus: "COVID-19",
+  "money laundering": "anti-money laundering", obesity: "GLP-1",
+};
+
+async function fetchEfts(query: string, ciks: string | null, forms: string | undefined, from: number): Promise<{ total: number; hits: DocHit[] }> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  if (forms) params.set("forms", forms);
+  if (ciks) params.set("ciks", ciks);
+  if (from) params.set("from", String(from));
+  // URLSearchParams encodes spaces as '+', which EFTS rejects inside q.
+  const qs = params.toString().replace(/\+/g, "%20");
+  const res = await fetch(`https://efts.sec.gov/LATEST/search-index?${qs}`, { headers: HEADERS });
+  if (!res.ok) return { total: 0, hits: [] };
+  const j: any = await res.json();
+  const total: number = j?.hits?.total?.value ?? 0;
+  const hits: DocHit[] = (j?.hits?.hits || []).map((h: any) => {
+    const s = h._source || {};
+    const { name, ticker } = parseDisplayName((s.display_names || [])[0] || "");
+    const cik = String(s.ciks?.[0] || "").replace(/^0+/, "") || "0";
+    const [accession, filename] = String(h._id || "").split(":");
+    const accNo = (accession || "").replace(/-/g, "");
+    return {
+      name, ticker, cik,
+      form: s.form || (s.root_forms || [])[0] || "",
+      date: s.file_date || "",
+      accession: accession || "",
+      filename: filename || "",
+      url: filename ? `https://www.sec.gov/Archives/edgar/data/${cik}/${accNo}/${filename}` : "",
+    };
+  });
+  return { total, hits };
+}
+
 export async function searchFilings(
   q: string,
   opts: { ticker?: string; forms?: string; from?: number } = {},
@@ -48,43 +91,18 @@ export async function searchFilings(
   const query = q.trim();
   const from = Math.max(0, opts.from || 0);
   if (!query) return { query, total: 0, hits: [], from, nextFrom: null };
-
-  let ciks: string | null = null;
-  if (opts.ticker) ciks = await tickerToCik(opts.ticker);
-
-  const params = new URLSearchParams();
-  params.set("q", query);
-  if (opts.forms) params.set("forms", opts.forms);
-  if (ciks) params.set("ciks", ciks);
-  if (from) params.set("from", String(from));
-  // URLSearchParams encodes spaces as '+', which EFTS rejects inside q.
-  const qs = params.toString().replace(/\+/g, "%20");
-
+  const ciks = opts.ticker ? await tickerToCik(opts.ticker) : null;
   try {
-    const res = await fetch(`https://efts.sec.gov/LATEST/search-index?${qs}`, { headers: HEADERS });
-    if (!res.ok) return { query, total: 0, hits: [], from, nextFrom: null };
-    const j: any = await res.json();
-    const total: number = j?.hits?.total?.value ?? 0;
-    const hits: DocHit[] = (j?.hits?.hits || []).map((h: any) => {
-      const s = h._source || {};
-      const { name, ticker } = parseDisplayName((s.display_names || [])[0] || "");
-      const cik = String(s.ciks?.[0] || "").replace(/^0+/, "") || "0";
-      const [accession, filename] = String(h._id || "").split(":");
-      const accNo = (accession || "").replace(/-/g, "");
-      return {
-        name,
-        ticker,
-        cik,
-        form: s.form || (s.root_forms || [])[0] || "",
-        date: s.file_date || "",
-        accession: accession || "",
-        filename: filename || "",
-        url: filename ? `https://www.sec.gov/Archives/edgar/data/${cik}/${accNo}/${filename}` : "",
-      };
-    });
-    // EFTS (Elasticsearch) allows from+size up to 10000.
+    let { total, hits } = await fetchEfts(query, ciks, opts.forms, from);
+    let rewroteTo: string | undefined;
+    // Sparse literal results → retry with the formal filing term.
+    const norm = query.replace(/(^["']|["']$)/g, "").trim().toLowerCase();
+    if (!from && total < 8 && SYNONYMS[norm] && SYNONYMS[norm].toLowerCase() !== norm) {
+      const alt = await fetchEfts(SYNONYMS[norm], ciks, opts.forms, 0);
+      if (alt.total > total) { total = alt.total; hits = alt.hits; rewroteTo = SYNONYMS[norm]; }
+    }
     const nextFrom = hits.length === PAGE && from + PAGE < Math.min(total, 10000) ? from + PAGE : null;
-    return { query, total, hits, from, nextFrom };
+    return { query, total, hits, from, nextFrom, rewroteTo };
   } catch {
     return { query, total: 0, hits: [], from, nextFrom: null };
   }
