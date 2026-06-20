@@ -32,6 +32,27 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     note: "The full Russell 3000 (~2,900 names), sourced from the iShares IWV holdings file — the broadest U.S. equity universe here.",
   },
+  {
+    id: "cac40",
+    name: "CAC 40 (France)",
+    short: "CAC 40",
+    intraday: false,
+    note: "France's CAC 40 — Euronext Paris. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
+    id: "aex",
+    name: "AEX (Netherlands)",
+    short: "AEX",
+    intraday: false,
+    note: "The Amsterdam AEX index — Euronext Amsterdam. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
+    id: "kospi",
+    name: "KOSPI (Korea)",
+    short: "KOSPI",
+    intraday: false,
+    note: "Major KOSPI constituents — Korea Exchange. Prices in KRW. International data via Yahoo (npm run refresh-intl).",
+  },
 ];
 
 export const DEFAULT_UNIVERSE = "sp500";
