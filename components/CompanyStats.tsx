@@ -99,11 +99,16 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
         )}
       </Section>
 
+      {/* Estimate revisions */}
+      <EstimateRevisions estimates={s.estimates} />
+
       {/* Earnings surprises */}
       <Section title="Earnings Surprises (EPS)">
         {s.surprises.length === 0 ? (
           <Empty />
         ) : (
+          <>
+          <BeatSummary surprises={s.surprises} />
           <table className="w-full text-xs">
             <thead>
               <tr className="text-[#8b93a7]">
@@ -126,6 +131,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
               ))}
             </tbody>
           </table>
+          </>
         )}
       </Section>
 
@@ -226,6 +232,87 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
         </Grid>
       </Section>
     </div>
+  );
+}
+
+function deltaPct(v: number | null): string {
+  if (v == null) return "—";
+  if (Math.abs(v) < 0.0005) return "flat";
+  return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+}
+
+function BeatSummary({ surprises }: { surprises: import("@/lib/companyStats").SurpriseRow[] }) {
+  const recent = surprises.slice(-8).filter((e) => e.surprisePercent != null);
+  if (!recent.length) return null;
+  const beats = recent.filter((e) => (e.surprisePercent ?? 0) > 0).length;
+  const avg = recent.reduce((a, e) => a + (e.surprisePercent ?? 0), 0) / recent.length;
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <span className="text-[#aab2c5]">
+        Beat in <span className="font-semibold text-[#e6e9f0]">{beats} of {recent.length}</span> recent quarters
+      </span>
+      <span className="text-[#8b93a7]">
+        avg surprise{" "}
+        <span className="font-semibold tabular-nums" style={{ color: trend(avg) }}>
+          {avg >= 0 ? "+" : ""}{(avg * 100).toFixed(1)}%
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function EstimateRevisions({ estimates }: { estimates: import("@/lib/companyStats").EstimatePeriod[] }) {
+  const fwd = estimates.filter((e) => ["0q", "+1q", "0y", "+1y"].includes(e.period) && e.epsCurrent != null);
+  if (!fwd.length) return null;
+  const cy = fwd.find((e) => e.period === "0y") || fwd[0];
+  const chg90 = cy.epsCurrent != null && cy.eps90dAgo ? cy.epsCurrent / cy.eps90dAgo - 1 : null;
+  const netUp = (cy.epsUp30d ?? 0) - (cy.epsDown30d ?? 0);
+  const rising = (chg90 != null && chg90 > 0.002) || netUp > 0;
+  const falling = (chg90 != null && chg90 < -0.002) || netUp < 0;
+  const signal =
+    rising && !falling
+      ? { t: "Estimates trending higher ↑", c: "#22c55e" }
+      : falling && !rising
+        ? { t: "Estimates trending lower ↓", c: "#ef4444" }
+        : { t: "Estimates steady", c: "#8b93a7" };
+  return (
+    <Section title="Estimate Revisions (consensus EPS)" wide>
+      <div className="mb-2 text-xs">
+        <span className="font-semibold" style={{ color: signal.c }}>{signal.t}</span>
+        <span className="text-[#8b93a7]"> · where consensus sits now vs. 30–90 days ago, and how many analysts moved each way</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[460px] text-xs">
+          <thead>
+            <tr className="text-[#8b93a7]">
+              <th className="py-1 text-left font-medium">Period</th>
+              <th className="py-1 text-right font-medium">EPS now</th>
+              <th className="py-1 text-right font-medium">vs 30d</th>
+              <th className="py-1 text-right font-medium">vs 90d</th>
+              <th className="py-1 text-right font-medium">Revisions (30d)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fwd.map((e) => {
+              const d30 = e.epsCurrent != null && e.eps30dAgo ? e.epsCurrent / e.eps30dAgo - 1 : null;
+              const d90 = e.epsCurrent != null && e.eps90dAgo ? e.epsCurrent / e.eps90dAgo - 1 : null;
+              return (
+                <tr key={e.period} className="border-t border-[#1f2430]">
+                  <td className="py-1 text-left text-[#aab2c5]">{periodName(e.period)}</td>
+                  <td className="py-1 text-right tabular-nums">{price(e.epsCurrent)}</td>
+                  <td className="py-1 text-right tabular-nums" style={{ color: trend(d30) }}>{deltaPct(d30)}</td>
+                  <td className="py-1 text-right tabular-nums" style={{ color: trend(d90) }}>{deltaPct(d90)}</td>
+                  <td className="py-1 text-right tabular-nums">
+                    <span className="text-[#22c55e]">↑{e.epsUp30d ?? 0}</span>{" "}
+                    <span className="text-[#ef4444]">↓{e.epsDown30d ?? 0}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Section>
   );
 }
 
