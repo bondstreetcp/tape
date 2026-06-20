@@ -19,7 +19,7 @@ interface Result {
   nextFrom: number | null;
   rewroteTo?: string;
 }
-interface Call { title: string; date: string | null; url: string; snippet: string; count: number }
+interface Call { title: string; date: string | null; url: string; snippet: string; count: number; name?: string }
 
 const FORM_FILTERS = [
   { label: "All filings", value: "" },
@@ -61,7 +61,27 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
       if (from) u.set("from", String(from));
       fetch(`/api/docsearch?${u.toString().replace(/\+/g, "%20")}`)
         .then((r) => r.json())
-        .then((d: Result) => setData((prev) => (append && prev ? { ...d, hits: [...prev.hits, ...(d.hits || [])] } : d)))
+        .then((d: Result) => {
+          setData((prev) => (append && prev ? { ...d, hits: [...prev.hits, ...(d.hits || [])] } : d));
+          // Global search: also search the transcripts of the top companies that
+          // matched in the filing results (per-ticker search is handled in onSearch).
+          if (!append && !ticker) {
+            const seen = new Set<string>();
+            const top: { t: string; n: string }[] = [];
+            for (const h of d.hits || []) {
+              if (h.ticker && !seen.has(h.ticker)) { seen.add(h.ticker); top.push({ t: h.ticker, n: h.name }); }
+              if (top.length >= 3) break;
+            }
+            if (!top.length) { setCalls(null); return; }
+            setCalls("loading");
+            Promise.all(
+              top.map(({ t, n }) => {
+                const tu = new URLSearchParams({ q: query, name: n }).toString().replace(/\+/g, "%20");
+                return fetch(`/api/transcript-search/${encodeURIComponent(t)}?${tu}`).then((r) => r.json()).then((d) => (d.matches || []).map((m: Call) => ({ ...m, name: n }))).catch(() => [] as Call[]);
+              }),
+            ).then((lists) => setCalls(lists.flat().sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8)));
+          }
+        })
         .catch(() => {})
         .finally(() => setLoading(false));
     },
@@ -117,14 +137,14 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
         Full-text search of SEC EDGAR filings since 2001{ticker ? " + this company's recent earnings calls" : ""}. Wrap a phrase in &quot;quotes&quot; for an exact match.
       </p>
 
-      {submitted && ticker && !submitted.all && calls && calls !== "loading" && calls.length > 0 && (
+      {submitted && calls && calls !== "loading" && calls.length > 0 && (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="mb-2 text-xs font-semibold text-[var(--text-2)]">In recent earnings calls</div>
+          <div className="mb-2 text-xs font-semibold text-[var(--text-2)]">{ticker ? "In recent earnings calls" : "In earnings calls — matching companies"}</div>
           <div className="space-y-2">
             {calls.map((c, i) => (
               <a key={i} href={c.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] px-3 py-2 hover:border-[#2a3346]">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-medium text-[var(--text)]">{c.title}</span>
+                  <span className="truncate font-medium text-[var(--text)]">{c.name && !ticker ? <><span className="font-mono text-[var(--text-2)]">{c.name}</span> — {c.title}</> : c.title}</span>
                   <span className="shrink-0 whitespace-nowrap text-[var(--text-3)]">{c.count}× · {c.date} ↗</span>
                 </div>
                 <div className="mt-1 text-[13px] leading-relaxed text-[var(--text-body)]">{highlight(c.snippet, submitted.q)}</div>
