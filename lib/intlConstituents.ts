@@ -107,4 +107,18 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "CBK.DE", "HEI.DE", "BEI.DE", "SRT3.DE", "PAH3.DE",
     ],
   },
+  {
+    id: "tsx",
+    name: "S&P/TSX Composite (Canada)",
+    short: "TSX",
+    currency: "CAD",
+    tickers: [
+      "RY.TO", "TD.TO", "BMO.TO", "BNS.TO", "CM.TO", "NA.TO", "MFC.TO", "SLF.TO",
+      "GWO.TO", "IFC.TO", "BN.TO", "ENB.TO", "TRP.TO", "SU.TO", "CNQ.TO", "IMO.TO",
+      "CVE.TO", "TOU.TO", "PPL.TO", "CNR.TO", "CP.TO", "WCN.TO", "GIB-A.TO", "MG.TO",
+      "WSP.TO", "NTR.TO", "FNV.TO", "WPM.TO", "AEM.TO", "ABX.TO", "TECK-B.TO", "CCO.TO",
+      "SHOP.TO", "CSU.TO", "OTEX.TO", "ATD.TO", "L.TO", "DOL.TO", "QSR.TO", "MRU.TO",
+      "BCE.TO", "T.TO", "RCI-B.TO", "FTS.TO", "EMA.TO", "H.TO", "TRI.TO",
+    ],
+  },
 ];

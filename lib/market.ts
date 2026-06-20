@@ -32,6 +32,7 @@ const GROUPS: { name: string; kind: AssetKind; syms: [string, string][] }[] = [
       ["^IXIC", "Nasdaq Comp"],
       ["^RUT", "Russell 2000"],
       ["^VIX", "VIX"],
+      ["^GSPTSE", "S&P/TSX"],
       ["^FTSE", "FTSE 100"],
       ["^GDAXI", "DAX"],
       ["^FCHI", "CAC 40"],
