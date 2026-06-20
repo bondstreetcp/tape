@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { buildComparison } from "@/lib/compute";
+import { ECON_PREFIX, prettySym } from "@/lib/econOverlays";
 import MultiLineChart from "./MultiLineChart";
 
 const COLORS = ["#60a5fa", "#f472b6", "#fbbf24", "#4ade80", "#c084fc", "#fb923c"];
@@ -36,7 +37,10 @@ export default function CompareChart({
     for (const sym of compareSymbols) {
       if (requested.current.has(sym)) continue;
       requested.current.add(sym);
-      fetch(`/api/ohlc/${encodeURIComponent(sym)}`)
+      const url = sym.startsWith(ECON_PREFIX)
+        ? `/api/econ-series/${encodeURIComponent(sym.slice(ECON_PREFIX.length))}`
+        : `/api/ohlc/${encodeURIComponent(sym)}`;
+      fetch(url)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           const toPts = (a: any[]): SeriesPoint[] => (a || []).map((b: any) => ({ t: b.t, c: b.c }));
@@ -56,7 +60,7 @@ export default function CompareChart({
       if (f) items.push({ symbol: sym, daily: f.daily, intraday: f.intraday });
     }
     const { rows } = buildComparison(items, tf, now);
-    const series = items.map((it, i) => ({ symbol: it.symbol, color: COLORS[i % COLORS.length] }));
+    const series = items.map((it, i) => ({ symbol: it.symbol, color: COLORS[i % COLORS.length], label: prettySym(it.symbol) }));
     return { rows, series };
   }, [mainSymbol, mainDaily, mainIntraday, compareSymbols, fetched, tf, now]);
 

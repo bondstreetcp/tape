@@ -7,6 +7,7 @@ import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { sliceSeries, seriesChangePct } from "@/lib/compute";
 import { trendColor } from "@/lib/color";
 import { fmtPct, fmtPrice } from "@/lib/format";
+import { ECON_OVERLAYS, econSym, prettySym, ECON_PREFIX } from "@/lib/econOverlays";
 import TimeframeSelector from "./TimeframeSelector";
 import NewsFeed from "./NewsFeed";
 import StockExtras from "./StockExtras";
@@ -50,7 +51,10 @@ export default function StockOverview({
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
   const addCompare = (raw?: string) => {
-    const s = (raw ?? compareInput).trim().toUpperCase().replace(/[^A-Z0-9.=^-]/g, "");
+    const input = (raw ?? compareInput).trim();
+    // Econ overlays are trusted pseudo-symbols ("ECON:housing") — don't uppercase
+    // or strip the colon; everything else is a Yahoo ticker.
+    const s = input.startsWith(ECON_PREFIX) ? input : input.toUpperCase().replace(/[^A-Z0-9.=^-]/g, "");
     if (s && s !== row.symbol && !compareSymbols.includes(s) && compareSymbols.length < 5) {
       setCompareSymbols((p) => [...p, s]);
     }
@@ -91,7 +95,7 @@ export default function StockOverview({
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 font-mono text-xs"
                 style={{ color: CMP_COLORS[i % CMP_COLORS.length] }}
               >
-                {s}
+                {prettySym(s)}
                 <button onClick={() => removeCompare(s)} className="text-[var(--text-3)] hover:text-[var(--text)]" title="Remove">×</button>
               </span>
             ))}
@@ -110,6 +114,16 @@ export default function StockOverview({
                 className="rounded-md border border-dashed border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
               >
                 +{p.label}
+              </button>
+            ))}
+            {ECON_OVERLAYS.map((o) => (
+              <button
+                key={o.key}
+                onClick={() => addCompare(econSym(o.key))}
+                title={`Overlay ${o.label} — FRED economic data`}
+                className="rounded-md border border-dotted border-[#a855f7]/50 bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[#c4b5fd] transition-colors hover:border-[#a855f7]"
+              >
+                +{o.label}
               </button>
             ))}
           </div>

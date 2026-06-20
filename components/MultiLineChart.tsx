@@ -16,6 +16,7 @@ export interface SeriesDef {
   symbol: string;
   color: string;
   isRef?: boolean;
+  label?: string; // friendly display name (e.g. "Housing Starts" for ECON:housing)
 }
 
 function tickFmt(tf: TimeframeKey) {
@@ -33,7 +34,7 @@ function pct(v: number) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
-function CustomTooltip({ active, payload, label, tf, colors }: any) {
+function CustomTooltip({ active, payload, label, tf, colors, labels }: any) {
   if (!active || !payload?.length) return null;
   const d = new Date(label);
   const dateStr =
@@ -64,7 +65,7 @@ function CustomTooltip({ active, payload, label, tf, colors }: any) {
                 className="inline-block h-2 w-2 rounded-sm"
                 style={{ background: colors[p.dataKey] || p.color }}
               />
-              <span className="font-mono">{p.dataKey}</span>
+              <span className="font-mono">{labels?.[p.dataKey] ?? p.dataKey}</span>
             </span>
             <span
               className="text-right tabular-nums"
@@ -97,6 +98,9 @@ export default function MultiLineChart({
 }) {
   const colorMap: Record<string, string> = Object.fromEntries(
     series.map((s) => [s.symbol, s.color]),
+  );
+  const labelMap: Record<string, string> = Object.fromEntries(
+    series.map((s) => [s.symbol, s.label ?? s.symbol]),
   );
 
   if (rows.length < 2) {
@@ -137,7 +141,7 @@ export default function MultiLineChart({
         />
         <ReferenceLine y={0} stroke="var(--border-strong)" strokeDasharray="3 3" />
         <Tooltip
-          content={<CustomTooltip tf={tf} colors={colorMap} />}
+          content={<CustomTooltip tf={tf} colors={colorMap} labels={labelMap} />}
           isAnimationActive={false}
         />
         {visible.map((s) => {
@@ -172,7 +176,7 @@ export default function MultiLineChart({
                         fill={s.color}
                         opacity={dim ? 0.25 : 1}
                       >
-                        {s.symbol}
+                        {s.label ?? s.symbol}
                       </text>
                     );
                   }}
