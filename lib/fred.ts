@@ -3,6 +3,8 @@
  * endpoint — no API key required. Fetched per-series (mixed frequencies would
  * otherwise come back zipped) and cached by the page's ISR window.
  */
+import { RELEASES, type ReleaseData } from "./releases";
+
 const FREDGRAPH = "https://fred.stlouisfed.org/graph/fredgraph.csv";
 const DAY = 86_400_000;
 
@@ -53,7 +55,7 @@ const CURVE: [string, string, number][] = [
 
 export interface CurvePoint { label: string; mat: number; now: number | null; monthAgo: number | null; yearAgo: number | null }
 export interface MacroInd { key: string; label: string; value: number | null; unit: string; asOf: string | null; group: string; seriesId?: string; history?: [string, number][] }
-export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null }
+export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null; releases?: Record<string, ReleaseData> }
 
 export async function getMacro(): Promise<Macro> {
   const now = Date.now();
@@ -131,5 +133,38 @@ export async function getMacro(): Promise<Macro> {
     /* leave null */
   }
 
-  return { curve, indicators, asOf: new Date(now).toISOString(), gdpNow };
+  // Recent prints for each calendar release, so an expanded row shows its history.
+  const FOURY = 4 * 365 * DAY;
+  const buildRelease = async (def: (typeof RELEASES)[number]): Promise<ReleaseData | null> => {
+    try {
+      const obs = await fetchSeries(def.fredId, new Date(now - FOURY).toISOString().slice(0, 10));
+      if (!obs.length) return null;
+      let pairs: [string, number][] = [];
+      if (def.transform === "yoy") {
+        for (const x of obs) {
+          const p = onOrBefore(obs, new Date(x.date).getTime() - 360 * DAY);
+          if (p && p.value) pairs.push([x.date, (x.value / p.value - 1) * 100]);
+        }
+      } else if (def.transform === "mom") {
+        for (let i = 1; i < obs.length; i++) if (obs[i - 1].value) pairs.push([obs[i].date, (obs[i].value / obs[i - 1].value - 1) * 100]);
+      } else if (def.transform === "momChange") {
+        for (let i = 1; i < obs.length; i++) pairs.push([obs[i].date, (obs[i].value - obs[i - 1].value) * def.scale]);
+      } else {
+        for (const x of obs) pairs.push([x.date, x.value * def.scale]);
+      }
+      pairs = pairs.slice(def.chart === "bar" ? -16 : -24);
+      if (!pairs.length) return null;
+      const lt = pairs[pairs.length - 1];
+      const pr = pairs[pairs.length - 2];
+      return { key: def.key, label: def.label, unit: def.unit, chart: def.chart, hint: def.hint, history: pairs, latest: lt[1], latestDate: lt[0], prior: pr ? pr[1] : null, nowcast: null };
+    } catch {
+      return null;
+    }
+  };
+  const releaseList = await Promise.all(RELEASES.map(buildRelease));
+  const releases: Record<string, ReleaseData> = {};
+  for (const r of releaseList) if (r) releases[r.key] = r;
+  if (releases.gdp && gdpNow) releases.gdp.nowcast = gdpNow.value;
+
+  return { curve, indicators, asOf: new Date(now).toISOString(), gdpNow, releases };
 }

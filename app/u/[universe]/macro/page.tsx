@@ -20,7 +20,7 @@ export default async function MacroPage() {
       calendar={calendar}
       keyConfigured={econKeyConfigured()}
       volOil={volOil}
-      gdpNow={macro.gdpNow ?? null}
+      releases={macro.releases}
     />
   );
 }
