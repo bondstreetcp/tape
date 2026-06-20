@@ -86,18 +86,26 @@ export default function ScreenerView({
   const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
   const [magic, setMagic] = useState(false); // Greenblatt magic formula
 
-  // Magic Formula: cheapest valuation quintile (low P/E) ∩ highest ROE quintile,
-  // computed across the whole universe — a Greenblatt-style "good + cheap" set.
-  const magicSet = useMemo(() => {
+  // Magic Formula (Greenblatt): rank every name by earnings yield and by return
+  // on capital, sum the two ranks, take the best ~30 — good companies at cheap
+  // prices. He excludes financials & utilities (the EBIT/capital math doesn't fit)
+  // and tiny caps. The free snapshot has P/E + ROE, so we proxy earnings yield with
+  // 1/(P/E) and return-on-capital with ROE. Returns symbol → magic rank (0 = best).
+  const magicRank = useMemo(() => {
     if (!magic) return null;
-    const valid = stocks.filter((s) => (s.trailingPE ?? 0) > 0 && s.fund?.roe != null);
-    if (valid.length < 10) return new Set<string>();
-    const pes = valid.map((s) => s.trailingPE!).sort((a, b) => a - b);
-    const roes = valid.map((s) => s.fund!.roe!).sort((a, b) => a - b);
-    const q = (arr: number[], p: number) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
-    const peCut = q(pes, 0.2); // cheapest quintile: P/E ≤ peCut
-    const roeCut = q(roes, 0.8); // highest quintile: ROE ≥ roeCut
-    return new Set(valid.filter((s) => s.trailingPE! <= peCut && s.fund!.roe! >= roeCut).map((s) => s.symbol));
+    const valid = stocks.filter(
+      (s) => (s.trailingPE ?? 0) > 0 && s.fund?.roe != null && s.etf !== "XLF" && s.etf !== "XLU" && (s.marketCap || 0) >= 5e8,
+    );
+    if (valid.length < 20) return new Map<string, number>();
+    const ey = new Map<string, number>(); // earnings-yield rank (high = better)
+    [...valid].sort((a, b) => 1 / b.trailingPE! - 1 / a.trailingPE!).forEach((s, i) => ey.set(s.symbol, i));
+    const roc = new Map<string, number>(); // return-on-capital rank (high = better)
+    [...valid].sort((a, b) => b.fund!.roe! - a.fund!.roe!).forEach((s, i) => roc.set(s.symbol, i));
+    const ranked = valid
+      .map((s) => ({ sym: s.symbol, score: ey.get(s.symbol)! + roc.get(s.symbol)! }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 30);
+    return new Map(ranked.map((r, i) => [r.sym, i]));
   }, [magic, stocks]);
 
   const columns: Col[] = useMemo(() => {
@@ -148,7 +156,10 @@ export default function ScreenerView({
     if (minYld != null) r = r.filter((s) => (s.dividendYield ?? 0) >= minYld);
     if (minRoe != null) r = r.filter((s) => (s.fund?.roe ?? -Infinity) >= minRoe);
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
-    if (magicSet) r = r.filter((s) => magicSet.has(s.symbol));
+    if (magicRank) r = r.filter((s) => magicRank.has(s.symbol));
+
+    // When Magic Formula is on, order by the magic rank (best first) rather than a column.
+    if (magicRank) return [...r].sort((a, b) => (magicRank.get(a.symbol) ?? 999) - (magicRank.get(b.symbol) ?? 999));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -165,7 +176,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, magicSet, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, magicRank, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -271,7 +282,7 @@ export default function ScreenerView({
         </button>
         <button
           onClick={() => setMagic((v) => !v)}
-          title="Greenblatt Magic Formula: names in the cheapest valuation quintile (lowest P/E) AND the highest return-on-equity quintile across this universe — good companies at cheap prices. Needs fundamentals data (US universes)."
+          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, top 30 shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes)."
           className={"rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors " + (magic ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
         >
           ✦ Magic Formula
@@ -322,6 +333,9 @@ export default function ScreenerView({
       )}
 
       <div className="mb-2 text-xs text-[var(--text-3)]">
+        {magic ? (
+          <span><span className="font-semibold text-[#d8b4fe]">✦ Magic Formula</span> — top {filtered.length} ranked by earnings yield + return on capital (best first){sectorEtf !== "all" ? " in this sector" : ""}. </span>
+        ) : null}
         Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}
         {filtered.length > LIMIT && ` (first ${LIMIT} — refine filters or sort)`} · click a row to open
       </div>
