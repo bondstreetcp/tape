@@ -408,9 +408,76 @@ export default function FinancialsView({
               </>
             )}
           </p>
+          <DuPontPanel periods={financials.annual} />
         </>
       )}
     </main>
+  );
+}
+
+function DuPontPanel({ periods }: { periods: FinPeriod[] }) {
+  const rows = [...periods]
+    .reverse() // newest → oldest
+    .map((p) => {
+      const rev = fld(p, "totalRevenue");
+      const ni = netInc(p);
+      const assets = fld(p, "totalAssets");
+      const equity = fld(p, "stockholdersEquity") ?? fld(p, "commonStockEquity");
+      if (rev == null || ni == null || assets == null || equity == null || rev <= 0 || assets <= 0 || equity <= 0) return null;
+      const netMargin = ni / rev;
+      const turnover = rev / assets;
+      const leverage = assets / equity;
+      return { date: p.date, netMargin, turnover, leverage, roe: netMargin * turnover * leverage };
+    })
+    .filter((r): r is { date: string; netMargin: number; turnover: number; leverage: number; roe: number } => !!r)
+    .slice(0, 5);
+  if (rows.length < 2) return null;
+
+  // Attribute the latest ROE change to its biggest DuPont driver.
+  const [cur, prev] = rows;
+  const contrib = {
+    margin: (cur.netMargin - prev.netMargin) * prev.turnover * prev.leverage,
+    turnover: cur.netMargin * (cur.turnover - prev.turnover) * prev.leverage,
+    leverage: cur.netMargin * cur.turnover * (cur.leverage - prev.leverage),
+  };
+  const top = (Object.entries(contrib).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0] || ["", 0]) as [string, number];
+  const label = ({ margin: "net margin", turnover: "asset turnover", leverage: "leverage" } as Record<string, string>)[top[0]] || "";
+  const dRoe = cur.roe - prev.roe;
+  const driver = label ? `ROE ${dRoe >= 0 ? "rose" : "fell"} ${Math.abs(dRoe * 100).toFixed(1)} pts vs. the prior year — mostly ${top[1] >= 0 ? "higher" : "lower"} ${label}.` : "";
+
+  return (
+    <section className="mt-5 rounded-xl border border-[#2a2e39] bg-[#131722] p-4">
+      <h3 className="mb-1 text-sm font-semibold text-[#aab2c5]">ROE decomposition (DuPont) · annual</h3>
+      <p className="mb-3 text-[11px] leading-relaxed text-[#5b6478]">
+        ROE = <span className="text-[#8b93a7]">net margin</span> × <span className="text-[#8b93a7]">asset turnover</span> ×{" "}
+        <span className="text-[#8b93a7]">equity multiplier</span> — shows whether returns come from profitability, efficiency, or leverage.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[460px] text-sm">
+          <thead>
+            <tr className="text-[#8b93a7]">
+              <th className="py-1 text-left font-medium">Year</th>
+              <th className="py-1 text-right font-medium">Net margin</th>
+              <th className="py-1 text-right font-medium">× Asset turnover</th>
+              <th className="py-1 text-right font-medium">× Equity mult.</th>
+              <th className="py-1 text-right font-medium">= ROE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.date} className="border-t border-[#1f2430]">
+                <td className="py-1 text-left text-[#aab2c5]">{new Date(r.date).getFullYear()}</td>
+                <td className="py-1 text-right tabular-nums">{(r.netMargin * 100).toFixed(1)}%</td>
+                <td className="py-1 text-right tabular-nums">{r.turnover.toFixed(2)}×</td>
+                <td className="py-1 text-right tabular-nums">{r.leverage.toFixed(2)}×</td>
+                <td className="py-1 text-right font-semibold tabular-nums text-[#e6e9f0]">{(r.roe * 100).toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {driver && <p className="mt-2 text-[11px] text-[#8b93a7]">{driver}</p>}
+    </section>
   );
 }
 
