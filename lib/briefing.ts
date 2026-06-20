@@ -13,6 +13,7 @@ export interface Briefing {
   id: string;
   title: string;
   edition: string;
+  cadence: string;
   date: string | null;
   sections: BriefSection[];
   sourceUrl: string;
@@ -20,8 +21,8 @@ export interface Briefing {
 }
 
 const SOURCES = [
-  { id: "mnc", title: "Morning News Call", edition: "U.S. Edition · Reuters", url: "https://share.refinitiv.com/assets/newsletters/Morning_News_Call/MNC_US.pdf" },
-  { id: "tda", title: "The Day Ahead", edition: "North America · Reuters", url: "https://share.refinitiv.com/assets/newsletters/The_Day_Ahead/TDA_NAM.pdf" },
+  { id: "mnc", title: "Morning News Call", edition: "U.S. Edition · Reuters", cadence: "Before the open · new each morning (~6–8am ET)", url: "https://share.refinitiv.com/assets/newsletters/Morning_News_Call/MNC_US.pdf" },
+  { id: "tda", title: "The Day Ahead", edition: "North America · Reuters", cadence: "After the close · new each afternoon (~4pm ET)", url: "https://share.refinitiv.com/assets/newsletters/The_Day_Ahead/TDA_NAM.pdf" },
 ];
 
 // Section headers we recognise (others fall back to the generic all-caps test).
@@ -126,7 +127,7 @@ async function fetchOne(src: (typeof SOURCES)[number]): Promise<Briefing | null>
     const data = await pdfParse(buf);
     const { date, sections } = parse(data.text);
     if (!sections.length) return null;
-    return { id: src.id, title: src.title, edition: src.edition, date, sections, sourceUrl: src.url, chars: data.text.length };
+    return { id: src.id, title: src.title, edition: src.edition, cadence: src.cadence, date, sections, sourceUrl: src.url, chars: data.text.length };
   } catch {
     return null;
   }

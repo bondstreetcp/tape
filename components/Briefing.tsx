@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 interface Block { headline?: string; text: string }
 interface Section { heading: string; kind: "prose" | "list"; blocks?: Block[]; lines?: string[] }
-interface Brief { id: string; title: string; edition: string; date: string | null; sections: Section[]; sourceUrl: string; chars: number }
+interface Brief { id: string; title: string; edition: string; cadence: string; date: string | null; sections: Section[]; sourceUrl: string; chars: number }
 type State = "loading" | "need-auth" | "unconfigured" | "ready" | "error";
 
 export default function Briefing() {
@@ -106,6 +106,7 @@ export default function Briefing() {
             <div>
               <h2 className="text-base font-bold text-[var(--text)]">{b.title}</h2>
               <div className="text-[11px] text-[var(--text-4)]">{b.edition}{b.date ? ` · ${b.date}` : ""}</div>
+              <div className="mt-1 inline-block rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-3)]">{b.cadence}</div>
             </div>
             <a href={b.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-[#60a5fa] hover:underline">Source PDF ↗</a>
           </header>
