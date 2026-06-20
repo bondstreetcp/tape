@@ -23,6 +23,17 @@ const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false })
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
 const CompareChart = dynamic(() => import("./CompareChart"), { ssr: false });
 
+// One-click cross-asset overlays (rebased to % change). Symbols are Yahoo's.
+const COMPARE_PRESETS: { label: string; sym: string }[] = [
+  { label: "Crude", sym: "CL=F" },
+  { label: "Gold", sym: "GC=F" },
+  { label: "10Y", sym: "^TNX" },
+  { label: "Dollar", sym: "UUP" },
+  { label: "S&P", sym: "^GSPC" },
+  { label: "VIX", sym: "^VIX" },
+  { label: "BTC", sym: "BTC-USD" },
+];
+
 export default function StockView({
   universe,
   row,
@@ -46,8 +57,8 @@ export default function StockView({
   const [compareInput, setCompareInput] = useState("");
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
-  const addCompare = () => {
-    const s = compareInput.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+  const addCompare = (raw?: string) => {
+    const s = (raw ?? compareInput).trim().toUpperCase().replace(/[^A-Z0-9.=^-]/g, "");
     if (s && s !== row.symbol && !compareSymbols.includes(s) && compareSymbols.length < 5) {
       setCompareSymbols((p) => [...p, s]);
     }
@@ -162,9 +173,19 @@ export default function StockView({
               value={compareInput}
               onChange={(e) => setCompareInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addCompare(); }}
-              placeholder="+ ticker (e.g. KO)"
+              placeholder="+ ticker (KO, CL=F)"
               className="w-32 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
             />
+            {COMPARE_PRESETS.map((p) => (
+              <button
+                key={p.sym}
+                onClick={() => addCompare(p.sym)}
+                title={`Overlay ${p.label} (${p.sym})`}
+                className="rounded-md border border-dashed border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+              >
+                +{p.label}
+              </button>
+            ))}
           </div>
           {!comparing && (
             <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { buildComparison } from "@/lib/compute";
@@ -25,25 +25,29 @@ export default function CompareChart({
   now: number;
 }) {
   const [fetched, setFetched] = useState<Record<string, Bars | null>>({});
+  // Track requested symbols in a ref (not state) so this effect depends only on
+  // compareSymbols — depending on `fetched` made each re-run's cleanup cancel the
+  // in-flight fetch, so comparisons never plotted. No "alive"/"mounted" flag: in
+  // dev StrictMode the mount→unmount→remount would leave it false forever; React
+  // 18+ no-ops setState after unmount anyway.
+  const requested = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    let alive = true;
     for (const sym of compareSymbols) {
-      if (sym in fetched) continue;
-      setFetched((p) => ({ ...p, [sym]: p[sym] ?? null })); // mark in-flight
+      if (requested.current.has(sym)) continue;
+      requested.current.add(sym);
       fetch(`/api/ohlc/${encodeURIComponent(sym)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (!alive) return;
           const toPts = (a: any[]): SeriesPoint[] => (a || []).map((b: any) => ({ t: b.t, c: b.c }));
           setFetched((p) => ({ ...p, [sym]: d ? { daily: toPts(d.daily), intraday: toPts(d.intraday) } : null }));
         })
-        .catch(() => alive && setFetched((p) => ({ ...p, [sym]: null })));
+        .catch(() => {
+          requested.current.delete(sym); // allow a retry on failure
+          setFetched((p) => ({ ...p, [sym]: null }));
+        });
     }
-    return () => {
-      alive = false;
-    };
-  }, [compareSymbols, fetched]);
+  }, [compareSymbols]);
 
   const { rows, series } = useMemo(() => {
     const items = [{ symbol: mainSymbol, daily: mainDaily, intraday: mainIntraday }];
