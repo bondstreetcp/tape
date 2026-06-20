@@ -84,6 +84,21 @@ export default function ScreenerView({
   const [minYld, setMinYld] = useState<number | null>(null);
   const [minRoe, setMinRoe] = useState<number | null>(null);
   const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
+  const [magic, setMagic] = useState(false); // Greenblatt magic formula
+
+  // Magic Formula: cheapest valuation quintile (low P/E) ∩ highest ROE quintile,
+  // computed across the whole universe — a Greenblatt-style "good + cheap" set.
+  const magicSet = useMemo(() => {
+    if (!magic) return null;
+    const valid = stocks.filter((s) => (s.trailingPE ?? 0) > 0 && s.fund?.roe != null);
+    if (valid.length < 10) return new Set<string>();
+    const pes = valid.map((s) => s.trailingPE!).sort((a, b) => a - b);
+    const roes = valid.map((s) => s.fund!.roe!).sort((a, b) => a - b);
+    const q = (arr: number[], p: number) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
+    const peCut = q(pes, 0.2); // cheapest quintile: P/E ≤ peCut
+    const roeCut = q(roes, 0.8); // highest quintile: ROE ≥ roeCut
+    return new Set(valid.filter((s) => s.trailingPE! <= peCut && s.fund!.roe! >= roeCut).map((s) => s.symbol));
+  }, [magic, stocks]);
 
   const columns: Col[] = useMemo(() => {
     const base: Col[] = [
@@ -133,6 +148,7 @@ export default function ScreenerView({
     if (minYld != null) r = r.filter((s) => (s.dividendYield ?? 0) >= minYld);
     if (minRoe != null) r = r.filter((s) => (s.fund?.roe ?? -Infinity) >= minRoe);
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
+    if (magicSet) r = r.filter((s) => magicSet.has(s.symbol));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -149,7 +165,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, magicSet, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -252,6 +268,13 @@ export default function ScreenerView({
         </select>
         <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
           Above 200-day avg
+        </button>
+        <button
+          onClick={() => setMagic((v) => !v)}
+          title="Greenblatt Magic Formula: names in the cheapest valuation quintile (lowest P/E) AND the highest return-on-equity quintile across this universe — good companies at cheap prices. Needs fundamentals data (US universes)."
+          className={"rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors " + (magic ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
+        >
+          ✦ Magic Formula
         </button>
       </div>
 
