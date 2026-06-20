@@ -12,6 +12,7 @@ import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
 import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
+import SegmentsPanel from "./Segments";
 import OptionsChain from "./OptionsChain";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
@@ -413,6 +414,7 @@ export default function FinancialsView({
             )}
           </p>
           <DuPontPanel periods={financials.annual} />
+          <SegmentsPanel symbol={symbol} />
         </>
       )}
     </main>
