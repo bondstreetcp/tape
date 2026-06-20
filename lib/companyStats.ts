@@ -45,6 +45,13 @@ export interface EstimatePeriod {
   epsAnalysts: number | null;
   revAvg: number | null;
   growth: number | null;
+  // revision tracking: where consensus EPS sits now vs 30/90 days ago, and how
+  // many analysts revised up vs down in the last 30 days.
+  epsCurrent: number | null;
+  eps30dAgo: number | null;
+  eps90dAgo: number | null;
+  epsUp30d: number | null;
+  epsDown30d: number | null;
 }
 export interface SurpriseRow {
   quarter: string;
@@ -162,11 +169,16 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
           epsAnalysts: num(t.earningsEstimate?.numberOfAnalysts),
           revAvg: num(t.revenueEstimate?.avg),
           growth: num(t.growth),
+          epsCurrent: num(t.epsTrend?.current),
+          eps30dAgo: num(t.epsTrend?.["30daysAgo"]),
+          eps90dAgo: num(t.epsTrend?.["90daysAgo"]),
+          epsUp30d: num(t.epsRevisions?.upLast30days),
+          epsDown30d: num(t.epsRevisions?.downLast30days),
         }))
         .filter((e: EstimatePeriod) => e.epsAvg != null || e.revAvg != null),
       surprises: eh
         .map((h: any) => ({
-          quarter: str(h.quarter) || "",
+          quarter: str(h.quarter) || dstr(h.quarter) || "",
           actual: num(h.epsActual),
           estimate: num(h.epsEstimate),
           surprisePercent: num(h.surprisePercent),
