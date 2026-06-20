@@ -68,4 +68,43 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "030200.KS", "010950.KS", "090430.KS", "011170.KS", "138040.KS", "047810.KS",
     ],
   },
+  {
+    id: "nikkei",
+    name: "Nikkei 225 (Japan)",
+    short: "Nikkei",
+    currency: "JPY",
+    tickers: [
+      "7203.T", "6758.T", "9984.T", "6861.T", "8306.T", "9983.T", "6098.T", "8035.T",
+      "6501.T", "7974.T", "4063.T", "9433.T", "9432.T", "8058.T", "8001.T", "6902.T",
+      "7267.T", "6594.T", "4568.T", "4502.T", "8316.T", "8411.T", "6367.T", "6273.T",
+      "7741.T", "4519.T", "6981.T", "9020.T", "8031.T", "7751.T", "6752.T", "6503.T",
+      "7011.T", "4661.T", "9434.T", "6954.T", "4543.T", "8766.T", "8053.T", "7269.T",
+    ],
+  },
+  {
+    id: "ftse100",
+    name: "FTSE 100 (UK)",
+    short: "FTSE 100",
+    currency: "GBP",
+    tickers: [
+      "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "REL.L",
+      "DGE.L", "BATS.L", "GLEN.L", "NG.L", "LSEG.L", "BARC.L", "LLOY.L", "VOD.L",
+      "BA.L", "NWG.L", "PRU.L", "CPG.L", "AAL.L", "TSCO.L", "RKT.L", "IMB.L",
+      "STAN.L", "AHT.L", "III.L", "EXPN.L", "SSE.L", "NXT.L", "AV.L", "LGEN.L",
+      "ABF.L", "SGRO.L", "HLN.L", "FLTR.L", "INF.L", "WTB.L", "BNZL.L", "SMIN.L",
+    ],
+  },
+  {
+    id: "dax",
+    name: "DAX (Germany)",
+    short: "DAX",
+    currency: "EUR",
+    tickers: [
+      "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "AIR.DE", "MBG.DE", "MUV2.DE", "BAS.DE",
+      "BMW.DE", "BAYN.DE", "VOW3.DE", "IFX.DE", "DB1.DE", "ADS.DE", "DBK.DE", "RWE.DE",
+      "EOAN.DE", "HEN3.DE", "MRK.DE", "VNA.DE", "DHL.DE", "CON.DE", "BNR.DE", "SHL.DE",
+      "SY1.DE", "HNR1.DE", "FRE.DE", "QIA.DE", "ZAL.DE", "P911.DE", "MTX.DE", "RHM.DE",
+      "CBK.DE", "HEI.DE", "BEI.DE", "SRT3.DE", "PAH3.DE",
+    ],
+  },
 ];

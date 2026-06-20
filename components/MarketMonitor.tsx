@@ -1,11 +1,19 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { MarketGroup, Tile } from "@/lib/market";
 import { fmtDateTime } from "@/lib/format";
 import NewsFeed from "./NewsFeed";
 import MarketChartModal from "./MarketChartModal";
 import MarketAlert from "./MarketAlert";
+
+// Index symbols that have a full universe (heatmap) in the app — clicking the
+// tile opens that index's page instead of the quick chart.
+const INDEX_UNIVERSE: Record<string, string> = {
+  "^GSPC": "sp500", "^IXIC": "nasdaq100", "^N225": "nikkei", "^FTSE": "ftse100",
+  "^GDAXI": "dax", "^FCHI": "cac40", "^AEX": "aex", "^KS11": "kospi",
+};
 
 function fmtPrice(t: Tile): string {
   const p = t.price;
@@ -27,22 +35,22 @@ function TileCard({ t, onClick }: { t: Tile; onClick: () => void }) {
   const has = signal != null;
   const pos = (signal ?? 0) >= 0;
   const col = !has ? "var(--text-3)" : pos ? "#22c55e" : "#ef4444";
-  return (
-    <button
-      onClick={onClick}
-      title={`View ${t.name} history`}
-      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
-    >
+  const universe = INDEX_UNIVERSE[t.sym];
+  const cls = "block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]";
+  const inner = (
+    <>
       <div className="flex items-baseline justify-between gap-1">
         <span className="truncate text-xs font-medium text-[var(--text-2)]">{t.name}</span>
-        <span className="shrink-0 font-mono text-[10px] text-[var(--text-4)]">{t.sym}</span>
+        <span className="shrink-0 font-mono text-[10px] text-[var(--text-4)]">{universe ? "heatmap ↗" : t.sym}</span>
       </div>
       <div className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{fmtPrice(t)}</div>
       <div className="text-xs font-medium tabular-nums" style={{ color: col }}>
         {has ? (pos ? "▲" : "▼") : ""} {fmtChange(t)}
       </div>
-    </button>
+    </>
   );
+  if (universe) return <Link href={`/u/${universe}`} title={`Open the ${t.name} heatmap`} className={cls}>{inner}</Link>;
+  return <button onClick={onClick} title={`View ${t.name} history`} className={cls}>{inner}</button>;
 }
 
 export default function MarketMonitor({ groups, asOf }: { groups: MarketGroup[]; asOf: string }) {
