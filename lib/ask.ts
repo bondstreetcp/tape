@@ -68,12 +68,15 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
   return { name: display, text };
 }
 
-export async function askGemini(question: string, ctx: { name: string; text: string }): Promise<string | null> {
+export interface AskSource { title: string; uri: string }
+export interface AskResult { answer: string; sources: AskSource[] }
+
+export async function askGemini(question: string, ctx: { name: string; text: string }): Promise<AskResult | null> {
   if (!KEY) return null;
   const prompt =
     `You are a sharp, helpful equity-research analyst. Give a direct, substantive answer to the user's question about ${ctx.name}. ` +
-    `Ground every quantitative claim in the DATA below and cite the specific numbers. You may also draw on your general knowledge of the company, its products, its industry, and how financial metrics work to add useful interpretation and context. ` +
-    `Write 3–6 sentences. Do NOT just say you need more data — work with what's provided plus your own knowledge and give your best analytical answer; if one specific figure is missing, reason around it and answer the spirit of the question. ` +
+    `Use the DATA below for the company's fundamentals (cite specific numbers), AND search the web for current information — recent news, this week's developments, latest analyst sentiment, current events affecting the company — so the answer is up to date, not limited to filings. ` +
+    `Write 3–6 sentences. Do NOT just say you need more data — combine the data, the web, and your own knowledge into your best analytical answer; if one figure is missing, reason around it. ` +
     `Explain and analyze freely, but don't give a personalized buy/sell/hold recommendation.\n\n` +
     `=== DATA on ${ctx.name} ===\n${ctx.text}\n=== END DATA ===\n\nQUESTION: ${question}`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
@@ -81,13 +84,23 @@ export async function askGemini(question: string, ctx: { name: string; text: str
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      // gemini-2.5-flash "thinks" by default and that thinking eats the output
-      // budget (answers got truncated mid-sentence). Disable it and give the
-      // answer real room so responses are complete.
-      generationConfig: { temperature: 0.4, maxOutputTokens: 900, thinkingConfig: { thinkingBudget: 0 } },
+      // Google Search grounding so the answer reflects current web info, not just
+      // the filing context. gemini-2.5-flash also "thinks" by default which ate
+      // the output budget and truncated answers — cap thinking and give the answer
+      // real room.
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1100, thinkingConfig: { thinkingBudget: 0 } },
     }),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);
   const j: any = await res.json();
-  return j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+  const cand = j?.candidates?.[0];
+  const answer = (cand?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
+  if (!answer) return null;
+  const sources: AskSource[] = (cand?.groundingMetadata?.groundingChunks || [])
+    .map((c: any) => c?.web)
+    .filter((w: any) => w?.uri)
+    .map((w: any) => ({ title: w.title || w.uri, uri: w.uri }))
+    .slice(0, 6);
+  return { answer, sources };
 }

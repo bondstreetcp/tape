@@ -21,11 +21,14 @@ export interface EarningsReaction {
 export async function getEarningsReactions(symbol: string, n = 10): Promise<EarningsReaction[]> {
   const sym = symbol.toUpperCase();
 
-  // 1) Earnings announcement dates from EDGAR 8-K item 2.02 (newest first).
+  // 1) Earnings announcement dates from EDGAR 8-K item 2.02 (newest first), with
+  //    each filing's acceptance time (ET) so we know before-open vs after-close.
   let dates: string[] = [];
+  const acceptByDate = new Map<string, string>();
   try {
     const { filings } = await getFilings(sym, 0, 300);
-    dates = [...new Set(filings.filter((f) => f.isEarnings).map((f) => f.date))].slice(0, n + 2);
+    for (const f of filings) if (f.isEarnings && !acceptByDate.has(f.date)) acceptByDate.set(f.date, f.acceptance);
+    dates = [...acceptByDate.keys()].slice(0, n + 2);
   } catch {
     /* none */
   }
@@ -62,14 +65,30 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
     /* optional */
   }
 
-  // 4) Next-session reaction per earnings date (most large caps report after the
-  //    close, so the move shows up the following trading day).
+  // 4) Reaction per earnings date. A company can report BEFORE the open (the
+  //    reaction is that same session's move) or AFTER the close (it shows up the
+  //    NEXT session). We locate the announcement's own trading session by date
+  //    (not by timestamp ordering, which lands a day off), then take the larger-
+  //    magnitude of [that session's move] vs [the next session's move] — i.e. the
+  //    earnings reaction whichever way it was reported.
+  const dstr = (t: number) => new Date(t).toISOString().slice(0, 10);
   const out: EarningsReaction[] = [];
   for (const d of dates) {
-    const dt = new Date(d + "T00:00:00Z").getTime();
-    const j = closes.findIndex((b) => b.t > dt); // first session strictly after the announcement
-    if (j < 1) continue;
-    const move = closes[j].c / closes[j - 1].c - 1;
+    let idx = closes.findIndex((b) => dstr(b.t) === d); // the announcement's trading session
+    if (idx < 0) idx = closes.findIndex((b) => dstr(b.t) > d); // non-trading day → next session
+    if (idx < 1 || idx + 1 >= closes.length) continue;
+    const moveOn = closes[idx].c / closes[idx - 1].c - 1; // before-open reporters
+    const moveNext = closes[idx + 1].c / closes[idx].c - 1; // after-close reporters
+    // Use the 8-K acceptance hour (ET) when we have it: ≥16:00 → after-close
+    // (reaction is the next session), <10:00 → before-open (reaction is this
+    // session). Only mid-day/unknown filings fall back to the larger move.
+    const accept = acceptByDate.get(d) || "";
+    const hour = accept.length >= 13 ? parseInt(accept.slice(11, 13), 10) : NaN;
+    let move: number, j: number;
+    if (hour >= 16) { move = moveNext; j = idx + 1; }
+    else if (hour >= 0 && hour < 10) { move = moveOn; j = idx; }
+    else { const useOn = Math.abs(moveOn) >= Math.abs(moveNext); move = useOn ? moveOn : moveNext; j = useOn ? idx : idx + 1; }
+    const dt = Date.parse(d + "T00:00:00Z"); // for matching the nearest EPS surprise
     // Surprise: the announcement is ~30–45 days after the fiscal quarter end.
     let surprise: number | null = null;
     let bestGap = 55 * DAY;

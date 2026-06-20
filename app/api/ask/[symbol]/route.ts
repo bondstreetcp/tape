@@ -13,8 +13,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
   if (!q) return NextResponse.json({ configured: true, answer: null, error: "Ask a question." });
   try {
     const ctx = await gatherContext(decodeURIComponent(symbol).toUpperCase(), name);
-    const answer = await askGemini(q, ctx);
-    return NextResponse.json({ configured: true, answer });
+    const result = await askGemini(q, ctx);
+    return NextResponse.json({ configured: true, answer: result?.answer ?? null, sources: result?.sources ?? [] });
   } catch (e: any) {
     return NextResponse.json({ configured: true, answer: null, error: String(e?.message || e).slice(0, 200) });
   }
