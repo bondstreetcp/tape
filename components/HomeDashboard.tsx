@@ -63,7 +63,7 @@ export default function HomeDashboard({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {UNIVERSE_BY_ID[universe]?.name ?? "Sector"} Screener
+              {UNIVERSE_BY_ID[universe]?.name ?? "Markets"}
             </h1>
             <p className="mt-1 text-sm text-[var(--text-3)]">
               {breadth.total} constituents · {snapshot.sectors.length} sectors · as of{" "}

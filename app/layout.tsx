@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import ThemeManager from "@/components/ThemeManager";
 
 export const metadata: Metadata = {
-  title: "S&P 500 Sector Screener",
+  title: "Tape — Equity Research",
   description:
-    "Track S&P 500 constituents by sector and industry, and spot 52-week highs and lows.",
+    "Multi-universe equity research: charts, screening, financials, estimates, ownership, filings, options, macro, and news across US and international indices.",
 };
 
 export default function RootLayout({

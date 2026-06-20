@@ -35,7 +35,7 @@ export default function AppHeader({
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <Link href={base} className="mr-1 flex shrink-0 items-center gap-1.5 font-semibold text-[var(--text)]">
             <span className="text-[#60a5fa]">▦</span>
-            <span className="hidden sm:inline">Screener</span>
+            <span className="hidden font-bold tracking-tight sm:inline">Tape</span>
           </Link>
           <nav className="flex items-center gap-0.5 text-sm">
             <NavLink href={base} label="Home" exact />
