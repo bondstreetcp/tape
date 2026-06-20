@@ -1,6 +1,4 @@
-import YahooFinance from "yahoo-finance2";
-
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+import * as cheerio from "cheerio";
 
 export interface NewsItem {
   title: string;
@@ -10,22 +8,47 @@ export interface NewsItem {
   tickers: string[];
 }
 
+// Low-signal content farms / SEO mills to drop.
+const BLOCK = [
+  "stockstory", "insider monkey", "24/7 wall st", "gurufocus", "simply wall st",
+  "investorplace", "stocktwits", "tipranks", "marketbeat", "the globe and mail",
+  "khabarhub", "zacks", "etf daily news", "kavout",
+];
+
+const isBlocked = (pub: string) => {
+  const p = pub.toLowerCase();
+  return BLOCK.some((b) => p.includes(b));
+};
+
+/** News from Google News RSS (better source mix than Yahoo's search). `query`
+ *  is a ticker/company or the literal "market". */
 export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
+  const q = query.toLowerCase() === "market" ? "stock market" : `${query} stock`;
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:14d")}&hl=en-US&gl=US&ceid=US:en`;
   try {
-    const r: any = await yf.search(
-      query,
-      { newsCount: count, quotesCount: 0, enableNavLinks: false, enableEnhancedTrivialQuery: false } as any,
-      { validateResult: false },
-    );
-    return (r.news || [])
-      .map((n: any) => ({
-        title: n.title || "",
-        publisher: n.publisher || "",
-        link: n.link || "",
-        time: n.providerPublishTime ? new Date(n.providerPublishTime).toISOString() : null,
-        tickers: (n.relatedTickers || []).filter((t: string) => t && !t.startsWith("^")).slice(0, 4),
-      }))
-      .filter((n: NewsItem) => n.title && n.link);
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" } });
+    if (!res.ok) return [];
+    const $ = cheerio.load(await res.text(), { xmlMode: true });
+    const out: NewsItem[] = [];
+    $("item").each((_, el) => {
+      const $el = $(el);
+      const source = $el.find("source").first().text().trim();
+      let title = $el.find("title").first().text().trim();
+      // Google appends " - Source" to titles
+      if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim();
+      else title = title.replace(/\s-\s[^-]+$/, "").trim();
+      const link = $el.find("link").first().text().trim();
+      const pub = $el.find("pubDate").first().text().trim();
+      if (!title || !link || isBlocked(source)) return;
+      out.push({
+        title,
+        publisher: source || "News",
+        link,
+        time: pub ? new Date(pub).toISOString() : null,
+        tickers: [],
+      });
+    });
+    return out.slice(0, count);
   } catch {
     return [];
   }

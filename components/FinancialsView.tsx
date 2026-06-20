@@ -19,6 +19,7 @@ interface RowSpec {
   kind: Kind;
   bold?: boolean;
   derived?: (p: FinPeriod) => number | null;
+  growth?: boolean; // show YoY % change under the value
 }
 
 const fld = (p: FinPeriod, f?: string | string[]): number | null => {
@@ -35,7 +36,7 @@ const ratio = (a: number | null, b: number | null) =>
 const netInc = (p: FinPeriod) => fld(p, ["netIncome", "netIncomeCommonStockholders"]);
 
 const INCOME: RowSpec[] = [
-  { label: "Total Revenue", field: "totalRevenue", kind: "cur", bold: true },
+  { label: "Total Revenue", field: "totalRevenue", kind: "cur", bold: true, growth: true },
   { label: "Cost of Revenue", field: "costOfRevenue", kind: "cur" },
   { label: "Gross Profit", field: "grossProfit", kind: "cur", bold: true },
   { label: "Gross Margin", kind: "pct", derived: (p) => ratio(fld(p, "grossProfit"), fld(p, "totalRevenue")) },
@@ -46,9 +47,9 @@ const INCOME: RowSpec[] = [
   { label: "EBITDA", field: "EBITDA", kind: "cur" },
   { label: "Pretax Income", field: "pretaxIncome", kind: "cur" },
   { label: "Tax Provision", field: "taxProvision", kind: "cur" },
-  { label: "Net Income", field: ["netIncome", "netIncomeCommonStockholders"], kind: "cur", bold: true },
+  { label: "Net Income", field: ["netIncome", "netIncomeCommonStockholders"], kind: "cur", bold: true, growth: true },
   { label: "Net Margin", kind: "pct", derived: (p) => ratio(netInc(p), fld(p, "totalRevenue")) },
-  { label: "Diluted EPS", field: "dilutedEPS", kind: "eps", bold: true },
+  { label: "Diluted EPS", field: "dilutedEPS", kind: "eps", bold: true, growth: true },
   { label: "Diluted Shares", field: "dilutedAverageShares", kind: "shares" },
 ];
 
@@ -183,21 +184,20 @@ export default function FinancialsView({
     const out: FinPeriod[] = [];
     let prevRev = fld(lastActual, "totalRevenue");
     let prevEps: number | null = stats.trailingEps;
+    // earningsTrend often has null endDates, so map by period: 0y → FY+1, +1y → FY+2.
+    const cap = (g: number | null) => (g == null ? null : Math.max(-0.5, Math.min(g, 0.35)));
     for (let k = 1; k <= 2; k++) {
       const year = lastYear + k;
-      const tr =
-        findTrend(year) ??
-        (k === 1
-          ? stats.estimates.find((e) => e.period === "0y" || e.period === "+1y") ?? null
-          : null);
+      const periodKey = k === 1 ? "0y" : "+1y";
+      const tr = findTrend(year) ?? stats.estimates.find((e) => e.period === periodKey) ?? null;
       const revEst =
-        tr?.revAvg ?? (prevRev != null && revG != null ? prevRev * (1 + revG) : null);
+        tr?.revAvg ?? (prevRev != null && revG != null ? prevRev * (1 + (cap(revG) ?? 0)) : null);
       const epsEst =
         tr?.epsAvg ??
         (k === 1
           ? stats.forwardEps
           : prevEps != null && epsG != null
-            ? prevEps * (1 + epsG)
+            ? prevEps * (1 + (cap(epsG) ?? 0))
             : null);
       const derived = tr?.revAvg == null && tr?.epsAvg == null;
       const niEst = epsEst != null && lastShares != null ? epsEst * lastShares : null;
@@ -364,9 +364,11 @@ export default function FinancialsView({
                       >
                         {r.label}
                       </td>
-                      {displayPeriods.map((p) => {
+                      {displayPeriods.map((p, i) => {
                         const v = cell(p, r);
                         const neg = v != null && v < 0 && r.kind !== "pct";
+                        const prior = r.growth && i + 1 < displayPeriods.length ? cell(displayPeriods[i + 1], r) : null;
+                        const yoy = r.growth && v != null && prior != null && prior > 0 ? (v / prior - 1) * 100 : null;
                         return (
                           <td
                             key={p.date}
@@ -378,6 +380,11 @@ export default function FinancialsView({
                             }
                           >
                             {fmtCell(v, r.kind)}
+                            {yoy != null && (
+                              <div className="text-[10px] font-normal tabular-nums" style={{ color: yoy >= 0 ? "#22c55e" : "#ef4444" }}>
+                                {yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%
+                              </div>
+                            )}
                           </td>
                         );
                       })}
