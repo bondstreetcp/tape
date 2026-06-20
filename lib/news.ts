@@ -42,13 +42,19 @@ const TITLE_BLOCK = [
 // Top-tier wire services & major financial press — surfaced first.
 const TOP = [
   "associated press", "ap news", "apnews", "reuters", "bloomberg", "wall street journal", "wsj",
-  "financial times", "cnbc", "barron", "marketwatch", "the new york times", "the economist", "npr",
+  "financial times", "cnbc", "barron", "marketwatch", "the new york times", "nytimes", "the economist", "npr",
+  "investor's business daily", "investors business daily",
 ];
 // Other reputable outlets — surfaced after the top tier.
 const PREFERRED = [
-  "yahoo finance", "investing.com", "forbes", "business insider", "axios", "fortune", "the information",
-  "morningstar", "9to5mac", "techcrunch", "the verge", "ars technica", "reuters", "guardian", "cnn",
+  "forbes", "fortune", "business insider", "axios", "the information", "morningstar", "cnn", "the guardian",
+  "bbc", "fox business", "usa today", "the washington post", "washington post", "quartz", "kiplinger",
+  "investopedia", "yahoo finance", "investing.com", "techcrunch", "the verge", "ars technica", "wired",
+  "9to5mac", "cnet", "engadget", "reuters", "semafor", "the hill", "fast company",
 ];
+
+// ONLY publishers on the allow-list above are shown — a block-list let unknown
+// farms through, which is why the feed stayed noisy. Allow-list = TOP ∪ PREFERRED.
 
 const lc = (s: string) => s.toLowerCase();
 const isBlocked = (pub: string) => BLOCK.some((b) => lc(pub).includes(b));
@@ -60,7 +66,7 @@ const isPreferred = (pub: string) => PREFERRED.some((p) => lc(pub).includes(p));
  *  is a ticker/company or the literal "market". */
 export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
   const q = query.toLowerCase() === "market" ? "stock market" : `${query} stock`;
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:14d")}&hl=en-US&gl=US&ceid=US:en`;
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:30d")}&hl=en-US&gl=US&ceid=US:en`;
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" } });
     if (!res.ok) return [];
@@ -86,10 +92,11 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
     });
     // Three tiers: wire services & major press first, then other reputable
     // outlets, then the rest — recency preserved within each tier.
+    // Allow-list only: wire services & major press first, then other reputable
+    // outlets. Anything not on the allow-list (unknown farms/SEO mills) is dropped.
     const top = out.filter((o) => isTop(o.publisher));
     const pref = out.filter((o) => !isTop(o.publisher) && isPreferred(o.publisher));
-    const rest = out.filter((o) => !isTop(o.publisher) && !isPreferred(o.publisher));
-    return [...top, ...pref, ...rest].slice(0, count);
+    return [...top, ...pref].slice(0, count);
   } catch {
     return [];
   }
