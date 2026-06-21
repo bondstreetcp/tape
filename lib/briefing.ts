@@ -88,6 +88,22 @@ function groupBulleted(lines: string[]): BriefBlock[] {
   return blocks;
 }
 
+// The Day Ahead embeds a "Market Monitor" gainers/losers table whose rows get
+// spliced into the news text by the multi-column linearisation. These detect those
+// rows so we can drop them: a pure price line ("43.88 2.81 6.84"), a name with a
+// trailing price/chng/%chng triple ("Atkinsrealis Group Inc 86.79 5.25 6.44"), or the
+// "Price C$ chng % chng" column header.
+const NUM_ROW = /^[-+$]?\d[\d,]*\.?\d*%?(?:\s+[-+$]?\d[\d,]*\.?\d*%?){1,6}$/;
+const TRAILING_PRICES = /(?:\s[-+]?\d[\d,]*\.\d+){2,}\s*$/;
+const MONITOR_HDR = /\bchng\b/i;
+function isTableRow(l: string, lines: string[], i: number): boolean {
+  if (NUM_ROW.test(l) || TRAILING_PRICES.test(l) || MONITOR_HDR.test(l)) return true;
+  // A short, unpunctuated line sitting directly above a price row or the column
+  // header is that row's label (the company/index name on its own line).
+  const next = lines[i + 1];
+  return !!next && l.length <= 45 && !ENDS_SENTENCE.test(l) && (NUM_ROW.test(next) || MONITOR_HDR.test(next));
+}
+
 // Prose sections (TOP NEWS, ANALYSIS, BEFORE THE BELL): titled stories become
 // {headline, text}; plain market-color prose becomes text-only blocks (no bold).
 function groupProse(lines: string[], wrapWidth: number, narrow: boolean): BriefBlock[] {
@@ -95,7 +111,11 @@ function groupProse(lines: string[], wrapWidth: number, narrow: boolean): BriefB
   const blocks: BriefBlock[] = [];
   let cur: BriefBlock | null = null;
   let paraOpen = false; // inside a paragraph that may still take more lines
-  for (const l of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    // Drop spliced-in market-monitor table rows (narrow multi-column layout only) and
+    // break the paragraph there, so the prose on either side of the table stays apart.
+    if (narrow && isTableRow(l, lines, i)) { paraOpen = false; continue; }
     const endsSentence = ENDS_SENTENCE.test(l);
     const full = l.length > headlineMax; // line ran to the column edge → it wrapped
     // A headline is a short standalone line (it didn't fill the column, so it ended
