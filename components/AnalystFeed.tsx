@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { currencyOf } from "@/lib/universes";
+import { currencyPrefix } from "@/lib/format";
 
 interface Action {
   symbol: string;
@@ -25,6 +27,7 @@ const ACTION: Record<string, { label: string; color: string }> = {
 const PAGE = 30;
 
 export default function AnalystFeed({ universe }: { universe: string }) {
+  const cur = currencyPrefix(currencyOf(universe));
   const router = useRouter();
   const [actions, setActions] = useState<Action[] | null>(null);
   const [visible, setVisible] = useState(PAGE);
@@ -88,8 +91,8 @@ export default function AnalystFeed({ universe }: { universe: string }) {
                   )}
                   {a.targetTo != null && (
                     <span className="text-xs text-[var(--text-3)]">
-                      PT {a.targetFrom != null ? `$${a.targetFrom.toFixed(0)} → ` : ""}
-                      <span className="text-[var(--text-2)]">${a.targetTo.toFixed(0)}</span>
+                      PT {a.targetFrom != null ? `${cur}${a.targetFrom.toFixed(0)} → ` : ""}
+                      <span className="text-[var(--text-2)]">{cur}{a.targetTo.toFixed(0)}</span>
                     </span>
                   )}
                   <span className="ml-auto text-[11px] tabular-nums text-[var(--text-4)]">{a.date}</span>

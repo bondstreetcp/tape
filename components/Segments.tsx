@@ -1,13 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
+import { currencyPrefix } from "@/lib/format";
 
 interface Row { name: string; values: (number | null)[] }
 interface Breakdown { title: string; periods: string[]; rows: Row[]; total: (number | null)[] | null }
 interface Segments { asOf: string; form: string; url: string; product: Breakdown | null; geographic: Breakdown | null }
 
-const fmtB = (v: number | null) => (v == null ? "—" : v >= 1000 ? `$${(v / 1000).toFixed(1)}B` : `$${v.toFixed(0)}M`);
+const fmtB = (v: number | null, currency?: string) => {
+  if (v == null) return "—";
+  const sym = currencyPrefix(currency);
+  return v >= 1000 ? `${sym}${(v / 1000).toFixed(1)}B` : `${sym}${v.toFixed(0)}M`;
+};
 
-export default function SegmentsPanel({ symbol }: { symbol: string }) {
+export default function SegmentsPanel({ symbol, currency }: { symbol: string; currency?: string }) {
   const [data, setData] = useState<Segments | "loading" | "err" | null>("loading");
   useEffect(() => {
     let a = true;
@@ -23,13 +28,13 @@ export default function SegmentsPanel({ symbol }: { symbol: string }) {
   if (!data.product && !data.geographic) return null;
   return (
     <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {data.product && <Card b={data.product} subtitle="by product / service" url={data.url} />}
-      {data.geographic && <Card b={data.geographic} subtitle="by segment / geography" url={data.url} />}
+      {data.product && <Card b={data.product} subtitle="by product / service" url={data.url} currency={currency} />}
+      {data.geographic && <Card b={data.geographic} subtitle="by segment / geography" url={data.url} currency={currency} />}
     </div>
   );
 }
 
-function Card({ b, subtitle, url }: { b: Breakdown; subtitle: string; url: string }) {
+function Card({ b, subtitle, url, currency }: { b: Breakdown; subtitle: string; url: string; currency?: string }) {
   const rows = b.rows
     .map((r) => ({ name: r.name, latest: r.values[0] ?? null, prior: r.values[1] ?? null }))
     .filter((r) => r.latest != null)
@@ -54,7 +59,7 @@ function Card({ b, subtitle, url }: { b: Breakdown; subtitle: string; url: strin
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="truncate text-[var(--text-2)]">{r.name}</span>
                 <span className="shrink-0 tabular-nums">
-                  <span className="text-[var(--text)]">{fmtB(r.latest)}</span> <span className="text-[var(--text-3)]">{pct.toFixed(0)}%</span>
+                  <span className="text-[var(--text)]">{fmtB(r.latest, currency)}</span> <span className="text-[var(--text-3)]">{pct.toFixed(0)}%</span>
                   {yoy != null && (
                     <span style={{ color: yoy >= 0 ? "#22c55e" : "#ef4444" }}> {yoy >= 0 ? "+" : ""}{yoy.toFixed(0)}%</span>
                   )}

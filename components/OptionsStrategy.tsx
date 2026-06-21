@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { currencyPrefix } from "@/lib/format";
 
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
 interface Leg { kind: "stock" | "call" | "put"; side: "buy" | "sell"; strike?: number; premium: number; qty: number }
@@ -21,8 +22,8 @@ const mid = (o: Opt | undefined): number => {
   if (o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0) return (o.bid + o.ask) / 2;
   return o.last ?? 0;
 };
-const dollars = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-const price2 = (v: number) => `$${v.toFixed(2)}`;
+const fmtDollars = (v: number, sym: string) => `${v < 0 ? "−" : ""}${sym}${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+const fmtPrice2 = (v: number, sym: string) => `${sym}${v.toFixed(2)}`;
 
 function buildLegs(strat: StratKey, kA: number, kB: number, u: number, callBy: Map<number, Opt>, putBy: Map<number, Opt>): Leg[] {
   const c = (k: number) => mid(callBy.get(k));
@@ -47,8 +48,11 @@ const payoffOf = (legs: Leg[]) => (S: number) =>
 
 const CW = 520, CH = 200, ML = 44, MR = 12, MT = 12, MB = 22;
 
-export default function OptionsStrategy({ calls, puts, underlying, expiry, dte }: { calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null }) {
+export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, currency }: { calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null; currency?: string }) {
   const u = underlying ?? 0;
+  const sym = currencyPrefix(currency);
+  const dollars = (v: number) => fmtDollars(v, sym);
+  const price2 = (v: number) => fmtPrice2(v, sym);
   const callBy = useMemo(() => new Map(calls.map((c) => [c.strike, c])), [calls]);
   const putBy = useMemo(() => new Map(puts.map((p) => [p.strike, p])), [puts]);
   const strikes = useMemo(() => [...new Set([...callBy.keys(), ...putBy.keys()])].sort((a, b) => a - b), [callBy, putBy]);
@@ -164,7 +168,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte }
         </defs>
         {/* zero line */}
         <line x1={ML} x2={CW - MR} y1={y0} y2={y0} stroke="var(--border-strong)" strokeWidth={1} />
-        <text x={ML - 6} y={y0 + 3} textAnchor="end" fontSize={9} fill="var(--text-4)">$0</text>
+        <text x={ML - 6} y={y0 + 3} textAnchor="end" fontSize={9} fill="var(--text-4)">{sym}0</text>
         {/* y labels */}
         {[yMax, (yMax + yMin) / 2, yMin].map((v, i) => (
           <text key={i} x={ML - 6} y={Y(v) + 3} textAnchor="end" fontSize={9} fill="var(--text-4)">{dollars(v)}</text>
