@@ -12,6 +12,7 @@ import { SECTORS, ETF_TO_SECTOR } from "@/lib/sectors";
 import { isNearHigh, isNearLow } from "@/lib/compute";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import NlScreener from "./NlScreener";
+import StrategyTip from "./StrategyTip";
 import { useWatchlist } from "@/lib/watchlist";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -313,6 +314,7 @@ export default function ScreenerView({
         >
           {STRATEGIES.map((s) => (<option key={s.v} value={s.v}>{s.label}</option>))}
         </select>
+        <StrategyTip />
         {(strategy === "magic" || strategy === "shyield") && (
           <select value={topN} onChange={(e) => setTopN(Number(e.target.value))} title="How many names the list shows" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
             {[20, 30, 40, 50, 75, 100].map((n) => (<option key={n} value={n}>Top {n}</option>))}

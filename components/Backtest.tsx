@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { runStrategy, strategyLabel, type BacktestMatrix, type BacktestResult, type StrategyKey } from "@/lib/backtest";
 import { screenSymbols, SCREEN_LABEL, type ScreenKey } from "@/lib/screens";
 import type { StockRow } from "@/lib/types";
+import StrategyTip from "./StrategyTip";
 
 const STRATS: StrategyKey[] = ["momentum", "trend", "lowvol", "equal"];
 const SCREENS: ScreenKey[] = ["magic", "netnet", "piotroski", "shyield"];
@@ -69,6 +70,7 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
             </button>
           ))}
         </div>
+        <StrategyTip />
         {usesParams && <Select label="Hold" value={topN} onChange={setTopN} opts={[10, 20, 30, 50]} suffix=" names" />}
         {usesParams && <Select label="Lookback" value={lookback} onChange={setLookback} opts={[3, 6, 12]} suffix=" mo" />}
         {screen && (screen === "magic" || screen === "shyield") && <Select label="Top" value={topN} onChange={setTopN} opts={[20, 30, 50, 75]} />}
