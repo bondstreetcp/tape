@@ -334,7 +334,7 @@ export default function FinancialsView({
           <ValuationBands symbol={symbol} />
         </div>
       ) : view === "peers" ? (
-        <PeerComparison universe={universe} symbol={symbol} peers={peers} peerGroup={peerGroup} />
+        <PeerComparison universe={universe} symbol={symbol} name={name} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
         <OwnershipPanel profile={profile} symbol={symbol} />
       ) : view === "filings" ? (

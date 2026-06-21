@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import { fmtPct, fmtMarketCap } from "@/lib/format";
 import { currencyOf } from "@/lib/universes";
+import AiCompare from "./AiCompare";
 import { trendColor } from "@/lib/color";
 
 interface Col {
@@ -30,11 +31,13 @@ function median(vals: (number | null | undefined)[]): number | null {
 export default function PeerComparison({
   universe,
   symbol,
+  name,
   peers,
   peerGroup,
 }: {
   universe: string;
   symbol: string;
+  name: string;
   peers: StockRow[];
   peerGroup: string | null;
 }) {
@@ -101,6 +104,7 @@ export default function PeerComparison({
 
   return (
     <div>
+      <AiCompare symbol={symbol} name={name} peers={peers} />
       <p className="mb-3 text-sm text-[var(--text-3)]">
         {symbol} vs {peers.length - 1} peers in{" "}
         <span className="text-[var(--text-2)]">{peerGroup}</span> · valuation &amp;
