@@ -5,7 +5,7 @@ import type { FinPeriod, Financials } from "@/lib/financials";
 import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import type { StockRow } from "@/lib/types";
-import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
@@ -24,7 +24,7 @@ import KeyStatsStrip from "./KeyStatsStrip";
 import WatchStar from "./WatchStar";
 import UniverseSwitcher from "./UniverseSwitcher";
 import type { SeriesPoint } from "@/lib/types";
-import { fmtPrice, fmtPct } from "@/lib/format";
+import { fmtMoney, fmtPct, currencyPrefix } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
@@ -101,27 +101,28 @@ const STATEMENTS = {
 } as const;
 type StmtKey = keyof typeof STATEMENTS;
 
-function fmtBig(v: number | null): string {
+function fmtBig(v: number | null, cur = "USD"): string {
   if (v == null || Number.isNaN(v)) return "—";
   const a = Math.abs(v);
   const sign = v < 0 ? "−" : "";
-  if (a >= 1e12) return `${sign}$${(a / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(1)}M`;
-  if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(1)}K`;
-  return `${sign}$${a.toFixed(0)}`;
+  const s = currencyPrefix(cur);
+  if (a >= 1e12) return `${sign}${s}${(a / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `${sign}${s}${(a / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `${sign}${s}${(a / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${sign}${s}${(a / 1e3).toFixed(1)}K`;
+  return `${sign}${s}${a.toFixed(0)}`;
 }
-function fmtCell(v: number | null, kind: Kind): string {
+function fmtCell(v: number | null, kind: Kind, cur = "USD"): string {
   if (v == null || Number.isNaN(v)) return "—";
   if (kind === "pct") return `${v >= 0 ? "" : "−"}${Math.abs(v).toFixed(1)}%`;
-  if (kind === "eps") return `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
+  if (kind === "eps") return fmtMoney(v, cur);
   if (kind === "shares") {
     const a = Math.abs(v);
     if (a >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
     if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
     return `${v.toFixed(0)}`;
   }
-  return fmtBig(v);
+  return fmtBig(v, cur);
 }
 function periodLabel(date: string, type: "annual" | "quarterly"): string {
   const d = new Date(date);
@@ -164,6 +165,7 @@ export default function FinancialsView({
   const [view, setView] = useState<View>("overview");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
+  const currency = currencyOf(universe);
 
   // Active tab: ?tab= deep-link wins, else the last tab you used (so switching
   // companies keeps you on the same view — e.g. compare Statements across names).
@@ -280,7 +282,7 @@ export default function FinancialsView({
           <div className="flex flex-wrap items-baseline gap-3">
             <h1 className="font-mono text-2xl font-bold">{symbol}</h1>
             <span className="text-lg text-[var(--text-2)]">{name}</span>
-            {row && <span className="font-mono text-xl tabular-nums">${fmtPrice(row.price)}</span>}
+            {row && <span className="font-mono text-xl tabular-nums">{fmtMoney(row.price, currency)}</span>}
             {row && (
               <span className="text-sm font-semibold tabular-nums" style={{ color: trendColor(row.returns["1d"]) }}>
                 {fmtPct(row.returns["1d"])} <span className="font-normal text-[var(--text-3)]">1D</span>
@@ -292,7 +294,7 @@ export default function FinancialsView({
             {etf && <UniverseSwitcher current={universe} etf={etf} />}
           </div>
         </div>
-        {row && <div className="mt-3"><KeyStatsStrip stats={stats} row={row} /></div>}
+        {row && <div className="mt-3"><KeyStatsStrip stats={stats} row={row} currency={currency} /></div>}
       </div>
 
       <div className="mb-4">
@@ -315,20 +317,20 @@ export default function FinancialsView({
 
       {view === "overview" ? (
         row ? (
-          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} />
+          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} currency={currency} />
         ) : (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">No overview data for {symbol}.</div>
         )
       ) : view === "stats" ? (
         <div className="space-y-4">
-          <CompanyStats stats={stats} />
-          <DcfPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} />
-          <ScenarioPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} />
+          <CompanyStats stats={stats} currency={currency} />
+          <DcfPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
+          <ScenarioPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <DividendPanel financials={financials} stats={stats} />
+            <DividendPanel financials={financials} stats={stats} currency={currency} />
             <ShortInterestPanel stats={stats} />
           </div>
-          <EarningsMultipleChart symbol={symbol} />
+          <EarningsMultipleChart symbol={symbol} currency={currency} />
           <ValuationBands symbol={symbol} />
         </div>
       ) : view === "peers" ? (
@@ -370,7 +372,7 @@ export default function FinancialsView({
           </div>
 
           {/* revenue + net income trend */}
-          <TrendBars periods={chrono} type={type} />
+          <TrendBars periods={chrono} type={type} currency={currency} />
 
           {/* statement table */}
           {periods.length === 0 ? (
@@ -434,7 +436,7 @@ export default function FinancialsView({
                               (neg && !p.__est ? "text-[#ef4444]" : "")
                             }
                           >
-                            {fmtCell(v, r.kind)}
+                            {fmtCell(v, r.kind, currency)}
                             {yoy != null && (
                               <div className="text-[10px] font-normal tabular-nums" style={{ color: yoy >= 0 ? "#22c55e" : "#ef4444" }}>
                                 {yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%
@@ -566,9 +568,11 @@ function Segmented({
 function TrendBars({
   periods,
   type,
+  currency = "USD",
 }: {
   periods: FinPeriod[];
   type: "annual" | "quarterly";
+  currency?: string;
 }) {
   const data = periods.map((p) => ({
     label: periodLabel(p.date, type),
@@ -590,18 +594,18 @@ function TrendBars({
         {data.map((d) => (
           <div key={d.label} className="flex flex-1 flex-col items-center justify-end gap-1">
             <div className="text-[10px] tabular-nums text-[var(--text-3)]">
-              {d.rev ? fmtBig(d.rev) : ""}
+              {d.rev ? fmtBig(d.rev, currency) : ""}
             </div>
             <div className="flex h-28 w-full items-end justify-center gap-1">
               <div
                 className="w-1/2 rounded-t bg-[#60a5fa]"
                 style={{ height: `${d.rev ? (Math.abs(d.rev) / maxRev) * 100 : 0}%` }}
-                title={`Revenue ${fmtBig(d.rev)}`}
+                title={`Revenue ${fmtBig(d.rev, currency)}`}
               />
               <div
                 className={"w-1/3 rounded-t " + ((d.ni ?? 0) < 0 ? "bg-[#ef4444]" : "bg-[#22c55e]")}
                 style={{ height: `${d.ni ? (Math.abs(d.ni) / maxRev) * 100 : 0}%` }}
-                title={`Net Income ${fmtBig(d.ni)}`}
+                title={`Net Income ${fmtBig(d.ni, currency)}`}
               />
             </div>
             <div className="text-[10px] tabular-nums text-[var(--text-2)]">{d.label}</div>

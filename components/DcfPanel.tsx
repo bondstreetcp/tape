@@ -2,18 +2,21 @@
 import { useMemo, useState } from "react";
 import type { Financials, FinPeriod } from "@/lib/financials";
 import type { CompanyStats } from "@/lib/companyStats";
+import { fmtMoney, currencyPrefix } from "@/lib/format";
 
 const fld = (p: FinPeriod, ks: string[]): number | null => {
   for (const k of ks) { const v = p[k]; if (typeof v === "number") return v; }
   return null;
 };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const big = (v: number) =>
-  Math.abs(v) >= 1e12 ? `$${(v / 1e12).toFixed(2)}T` : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toFixed(0)}`;
+const big = (v: number, cur = "USD") => {
+  const s = currencyPrefix(cur);
+  return Math.abs(v) >= 1e12 ? `${s}${(v / 1e12).toFixed(2)}T` : Math.abs(v) >= 1e9 ? `${s}${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `${s}${(v / 1e6).toFixed(0)}M` : `${s}${v.toFixed(0)}`;
+};
 
 const YEARS = 5;
 
-export default function DcfPanel({ financials, stats, price }: { financials: Financials; stats: CompanyStats | null; price: number | null }) {
+export default function DcfPanel({ financials, stats, price, currency = "USD" }: { financials: Financials; stats: CompanyStats | null; price: number | null; currency?: string }) {
   const base = useMemo(() => {
     const annual = financials.annual ?? [];
     const latest = annual[annual.length - 1];
@@ -75,7 +78,7 @@ export default function DcfPanel({ financials, stats, price }: { financials: Fin
     return (
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-2)]">Discounted cash flow (DCF)</h3>
-        <p className="mt-1 text-xs text-[var(--text-3)]">Latest free cash flow is negative ({big(base.fcf)}, FY{base.fy}) — a DCF isn&apos;t meaningful here.</p>
+        <p className="mt-1 text-xs text-[var(--text-3)]">Latest free cash flow is negative ({big(base.fcf, currency)}, FY{base.fy}) — a DCF isn&apos;t meaningful here.</p>
       </section>
     );
   }
@@ -88,16 +91,16 @@ export default function DcfPanel({ financials, stats, price }: { financials: Fin
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-[var(--text-2)]">Discounted cash flow (DCF)</h3>
-        <span className="text-[11px] text-[var(--text-4)]">5-yr 2-stage · base FCF {big(base.fcf)} (FY{base.fy})</span>
+        <span className="text-[11px] text-[var(--text-4)]">5-yr 2-stage · base FCF {big(base.fcf, currency)} (FY{base.fy})</span>
       </div>
 
       <div className="mb-3 flex flex-wrap items-end gap-4">
         <div>
           <div className="text-[11px] text-[var(--text-4)]">Intrinsic value / share</div>
-          <div className="font-mono text-2xl font-bold tabular-nums text-[var(--text)]">{intrinsic == null ? "—" : `$${intrinsic.toFixed(2)}`}</div>
+          <div className="font-mono text-2xl font-bold tabular-nums text-[var(--text)]">{intrinsic == null ? "—" : fmtMoney(intrinsic, currency)}</div>
         </div>
         <div>
-          <div className="text-[11px] text-[var(--text-4)]">vs price {price ? `$${price.toFixed(2)}` : "—"}</div>
+          <div className="text-[11px] text-[var(--text-4)]">vs price {price ? fmtMoney(price, currency) : "—"}</div>
           <div className="font-mono text-2xl font-bold tabular-nums" style={{ color: upside == null ? "var(--text-3)" : upside >= 0 ? "#22c55e" : "#ef4444" }}>
             {upside == null ? "—" : `${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(0)}%`}
           </div>
@@ -144,7 +147,7 @@ export default function DcfPanel({ financials, stats, price }: { financials: Fin
         </table>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-4)]">
-        2-stage model: free cash flow grown {growthPct}%/yr for 5 years, then a Gordon terminal value at {termPct}% growth, all discounted at {discPct}%; equity = enterprise value − net debt ({big(base.netDebt)}), ÷ {base.shares ? (base.shares / 1e6).toFixed(0) + "M" : "—"} shares. A rough model — sensitive to assumptions; not advice.
+        2-stage model: free cash flow grown {growthPct}%/yr for 5 years, then a Gordon terminal value at {termPct}% growth, all discounted at {discPct}%; equity = enterprise value − net debt ({big(base.netDebt, currency)}), ÷ {base.shares ? (base.shares / 1e6).toFixed(0) + "M" : "—"} shares. A rough model — sensitive to assumptions; not advice.
       </p>
     </section>
   );

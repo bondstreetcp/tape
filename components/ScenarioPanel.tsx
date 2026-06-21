@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Financials, FinPeriod } from "@/lib/financials";
 import type { CompanyStats } from "@/lib/companyStats";
+import { fmtMoney } from "@/lib/format";
 
 const fld = (p: FinPeriod, ks: string[]): number | null => {
   for (const k of ks) { const v = p[k]; if (typeof v === "number") return v; }
@@ -11,7 +12,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /** "What-if" implied price: toggle revenue growth + gross margin (holding the cost
  *  structure & tax rate from the latest year) → forward EPS → × a P/E multiple. */
-export default function ScenarioPanel({ financials, stats, price }: { financials: Financials; stats: CompanyStats | null; price: number | null }) {
+export default function ScenarioPanel({ financials, stats, price, currency = "USD" }: { financials: Financials; stats: CompanyStats | null; price: number | null; currency?: string }) {
   const annual = financials.annual ?? [];
   const latest = annual[annual.length - 1];
   const base = (() => {
@@ -72,10 +73,10 @@ export default function ScenarioPanel({ financials, stats, price }: { financials
       <div className="mb-3 flex flex-wrap items-end gap-4">
         <div>
           <div className="text-[11px] text-[var(--text-4)]">Implied price</div>
-          <div className="font-mono text-2xl font-bold tabular-nums text-[var(--text)]">{ip == null ? "—" : `$${ip.toFixed(2)}`}</div>
+          <div className="font-mono text-2xl font-bold tabular-nums text-[var(--text)]">{ip == null ? "—" : fmtMoney(ip, currency)}</div>
         </div>
         <div>
-          <div className="text-[11px] text-[var(--text-4)]">vs price {price ? `$${price.toFixed(2)}` : "—"}</div>
+          <div className="text-[11px] text-[var(--text-4)]">vs price {price ? fmtMoney(price, currency) : "—"}</div>
           <div className="font-mono text-2xl font-bold tabular-nums" style={{ color: upside == null ? "var(--text-3)" : upside >= 0 ? "#22c55e" : "#ef4444" }}>
             {upside == null ? "—" : `${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(0)}%`}
           </div>

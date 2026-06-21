@@ -11,6 +11,8 @@ export interface UniverseMeta {
    *  heatmap instead of US-GICS sector buckets. */
   international?: boolean;
   indexSymbol?: string; // Yahoo symbol for the headline index (for the chart)
+  /** ISO currency the prices are quoted in (default USD). "GBp" = UK pence. */
+  currency?: string;
 }
 
 export const UNIVERSES: UniverseMeta[] = [
@@ -43,6 +45,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^FCHI",
+    currency: "EUR",
     note: "France's CAC 40 — Euronext Paris. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -52,6 +55,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^AEX",
+    currency: "EUR",
     note: "The Amsterdam AEX index — Euronext Amsterdam. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -61,6 +65,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^KS11",
+    currency: "KRW",
     note: "Major KOSPI constituents — Korea Exchange. Prices in KRW. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -70,6 +75,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^N225",
+    currency: "JPY",
     note: "Major Nikkei 225 constituents — Tokyo Stock Exchange. Prices in JPY. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -79,6 +85,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^FTSE",
+    currency: "GBp",
     note: "Major FTSE 100 constituents — London Stock Exchange. Prices in GBp. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -88,6 +95,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^GDAXI",
+    currency: "EUR",
     note: "Major DAX constituents — Deutsche Börse. Prices in EUR. International data via Yahoo (npm run refresh-intl).",
   },
   {
@@ -97,6 +105,7 @@ export const UNIVERSES: UniverseMeta[] = [
     intraday: false,
     international: true,
     indexSymbol: "^GSPTSE",
+    currency: "CAD",
     note: "Major S&P/TSX Composite constituents — Toronto Stock Exchange. Prices in CAD. International data via Yahoo (npm run refresh-intl).",
   },
 ];
@@ -106,3 +115,7 @@ export const UNIVERSE_IDS = UNIVERSES.map((u) => u.id);
 export const UNIVERSE_BY_ID: Record<string, UniverseMeta> = Object.fromEntries(
   UNIVERSES.map((u) => [u.id, u]),
 );
+
+/** Quote currency for a universe (USD for the US universes). */
+export const currencyOf = (id: string | undefined): string =>
+  (id && UNIVERSE_BY_ID[id]?.currency) || "USD";

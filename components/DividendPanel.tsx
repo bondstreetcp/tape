@@ -1,6 +1,7 @@
 "use client";
 import type { Financials, FinPeriod } from "@/lib/financials";
 import type { CompanyStats } from "@/lib/companyStats";
+import { fmtMoney } from "@/lib/format";
 
 const fld = (p: FinPeriod, ks: string[]): number | null => {
   for (const k of ks) { const v = p[k]; if (typeof v === "number") return v; }
@@ -8,7 +9,7 @@ const fld = (p: FinPeriod, ks: string[]): number | null => {
 };
 const pct = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
 
-export default function DividendPanel({ financials, stats }: { financials: Financials; stats: CompanyStats | null }) {
+export default function DividendPanel({ financials, stats, currency = "USD" }: { financials: Financials; stats: CompanyStats | null; currency?: string }) {
   // Dividend per share per year = |dividends paid| / diluted shares (from the cash-flow statement).
   const dps = (financials.annual ?? [])
     .map((p) => {
@@ -42,9 +43,9 @@ export default function DividendPanel({ financials, stats }: { financials: Finan
 
       <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
         <Stat label="Yield" value={pct(stats?.dividendYield)} />
-        <Stat label="Annual rate" value={stats?.dividendRate != null ? `$${stats.dividendRate.toFixed(2)}` : "—"} />
+        <Stat label="Annual rate" value={stats?.dividendRate != null ? fmtMoney(stats.dividendRate, currency) : "—"} />
         <Stat label="Payout ratio" value={pct(stats?.payoutRatio)} hint={stats?.payoutRatio != null && stats.payoutRatio > 0.8 ? "high" : undefined} />
-        <Stat label="Latest DPS" value={paying.length ? `$${paying[paying.length - 1].dps.toFixed(2)}` : "—"} />
+        <Stat label="Latest DPS" value={paying.length ? fmtMoney(paying[paying.length - 1].dps, currency) : "—"} />
       </div>
 
       {dps.length >= 2 && (
@@ -52,7 +53,7 @@ export default function DividendPanel({ financials, stats }: { financials: Finan
           <div className="mb-1 text-[11px] text-[var(--text-4)]">Dividend per share · annual</div>
           <div className="flex h-20 items-end gap-1.5">
             {dps.map((d) => (
-              <div key={d.year} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.year}: $${d.dps.toFixed(2)}`}>
+              <div key={d.year} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${d.year}: ${fmtMoney(d.dps, currency)}`}>
                 <div className="w-full rounded-t bg-[#22c55e]" style={{ height: `${Math.max(2, (d.dps / max) * 100)}%`, minHeight: 2 }} />
                 <span className="text-[9px] tabular-nums text-[var(--text-4)]">{d.year.slice(2)}</span>
               </div>

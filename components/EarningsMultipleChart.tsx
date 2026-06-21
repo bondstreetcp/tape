@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { fmtMoney } from "@/lib/format";
 
 interface EMPoint { t: number; price: number; eps: number; fair: number; lo: number; hi: number }
 interface EM {
@@ -10,9 +11,9 @@ interface EM {
   premiumPct: number | null; epsCagr: number | null; years: number;
 }
 
-const usd = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(v < 10 ? 1 : 0)}`);
+const usd = (v: number, cur = "USD") => fmtMoney(v, cur, v < 10 ? 1 : 0);
 
-export default function EarningsMultipleChart({ symbol }: { symbol: string }) {
+export default function EarningsMultipleChart({ symbol, currency = "USD" }: { symbol: string; currency?: string }) {
   const [data, setData] = useState<EM | "loading" | "err" | null>("loading");
   useEffect(() => {
     let a = true;
@@ -43,12 +44,12 @@ export default function EarningsMultipleChart({ symbol }: { symbol: string }) {
           </span>
         )}
       </div>
-      <EMChart d={data} />
+      <EMChart d={data} currency={currency} />
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Current P/E" value={data.currentPE == null ? "—" : `${data.currentPE.toFixed(1)}×`} />
         <Stat label="Normal P/E" value={`${data.normalPE.toFixed(1)}×`} />
         <Stat label="EPS growth (CAGR)" value={data.epsCagr == null ? "—" : `${data.epsCagr >= 0 ? "+" : "−"}${Math.abs(data.epsCagr * 100).toFixed(0)}%`} color={data.epsCagr == null ? undefined : data.epsCagr >= 0 ? "#22c55e" : "#ef4444"} />
-        <Stat label="Fair value" value={usd(data.fair)} color={premColor} />
+        <Stat label="Fair value" value={usd(data.fair, currency)} color={premColor} />
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
         The <span style={{ color: "#f59e0b" }}>orange line</span> is earnings × the stock&apos;s own normal P/E ({data.normalPE.toFixed(1)}×, its ~{data.years}-yr median); the band shades the 25th–75th-percentile multiple. Price above the band ⇒ the market is paying up vs. its own history; below ⇒ cheaper. EPS is trailing annual diluted with a ~75-day reporting lag (no look-ahead). Not a price target.
@@ -57,7 +58,7 @@ export default function EarningsMultipleChart({ symbol }: { symbol: string }) {
   );
 }
 
-function EMChart({ d }: { d: EM }) {
+function EMChart({ d, currency = "USD" }: { d: EM; currency?: string }) {
   const s = d.series;
   const W = 1000, H = 250, ML = 50, MR = 14, MT = 12, MB = 22;
   const n = s.length;
@@ -85,7 +86,7 @@ function EMChart({ d }: { d: EM }) {
       {yvals.map((v, i) => (
         <g key={i}>
           <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" strokeWidth={1} />
-          <text x={ML - 6} y={y(v) + 3} textAnchor="end" fontSize={11} fill="var(--text-4)">{usd(v)}</text>
+          <text x={ML - 6} y={y(v) + 3} textAnchor="end" fontSize={11} fill="var(--text-4)">{usd(v, currency)}</text>
         </g>
       ))}
       <path d={band} fill="#f59e0b" opacity={0.1} />

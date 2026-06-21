@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { fmtMoney } from "@/lib/format";
 
 interface Reaction { date: string; reactionDate: string; move: number | null; surprise: number | null }
 interface RatingChange { firm: string; action: string; fromGrade: string; toGrade: string; targetTo: number | null; targetFrom: number | null; date: string }
@@ -23,16 +24,16 @@ function actionMeta(a: string) {
   }
 }
 
-export default function StockExtras({ symbol }: { symbol: string }) {
+export default function StockExtras({ symbol, currency = "USD" }: { symbol: string; currency?: string }) {
   return (
     <div className="space-y-3">
-      <AnalystRatings symbol={symbol} />
+      <AnalystRatings symbol={symbol} currency={currency} />
       <EarningsReactions symbol={symbol} />
     </div>
   );
 }
 
-const usd = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(v < 10 ? 2 : 0)}`);
+const usd = (v: number | null | undefined, cur = "USD") => (v == null ? "—" : fmtMoney(v, cur, v < 10 ? 2 : 0));
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -87,7 +88,7 @@ function EarningsReactions({ symbol }: { symbol: string }) {
   );
 }
 
-function AnalystRatings({ symbol }: { symbol: string }) {
+function AnalystRatings({ symbol, currency = "USD" }: { symbol: string; currency?: string }) {
   const [data, setData] = useState<Ratings | null | "err">(null);
   useEffect(() => {
     let a = true;
@@ -118,12 +119,12 @@ function AnalystRatings({ symbol }: { symbol: string }) {
               )}
               {data.targetMean != null && (
                 <span className="text-[var(--text-3)]">
-                  Avg target <span className="font-semibold text-[var(--text)]">{usd(data.targetMean)}</span>
-                  {data.price ? <span className="font-medium" style={{ color: col(data.targetMean / data.price - 1) }}> ({pct(data.targetMean / data.price - 1)} vs {usd(data.price)})</span> : null}
+                  Avg target <span className="font-semibold text-[var(--text)]">{usd(data.targetMean, currency)}</span>
+                  {data.price ? <span className="font-medium" style={{ color: col(data.targetMean / data.price - 1) }}> ({pct(data.targetMean / data.price - 1)} vs {usd(data.price, currency)})</span> : null}
                 </span>
               )}
               {data.targetLow != null && data.targetHigh != null && (
-                <span className="text-[var(--text-4)]">Range {usd(data.targetLow)}–{usd(data.targetHigh)}</span>
+                <span className="text-[var(--text-4)]">Range {usd(data.targetLow, currency)}–{usd(data.targetHigh, currency)}</span>
               )}
             </div>
           )}
@@ -161,11 +162,11 @@ function AnalystRatings({ symbol }: { symbol: string }) {
                           <span className="text-[var(--text-4)]">—</span>
                         ) : ptChanged ? (
                           <span>
-                            <span className="text-[var(--text-4)]">{usd(c.targetFrom)}</span>{" "}
-                            <span style={{ color: col((c.targetTo ?? 0) - (c.targetFrom ?? 0)) }}>→ {usd(c.targetTo)}</span>
+                            <span className="text-[var(--text-4)]">{usd(c.targetFrom, currency)}</span>{" "}
+                            <span style={{ color: col((c.targetTo ?? 0) - (c.targetFrom ?? 0)) }}>→ {usd(c.targetTo, currency)}</span>
                           </span>
                         ) : (
-                          <span className="font-medium text-[var(--text)]">{usd(c.targetTo ?? c.targetFrom)}</span>
+                          <span className="font-medium text-[var(--text)]">{usd(c.targetTo ?? c.targetFrom, currency)}</span>
                         )}
                       </td>
                     </tr>
