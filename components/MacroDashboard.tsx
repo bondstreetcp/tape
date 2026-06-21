@@ -9,6 +9,7 @@ import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
+import CreditSpreads, { type CreditSeries } from "./CreditSpreads";
 
 const VBW = 1000, MT = 22, MB = 24, ML = 44, MR = 14, H = 300;
 const PH = H - MT - MB;
@@ -81,7 +82,7 @@ function IndCard({ ind, onOpen }: { ind: MacroInd; onOpen: () => void }) {
         {has && <span className="text-[10px] text-[var(--text-4)]">↗</span>}
       </div>
       <div className="mt-1 font-mono text-xl font-semibold tabular-nums" style={{ color: neg ? "#ef4444" : "var(--text)" }}>
-        {ind.value == null ? "—" : `${ind.value >= 0 && ind.unit === "pp" ? "+" : ""}${ind.value.toFixed(2)}${ind.unit === "pp" ? " pp" : "%"}`}
+        {ind.value == null ? "—" : `${ind.value >= 0 && ind.unit === "pp" ? "+" : ""}${ind.value.toFixed(2)}${ind.unit === "pp" ? " pp" : ind.unit === "%" ? "%" : ""}`}
       </div>
       <div className="text-[10px] text-[var(--text-4)]">{ind.asOf ?? ""}{neg ? " · inverted" : ""}</div>
     </button>
@@ -109,7 +110,7 @@ function IndicatorDetail({ ind, onClose }: { ind: MacroInd; onClose: () => void 
   const years: { i: number; yr: string }[] = [];
   let ly = "";
   h.forEach((p, i) => { const yr = p[0].slice(0, 4); if (yr !== ly) { years.push({ i, yr }); ly = yr; } });
-  const sfx = ind.unit === "pp" ? " pp" : "%";
+  const sfx = ind.unit === "pp" ? " pp" : ind.unit === "%" ? "%" : "";
   const col = "#60a5fa";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -269,6 +270,7 @@ export default function MacroDashboard({
   keyConfigured,
   volOil,
   releases,
+  creditSeries,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -277,6 +279,7 @@ export default function MacroDashboard({
   keyConfigured: boolean;
   volOil?: VolOil;
   releases?: Record<string, ReleaseData>;
+  creditSeries?: CreditSeries;
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -289,7 +292,8 @@ export default function MacroDashboard({
       n.has(i) ? n.delete(i) : n.add(i);
       return n;
     });
-  const groups = [...new Set(indicators.map((i) => i.group))];
+  // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
+  const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -342,6 +346,8 @@ export default function MacroDashboard({
           </div>
         </section>
       ))}
+
+      <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>
 
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>

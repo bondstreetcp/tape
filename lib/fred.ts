@@ -117,7 +117,7 @@ export async function getMacro(): Promise<Macro> {
     return { v: l?.value ?? null, asOf: l?.date ?? null, history: downsample(o.map((x) => [x.date, x.value] as [string, number])) };
   };
 
-  const [cpi, core, ff, unrate, t102, hy, ig, gdp] = await Promise.all([
+  const [cpi, core, ff, unrate, t102, hy, ig, gdp, corePce, be10, real10, sentiment, nfci, vix, m2] = await Promise.all([
     yoy("CPIAUCSL"),
     yoy("CPILFESL"),
     simple("FEDFUNDS"),
@@ -126,17 +126,31 @@ export async function getMacro(): Promise<Macro> {
     simple("BAMLH0A0HYM2"),
     simple("BAMLC0A0CM"),
     simple("A191RL1Q225SBEA"),
+    yoy("PCEPILFE"),       // Core PCE — the Fed's preferred inflation gauge
+    simple("T10YIE"),      // 10y breakeven inflation (market-implied)
+    simple("DFII10"),      // 10y real yield (TIPS)
+    simple("UMCSENT"),     // U. Michigan consumer sentiment
+    simple("NFCI"),        // Chicago Fed financial conditions (0 = average; <0 looser)
+    simple("VIXCLS"),      // CBOE VIX
+    yoy("M2SL"),           // M2 money supply, YoY growth
   ]);
 
   const indicators: MacroInd[] = [
     { key: "ff", label: "Fed Funds Rate", value: ff.v, unit: "%", asOf: ff.asOf, group: "Rates", seriesId: "FEDFUNDS", history: ff.history },
     { key: "t102", label: "10Y–2Y Spread", value: t102.v, unit: "pp", asOf: t102.asOf, group: "Rates", seriesId: "T10Y2Y", history: t102.history },
+    { key: "real10", label: "10Y Real Yield (TIPS)", value: real10.v, unit: "%", asOf: real10.asOf, group: "Rates", seriesId: "DFII10", history: real10.history },
     { key: "cpi", label: "CPI (YoY)", value: cpi.v, unit: "%", asOf: cpi.asOf, group: "Inflation", seriesId: "CPIAUCSL", history: cpi.history },
     { key: "core", label: "Core CPI (YoY)", value: core.v, unit: "%", asOf: core.asOf, group: "Inflation", seriesId: "CPILFESL", history: core.history },
+    { key: "corepce", label: "Core PCE (YoY)", value: corePce.v, unit: "%", asOf: corePce.asOf, group: "Inflation", seriesId: "PCEPILFE", history: corePce.history },
+    { key: "be10", label: "10Y Breakeven Inflation", value: be10.v, unit: "%", asOf: be10.asOf, group: "Inflation", seriesId: "T10YIE", history: be10.history },
     { key: "unrate", label: "Unemployment", value: unrate.v, unit: "%", asOf: unrate.asOf, group: "Growth & Jobs", seriesId: "UNRATE", history: unrate.history },
     { key: "gdp", label: "Real GDP (annualized QoQ)", value: gdp.v, unit: "%", asOf: gdp.asOf, group: "Growth & Jobs", seriesId: "A191RL1Q225SBEA", history: gdp.history },
+    { key: "sentiment", label: "Consumer Sentiment (UMich)", value: sentiment.v, unit: "", asOf: sentiment.asOf, group: "Growth & Jobs", seriesId: "UMCSENT", history: sentiment.history },
     { key: "hy", label: "High-Yield OAS", value: hy.v, unit: "%", asOf: hy.asOf, group: "Credit", seriesId: "BAMLH0A0HYM2", history: hy.history },
     { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit", seriesId: "BAMLC0A0CM", history: ig.history },
+    { key: "nfci", label: "Financial Conditions (NFCI)", value: nfci.v, unit: "", asOf: nfci.asOf, group: "Financial Conditions", seriesId: "NFCI", history: nfci.history },
+    { key: "vix", label: "VIX (S&P 500 vol)", value: vix.v, unit: "", asOf: vix.asOf, group: "Financial Conditions", seriesId: "VIXCLS", history: vix.history },
+    { key: "m2", label: "M2 Money Supply (YoY)", value: m2.v, unit: "%", asOf: m2.asOf, group: "Financial Conditions", seriesId: "M2SL", history: m2.history },
   ];
 
   // Daily credit-spread series for the rates page's windowed charts (the indicator
