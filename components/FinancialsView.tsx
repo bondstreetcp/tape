@@ -24,7 +24,7 @@ import StockOverview from "./StockOverview";
 import WatchStar from "./WatchStar";
 import UniverseSwitcher from "./UniverseSwitcher";
 import type { SeriesPoint } from "@/lib/types";
-import { fmtMoney, fmtPct, currencyPrefix } from "@/lib/format";
+import { fmtMoney, fmtPct, currencyPrefix, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 
 type Kind = "cur" | "eps" | "shares" | "pct";
@@ -280,6 +280,11 @@ export default function FinancialsView({
                 {fmtPct(row.returns["1d"])} <span className="font-normal text-[var(--text-3)]">1D</span>
               </span>
             )}
+            {generatedAt && (
+              <span className="text-[11px] text-[var(--text-4)]" title="Price/quote snapshot time — financial statements refresh separately">
+                · price as of {fmtDateTime(generatedAt)}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <WatchStar symbol={symbol} withLabel />
@@ -327,15 +332,15 @@ export default function FinancialsView({
       ) : view === "peers" ? (
         <PeerComparison universe={universe} symbol={symbol} name={name} peers={peers} peerGroup={peerGroup} />
       ) : view === "ownership" ? (
-        <OwnershipPanel profile={profile} symbol={symbol} />
+        <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
       ) : view === "filings" ? (
         <FilingsView symbol={symbol} name={name} />
       ) : view === "docsearch" ? (
         <DocSearch ticker={symbol} name={name} />
       ) : view === "options" ? (
-        <OptionsChain symbol={symbol} />
+        <OptionsChain symbol={symbol} currency={currency} />
       ) : view === "profile" ? (
-        <ProfilePanel profile={profile} />
+        <ProfilePanel profile={profile} currency={currency} />
       ) : !hasData ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
           No financial data available for {symbol}.
@@ -456,7 +461,7 @@ export default function FinancialsView({
             )}
           </p>
           <DuPontPanel periods={financials.annual} />
-          <SegmentsPanel symbol={symbol} />
+          <SegmentsPanel symbol={symbol} currency={currency} />
           <SharesChart symbol={symbol} financials={financials} />
         </>
       )}

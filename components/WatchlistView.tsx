@@ -166,7 +166,7 @@ export default function WatchlistView({
                   <td className="px-3 py-1.5 text-right tabular-nums">${fmtPrice(dispPrice(s))}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(dispChg(s)) }}>{fmtPct(dispChg(s), 1)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.pctFromHigh) }}>{fmtPct(s.pctFromHigh, 1)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">+{s.pctFromLow.toFixed(1)}%</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtPct(s.pctFromLow, 1)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{fmtMarketCap(s.marketCap)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{s.trailingPE == null ? "—" : s.trailingPE.toFixed(1)}</td>
                   <td className="px-3 py-1.5 text-left">

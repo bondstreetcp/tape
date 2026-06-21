@@ -116,16 +116,32 @@ export default function CandleChart({
       return { color: d.color, path, period: d.period };
     });
 
+    // Decimals from the visible price RANGE (not the absolute level) so the 5 gridline
+    // labels stay distinct on a narrow range — a $440–446 ETF at 0 decimals would
+    // collapse to duplicate "$443"s.
+    const range = pMax - pMin;
+    const dec = range >= 50 ? 0 : range >= 8 ? 1 : 2;
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
       const p = pMin + f * (pMax - pMin);
-      return { y: yP(p), label: fmtMoney(p, currency, p >= 100 ? 0 : 1) };
+      return { y: yP(p), label: fmtMoney(p, currency, dec) };
     });
+    // On the 1W intraday view, one x-tick per trading day — otherwise evenly-spaced
+    // ticks can land on the same day and repeat the weekday label ("Mon Mon …").
     const xTickIdx: number[] = [];
-    const want = 6;
-    for (let k = 0; k < want; k++) xTickIdx.push(Math.round((k / (want - 1)) * (n - 1)));
+    if (tf === "1w") {
+      const seen = new Set<string>();
+      for (let i = 0; i < n; i++) {
+        const d = new Date(bars[i].t);
+        const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!seen.has(k)) { seen.add(k); xTickIdx.push(i); }
+      }
+    } else {
+      const want = 6;
+      for (let k = 0; k < want; k++) xTickIdx.push(Math.round((k / (want - 1)) * (n - 1)));
+    }
 
     return { bars, n, x, yP, yV, cw, smaPaths, yTicks, xTickIdx, plotW };
-  }, [source, windowStart, smas, smaOn]);
+  }, [source, windowStart, smas, smaOn, tf, currency]);
 
   const onMove = (e: React.MouseEvent) => {
     if (!view || !svgRef.current) return;

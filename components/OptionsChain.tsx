@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { fmtMoney } from "@/lib/format";
 import OptionsStrategy from "./OptionsStrategy";
 
 const isHot = (o: Opt | null | undefined) => !!o && o.vol != null && o.oi != null && o.vol > Math.max(o.oi, 300);
@@ -31,7 +32,7 @@ const big = (v: number | null) => {
   return `${v}`;
 };
 
-export default function OptionsChain({ symbol }: { symbol: string }) {
+export default function OptionsChain({ symbol, currency }: { symbol: string; currency?: string }) {
   const [data, setData] = useState<OptionChain | null>(null);
   const [expiry, setExpiry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,7 +125,7 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
         </label>
         {dte != null && <span className="text-[var(--text-3)]">{dte}d to expiry</span>}
         {data.underlying != null && (
-          <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">${data.underlying.toFixed(2)}</span></span>
+          <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">{fmtMoney(data.underlying, currency)}</span></span>
         )}
         {atmIv != null && <span className="text-[var(--text-2)]">ATM IV <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
         <button onClick={() => setAllStrikes((v) => !v)} className="ml-auto text-xs text-[#60a5fa] hover:underline">
@@ -132,7 +133,7 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
         </button>
       </div>
 
-      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} />
+      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">

@@ -1,16 +1,18 @@
 "use client";
 import type { CompanyProfile, Holder } from "@/lib/companyProfile";
+import { currencyPrefix } from "@/lib/format";
 import InsiderActivity from "./InsiderActivity";
 
-function big(v: number | null): string {
+function big(v: number | null, currency?: string): string {
   if (v == null) return "—";
   const a = Math.abs(v);
   const s = v < 0 ? "−" : "";
-  if (a >= 1e12) return `${s}$${(a / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `${s}$${(a / 1e6).toFixed(1)}M`;
-  if (a >= 1e3) return `${s}$${(a / 1e3).toFixed(0)}K`;
-  return `${s}$${a.toFixed(0)}`;
+  const c = currencyPrefix(currency);
+  if (a >= 1e12) return `${s}${c}${(a / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `${s}${c}${(a / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `${s}${c}${(a / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${s}${c}${(a / 1e3).toFixed(0)}K`;
+  return `${s}${c}${a.toFixed(0)}`;
 }
 function shares(v: number | null): string {
   if (v == null) return "—";
@@ -33,7 +35,7 @@ function Empty() {
   return <div className="py-2 text-xs text-[var(--text-3)]">Not available.</div>;
 }
 
-function HolderTable({ holders }: { holders: Holder[] }) {
+function HolderTable({ holders, currency }: { holders: Holder[]; currency?: string }) {
   if (holders.length === 0) return <Empty />;
   return (
     <div className="max-h-[320px] overflow-y-auto">
@@ -51,7 +53,7 @@ function HolderTable({ holders }: { holders: Holder[] }) {
             <tr key={i} className="border-t border-[var(--divider)]">
               <td className="py-1 pr-2 text-left text-[var(--text-2)]">{h.name}</td>
               <td className="py-1 text-right tabular-nums">{pct(h.pct)}</td>
-              <td className="py-1 text-right tabular-nums">{big(h.value)}</td>
+              <td className="py-1 text-right tabular-nums">{big(h.value, currency)}</td>
               <td
                 className="py-1 text-right tabular-nums"
                 style={{ color: h.change == null ? undefined : h.change >= 0 ? "#22c55e" : "#ef4444" }}
@@ -131,7 +133,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function OwnershipPanel({ profile, symbol }: { profile: CompanyProfile | null; symbol: string }) {
+export function OwnershipPanel({ profile, symbol, currency }: { profile: CompanyProfile | null; symbol: string; currency?: string }) {
   return (
     <div className="space-y-4">
       {profile?.breakdown && (
@@ -150,10 +152,10 @@ export function OwnershipPanel({ profile, symbol }: { profile: CompanyProfile | 
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title={`Institutional Holders${profile?.institutions.length ? ` (top ${profile.institutions.length})` : ""}`}>
-          <HolderTable holders={profile?.institutions ?? []} />
+          <HolderTable holders={profile?.institutions ?? []} currency={currency} />
         </Card>
         <Card title={`Mutual Fund Holders${profile?.funds.length ? ` (top ${profile.funds.length})` : ""}`}>
-          <HolderTable holders={profile?.funds ?? []} />
+          <HolderTable holders={profile?.funds ?? []} currency={currency} />
         </Card>
       </div>
       <p className="-mt-2 text-[11px] text-[var(--text-4)]">
@@ -168,7 +170,7 @@ export function OwnershipPanel({ profile, symbol }: { profile: CompanyProfile | 
   );
 }
 
-export function ProfilePanel({ profile }: { profile: CompanyProfile | null }) {
+export function ProfilePanel({ profile, currency }: { profile: CompanyProfile | null; currency?: string }) {
   if (!profile) return <Empty />;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -233,7 +235,7 @@ export function ProfilePanel({ profile }: { profile: CompanyProfile | null }) {
                   <span className="text-xs text-[var(--text-3)]">· {o.title}</span>
                 </span>
                 <span className="shrink-0 pl-2 text-sm tabular-nums text-[var(--text-2)]">
-                  {o.pay ? big(o.pay) : ""}
+                  {o.pay ? big(o.pay, currency) : ""}
                 </span>
               </div>
             ))}

@@ -27,8 +27,23 @@ function tickFmt(tf: TimeframeKey) {
       return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     if (tf === "1w")
       return d.toLocaleDateString(undefined, { weekday: "short" });
+    if (tf === "3y" || tf === "5y")
+      return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
+}
+
+// On the 1W intraday view, place one tick per trading day — otherwise every 15-min
+// tick formats to the same weekday and the axis repeats ("Mon Mon Mon Tue …").
+function dayTicks(rows: Array<Record<string, number>>): number[] {
+  const seen = new Set<string>();
+  const ticks: number[] = [];
+  for (const r of rows) {
+    const d = new Date(r.t);
+    const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!seen.has(k)) { seen.add(k); ticks.push(r.t); }
+  }
+  return ticks;
 }
 
 function pct(v: number) {
@@ -115,6 +130,7 @@ export default function MultiLineChart({
   const visible = series.filter((s) => !hidden.has(s.symbol));
   const hasSecondary = visible.some((s) => s.secondary);
   const lastIdx = rows.length - 1;
+  const xTicks = tf === "1w" ? dayTicks(rows) : undefined;
 
   return (
     <ResponsiveContainer width="100%" height={440}>
@@ -128,10 +144,11 @@ export default function MultiLineChart({
           type="number"
           scale="time"
           domain={["dataMin", "dataMax"]}
+          ticks={xTicks}
           tickFormatter={tickFmt(tf)}
           tick={{ fill: "var(--text-3)", fontSize: 11 }}
           stroke="var(--border)"
-          minTickGap={48}
+          minTickGap={xTicks ? 12 : 48}
         />
         <YAxis
           yAxisId="right"

@@ -228,15 +228,15 @@ export default function Treemap({
               className="font-semibold tabular-nums"
               style={{ color: trendText(hover.row.returns[tf]) }}
             >
-              {fmtPct(hover.row.returns[tf])}
+              {fmtPct(hover.row.returns[tf], 1)}
             </span>
           </div>
           <div className="mt-0.5 truncate text-[var(--text-3)]">{hover.row.name}</div>
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[var(--text-2)]">
             <span className="text-[var(--text-3)]">From 52w high</span>
-            <span className="text-right tabular-nums">{fmtPct(hover.row.pctFromHigh)}</span>
+            <span className="text-right tabular-nums">{fmtPct(hover.row.pctFromHigh, 1)}</span>
             <span className="text-[var(--text-3)]">From 52w low</span>
-            <span className="text-right tabular-nums">+{hover.row.pctFromLow.toFixed(2)}%</span>
+            <span className="text-right tabular-nums">{fmtPct(hover.row.pctFromLow, 1)}</span>
           </div>
         </div>
       )}
