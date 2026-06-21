@@ -29,6 +29,7 @@ export default async function MacroPage() {
       keyConfigured={econKeyConfigured()}
       volOil={volOil}
       releases={macro.releases}
+      creditSeries={macro.creditSeries}
     />
   );
 }
