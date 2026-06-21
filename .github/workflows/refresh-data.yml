@@ -1,14 +1,14 @@
-name: Refresh market data
+name: Daily data refresh
 
-# Re-pulls Yahoo Finance data on a schedule, commits the updated snapshot, and
-# pushes — which triggers Vercel to auto-redeploy with fresh prices.
-#
-# Runs on GitHub's runners (not Vercel) because the full ~1,650-symbol fetch
-# takes several minutes, well past Vercel's serverless time limit.
+# Re-pulls Yahoo data on a schedule, commits the updated snapshots, and pushes —
+# which triggers Vercel to auto-redeploy with fresh prices, international data, and
+# the day's options flow. Runs on GitHub's runners (the full fetch is well past
+# Vercel's serverless time limit). Free — no local machine needed.
 
 on:
   schedule:
-    # 22:00 UTC on weekdays — ~1-2h after the US market close (handles EST/EDT).
+    # 22:00 UTC on weekdays — ~1-2h after the 4pm ET close (handles EST/EDT), so
+    # the options-flow scan captures the settled volume.
     - cron: "0 22 * * 1-5"
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab
 
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -36,8 +36,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Refresh market data
+      # Each source is independent — keep going if one hiccups (rate limits etc.);
+      # the next run will fill any gaps.
+      - name: Refresh US universes (prices, returns, fundamentals)
         run: npm run refresh-data
+        continue-on-error: true
+
+      - name: Refresh international universes
+        run: npm run refresh-intl
+        continue-on-error: true
+
+      - name: Refresh options flow (S&P 500)
+        run: npm run refresh-flow
+        continue-on-error: true
 
       - name: Commit & push if data changed
         run: |
@@ -46,7 +57,19 @@ jobs:
           git add -A data
           if git diff --cached --quiet; then
             echo "No data changes — nothing to commit."
-          else
-            git commit -m "chore: refresh market data ($(date -u +%Y-%m-%d))"
-            git push
+            exit 0
           fi
+          git commit -m "chore: daily data refresh ($(date -u +%Y-%m-%d))"
+          # The fetch takes a while; if other commits landed meanwhile, the push is
+          # rejected (non-fast-forward). Rebase the data commit on top and retry —
+          # data/ files never conflict with code changes.
+          for i in 1 2 3; do
+            if git pull --rebase origin main && git push; then
+              echo "Pushed."
+              exit 0
+            fi
+            echo "Push race — rebasing and retrying ($i/3)…"
+            sleep 5
+          done
+          echo "Push failed after retries"
+          exit 1
