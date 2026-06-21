@@ -129,8 +129,8 @@ export default function WatchlistView({
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
-                <th className="w-8 px-2 py-2"></th>
-                <th className="px-3 py-2 text-left font-medium">Symbol</th>
+                <th className="sticky left-0 z-10 w-8 bg-[var(--surface)] px-2 py-2"></th>
+                <th className="sticky left-8 z-10 bg-[var(--surface)] px-3 py-2 text-left font-medium">Symbol</th>
                 <th className="px-3 py-2 text-left font-medium">Name</th>
                 <th className="px-3 py-2 text-left font-medium">Sector</th>
                 <th className="px-3 py-2 text-right font-medium">Price</th>
@@ -147,9 +147,9 @@ export default function WatchlistView({
                 <tr
                   key={s.symbol}
                   onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`)}
-                  className="cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
+                  className="group cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
                 >
-                  <td className="px-2 py-1.5 text-center">
+                  <td className="sticky left-0 z-10 bg-[var(--surface)] px-2 py-1.5 text-center transition-colors group-hover:bg-[var(--surface-hover)]">
                     <button
                       onClick={(e) => { e.stopPropagation(); toggle(s.symbol); }}
                       title="Remove from watchlist"
@@ -160,7 +160,7 @@ export default function WatchlistView({
                       </svg>
                     </button>
                   </td>
-                  <td className="px-3 py-1.5 text-left font-mono font-semibold">{s.symbol}</td>
+                  <td className="sticky left-8 z-10 bg-[var(--surface)] px-3 py-1.5 text-left font-mono font-semibold transition-colors group-hover:bg-[var(--surface-hover)]">{s.symbol}</td>
                   <td className="max-w-[16rem] truncate px-3 py-1.5 text-left text-[var(--text-2)]">{s.name}</td>
                   <td className="px-3 py-1.5 text-left text-[var(--text-3)]">{ETF_TO_SECTOR[s.etf]?.name ?? s.sector}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">${fmtPrice(dispPrice(s))}</td>

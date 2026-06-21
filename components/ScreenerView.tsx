@@ -387,13 +387,14 @@ export default function ScreenerView({
         <table className="w-full min-w-[920px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
-              <th className="w-8 px-2 py-2"></th>
+              <th className="sticky left-0 z-10 w-8 bg-[var(--surface)] px-2 py-2"></th>
               {columns.map((c) => (
                 <th
                   key={c.key}
                   onClick={() => onSort(c.key, c.num)}
                   className={
                     "cursor-pointer select-none px-3 py-2 font-medium whitespace-nowrap hover:text-[var(--text)] " +
+                    (c.key === "symbol" ? "sticky left-8 z-10 bg-[var(--surface)] " : "") +
                     (c.align === "right" ? "text-right" : "text-left")
                   }
                 >
@@ -408,9 +409,9 @@ export default function ScreenerView({
               <tr
                 key={s.symbol}
                 onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`)}
-                className="cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
+                className="group cursor-pointer border-b border-[var(--divider)] transition-colors hover:bg-[var(--surface-hover)]"
               >
-                <td className="px-2 py-1.5 text-center">
+                <td className="sticky left-0 z-10 bg-[var(--surface)] px-2 py-1.5 text-center transition-colors group-hover:bg-[var(--surface-hover)]">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggle(s.symbol); }}
                     title={has(s.symbol) ? "Remove from watchlist" : "Add to watchlist"}
@@ -430,7 +431,7 @@ export default function ScreenerView({
                       className={
                         "px-3 py-1.5 whitespace-nowrap " +
                         (c.align === "right" ? "text-right tabular-nums " : "text-left ") +
-                        (c.key === "symbol" ? "font-mono font-semibold" : c.key === "name" ? "max-w-[16rem] truncate text-[var(--text-2)]" : c.key === "etf" ? "text-[var(--text-3)]" : "")
+                        (c.key === "symbol" ? "sticky left-8 z-10 bg-[var(--surface)] font-mono font-semibold transition-colors group-hover:bg-[var(--surface-hover)]" : c.key === "name" ? "max-w-[16rem] truncate text-[var(--text-2)]" : c.key === "etf" ? "text-[var(--text-3)]" : "")
                       }
                       style={c.color ? { color: c.color(v) } : undefined}
                     >
