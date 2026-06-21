@@ -8,13 +8,13 @@ const pct = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).
 const mult = (v: number | null | undefined, d = 1) => (v == null || v <= 0 ? "—" : `${v.toFixed(d)}×`);
 const num = (v: number | null | undefined, d = 2) => (v == null ? "—" : v.toFixed(d));
 
-export default function KeyStatsStrip({ stats, row }: { stats: CompanyStats | null; row: StockRow }) {
+export default function KeyStatsStrip({ stats, row, currency = "USD" }: { stats: CompanyStats | null; row: StockRow; currency?: string }) {
   const s = stats;
   const shortPctFloat =
     s?.sharesShort != null && s?.floatShares != null && s.floatShares > 0 ? s.sharesShort / s.floatShares : null;
 
   const items: { label: string; value: string; title?: string }[] = [
-    { label: "Mkt Cap", value: fmtMarketCap(s?.marketCap ?? row.marketCap) },
+    { label: "Mkt Cap", value: fmtMarketCap(s?.marketCap ?? row.marketCap, currency) },
     { label: "P/E", value: mult(s?.trailingPE ?? row.trailingPE), title: "Trailing P/E" },
     { label: "Fwd P/E", value: mult(s?.forwardPE ?? row.forwardPE) },
     { label: "PEG", value: num(s?.pegRatio) },

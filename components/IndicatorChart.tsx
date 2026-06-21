@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
-import { fmtPrice } from "@/lib/format";
+import { fmtMoney } from "@/lib/format";
 import { sliceSeries } from "@/lib/compute";
 import {
   OVERLAYS,
@@ -75,6 +75,7 @@ export default function IndicatorChart({
   now,
   up,
   symbol,
+  currency = "USD",
 }: {
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
@@ -82,6 +83,7 @@ export default function IndicatorChart({
   now: number;
   up: boolean;
   symbol?: string;
+  currency?: string;
 }) {
   const [enabled, setEnabled] = useState<Set<IndicatorId>>(new Set(["sma50"]));
 
@@ -231,10 +233,10 @@ export default function IndicatorChart({
                 domain={["auto", "auto"]}
                 tick={{ fill: "var(--text-3)", fontSize: 11 }}
                 stroke="var(--border)"
-                tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+                tickFormatter={(v: number) => fmtMoney(v, currency, 0)}
                 width={48}
               />
-              <Tooltip content={<PriceTip tf={tf} series={lineSeries} />} isAnimationActive={false} />
+              <Tooltip content={<PriceTip tf={tf} series={lineSeries} currency={currency} />} isAnimationActive={false} />
               <Area
                 type="monotone"
                 dataKey="c"
@@ -391,7 +393,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function PriceTip({ active, payload, label, tf, series }: any) {
+function PriceTip({ active, payload, label, tf, series, currency = "USD" }: any) {
   if (!active || !payload?.length) return null;
   const price = payload.find((p: any) => p.dataKey === "c")?.value;
   const d = new Date(label);
@@ -402,14 +404,14 @@ function PriceTip({ active, payload, label, tf, series }: any) {
   return (
     <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs shadow-lg">
       <div className="text-[var(--text-3)]">{dateStr}</div>
-      <div className="font-mono text-sm font-semibold">${fmtPrice(price)}</div>
+      <div className="font-mono text-sm font-semibold">{fmtMoney(price, currency)}</div>
       {series.map((s: any) => {
         const v = payload.find((p: any) => p.dataKey === s.key)?.value;
         if (v == null) return null;
         return (
           <div key={s.key} className="flex items-center gap-1.5" style={{ color: s.color }}>
             <span className="font-mono">{s.key.replace("_u", " up").replace("_l", " low")}</span>
-            <span className="tabular-nums">${fmtPrice(v)}</span>
+            <span className="tabular-nums">{fmtMoney(v, currency)}</span>
           </div>
         );
       })}

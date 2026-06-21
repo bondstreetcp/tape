@@ -6,7 +6,7 @@ import { TIMEFRAMES } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { sliceSeries, seriesChangePct } from "@/lib/compute";
 import { trendColor } from "@/lib/color";
-import { fmtPct, fmtPrice } from "@/lib/format";
+import { fmtPct, fmtMoney } from "@/lib/format";
 import { ECON_OVERLAYS, econSym, prettySym, ECON_PREFIX } from "@/lib/econOverlays";
 import TimeframeSelector from "./TimeframeSelector";
 import NewsFeed from "./NewsFeed";
@@ -40,11 +40,13 @@ export default function StockOverview({
   daily,
   intraday,
   generatedAt,
+  currency = "USD",
 }: {
   row: StockRow;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
+  currency?: string;
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1y");
   const [chartMode, setChartMode] = useState<"line" | "candles">("line");
@@ -152,20 +154,20 @@ export default function StockOverview({
         {comparing ? (
           <CompareChart mainSymbol={row.symbol} mainDaily={daily} mainIntraday={intraday} compareSymbols={compareSymbols} tf={tf} now={now} inverted={inverted} />
         ) : chartMode === "candles" ? (
-          <CandleChart symbol={row.symbol} tf={tf} now={now} />
+          <CandleChart symbol={row.symbol} tf={tf} now={now} currency={currency} />
         ) : daily.length === 0 && intraday.length === 0 ? (
           <div className="flex h-[300px] items-center justify-center text-sm text-[var(--text-3)]">No price history for {row.symbol}.</div>
         ) : (
-          <IndicatorChart daily={daily} intraday={intraday} tf={tf} now={now} up={(windowChange ?? 0) >= 0} symbol={row.symbol} />
+          <IndicatorChart daily={daily} intraday={intraday} tf={tf} now={now} up={(windowChange ?? 0) >= 0} symbol={row.symbol} currency={currency} />
         )}
       </section>
 
       {/* 52-week range */}
       <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-[var(--text-3)]">
-          <span>52-wk low ${fmtPrice(row.fiftyTwoWeekLow)}</span>
-          <span className="font-semibold text-[var(--text)]">${fmtPrice(row.price)}</span>
-          <span>52-wk high ${fmtPrice(row.fiftyTwoWeekHigh)}</span>
+          <span>52-wk low {fmtMoney(row.fiftyTwoWeekLow, currency)}</span>
+          <span className="font-semibold text-[var(--text)]">{fmtMoney(row.price, currency)}</span>
+          <span>52-wk high {fmtMoney(row.fiftyTwoWeekHigh, currency)}</span>
         </div>
         <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[#6b7280] to-[#22c55e]">
           <div className="absolute top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-white shadow" style={{ left: `calc(${pos}% - 2px)` }} />
@@ -194,7 +196,7 @@ export default function StockOverview({
 
       <section className="mt-5"><SeasonalityPanel daily={daily} /></section>
       <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>
-      <section className="mt-5"><StockExtras symbol={row.symbol} /></section>
+      <section className="mt-5"><StockExtras symbol={row.symbol} currency={currency} /></section>
       <section className="mt-5"><NewsFeed query={row.symbol} title={`${row.symbol} — recent news`} count={10} /></section>
     </div>
   );

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import { fmtPct, fmtMarketCap } from "@/lib/format";
+import { currencyOf } from "@/lib/universes";
 import { trendColor } from "@/lib/color";
 
 interface Col {
@@ -40,12 +41,13 @@ export default function PeerComparison({
   const router = useRouter();
   const [sortKey, setSortKey] = useState("cap");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const currency = currencyOf(universe);
 
   const columns: Col[] = useMemo(
     () => [
       { key: "symbol", label: "Symbol", get: (s) => s.symbol, fmt: (v) => v, num: false, align: "left" },
       { key: "name", label: "Name", get: (s) => s.name, fmt: (v) => v, num: false, align: "left" },
-      { key: "cap", label: "Mkt Cap", get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v), num: true, align: "right", median: true },
+      { key: "cap", label: "Mkt Cap", get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v, currency), num: true, align: "right", median: true },
       { key: "ytd", label: "YTD", get: (s) => s.returns.ytd, fmt: (v) => fmtPct(v, 1), color: trendColor, num: true, align: "right", median: true },
       { key: "y1", label: "1Y", get: (s) => s.returns["1y"], fmt: (v) => fmtPct(v, 1), color: trendColor, num: true, align: "right", median: true },
       { key: "pe", label: "P/E", get: (s) => s.trailingPE ?? null, fmt: r1, num: true, align: "right", median: true },
@@ -54,7 +56,7 @@ export default function PeerComparison({
       { key: "yld", label: "Div Yld", get: (s) => s.dividendYield ?? null, fmt: yld, num: true, align: "right", median: true },
       { key: "high", label: "% fr High", get: (s) => s.pctFromHigh, fmt: (v) => fmtPct(v, 1), color: trendColor, num: true, align: "right", median: true },
     ],
-    [],
+    [currency],
   );
 
   const medians = useMemo(() => {

@@ -5,11 +5,11 @@ import Link from "next/link";
 import type { StockRow } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
-import { fmtPct, fmtMarketCap, fmtPrice, fmtDateTime } from "@/lib/format";
+import { fmtPct, fmtMarketCap, fmtMoney, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 import { SECTORS, ETF_TO_SECTOR } from "@/lib/sectors";
 import { isNearHigh, isNearLow } from "@/lib/compute";
-import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import { useWatchlist } from "@/lib/watchlist";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -109,14 +109,15 @@ export default function ScreenerView({
     return new Map(ranked.map((r, i) => [r.sym, i]));
   }, [magic, stocks, magicCount]);
 
+  const currency = currencyOf(universe);
   const columns: Col[] = useMemo(() => {
     const base: Col[] = [
       { key: "symbol", label: "Symbol", num: false, get: (s) => s.symbol, fmt: (v) => v, align: "left" },
       { key: "name", label: "Name", num: false, get: (s) => s.name, fmt: (v) => v, align: "left" },
       { key: "etf", label: "Sector", num: false, get: (s) => ETF_TO_SECTOR[s.etf]?.name ?? s.sector, fmt: (v) => v, align: "left" },
-      { key: "price", label: "Price", num: true, get: (s) => s.price, fmt: (v) => (v == null ? "—" : `$${fmtPrice(v)}`), align: "right" },
+      { key: "price", label: "Price", num: true, get: (s) => s.price, fmt: (v) => (v == null ? "—" : fmtMoney(v, currency)), align: "right" },
       { key: "ret", label: TIMEFRAMES.find((t) => t.key === tf)?.label ?? "Ret", num: true, get: (s) => s.returns[tf], fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
-      { key: "cap", label: "Mkt Cap", num: true, get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v), align: "right" },
+      { key: "cap", label: "Mkt Cap", num: true, get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v, currency), align: "right" },
     ];
     const valuation: Col[] = [
       { key: "fromHigh", label: "% fr High", num: true, get: (s) => s.pctFromHigh, fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
@@ -137,7 +138,7 @@ export default function ScreenerView({
       { key: "roe", label: "ROE", num: true, get: (s) => s.fund?.roe ?? null, fmt: pctFrac, align: "right" },
     ];
     return [...base, ...(colSet === "fundamentals" ? fund : valuation)];
-  }, [tf, colSet]);
+  }, [tf, colSet, currency]);
 
   const filtered = useMemo(() => {
     let r = stocks;

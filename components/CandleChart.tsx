@@ -4,7 +4,7 @@ import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { sliceSeries } from "@/lib/compute";
 import { sma } from "@/lib/indicators";
-import { fmtPrice } from "@/lib/format";
+import { fmtPrice, fmtMoney } from "@/lib/format";
 
 interface Bar { t: number; o: number; h: number; l: number; c: number; v: number }
 
@@ -39,10 +39,12 @@ export default function CandleChart({
   symbol,
   tf,
   now,
+  currency = "USD",
 }: {
   symbol: string;
   tf: TimeframeKey;
   now: number;
+  currency?: string;
 }) {
   const [data, setData] = useState<{ daily: Bar[]; intraday: Bar[] } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,7 +118,7 @@ export default function CandleChart({
 
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
       const p = pMin + f * (pMax - pMin);
-      return { y: yP(p), label: `$${p >= 100 ? p.toFixed(0) : p.toFixed(1)}` };
+      return { y: yP(p), label: fmtMoney(p, currency, p >= 100 ? 0 : 1) };
     });
     const xTickIdx: number[] = [];
     const want = 6;

@@ -1,18 +1,21 @@
 "use client";
 import type { CompanyStats } from "@/lib/companyStats";
+import { fmtMoney, currencyPrefix } from "@/lib/format";
 
 const r1 = (v: number | null) => (v == null ? "—" : v.toFixed(1));
 const r2 = (v: number | null) => (v == null ? "—" : v.toFixed(2));
 const pct = (v: number | null) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
-const price = (v: number | null) => (v == null ? "—" : `$${v.toFixed(2)}`);
-function big(v: number | null): string {
+// Big amounts (cap, EV, revenue) in the universe currency — for UK these are pounds
+// (£) even though per-share prices are pence; currencyPrefix() handles that.
+function bigCur(v: number | null, cur: string): string {
   if (v == null) return "—";
   const a = Math.abs(v);
   const s = v < 0 ? "−" : "";
-  if (a >= 1e12) return `${s}$${(a / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `${s}$${(a / 1e6).toFixed(1)}M`;
-  return `${s}$${a.toFixed(0)}`;
+  const sym = currencyPrefix(cur);
+  if (a >= 1e12) return `${s}${sym}${(a / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `${s}${sym}${(a / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `${s}${sym}${(a / 1e6).toFixed(1)}M`;
+  return `${s}${sym}${a.toFixed(0)}`;
 }
 function shares(v: number | null): string {
   if (v == null) return "—";
@@ -32,7 +35,7 @@ const RATING_LABEL: Record<string, string> = {
   outperform: "Outperform",
 };
 
-export default function CompanyStats({ stats }: { stats: CompanyStats | null }) {
+export default function CompanyStats({ stats, currency = "USD" }: { stats: CompanyStats | null; currency?: string }) {
   if (!stats) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
@@ -41,6 +44,8 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
     );
   }
   const s = stats;
+  const price = (v: number | null) => fmtMoney(v, currency);
+  const big = (v: number | null) => bigCur(v, currency);
   const upside =
     s.targetMean != null && s.price ? (s.targetMean / s.price - 1) * 100 : null;
 
@@ -58,7 +63,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
 
       {/* Price target */}
       <Section title="Price Target">
-        <TargetBar low={s.targetLow} mean={s.targetMean} high={s.targetHigh} price={s.price} />
+        <TargetBar low={s.targetLow} mean={s.targetMean} high={s.targetHigh} price={s.price} currency={currency} />
         <div className="mt-3 grid grid-cols-4 gap-2 text-center">
           <Stat label="Current" value={price(s.price)} />
           <Stat label="Mean" value={price(s.targetMean)} color={trend(upside)} />
@@ -100,7 +105,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
       </Section>
 
       {/* Estimate revisions */}
-      <EstimateRevisions estimates={s.estimates} />
+      <EstimateRevisions estimates={s.estimates} currency={currency} />
 
       {/* Earnings surprises */}
       <Section title="Earnings Surprises (EPS)">
@@ -166,9 +171,9 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
                         )}
                       </td>
                       <td className="py-1 text-right tabular-nums">
-                        {c.targetTo != null ? `$${c.targetTo.toFixed(0)}` : "—"}
+                        {c.targetTo != null ? fmtMoney(c.targetTo, currency, 0) : "—"}
                         {c.targetFrom != null && c.targetTo != null && c.targetFrom !== c.targetTo && (
-                          <span className="text-[10px] text-[var(--text-3)]"> (was ${c.targetFrom.toFixed(0)})</span>
+                          <span className="text-[10px] text-[var(--text-3)]"> (was {fmtMoney(c.targetFrom, currency, 0)})</span>
                         )}
                       </td>
                     </tr>
@@ -215,7 +220,7 @@ export default function CompanyStats({ stats }: { stats: CompanyStats | null }) 
           <Metric label="Current Ratio" value={r2(s.currentRatio)} />
           <Metric label="Total Cash" value={big(s.totalCash)} />
           <Metric label="Dividend Yield" value={pct(s.dividendYield)} />
-          <Metric label="Dividend Rate" value={s.dividendRate == null ? "—" : `$${s.dividendRate.toFixed(2)}`} />
+          <Metric label="Dividend Rate" value={s.dividendRate == null ? "—" : fmtMoney(s.dividendRate, currency)} />
           <Metric label="Payout Ratio" value={pct(s.payoutRatio)} />
         </Grid>
       </Section>
@@ -261,7 +266,7 @@ function BeatSummary({ surprises }: { surprises: import("@/lib/companyStats").Su
   );
 }
 
-function EstimateRevisions({ estimates }: { estimates: import("@/lib/companyStats").EstimatePeriod[] }) {
+function EstimateRevisions({ estimates, currency = "USD" }: { estimates: import("@/lib/companyStats").EstimatePeriod[]; currency?: string }) {
   const fwd = estimates.filter((e) => ["0q", "+1q", "0y", "+1y"].includes(e.period) && e.epsCurrent != null);
   if (!fwd.length) return null;
   const cy = fwd.find((e) => e.period === "0y") || fwd[0];
@@ -299,7 +304,7 @@ function EstimateRevisions({ estimates }: { estimates: import("@/lib/companyStat
               return (
                 <tr key={e.period} className="border-t border-[var(--divider)]">
                   <td className="py-1 text-left text-[var(--text-2)]">{periodName(e.period)}</td>
-                  <td className="py-1 text-right tabular-nums">{price(e.epsCurrent)}</td>
+                  <td className="py-1 text-right tabular-nums">{fmtMoney(e.epsCurrent, currency)}</td>
                   <td className="py-1 text-right tabular-nums" style={{ color: trend(d30) }}>{deltaPct(d30)}</td>
                   <td className="py-1 text-right tabular-nums" style={{ color: trend(d90) }}>{deltaPct(d90)}</td>
                   <td className="py-1 text-right tabular-nums">
@@ -402,7 +407,7 @@ function RatingBar({ r }: { r: import("@/lib/companyStats").RatingDist }) {
   );
 }
 
-function TargetBar({ low, mean, high, price }: { low: number | null; mean: number | null; high: number | null; price: number | null }) {
+function TargetBar({ low, mean, high, price, currency = "USD" }: { low: number | null; mean: number | null; high: number | null; price: number | null; currency?: string }) {
   if (low == null || high == null || high <= low) return <Empty />;
   const span = high - low;
   const posOf = (v: number | null) => (v == null ? null : Math.min(100, Math.max(0, ((v - low) / span) * 100)));
@@ -419,10 +424,10 @@ function TargetBar({ low, mean, high, price }: { low: number | null; mean: numbe
         )}
       </div>
       <div className="mt-1 flex justify-between text-[10px] text-[var(--text-3)]">
-        <span>low ${low.toFixed(0)}</span>
+        <span>low {fmtMoney(low, currency, 0)}</span>
         <span className="text-[#fbbf24]">▮ price</span>
         <span className="text-[var(--text)]">▮ target</span>
-        <span>high ${high.toFixed(0)}</span>
+        <span>high {fmtMoney(high, currency, 0)}</span>
       </div>
     </div>
   );
