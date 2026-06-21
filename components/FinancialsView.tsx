@@ -465,7 +465,7 @@ export default function FinancialsView({
           </p>
           <DuPontPanel periods={financials.annual} />
           <SegmentsPanel symbol={symbol} />
-          <SharesChart periods={financials[type]} type={type} />
+          <SharesChart symbol={symbol} financials={financials} />
         </>
       )}
     </main>
