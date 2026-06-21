@@ -122,4 +122,17 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "ATZ.TO", "GRGD.TO",
     ],
   },
+  {
+    id: "smi",
+    name: "SMI (Switzerland)",
+    short: "SMI",
+    currency: "CHF",
+    tickers: [
+      "NESN.SW", "ROG.SW", "NOVN.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW", "CFR.SW",
+      "SIKA.SW", "LONN.SW", "ALC.SW", "GIVN.SW", "HOLN.SW", "SREN.SW", "SCMN.SW",
+      "GEBN.SW", "PGHN.SW", "SOON.SW", "LOGN.SW", "KNIN.SW", "UHR.SW",
+      "LISN.SW", "STMN.SW", "SCHP.SW", "SGSN.SW", "BAER.SW", "TEMN.SW", "ADEN.SW",
+      "CLN.SW", "BALN.SW", "VACN.SW", "GALE.SW", "BARN.SW",
+    ],
+  },
 ];
