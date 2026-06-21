@@ -13,6 +13,7 @@ import NewsFeed from "./NewsFeed";
 import StockExtras from "./StockExtras";
 import AskAI from "./AskAI";
 import SeasonalityPanel from "./SeasonalityPanel";
+import ExplainMove from "./ExplainMove";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -193,6 +194,8 @@ export default function StockOverview({
           </button>
         ))}
       </section>
+
+      <ExplainMove symbol={row.symbol} name={row.name} returns={row.returns} />
 
       <section className="mt-5"><SeasonalityPanel daily={daily} /></section>
       <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>
