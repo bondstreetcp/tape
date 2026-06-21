@@ -64,7 +64,7 @@ export default function CompanyStats({ stats, currency = "USD" }: { stats: Compa
       {/* Price target */}
       <Section title="Price Target">
         <TargetBar low={s.targetLow} mean={s.targetMean} high={s.targetHigh} price={s.price} currency={currency} />
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
           <Stat label="Current" value={price(s.price)} />
           <Stat label="Mean" value={price(s.targetMean)} color={trend(upside)} />
           <Stat label="Upside" value={upside == null ? "—" : `${upside >= 0 ? "+" : ""}${upside.toFixed(1)}%`} color={trend(upside)} />
