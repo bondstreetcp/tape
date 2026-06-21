@@ -10,7 +10,8 @@
     "fetch-constituents": "tsx scripts/fetch-constituents.ts",
     "patch-fundamentals": "tsx scripts/patch-fundamentals.ts",
     "refresh-intl": "tsx scripts/build-intl.ts",
-    "refresh-macro": "tsx scripts/build-macro.ts"
+    "refresh-macro": "tsx scripts/build-macro.ts",
+    "refresh-flow": "tsx scripts/build-flow.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",

@@ -42,6 +42,7 @@ export default function AppHeader({
             <NavLink href={`${base}/screener`} label="Screener" />
             <NavLink href={`${base}/heatmap`} label="Heatmap" />
             <NavLink href={`${base}/market`} label="Markets" />
+            <NavLink href={`${base}/flow`} label="Flow" />
             <NavLink href={`${base}/macro`} label="Macro" />
             <NavLink href={`${base}/rotation`} label="Rotation" />
             <NavLink href={`${base}/research`} label="Research" />
