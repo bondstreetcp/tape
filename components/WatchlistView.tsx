@@ -14,6 +14,7 @@ import { useWatchlist } from "@/lib/watchlist";
 import { computeSignals, TONE_BG, TONE_FG } from "@/lib/signals";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
+import WatchlistDigest from "./WatchlistDigest";
 
 export default function WatchlistView({
   universe,
@@ -87,6 +88,8 @@ export default function WatchlistView({
           {summary.below200 > 0 && <span className="rounded px-2 py-1" style={{ background: TONE_BG.down, color: TONE_FG.down }}>{summary.below200} below 200d MA</span>}
         </div>
       )}
+
+      {rows.length > 0 && <WatchlistDigest rows={rows} />}
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center">

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import { applyScreen, fieldDef, type ScreenSpec, type ScreenField } from "@/lib/nlScreen";
+import { useSavedScreens, type SavedScreen } from "@/lib/savedScreens";
 import { currencyPrefix } from "@/lib/format";
 
 const EXAMPLES = [
@@ -34,6 +35,14 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
   const [results, setResults] = useState<StockRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ranQuery, setRanQuery] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+  const { list: saved, save, remove } = useSavedScreens();
+
+  // Re-run a saved screen instantly — the spec is stored, so no AI call needed.
+  const runSaved = (s: SavedScreen) => {
+    setQ(s.query); setRanQuery(s.query); setError(null);
+    setSpec(s.spec); setResults(applyScreen(stocks, s.spec));
+  };
 
   const run = async (query: string) => {
     const text = query.trim();
@@ -85,16 +94,29 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
       </div>
 
       {!spec && !error && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {EXAMPLES.map((ex) => (
-            <button
-              key={ex}
-              onClick={() => { setQ(ex); run(ex); }}
-              className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-[11px] text-[var(--text-3)] transition-colors hover:border-[#a855f7]/50 hover:text-[var(--text)]"
-            >
-              {ex}
-            </button>
-          ))}
+        <div className="mt-2 space-y-2">
+          {saved.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-[var(--text-4)]">Saved:</span>
+              {saved.map((s) => (
+                <span key={s.id} className="inline-flex items-center gap-1 rounded-full border border-[#a855f7]/40 bg-[#a855f7]/10 px-2.5 py-1 text-[11px] text-[#c4b5fd]">
+                  <button onClick={() => runSaved(s)} title={s.query} className="max-w-[170px] truncate hover:text-[var(--text)]">{s.name}</button>
+                  <button onClick={() => remove(s.id)} className="text-[var(--text-4)] hover:text-[#ef4444]" title="Remove saved screen">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {EXAMPLES.map((ex) => (
+              <button
+                key={ex}
+                onClick={() => { setQ(ex); run(ex); }}
+                className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-[11px] text-[var(--text-3)] transition-colors hover:border-[#a855f7]/50 hover:text-[var(--text)]"
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -104,6 +126,14 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
         <div className="mt-3">
           <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="text-[var(--text-3)]">{spec.interpretation}</span>
+            {ranQuery && (
+              <button
+                onClick={() => { save(ranQuery, ranQuery, spec); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1600); }}
+                className="ml-auto shrink-0 rounded border border-[#a855f7]/40 px-2 py-0.5 text-[11px] text-[#c4b5fd] transition-colors hover:bg-[#a855f7]/15"
+              >
+                {savedFlash ? "✓ Saved" : "💾 Save screen"}
+              </button>
+            )}
           </div>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {(spec.filters || []).map((f, i) => {

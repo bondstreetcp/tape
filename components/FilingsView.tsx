@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import RedlineSection from "./Redline";
 import TranscriptIntel from "./TranscriptIntel";
+import EarningsCallAI from "./EarningsCallAI";
 
 interface Filing {
   form: string;
@@ -100,6 +101,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
 
   return (
     <div className="space-y-4">
+      <EarningsCallAI symbol={symbol} name={name} />
       <TranscriptLinks symbol={symbol} name={name} />
       <TranscriptIntel symbol={symbol} name={name} />
       <RedlineSection symbol={symbol} name={name} />
