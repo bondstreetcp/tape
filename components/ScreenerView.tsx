@@ -10,6 +10,7 @@ import { trendColor } from "@/lib/color";
 import { SECTORS, ETF_TO_SECTOR } from "@/lib/sectors";
 import { isNearHigh, isNearLow } from "@/lib/compute";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
+import NlScreener from "./NlScreener";
 import { useWatchlist } from "@/lib/watchlist";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -206,6 +207,8 @@ export default function ScreenerView({
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <NlScreener universe={universe} stocks={stocks} currency={currency} />
 
       {/* controls */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
