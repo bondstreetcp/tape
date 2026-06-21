@@ -37,6 +37,7 @@ const GROUPS: { name: string; kind: AssetKind; syms: [string, string][] }[] = [
       ["^GDAXI", "DAX"],
       ["^FCHI", "CAC 40"],
       ["^AEX", "AEX (NL)"],
+      ["^SSMI", "SMI (CH)"],
       ["^STOXX50E", "Euro Stoxx 50"],
       ["^N225", "Nikkei 225"],
       ["^KS11", "KOSPI"],

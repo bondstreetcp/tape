@@ -56,6 +56,15 @@ jobs:
         run: npm run refresh-flow
         continue-on-error: true
 
+      # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
+      # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
+      # CSV still works but caps at ~3yr.
+      - name: Refresh macro (FRED)
+        run: npm run refresh-macro
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        continue-on-error: true
+
       - name: Commit & push if data changed
         run: |
           git config user.name "github-actions[bot]"

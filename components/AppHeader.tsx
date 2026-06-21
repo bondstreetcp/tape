@@ -55,6 +55,15 @@ export default function AppHeader({
         </div>
         <div className="flex items-center gap-1.5">
           <SearchBox universe={universe} stocks={stocks} />
+          <a
+            href="/guide.html"
+            target="_blank"
+            rel="noreferrer"
+            title="New here? Open the walkthrough guide"
+            className="hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-sm text-[var(--text-3)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text)] sm:inline-flex"
+          >
+            <span aria-hidden className="text-[13px] text-[var(--text-4)]">📖</span> Guide
+          </a>
           <ThemeToggle />
         </div>
       </div>
