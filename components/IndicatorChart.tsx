@@ -179,6 +179,31 @@ export default function IndicatorChart({
     return out;
   }, [source, windowStart, closes, enabled]);
 
+  // X-axis: on the 1W intraday view, place one tick per trading day — otherwise the
+  // many 15-min bars all format to the same weekday and repeat ("Mon Mon Mon Tue …").
+  const xTicks = useMemo(() => {
+    if (tf !== "1w") return undefined;
+    const seen = new Set<string>();
+    const ticks: number[] = [];
+    for (const row of priceData) {
+      const t = row.t as number;
+      const d = new Date(t);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!seen.has(key)) { seen.add(key); ticks.push(t); }
+    }
+    return ticks.length ? ticks : undefined;
+  }, [priceData, tf]);
+
+  // Y-axis: use enough decimals that ticks stay distinct on a narrow range — a $44–46
+  // ETF with 0 decimals rounds every tick to "$45".
+  const priceDecimals = useMemo(() => {
+    let lo = Infinity, hi = -Infinity;
+    for (const p of points) { if (p.c < lo) lo = p.c; if (p.c > hi) hi = p.c; }
+    const range = hi - lo;
+    if (!Number.isFinite(range) || range <= 0) return 2;
+    return range >= 50 ? 0 : range >= 8 ? 1 : 2;
+  }, [points]);
+
   const color = up ? "#22c55e" : "#ef4444";
   const fmt = tickFmt(tf);
   const xAxis = (
@@ -187,10 +212,11 @@ export default function IndicatorChart({
       type="number"
       scale="time"
       domain={["dataMin", "dataMax"]}
+      ticks={xTicks}
       tickFormatter={fmt}
       tick={{ fill: "var(--text-3)", fontSize: 11 }}
       stroke="var(--border)"
-      minTickGap={48}
+      minTickGap={xTicks ? 12 : 48}
     />
   );
 
@@ -239,8 +265,8 @@ export default function IndicatorChart({
                 domain={["auto", "auto"]}
                 tick={{ fill: "var(--text-3)", fontSize: 11 }}
                 stroke="var(--border)"
-                tickFormatter={(v: number) => fmtMoney(v, currency, 0)}
-                width={48}
+                tickFormatter={(v: number) => fmtMoney(v, currency, priceDecimals)}
+                width={52}
               />
               <Tooltip content={<PriceTip tf={tf} series={lineSeries} currency={currency} />} isAnimationActive={false} />
               <Area
