@@ -39,12 +39,14 @@ const LIST_SECTIONS = new Set([
 ]);
 
 const NOISE = [
-  /^powered by reuters$/i, /^morning news call$/i, /^the day ahead$/i, /^©/, /thomson reuters/i,
+  /^powered by reuters$/i, /^morning news call/i, /^the day ahead/i, /^©/, /thomson reuters/i,
   /all rights reserved/i, /^https?:\/\//i, /^\d{1,3}$/, /^click here/i, /reuters\.com/i,
   /^for .{0,40}\bclick\b/i, /^to .{0,40}\bunsubscribe\b/i, /^\(.*Reuters.*\)$/i,
 ];
 
 const DATE_RE = /((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+[A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/;
+// A line ends a sentence when it closes with terminal punctuation or a closing quote.
+const ENDS_SENTENCE = /[.?!:”"']$/;
 
 function isHeader(l: string): boolean {
   const u = l.toUpperCase();
@@ -53,70 +55,107 @@ function isHeader(l: string): boolean {
   return l === u && /^[A-Z][A-Z &'’.\/()-]{5,40}$/.test(l) && l.split(" ").length <= 5 && !/\d/.test(l);
 }
 
-// Group a run of lines into headline + paragraph blocks (a line that follows a
-// completed sentence and isn't one itself reads as a new headline).
-function groupProse(lines: string[], dropHeaders: boolean): BriefBlock[] {
+// Group a section's lines into headline + paragraph blocks. PDF text arrives as
+// hard-wrapped physical lines, so the bold "headline" must come from real structure
+// (a bullet entry, or a short standalone title line) — never from a paragraph's first
+// wrapped line, which lacks end punctuation only because it wrapped mid-sentence.
+function groupSection(lines: string[], wrapWidth: number): BriefBlock[] {
+  const bullets = lines.filter((l) => /^[•▪·‣]/.test(l)).length;
+  return bullets >= 2 ? groupBulleted(lines) : groupProse(lines, wrapWidth);
+}
+
+// Bulleted sections (e.g. STOCKS TO WATCH "• Company: writeup"): one block per
+// bullet, with the company/lead name (up to the first colon) as the bold headline
+// and the whole reflowed writeup as the body.
+function groupBulleted(lines: string[]): BriefBlock[] {
   const blocks: BriefBlock[] = [];
-  let prevEnded = true;
+  let cur: string | null = null;
+  const flush = () => {
+    if (cur == null) return;
+    const raw = cur.replace(/\s+/g, " ").trim();
+    const m = raw.match(/^(.{2,60}?):\s+(.+)$/);
+    // Only treat the pre-colon text as a name when it reads like one (short, no
+    // sentence punctuation); otherwise keep the whole entry as plain body.
+    if (m && m[1].split(" ").length <= 9 && !/[.?!]/.test(m[1])) blocks.push({ headline: m[1].trim(), text: m[2].trim() });
+    else if (raw) blocks.push({ text: raw });
+    cur = null;
+  };
   for (const l of lines) {
-    if (dropHeaders && isHeader(l)) { prevEnded = true; continue; }
-    const endsSentence = /[.?!:”"']$/.test(l);
-    const looksHeadline = prevEnded && !endsSentence && l.length <= 160;
-    if (looksHeadline || blocks.length === 0) blocks.push({ headline: l, text: "" });
-    else {
-      const b = blocks[blocks.length - 1];
-      b.text = b.text ? `${b.text} ${l}` : l;
+    if (/^[•▪·‣]/.test(l)) { flush(); cur = l.replace(/^[•▪·‣]\s*/, ""); }
+    else cur = cur != null ? `${cur} ${l}` : l;
+  }
+  flush();
+  return blocks;
+}
+
+// Prose sections (TOP NEWS, ANALYSIS, BEFORE THE BELL): titled stories become
+// {headline, text}; plain market-color prose becomes text-only blocks (no bold).
+function groupProse(lines: string[], wrapWidth: number): BriefBlock[] {
+  const headlineMax = Math.max(60, wrapWidth - 18);
+  const blocks: BriefBlock[] = [];
+  let cur: BriefBlock | null = null;
+  let paraOpen = false; // inside a paragraph that may still take more lines
+  for (const l of lines) {
+    const endsSentence = ENDS_SENTENCE.test(l);
+    const full = l.length > headlineMax; // line ran to the column edge → it wrapped
+    // A headline is a short standalone line (it didn't fill the column, so it ended
+    // because the title ended) sitting between finished paragraphs. The width test is
+    // what stops a paragraph's wrapped first line — which also lacks end punctuation —
+    // from being mistaken for a headline.
+    if (!paraOpen && !endsSentence && !full) {
+      cur = { headline: l, text: "" };
+      blocks.push(cur);
+      paraOpen = true;
+      continue;
     }
-    prevEnded = endsSentence;
+    if (!cur || !paraOpen) { cur = { text: l }; blocks.push(cur); }
+    else cur.text = cur.text ? `${cur.text} ${l}` : l;
+    paraOpen = full || !endsSentence; // closes on a short, sentence-final line
   }
   return blocks.filter((b) => b.headline || b.text);
 }
 
 function parse(text: string): { date: string | null; sections: BriefSection[] } {
-  const rawLines = text.split("\n").map((l) => l.replace(/ /g, " ").trim());
+  const rawLines = text.split("\n").map((l) => l.replace(/ /g, " ").trim());
   let date: string | null = null;
   for (const l of rawLines) {
     const m = l.match(DATE_RE);
     if (m) { date = m[1].replace(/\s+/g, " "); break; }
   }
   const lines = rawLines.filter((l) => l && !NOISE.some((re) => re.test(l)));
+  const wrapWidth = lines.reduce((m, l) => Math.max(m, l.length), 80);
 
-  const sections: BriefSection[] = [];
-  let cur: BriefSection | null = null;
-  let prevEnded = true;
+  // Split into sections at header lines, collecting each section's raw lines.
+  const raw: { heading: string; kind: "prose" | "list"; lines: string[] }[] = [];
+  let cur: (typeof raw)[number] | null = null;
   for (const l of lines) {
     if (isHeader(l)) {
       const heading = l.replace(/\s+/g, " ");
       const kind: "prose" | "list" = LIST_SECTIONS.has(heading.toUpperCase()) ? "list" : "prose";
-      cur = kind === "list" ? { heading, kind, lines: [] } : { heading, kind, blocks: [] };
-      sections.push(cur);
-      prevEnded = true;
+      cur = { heading, kind, lines: [] };
+      raw.push(cur);
       continue;
     }
-    if (!cur) continue; // skip preamble before the first section (masthead/date)
-    if (cur.kind === "list") { cur.lines!.push(l); continue; }
-
-    const endsSentence = /[.?!:”"']$/.test(l);
-    const looksHeadline = prevEnded && !endsSentence && l.length <= 160;
-    if (looksHeadline || cur.blocks!.length === 0) {
-      cur.blocks!.push({ headline: l, text: "" });
-    } else {
-      const b = cur.blocks![cur.blocks!.length - 1];
-      b.text = b.text ? `${b.text} ${l}` : l;
-    }
-    prevEnded = endsSentence;
+    if (cur) cur.lines.push(l); // skip preamble before the first section (masthead/date)
   }
 
-  const cleaned = sections.filter((s) => (s.kind === "list" ? s.lines!.length : s.blocks!.length));
-  // Multi-column PDFs (e.g. The Day Ahead) don't linearise into clean sections —
-  // a runaway "list" section means the columns ran together and headings no longer
-  // mark real breaks. Reflow the whole body into readable story blocks instead of
-  // mislabelling it (still the full text, just not falsely sectioned).
-  if (cleaned.some((s) => s.kind === "list" && s.lines!.length > 50)) {
-    const blocks = groupProse(lines, true);
+  const sections: BriefSection[] = raw
+    .filter((s) => s.lines.length)
+    .map((s) =>
+      s.kind === "list"
+        ? { heading: s.heading, kind: "list" as const, lines: s.lines }
+        : { heading: s.heading, kind: "prose" as const, blocks: groupSection(s.lines, wrapWidth) },
+    )
+    .filter((s) => (s.kind === "list" ? s.lines!.length : s.blocks!.length));
+
+  // Multi-column PDFs (e.g. The Day Ahead) don't linearise into clean sections — a
+  // runaway "list" section means the columns ran together and headings no longer mark
+  // real breaks. Reflow the whole body into readable story blocks instead.
+  if (sections.some((s) => s.kind === "list" && s.lines!.length > 50)) {
+    const blocks = groupProse(lines.filter((l) => !isHeader(l)), wrapWidth);
     if (blocks.length) return { date, sections: [{ heading: "Briefing", kind: "prose", blocks }] };
   }
-  return { date, sections: cleaned };
+  return { date, sections };
 }
 
 async function fetchOne(src: (typeof SOURCES)[number]): Promise<Briefing | null> {
