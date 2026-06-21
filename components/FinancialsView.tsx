@@ -167,27 +167,19 @@ export default function FinancialsView({
   const [stmt, setStmt] = useState<StmtKey>("income");
   const currency = currencyOf(universe);
 
-  // Active tab: ?tab= deep-link wins, else the last tab you used (so switching
-  // companies keeps you on the same view — e.g. compare Statements across names).
+  // A ticker opens on Overview by default. Only an explicit ?tab= deep-link selects a
+  // different tab (we no longer carry the last-used tab across tickers via localStorage,
+  // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
     const valid = ["overview", "statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"];
     const t = new URLSearchParams(window.location.search).get("tab");
-    let next = t && valid.includes(t) ? t : null;
-    if (!next) {
-      try {
-        const saved = localStorage.getItem("fin.tab");
-        if (saved && valid.includes(saved)) next = saved;
-      } catch {}
-    }
-    if (next && next !== "overview") setView(next as View);
+    if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
   const changeView = (v: View) => {
     setView(v);
-    try {
-      localStorage.setItem("fin.tab", v);
-    } catch {}
     const u = new URL(window.location.href);
-    u.searchParams.set("tab", v);
+    if (v === "overview") u.searchParams.delete("tab");
+    else u.searchParams.set("tab", v);
     window.history.replaceState(null, "", u);
   };
 
