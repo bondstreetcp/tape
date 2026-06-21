@@ -354,10 +354,13 @@ async function main() {
     if (eq && typeof eq.regularMarketChangePercent === "number")
       r["1d"] = eq.regularMarketChangePercent;
     etfReturns.set(etf, r);
-    await fs.writeFile(
-      path.join(SYMBOL_DIR, symbolFile(etf)),
-      JSON.stringify({ daily: toXY(daily), intraday: toXY(intraday) }),
-    );
+    // Don't overwrite a good series with an empty fetch (rate-limit at the tail of a
+    // big run) — leaving the prior file keeps the sector's returns from going blank.
+    if (daily.length > 0)
+      await fs.writeFile(
+        path.join(SYMBOL_DIR, symbolFile(etf)),
+        JSON.stringify({ daily: toXY(daily), intraday: toXY(intraday) }),
+      );
   }
 
   // Carry trend fundamentals over from the previous snapshots — they're refreshed
