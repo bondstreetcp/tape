@@ -14,6 +14,7 @@ import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
+import TickerResearch from "./TickerResearch";
 import SharesChart from "./SharesChart";
 import OptionsChain from "./OptionsChain";
 import DcfPanel from "./DcfPanel";
@@ -161,7 +162,7 @@ export default function FinancialsView({
   intraday: SeriesPoint[];
   generatedAt: string;
 }) {
-  type View = "overview" | "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "options" | "docsearch";
+  type View = "overview" | "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "docsearch";
   const [view, setView] = useState<View>("overview");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
@@ -171,7 +172,7 @@ export default function FinancialsView({
   // different tab (we no longer carry the last-used tab across tickers via localStorage,
   // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
-    const valid = ["overview", "statements", "stats", "peers", "ownership", "profile", "filings", "options", "docsearch"];
+    const valid = ["overview", "statements", "stats", "peers", "ownership", "profile", "filings", "research", "options", "docsearch"];
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
@@ -302,6 +303,7 @@ export default function FinancialsView({
             { key: "peers", label: "Peers" },
             { key: "ownership", label: "Ownership" },
             { key: "filings", label: "Filings & Calls" },
+            { key: "research", label: "Research" },
             { key: "docsearch", label: "Doc Search" },
             { key: "options", label: "Options" },
             { key: "profile", label: "Profile" },
@@ -335,6 +337,8 @@ export default function FinancialsView({
         <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
       ) : view === "filings" ? (
         <FilingsView symbol={symbol} name={name} />
+      ) : view === "research" ? (
+        <TickerResearch symbol={symbol} name={name} />
       ) : view === "docsearch" ? (
         <DocSearch ticker={symbol} name={name} />
       ) : view === "options" ? (

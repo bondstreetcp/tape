@@ -98,15 +98,28 @@ export async function synthesize(docs: StoredDoc[]): Promise<string | null> {
   return out || null;
 }
 
-/** Free-text Q&A over the corpus (RAG-lite: at this scale the digested notes fit in context,
- *  so no vector store is needed — pgvector becomes worthwhile only for a much larger corpus). */
-export async function askCorpus(docs: StoredDoc[], question: string): Promise<string | null> {
+/** Full-text Q&A over the corpus: grounds the answer in the actual report PROSE (not just
+ *  the extracted summary), so it can surface specifics the structured fields don't capture.
+ *  RAG-lite — at a few notes per ticker the full text fits in context (capped, newest-first);
+ *  a larger corpus would chunk + retrieve via pgvector. Falls back to a doc's digest if its
+ *  full text wasn't stored. */
+export async function searchCorpus(docs: StoredDoc[], question: string): Promise<string | null> {
   const KEY = process.env.GEMINI_API_KEY;
   if (!KEY || docs.length === 0) return null;
   const ticker = docs[0].ticker;
+  let budget = 170_000; // ~43k tokens of report text across the ticker's notes
+  const blocks: string[] = [];
+  for (const d of docs) { // newest-first
+    const body = (d.text && d.text.length > 200) ? d.text.slice(0, 55_000) : digest([d]);
+    if (budget - body.length < 0 && blocks.length) break;
+    blocks.push(`=== ${d.source} — ${d.publishDate} — ${d.title} ===\n${body}`);
+    budget -= body.length;
+  }
   const prompt =
-    `Answer the question using ONLY these research notes on ${ticker}. Cite the source firm(s) for each claim. ` +
-    `If the notes don't address it, say so.\n\nQuestion: ${question}\n\n=== NOTES ===\n${digest(docs)}`;
+    `You are a buy-side analyst answering a question using ONLY the ${ticker} research reports below. ` +
+    `Ground every claim in the reports and attribute it to the source firm; quote a short phrase where it sharpens the point. ` +
+    `Synthesize across reports where they agree or disagree. If the reports don't address the question, say so plainly.\n\n` +
+    `Question: ${question}\n\n${blocks.join("\n\n")}`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

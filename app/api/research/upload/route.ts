@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const id = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16);
     const doc = await extractResearch(text);
     if (!doc) return NextResponse.json({ error: "extraction failed" });
-    const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null };
+    const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null, text };
     saveDoc(stored);
     return NextResponse.json({ ok: true, doc: stored });
   } catch (e: any) {

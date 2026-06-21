@@ -11,5 +11,8 @@ export async function GET(req: NextRequest) {
   const ticker = req.nextUrl.searchParams.get("ticker")?.toUpperCase() || null;
   if (!ticker) return NextResponse.json({ available: true, index: corpusIndex() });
   const docs = listDocs(ticker);
-  return NextResponse.json({ available: true, ticker, docs, consensus: consensus(docs) });
+  // strip the full report text from the list payload — it's large and licensed; the
+  // server keeps it for grounded search.
+  const lite = docs.map(({ text, ...rest }) => rest);
+  return NextResponse.json({ available: true, ticker, docs: lite, consensus: consensus(docs) });
 }

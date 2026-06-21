@@ -51,7 +51,9 @@ export interface ResearchDoc {
   entitlement: string | null;
 }
 
-/** A stored document = the extracted fields + provenance + retrieval chunks. */
+/** A stored document = the extracted fields + provenance + the full report text used to
+ *  ground LLM search. `text` is server-side only — it is stripped before the doc list is
+ *  sent to the client (it's large, and the prose is licensed). */
 export interface StoredDoc extends ResearchDoc {
   id: string;            // content hash of the source file
   fileName: string;
@@ -59,6 +61,7 @@ export interface StoredDoc extends ResearchDoc {
   charCount: number;
   ingestedAt: string;    // ISO
   blobKey: string | null; // where the raw PDF lives (object store key) — null in metadata-only mode
+  text?: string;         // full extracted report text (grounds full-text LLM search)
 }
 
 export interface DocChunk {

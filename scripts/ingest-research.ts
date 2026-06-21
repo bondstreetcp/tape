@@ -46,7 +46,7 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
       const id = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16);
       const doc = await extractResearch(text);
       if (!doc) { console.log("  extract failed:", path.basename(p)); continue; }
-      const stored = { ...doc, id, fileName: path.basename(p), pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null };
+      const stored = { ...doc, id, fileName: path.basename(p), pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null, text };
       fs.writeFileSync(path.join(OUT, `${id}.json`), JSON.stringify(stored, null, 2));
       const pt = doc.priceTarget != null ? `$${doc.priceTarget}` : "—";
       const ptp = doc.priceTargetPrior != null ? `$${doc.priceTargetPrior}` : "—";
