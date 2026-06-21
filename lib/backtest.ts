@@ -14,8 +14,8 @@ export interface BacktestMatrix {
   closes: (number | null)[][]; // [symbolIdx][monthIdx]
 }
 
-export type StrategyKey = "momentum" | "trend" | "lowvol" | "equal";
-export interface StrategyConfig { strategy: StrategyKey; topN?: number; lookback?: number }
+export type StrategyKey = "momentum" | "trend" | "lowvol" | "equal" | "screen";
+export interface StrategyConfig { strategy: StrategyKey; topN?: number; lookback?: number; holdings?: string[]; screenLabel?: string }
 
 export interface BacktestResult {
   dates: number[];
@@ -35,6 +35,7 @@ const STRATEGY_LABELS: Record<StrategyKey, string> = {
   trend: "Trend (above 10-month average)",
   lowvol: "Low volatility",
   equal: "Equal-weight all",
+  screen: "Screen basket (equal-weight)",
 };
 export const strategyLabel = (k: StrategyKey) => STRATEGY_LABELS[k];
 
@@ -94,6 +95,12 @@ export function runStrategy(mx: BacktestMatrix, cfg: StrategyConfig): BacktestRe
     } else if (cfg.strategy === "equal") {
       picks = [];
       for (let i = 0; i < N; i++) if (ret(i, j) != null) picks.push(i);
+    } else if (cfg.strategy === "screen") {
+      // Hold the screen's passing names, equal-weight. The set is the CURRENT screen
+      // (we don't have point-in-time fundamentals) → look-ahead bias, flagged in the UI.
+      const set = new Set(cfg.holdings ?? []);
+      picks = [];
+      for (let i = 0; i < N; i++) if (set.has(mx.symbols[i]) && ret(i, j) != null) picks.push(i);
     } else {
       const scored: { i: number; s: number }[] = [];
       for (let i = 0; i < N; i++) { const s = score(i, j - 1); if (s != null) scored.push({ i, s }); }

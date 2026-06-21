@@ -18,6 +18,10 @@ export interface Fundamentals {
   roe: number | null;
   netDebtEbitda: number | null;
   currentRatio: number | null;
+  // deep-value / quality screen metrics (computed in patch-fundamentals-deep)
+  ncav: number | null; // Graham net current asset value = current assets − total liabilities ($)
+  fScore: number | null; // Piotroski F-score, 0–9 (higher = stronger fundamental momentum)
+  shareholderYield: number | null; // Meb Faber: dividend + net buyback + net debt-paydown yield (fraction)
   asOf: string | null; // latest FY period end
 }
 
