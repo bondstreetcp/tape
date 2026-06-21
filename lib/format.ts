@@ -17,6 +17,7 @@ const CURRENCIES: Record<string, { sym: string; suffix?: boolean; dec?: number; 
   CAD: { sym: "C$" },
   CHF: { sym: "CHF " },
   HKD: { sym: "HK$" },
+  MXN: { sym: "Mex$" },
 };
 const curOf = (c?: string) => CURRENCIES[c || "USD"] ?? CURRENCIES.USD;
 
