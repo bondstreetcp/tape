@@ -55,7 +55,7 @@ const CURVE: [string, string, number][] = [
 
 export interface CurvePoint { label: string; mat: number; now: number | null; monthAgo: number | null; yearAgo: number | null }
 export interface MacroInd { key: string; label: string; value: number | null; unit: string; asOf: string | null; group: string; seriesId?: string; history?: [string, number][] }
-export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null; releases?: Record<string, ReleaseData> }
+export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null; releases?: Record<string, ReleaseData>; creditSeries?: { hy: [string, number][]; ig: [string, number][] } }
 
 export async function getMacro(): Promise<Macro> {
   const now = Date.now();
@@ -122,6 +122,18 @@ export async function getMacro(): Promise<Macro> {
     { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit", seriesId: "BAMLC0A0CM", history: ig.history },
   ];
 
+  // Full daily IG/HY OAS series (5yr) for the rates page's windowed credit charts —
+  // the indicator `history` is downsampled to ~90 pts, too coarse for a 1-month view.
+  const creditStart = new Date(now - FIVEY).toISOString().slice(0, 10);
+  const [hyObs, igObs] = await Promise.all([
+    fetchSeries("BAMLH0A0HYM2", creditStart),
+    fetchSeries("BAMLC0A0CM", creditStart),
+  ]);
+  const creditSeries = {
+    hy: hyObs.map((o) => [o.date, o.value] as [string, number]),
+    ig: igObs.map((o) => [o.date, o.value] as [string, number]),
+  };
+
   // Atlanta Fed GDPNow — a running estimate of the current quarter's real GDP
   // growth, i.e. the market's working number ahead of the next GDP release.
   let gdpNow: { value: number; asOf: string } | null = null;
@@ -166,5 +178,5 @@ export async function getMacro(): Promise<Macro> {
   for (const r of releaseList) if (r) releases[r.key] = r;
   if (releases.gdp && gdpNow) releases.gdp.nowcast = gdpNow.value;
 
-  return { curve, indicators, asOf: new Date(now).toISOString(), gdpNow, releases };
+  return { curve, indicators, asOf: new Date(now).toISOString(), gdpNow, releases, creditSeries };
 }

@@ -9,5 +9,5 @@ export default async function RatesPage({ params }: { params: Promise<{ universe
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   const macro = await getMacroCached();
-  return <FixedIncomeView universe={universe} curve={macro.curve} indicators={macro.indicators} asOf={macro.asOf} />;
+  return <FixedIncomeView universe={universe} curve={macro.curve} indicators={macro.indicators} asOf={macro.asOf} creditSeries={macro.creditSeries} />;
 }
