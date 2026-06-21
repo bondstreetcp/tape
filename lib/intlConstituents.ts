@@ -148,6 +148,7 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "0688.HK", "0762.HK", "0823.HK", "0960.HK", "1038.HK", "1093.HK", "1109.HK",
       "1113.HK", "1177.HK", "1211.HK", "1928.HK", "2020.HK", "2269.HK", "2313.HK",
       "2331.HK", "2382.HK", "2688.HK", "9618.HK", "9999.HK", "9888.HK", "1024.HK",
+      "6086.HK", // Fangzhou Jianke (online healthcare) — added on request; not a Hang Seng index member
     ],
   },
   {
