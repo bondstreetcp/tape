@@ -11,6 +11,7 @@ import { trendColor } from "@/lib/color";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { useWatchlist } from "@/lib/watchlist";
+import { useLiveQuotes } from "@/lib/useLiveQuotes";
 import { computeSignals, TONE_BG, TONE_FG } from "@/lib/signals";
 import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -47,6 +48,21 @@ export default function WatchlistView({
 
   const missing = list.length - rows.length;
 
+  // Live prices (Yahoo), refreshed on an interval — overrides the nightly snapshot.
+  const liveSyms = useMemo(() => rows.map((r) => r.symbol), [rows]);
+  const { quotes: live, updatedAt } = useLiveQuotes(liveSyms);
+  const sample = Object.values(live).find((q) => q.state);
+  const isLive = sample?.state === "REGULAR";
+  const stateLabel = !sample
+    ? ""
+    : sample.state === "REGULAR" ? "Live"
+    : sample.state.startsWith("PRE") ? "Pre-market"
+    : sample.state.startsWith("POST") ? "After hours"
+    : "Market closed";
+  const dispPrice = (s: StockRow) => live[s.symbol]?.price ?? s.price;
+  const dispChg = (s: StockRow) =>
+    tf === "1d" && live[s.symbol]?.changePct != null ? (live[s.symbol]!.changePct as number) : s.returns[tf];
+
   const summary = useMemo(() => {
     let high = 0, low = 0, below200 = 0, near200 = 0;
     for (const s of rows) {
@@ -74,6 +90,12 @@ export default function WatchlistView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {rows.length > 0 && stateLabel && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--text-3)]" title={updatedAt ? `Live prices · updated ${new Date(updatedAt).toLocaleTimeString()}` : "Live prices"}>
+              <span className={"inline-block h-2 w-2 rounded-full " + (isLive ? "animate-pulse bg-[#22c55e]" : "bg-[var(--text-4)]")} />
+              {stateLabel}
+            </span>
+          )}
           <UniverseSwitcher current={universe} />
           <TimeframeSelector value={tf} onChange={setTf} />
         </div>
@@ -141,8 +163,8 @@ export default function WatchlistView({
                   <td className="px-3 py-1.5 text-left font-mono font-semibold">{s.symbol}</td>
                   <td className="max-w-[16rem] truncate px-3 py-1.5 text-left text-[var(--text-2)]">{s.name}</td>
                   <td className="px-3 py-1.5 text-left text-[var(--text-3)]">{ETF_TO_SECTOR[s.etf]?.name ?? s.sector}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">${fmtPrice(s.price)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.returns[tf]) }}>{fmtPct(s.returns[tf], 1)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">${fmtPrice(dispPrice(s))}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(dispChg(s)) }}>{fmtPct(dispChg(s), 1)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.pctFromHigh) }}>{fmtPct(s.pctFromHigh, 1)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">+{s.pctFromLow.toFixed(1)}%</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{fmtMarketCap(s.marketCap)}</td>
