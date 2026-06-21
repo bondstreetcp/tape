@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import OptionsStrategy from "./OptionsStrategy";
+
+const isHot = (o: Opt | null | undefined) => !!o && o.vol != null && o.oi != null && o.vol > Math.max(o.oi, 300);
 
 interface Opt {
   strike: number;
@@ -129,6 +132,8 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
         </button>
       </div>
 
+      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} />
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="mb-1 flex items-center justify-between text-xs">
@@ -164,7 +169,7 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
             {rows.map((r) => (
               <tr key={r.strike} className={"border-b border-[var(--divider)] " + (r.isAtm ? "bg-[var(--surface-3)]" : "")}>
                 <Cell v={big(r.call?.oi ?? null)} itm={r.call?.itm} />
-                <Cell v={big(r.call?.vol ?? null)} itm={r.call?.itm} />
+                <Cell v={big(r.call?.vol ?? null)} itm={r.call?.itm} hot={isHot(r.call)} />
                 <Cell v={iv(r.call?.iv ?? null)} itm={r.call?.itm} />
                 <Cell v={px(r.call?.bid ?? null)} itm={r.call?.itm} />
                 <Cell v={px(r.call?.ask ?? null)} itm={r.call?.itm} />
@@ -176,7 +181,7 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
                 <Cell v={px(r.put?.bid ?? null)} itm={r.put?.itm} />
                 <Cell v={px(r.put?.ask ?? null)} itm={r.put?.itm} />
                 <Cell v={iv(r.put?.iv ?? null)} itm={r.put?.itm} />
-                <Cell v={big(r.put?.vol ?? null)} itm={r.put?.itm} />
+                <Cell v={big(r.put?.vol ?? null)} itm={r.put?.itm} hot={isHot(r.put)} />
                 <Cell v={big(r.put?.oi ?? null)} itm={r.put?.itm} />
               </tr>
             ))}
@@ -184,17 +189,18 @@ export default function OptionsChain({ symbol }: { symbol: string }) {
         </table>
       </div>
       <p className="text-[11px] text-[var(--text-4)]">
-        In-the-money contracts shaded · ATM row highlighted · OI = open interest · IV = implied volatility. Quotes via Yahoo (may be delayed).
+        In-the-money contracts shaded · ATM row highlighted · <span className="font-semibold text-[#f59e0b]">amber volume</span> = unusual (today&apos;s volume &gt; open interest) · OI = open interest · IV = implied volatility. Quotes via Yahoo (may be delayed).
       </p>
     </div>
   );
 }
 
-function Cell({ v, itm, bold }: { v: string; itm?: boolean; bold?: boolean }) {
+function Cell({ v, itm, bold, hot }: { v: string; itm?: boolean; bold?: boolean; hot?: boolean }) {
   return (
     <td
-      className={"px-2 py-1 text-right tabular-nums " + (bold ? "font-semibold text-[var(--text)] " : "text-[var(--text-2)] ")}
-      style={itm ? { background: "var(--surface-hover)" } : undefined}
+      title={hot ? "Unusual volume — today's volume exceeds total open interest" : undefined}
+      className={"px-2 py-1 text-right tabular-nums " + (hot ? "font-semibold text-[#f59e0b] " : bold ? "font-semibold text-[var(--text)] " : "text-[var(--text-2)] ")}
+      style={hot ? { background: "rgba(245,158,11,0.15)" } : itm ? { background: "var(--surface-hover)" } : undefined}
     >
       {v}
     </td>
