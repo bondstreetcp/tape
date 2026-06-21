@@ -111,7 +111,11 @@ export default function IndicatorChart({
   // Indicators are computed over the FULL series, then sliced to the visible
   // window — so the 50/150/200-day SMAs are warmed up by the history that
   // precedes the window instead of starting blank inside it.
-  const source = tf === "1d" || tf === "1w" ? intraday : daily;
+  // The day-based moving averages only make sense on the DAILY series — over the
+  // intraday (1D/1W) bars a "50-day" SMA becomes a misleading 50-bar (~2-day)
+  // average, so the MA overlays are disabled on those timeframes (see the chips).
+  const intradayTf = tf === "1d" || tf === "1w";
+  const source = intradayTf ? intraday : daily;
   const closes = useMemo(() => source.map((p) => p.c), [source]);
 
   const windowStart = useMemo(() => {
@@ -141,7 +145,7 @@ export default function IndicatorChart({
     const cols: Record<string, (number | null)[]> = {};
     const lineSeries: { key: string; color: string; dash: boolean }[] = [];
     for (const o of OVERLAYS) {
-      if (!enabled.has(o.id)) continue;
+      if (intradayTf || !enabled.has(o.id)) continue;
       const res = overlayCloses(o.id, closes);
       for (const [key, data, color, dash] of res.keys) {
         cols[key] = data as (number | null)[];
@@ -197,9 +201,11 @@ export default function IndicatorChart({
         {OVERLAYS.map((o) => (
           <Chip
             key={o.id}
-            active={enabled.has(o.id)}
+            active={enabled.has(o.id) && !intradayTf}
             color={o.color}
-            onClick={() => toggle(o.id)}
+            disabled={intradayTf}
+            title={intradayTf ? "Moving averages apply to the daily timeframes — switch to 3M or longer." : undefined}
+            onClick={() => { if (!intradayTf) toggle(o.id); }}
           >
             {o.label}
           </Chip>
@@ -357,17 +363,23 @@ function Chip({
   color,
   onClick,
   children,
+  disabled,
+  title,
 }: {
   active: boolean;
   color?: string;
   onClick: () => void;
   children: React.ReactNode;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
+      title={title}
       className={
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors " +
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 " +
         (active
           ? "border-[var(--border-strong)] bg-[var(--surface-hover)] text-[var(--text)]"
           : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
