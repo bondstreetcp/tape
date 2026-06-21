@@ -90,7 +90,7 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "REL.L",
       "DGE.L", "BATS.L", "GLEN.L", "NG.L", "LSEG.L", "BARC.L", "LLOY.L", "VOD.L",
       "BA.L", "NWG.L", "PRU.L", "CPG.L", "AAL.L", "TSCO.L", "RKT.L", "IMB.L",
-      "STAN.L", "AHT.L", "III.L", "EXPN.L", "SSE.L", "NXT.L", "AV.L", "LGEN.L",
+      "STAN.L", "RR.L", "III.L", "EXPN.L", "SSE.L", "NXT.L", "AV.L", "LGEN.L",
       "ABF.L", "SGRO.L", "HLN.L", "FLTR.L", "INF.L", "WTB.L", "BNZL.L", "SMIN.L",
     ],
   },
@@ -128,11 +128,11 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
     short: "SMI",
     currency: "CHF",
     tickers: [
-      "NESN.SW", "ROG.SW", "NOVN.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW", "CFR.SW",
+      "NESN.SW", "ROP.SW", "NOVN.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW", "CFR.SW",
       "SIKA.SW", "LONN.SW", "ALC.SW", "GIVN.SW", "HOLN.SW", "SREN.SW", "SCMN.SW",
       "GEBN.SW", "PGHN.SW", "SOON.SW", "LOGN.SW", "KNIN.SW", "UHR.SW",
       "LISN.SW", "STMN.SW", "SCHP.SW", "SGSN.SW", "BAER.SW", "TEMN.SW", "ADEN.SW",
-      "CLN.SW", "BALN.SW", "VACN.SW", "GALE.SW", "BARN.SW",
+      "CLN.SW", "HBAN.SW", "VACN.SW", "GALE.SW", "BARN.SW",
     ],
   },
 ];
