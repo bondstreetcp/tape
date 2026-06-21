@@ -108,6 +108,16 @@ export const UNIVERSES: UniverseMeta[] = [
     currency: "CAD",
     note: "Major S&P/TSX Composite constituents — Toronto Stock Exchange. Prices in CAD. International data via Yahoo (npm run refresh-intl).",
   },
+  {
+    id: "smi",
+    name: "SMI (Switzerland)",
+    short: "SMI",
+    intraday: false,
+    international: true,
+    indexSymbol: "^SSMI",
+    currency: "CHF",
+    note: "Swiss Market Index blue chips + leaders — SIX Swiss Exchange. Prices in CHF. International data via Yahoo (npm run refresh-intl).",
+  },
 ];
 
 export const DEFAULT_UNIVERSE = "sp500";
