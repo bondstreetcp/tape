@@ -75,26 +75,6 @@ export default function HomeDashboard({
               {breadth.total} constituents{intl ? "" : ` · ${snapshot.sectors.length} sectors`} · as of{" "}
               {fmtDateTime(snapshot.generatedAt)}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Link
-                href={`/u/${universe}/screener`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
-              >
-                ⊞ Screener
-              </Link>
-              <Link
-                href={`/u/${universe}/compare`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
-              >
-                ⇄ Compare sectors
-              </Link>
-              <Link
-                href={`/u/${universe}/watchlist`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)]"
-              >
-                ★ Watchlist
-              </Link>
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <UniverseSwitcher current={universe} />

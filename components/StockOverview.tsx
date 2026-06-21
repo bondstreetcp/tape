@@ -14,6 +14,8 @@ import StockExtras from "./StockExtras";
 import AskAI from "./AskAI";
 import SeasonalityPanel from "./SeasonalityPanel";
 import ExplainMove from "./ExplainMove";
+import KeyStatsStrip from "./KeyStatsStrip";
+import type { CompanyStats } from "@/lib/companyStats";
 
 const IndicatorChart = dynamic(() => import("./IndicatorChart"), { ssr: false });
 const CandleChart = dynamic(() => import("./CandleChart"), { ssr: false });
@@ -42,12 +44,14 @@ export default function StockOverview({
   intraday,
   generatedAt,
   currency = "USD",
+  stats = null,
 }: {
   row: StockRow;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
   currency?: string;
+  stats?: CompanyStats | null;
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1y");
   const [chartMode, setChartMode] = useState<"line" | "candles">("line");
@@ -162,6 +166,8 @@ export default function StockOverview({
           <IndicatorChart daily={daily} intraday={intraday} tf={tf} now={now} up={(windowChange ?? 0) >= 0} symbol={row.symbol} currency={currency} />
         )}
       </section>
+
+      <div className="mb-5"><KeyStatsStrip stats={stats} row={row} currency={currency} /></div>
 
       {/* 52-week range */}
       <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">

@@ -20,7 +20,6 @@ import ScenarioPanel from "./ScenarioPanel";
 import DividendPanel from "./DividendPanel";
 import ShortInterestPanel from "./ShortInterestPanel";
 import StockOverview from "./StockOverview";
-import KeyStatsStrip from "./KeyStatsStrip";
 import WatchStar from "./WatchStar";
 import UniverseSwitcher from "./UniverseSwitcher";
 import type { SeriesPoint } from "@/lib/types";
@@ -294,7 +293,6 @@ export default function FinancialsView({
             {etf && <UniverseSwitcher current={universe} etf={etf} />}
           </div>
         </div>
-        {row && <div className="mt-3"><KeyStatsStrip stats={stats} row={row} currency={currency} /></div>}
       </div>
 
       <div className="mb-4">
@@ -317,7 +315,7 @@ export default function FinancialsView({
 
       {view === "overview" ? (
         row ? (
-          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} currency={currency} />
+          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} currency={currency} stats={stats} />
         ) : (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">No overview data for {symbol}.</div>
         )
