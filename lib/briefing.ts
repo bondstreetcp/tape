@@ -59,9 +59,9 @@ function isHeader(l: string): boolean {
 // hard-wrapped physical lines, so the bold "headline" must come from real structure
 // (a bullet entry, or a short standalone title line) — never from a paragraph's first
 // wrapped line, which lacks end punctuation only because it wrapped mid-sentence.
-function groupSection(lines: string[], wrapWidth: number): BriefBlock[] {
+function groupSection(lines: string[], wrapWidth: number, narrow: boolean): BriefBlock[] {
   const bullets = lines.filter((l) => /^[•▪·‣]/.test(l)).length;
-  return bullets >= 2 ? groupBulleted(lines) : groupProse(lines, wrapWidth);
+  return bullets >= 2 ? groupBulleted(lines) : groupProse(lines, wrapWidth, narrow);
 }
 
 // Bulleted sections (e.g. STOCKS TO WATCH "• Company: writeup"): one block per
@@ -90,7 +90,7 @@ function groupBulleted(lines: string[]): BriefBlock[] {
 
 // Prose sections (TOP NEWS, ANALYSIS, BEFORE THE BELL): titled stories become
 // {headline, text}; plain market-color prose becomes text-only blocks (no bold).
-function groupProse(lines: string[], wrapWidth: number): BriefBlock[] {
+function groupProse(lines: string[], wrapWidth: number, narrow: boolean): BriefBlock[] {
   const headlineMax = Math.max(60, wrapWidth - 18);
   const blocks: BriefBlock[] = [];
   let cur: BriefBlock | null = null;
@@ -101,8 +101,11 @@ function groupProse(lines: string[], wrapWidth: number): BriefBlock[] {
     // A headline is a short standalone line (it didn't fill the column, so it ended
     // because the title ended) sitting between finished paragraphs. The width test is
     // what stops a paragraph's wrapped first line — which also lacks end punctuation —
-    // from being mistaken for a headline.
-    if (!paraOpen && !endsSentence && !full) {
+    // from being mistaken for a headline. In a narrow multi-column layout (The Day
+    // Ahead) every line is short and fragmented, so that test can't work — we skip
+    // headline detection entirely and just reflow into prose, letting the teaser read
+    // as the lead of its paragraph rather than bolding mid-sentence fragments.
+    if (!narrow && !paraOpen && !endsSentence && !full) {
       cur = { headline: l, text: "" };
       blocks.push(cur);
       paraOpen = true;
@@ -124,6 +127,10 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
   }
   const lines = rawLines.filter((l) => l && !NOISE.some((re) => re.test(l)));
   const wrapWidth = lines.reduce((m, l) => Math.max(m, l.length), 80);
+  // A small typical line length means a narrow multi-column PDF (The Day Ahead), whose
+  // text can't be cleanly split into headline + body — flag it so prose stays unbolded.
+  const lens = lines.map((l) => l.length).sort((a, b) => a - b);
+  const narrow = lens.length > 0 && lens[lens.length >> 1] < 70;
 
   // Split into sections at header lines, collecting each section's raw lines.
   const raw: { heading: string; kind: "prose" | "list"; lines: string[] }[] = [];
@@ -144,7 +151,7 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
     .map((s) =>
       s.kind === "list"
         ? { heading: s.heading, kind: "list" as const, lines: s.lines }
-        : { heading: s.heading, kind: "prose" as const, blocks: groupSection(s.lines, wrapWidth) },
+        : { heading: s.heading, kind: "prose" as const, blocks: groupSection(s.lines, wrapWidth, narrow) },
     )
     .filter((s) => (s.kind === "list" ? s.lines!.length : s.blocks!.length));
 
@@ -152,7 +159,7 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
   // runaway "list" section means the columns ran together and headings no longer mark
   // real breaks. Reflow the whole body into readable story blocks instead.
   if (sections.some((s) => s.kind === "list" && s.lines!.length > 50)) {
-    const blocks = groupProse(lines.filter((l) => !isHeader(l)), wrapWidth);
+    const blocks = groupProse(lines.filter((l) => !isHeader(l)), wrapWidth, narrow);
     if (blocks.length) return { date, sections: [{ heading: "Briefing", kind: "prose", blocks }] };
   }
   return { date, sections };
