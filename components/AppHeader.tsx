@@ -20,7 +20,7 @@ export default function AppHeader({
       <Link
         href={href}
         className={
-          "rounded-md px-2.5 py-1 transition-colors " +
+          "shrink-0 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
           (active ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]")
         }
       >
@@ -37,15 +37,15 @@ export default function AppHeader({
             <span className="text-[#60a5fa]">▦</span>
             <span className="hidden font-bold tracking-tight sm:inline">Tape</span>
           </Link>
-          <nav className="flex items-center gap-0.5 text-sm">
+          <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <NavLink href={base} label="Home" exact />
             <NavLink href={`${base}/screener`} label="Screener" />
             <NavLink href={`${base}/heatmap`} label="Heatmap" />
             <NavLink href={`${base}/market`} label="Markets" />
-            <NavLink href={`${base}/flow`} label="Flow" />
-            <NavLink href={`${base}/macro`} label="Macro" />
-            <NavLink href={`${base}/rotation`} label="Rotation" />
-            <NavLink href={`${base}/research`} label="Research" />
+            <NavLink href={`${base}/flow`} label="Options" />
+            <NavLink href={`${base}/macro`} label="Economy" />
+            <NavLink href={`${base}/rotation`} label="Sectors" />
+            <NavLink href={`${base}/research`} label="Filings" />
             <NavLink href={`${base}/earnings`} label="Earnings" />
             <NavLink href={`${base}/compare`} label="Compare" />
             <NavLink href={`${base}/backtest`} label="Backtest" />

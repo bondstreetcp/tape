@@ -292,9 +292,9 @@ export default function MacroDashboard({
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Macro Dashboard</h1>
+          <h1 className="text-2xl font-bold">Economy</h1>
           <p className="mt-1 text-xs text-[var(--text-3)]">
-            U.S. rates, inflation, growth &amp; credit · data from FRED (St. Louis Fed) · as of {fmtDateTime(asOf)}
+            U.S. macro — rates, inflation, growth &amp; credit · data from FRED (St. Louis Fed) · as of {fmtDateTime(asOf)}
           </p>
         </div>
         <button
