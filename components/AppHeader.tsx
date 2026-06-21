@@ -38,6 +38,7 @@ export default function AppHeader({
         { href: `${base}/compare`, label: "Compare" },
         { href: `${base}/backtest`, label: "Backtest" },
         { href: `${base}/research`, label: "Filings & Docs" },
+        { href: `${base}/research-desk`, label: "Research Desk" },
       ],
     },
     {
