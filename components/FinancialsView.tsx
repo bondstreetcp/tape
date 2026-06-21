@@ -14,6 +14,7 @@ import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
+import SharesChart from "./SharesChart";
 import OptionsChain from "./OptionsChain";
 import DcfPanel from "./DcfPanel";
 import ScenarioPanel from "./ScenarioPanel";
@@ -464,6 +465,7 @@ export default function FinancialsView({
           </p>
           <DuPontPanel periods={financials.annual} />
           <SegmentsPanel symbol={symbol} />
+          <SharesChart periods={financials[type]} type={type} />
         </>
       )}
     </main>
