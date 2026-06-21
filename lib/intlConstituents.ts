@@ -135,4 +135,33 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "CLN.SW", "HBAN.SW", "VACN.SW", "GALE.SW", "BARN.SW",
     ],
   },
+  {
+    id: "hsi",
+    name: "Hang Seng (Hong Kong)",
+    short: "Hang Seng",
+    currency: "HKD",
+    tickers: [
+      "0700.HK", "9988.HK", "0005.HK", "1299.HK", "3690.HK", "0941.HK", "0939.HK",
+      "1398.HK", "0388.HK", "2318.HK", "0883.HK", "0857.HK", "1810.HK", "0027.HK",
+      "2628.HK", "3988.HK", "0016.HK", "0001.HK", "0002.HK", "0003.HK", "0006.HK",
+      "0012.HK", "0066.HK", "0101.HK", "0175.HK", "0267.HK", "0288.HK", "0386.HK",
+      "0688.HK", "0762.HK", "0823.HK", "0960.HK", "1038.HK", "1093.HK", "1109.HK",
+      "1113.HK", "1177.HK", "1211.HK", "1928.HK", "2020.HK", "2269.HK", "2313.HK",
+      "2331.HK", "2382.HK", "2688.HK", "9618.HK", "9999.HK", "9888.HK", "1024.HK",
+    ],
+  },
+  {
+    id: "ipc",
+    name: "IPC (Mexico)",
+    short: "IPC",
+    currency: "MXN",
+    tickers: [
+      "AMXB.MX", "GFNORTEO.MX", "WALMEX.MX", "FEMSAUBD.MX", "GMEXICOB.MX", "CEMEXCPO.MX",
+      "TLEVISACPO.MX", "BIMBOA.MX", "KIMBERA.MX", "ALSEA.MX", "GAPB.MX", "ASURB.MX",
+      "OMAB.MX", "PINFRA.MX", "GCARSOA1.MX", "LIVEPOLC-1.MX", "ORBIA.MX", "PE&OLES.MX",
+      "KOFUBL.MX", "AC.MX", "GRUMAB.MX", "CUERVO.MX", "Q.MX", "GENTERA.MX", "BBAJIOO.MX",
+      "RA.MX", "CHDRAUIB.MX", "LABB.MX", "MEGACPO.MX", "VESTA.MX", "FUNO11.MX",
+      "GFINBURO.MX", "GCC.MX", "BOLSAA.MX", "ALPEKA.MX",
+    ],
+  },
 ];

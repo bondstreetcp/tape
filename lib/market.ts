@@ -33,6 +33,7 @@ const GROUPS: { name: string; kind: AssetKind; syms: [string, string][] }[] = [
       ["^RUT", "Russell 2000"],
       ["^VIX", "VIX"],
       ["^GSPTSE", "S&P/TSX"],
+      ["^MXX", "IPC (Mexico)"],
       ["^FTSE", "FTSE 100"],
       ["^GDAXI", "DAX"],
       ["^FCHI", "CAC 40"],

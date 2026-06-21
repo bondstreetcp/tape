@@ -118,6 +118,26 @@ export const UNIVERSES: UniverseMeta[] = [
     currency: "CHF",
     note: "Swiss Market Index blue chips + leaders — SIX Swiss Exchange. Prices in CHF. International data via Yahoo (npm run refresh-intl).",
   },
+  {
+    id: "hsi",
+    name: "Hang Seng (Hong Kong)",
+    short: "Hang Seng",
+    intraday: false,
+    international: true,
+    indexSymbol: "^HSI",
+    currency: "HKD",
+    note: "Major Hang Seng Index constituents — Hong Kong Stock Exchange. Prices in HKD. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
+    id: "ipc",
+    name: "IPC (Mexico)",
+    short: "IPC",
+    intraday: false,
+    international: true,
+    indexSymbol: "^MXX",
+    currency: "MXN",
+    note: "S&P/BMV IPC constituents — Mexican Stock Exchange (BMV). Prices in MXN. International data via Yahoo (npm run refresh-intl).",
+  },
 ];
 
 export const DEFAULT_UNIVERSE = "sp500";

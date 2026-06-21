@@ -13,7 +13,7 @@ import MarketAlert from "./MarketAlert";
 const INDEX_UNIVERSE: Record<string, string> = {
   "^GSPC": "sp500", "^IXIC": "nasdaq100", "^N225": "nikkei", "^FTSE": "ftse100",
   "^GDAXI": "dax", "^FCHI": "cac40", "^AEX": "aex", "^KS11": "kospi", "^GSPTSE": "tsx",
-  "^SSMI": "smi",
+  "^SSMI": "smi", "^HSI": "hsi", "^MXX": "ipc",
 };
 
 function fmtPrice(t: Tile): string {
