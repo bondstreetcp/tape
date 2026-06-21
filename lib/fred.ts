@@ -11,7 +11,24 @@ const DAY = 86_400_000;
 interface Obs { date: string; value: number }
 
 async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
+  // Read the key at call time so a script can load .env.local before invoking getMacro.
+  const apiKey = process.env.FRED_API_KEY;
   try {
+    if (apiKey) {
+      // Keyed data API returns FULL history; the keyless graph CSV caps at ~800 obs (~3yr).
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&observation_start=${cosd}`;
+      const res = await fetch(url, { headers: { "User-Agent": "stock-chart-screener (research)" } });
+      if (res.ok) {
+        const j: any = await res.json();
+        const out: Obs[] = [];
+        for (const o of j?.observations ?? []) {
+          const v = parseFloat(o?.value);
+          if (o?.date && Number.isFinite(v)) out.push({ date: o.date, value: v });
+        }
+        if (out.length) return out;
+      }
+      // else fall through to the keyless CSV endpoint
+    }
     const res = await fetch(`${FREDGRAPH}?id=${id}&cosd=${cosd}`, {
       headers: { "User-Agent": "stock-chart-screener (research)" },
     });
@@ -55,7 +72,7 @@ const CURVE: [string, string, number][] = [
 
 export interface CurvePoint { label: string; mat: number; now: number | null; monthAgo: number | null; yearAgo: number | null }
 export interface MacroInd { key: string; label: string; value: number | null; unit: string; asOf: string | null; group: string; seriesId?: string; history?: [string, number][] }
-export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null; releases?: Record<string, ReleaseData>; creditSeries?: { hy: [string, number][]; ig: [string, number][] } }
+export interface Macro { curve: CurvePoint[]; indicators: MacroInd[]; asOf: string; gdpNow?: { value: number; asOf: string } | null; releases?: Record<string, ReleaseData>; creditSeries?: { hy: [string, number][]; ig: [string, number][]; baa?: [string, number][] } }
 
 export async function getMacro(): Promise<Macro> {
   const now = Date.now();
@@ -122,16 +139,23 @@ export async function getMacro(): Promise<Macro> {
     { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit", seriesId: "BAMLC0A0CM", history: ig.history },
   ];
 
-  // Full daily IG/HY OAS series (5yr) for the rates page's windowed credit charts —
-  // the indicator `history` is downsampled to ~90 pts, too coarse for a 1-month view.
-  const creditStart = new Date(now - FIVEY).toISOString().slice(0, 10);
-  const [hyObs, igObs] = await Promise.all([
+  // Daily credit-spread series for the rates page's windowed charts (the indicator
+  // `history` is downsampled to ~90 pts, too coarse for a 1-month view).
+  //  • ICE BofA IG/HY OAS — the standard option-adjusted spreads, but FRED's ICE
+  //    license only carries a rolling ~3yr, so these top out there even with a key.
+  //  • Moody's Baa–10Y Treasury spread (BAA10Y) — a classic credit gauge with decades
+  //    of history (needs FRED_API_KEY for the full daily series), for the long cycle.
+  const creditStart = new Date(now - 6 * 365 * DAY).toISOString().slice(0, 10);
+  const baaStart = new Date(now - 12 * 365 * DAY).toISOString().slice(0, 10);
+  const [hyObs, igObs, baaObs] = await Promise.all([
     fetchSeries("BAMLH0A0HYM2", creditStart),
     fetchSeries("BAMLC0A0CM", creditStart),
+    fetchSeries("BAA10Y", baaStart),
   ]);
   const creditSeries = {
     hy: hyObs.map((o) => [o.date, o.value] as [string, number]),
     ig: igObs.map((o) => [o.date, o.value] as [string, number]),
+    baa: baaObs.map((o) => [o.date, o.value] as [string, number]),
   };
 
   // Atlanta Fed GDPNow — a running estimate of the current quarter's real GDP

@@ -201,7 +201,7 @@ export default function StockOverview({
         ))}
       </section>
 
-      <ExplainMove symbol={row.symbol} name={row.name} returns={row.returns} />
+      <ExplainMove symbol={row.symbol} name={row.name} returns={row.returns} tf={tf} />
 
       <section className="mt-5"><SeasonalityPanel daily={daily} /></section>
       <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>

@@ -10,9 +10,15 @@ const SUGGESTIONS = [
 ];
 
 const researchNote = (label: string) =>
-  `Write a concise research note on ${label}, with specific numbers throughout. Use clear sections: ` +
-  `**What it does**, **Bull case**, **Bear case & key risks**, **Valuation** (is it cheap or expensive vs. its growth & peers, and why), and **What to watch next** (catalysts). ` +
-  `Draw on the financial data plus current web info; be balanced and concrete, not promotional.`;
+  `Write a tight buy-side research memo on ${label} — the kind a portfolio manager actually reads before sizing a position. Specific and numeric throughout; no boilerplate, no filler, no "consult a financial advisor." Have a real point of view — conviction with the caveats stated, not a both-sides shrug. Sections (use these bold headers):\n` +
+  `**Thesis** — one or two lines: the core argument for or against owning it here, and the single biggest driver.\n` +
+  `**Variant view** — what does consensus/the market currently believe, and where might it be wrong? Where's the edge? If it's efficiently priced, say so.\n` +
+  `**Business & moat** — how it makes money and why that persists, with the 2–3 unit-economics numbers that matter.\n` +
+  `**Numbers** — revenue / margin / FCF / EPS trajectory and where Street forward estimates sit; flag anything that looks mis-modeled or like a setup for revisions.\n` +
+  `**Valuation & setup** — current multiple vs. its own growth and peers, and a rough base / bull / bear with the approximate % upside/downside in each.\n` +
+  `**Catalysts** — specific, dated near-term events that re-rate the stock (earnings, product, regulatory, capital allocation).\n` +
+  `**What breaks it** — the 2–3 things that would make the thesis wrong, and the tells you'd watch.\n` +
+  `Draw on the financial data provided plus current web information. Analytical, not promotional; this is research, not personalized advice.`;
 
 interface Source { title: string; uri: string }
 interface Msg { q: string; a: string; sources?: Source[] }

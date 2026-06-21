@@ -7,7 +7,7 @@ import { fmtDateTime } from "@/lib/format";
 const yld = (v: number | null) => (v == null ? "—" : `${v.toFixed(2)}%`);
 const bps = (pp: number | null) => (pp == null ? "—" : `${pp >= 0 ? "+" : "−"}${Math.abs(pp * 100).toFixed(0)} bps`);
 
-const TFS: [string, number][] = [["1M", 30], ["3M", 90], ["6M", 180], ["1Y", 365], ["3Y", 1100]];
+const TFS: [string, number][] = [["1M", 30], ["3M", 90], ["6M", 180], ["1Y", 365], ["3Y", 1100], ["5Y", 1830], ["10Y", 3660]];
 
 export default function FixedIncomeView({
   universe, curve, indicators, asOf, creditSeries,
@@ -16,7 +16,7 @@ export default function FixedIncomeView({
   curve: CurvePoint[];
   indicators: MacroInd[];
   asOf: string;
-  creditSeries?: { hy: [string, number][]; ig: [string, number][] };
+  creditSeries?: { hy: [string, number][]; ig: [string, number][]; baa?: [string, number][] };
 }) {
   const [days, setDays] = useState(365);
 
@@ -30,6 +30,7 @@ export default function FixedIncomeView({
   const ig = indicators.find((i) => i.key === "ig");
   const hySeries = creditSeries?.hy ?? (hy?.history as [string, number][]) ?? [];
   const igSeries = creditSeries?.ig ?? (ig?.history as [string, number][]) ?? [];
+  const baaSeries = creditSeries?.baa ?? [];
 
   const inversion = s2s10 == null ? null
     : s2s10 < -0.05 ? { t: "Inverted", c: "#ef4444", note: "Long rates below short rates — historically a recession lead indicator." }
@@ -101,20 +102,25 @@ export default function FixedIncomeView({
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[var(--text-2)]">Credit spreads · option-adjusted (OAS)</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-2)]">Credit spreads</h2>
           <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
             {TFS.map(([lab, d]) => (
-              <button key={lab} onClick={() => setDays(d)} className={"rounded-md px-2.5 py-1 text-xs transition-colors " + (days === d ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lab}</button>
+              <button key={lab} onClick={() => setDays(d)} className={"rounded-md px-2 py-1 text-xs transition-colors " + (days === d ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lab}</button>
             ))}
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <OasCard label="Investment-grade OAS" hint="Spread over Treasuries on IG corporate bonds." color="#60a5fa" series={igSeries} days={days} />
-          <OasCard label="High-yield OAS" hint="Junk-bond spread — the market's risk-appetite gauge." color="#f59e0b" series={hySeries} days={days} />
+          <OasCard label="Investment-grade OAS" hint="Spread over Treasuries on IG corporate bonds." note="ICE BofA · FRED carries ~3yr" color="#60a5fa" series={igSeries} days={days} />
+          <OasCard label="High-yield OAS" hint="Junk-bond spread — the market's risk-appetite gauge." note="ICE BofA · FRED carries ~3yr" color="#f59e0b" series={hySeries} days={days} />
         </div>
+        {baaSeries.length > 0 && (
+          <div className="mt-4">
+            <OasCard label="Baa – 10Y Treasury spread" hint="Moody's Baa (lowest investment-grade tier) corporate yield over the 10-year Treasury — a classic credit-risk gauge with decades of history, for the long cycle." note="Moody's · daily since 2014" color="#a855f7" series={baaSeries} days={days} />
+          </div>
+        )}
       </section>
 
-      <p className="mt-4 text-[11px] text-[var(--text-4)]">Source: Federal Reserve Economic Data (FRED). Spreads in basis points; OAS = option-adjusted spread. Daily history ~3yr (FRED&apos;s free graph endpoint limit). Refreshes with the macro snapshot (npm run refresh-macro).</p>
+      <p className="mt-4 text-[11px] text-[var(--text-4)]">Source: FRED. OAS = option-adjusted spread (ICE BofA) — FRED&apos;s ICE license carries only a rolling ~3yr, so IG/HY top out at 3Y even with an API key; the Baa–10Y spread (Moody&apos;s) reaches back further for the longer cycle. Refreshes with the macro snapshot (npm run refresh-macro).</p>
     </main>
   );
 }
@@ -132,7 +138,7 @@ function Spread({ label, v }: { label: string; v: number | null }) {
   );
 }
 
-function OasCard({ label, hint, color, series, days }: { label: string; hint: string; color: string; series: [string, number][]; days: number }) {
+function OasCard({ label, hint, note, color, series, days }: { label: string; hint: string; note?: string; color: string; series: [string, number][]; days: number }) {
   const cur = series.length ? series[series.length - 1][1] : null;
   const windowed = useMemo(() => {
     if (!series.length) return [];
@@ -142,16 +148,18 @@ function OasCard({ label, hint, color, series, days }: { label: string; hint: st
   }, [series, days]);
 
   const vals = series.map((p) => p[1]);
+  const spanYrs = series.length > 1 ? Math.max(1, Math.round((new Date(series[series.length - 1][0]).getTime() - new Date(series[0][0]).getTime()) / (365 * 86_400_000))) : 0;
+  const span = `the past ${spanYrs} years`;
   const below = cur != null && vals.length ? vals.filter((v) => v <= cur).length / vals.length : null;
   const read = below == null ? hint
-    : below < 0.3 ? `Tighter than ${Math.round((1 - below) * 100)}% of the past 3 years — risk-on / complacent.`
-    : below > 0.7 ? `Wider than ${Math.round(below * 100)}% of the past 3 years — credit stress building.`
-    : "Mid-range vs. the past 3 years.";
+    : below < 0.3 ? `Tighter than ${Math.round((1 - below) * 100)}% of ${span} — risk-on / complacent.`
+    : below > 0.7 ? `Wider than ${Math.round(below * 100)}% of ${span} — credit stress building.`
+    : `Mid-range vs. ${span}.`;
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold text-[var(--text-2)]">{label}</span>
+        <span className="text-sm font-semibold text-[var(--text-2)]">{label}{note && <span className="ml-2 text-[10px] font-normal text-[var(--text-4)]">{note}</span>}</span>
         <span className="font-mono text-lg font-bold tabular-nums text-[var(--text)]">{cur == null ? "—" : `${cur.toFixed(2)}%`}</span>
       </div>
       <OasChart series={windowed} color={color} />
