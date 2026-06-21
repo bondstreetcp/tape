@@ -42,6 +42,12 @@ jobs:
         run: npm run refresh-data
         continue-on-error: true
 
+      # The sector ETFs are fetched last in refresh-data, so a tail-of-run rate-limit
+      # can blank them (→ null sector returns). Re-fetch just the 11 ETFs to repair.
+      - name: Repair sector ETF returns
+        run: npm run refresh-sectors
+        continue-on-error: true
+
       - name: Refresh international universes
         run: npm run refresh-intl
         continue-on-error: true
