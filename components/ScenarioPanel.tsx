@@ -36,7 +36,9 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
 
   const defG = Math.round(clamp(stats?.revenueGrowth ?? 0.06, -0.05, 0.3) * 100);
   const defGM = base ? Math.round(base.gm * 100) : 40;
-  const defPE = Math.round(clamp(stats?.trailingPE ?? stats?.forwardPE ?? 20, 5, 60));
+  // Forward multiple — the model applies the P/E to forward (next-year) EPS, so the
+  // forward P/E is the consistent default.
+  const defPE = Math.round(clamp(stats?.forwardPE ?? stats?.trailingPE ?? 20, 5, 60));
   const [g, setG] = useState(defG);
   const [gm, setGm] = useState(defGM);
   const [pe, setPe] = useState(defPE);
@@ -105,7 +107,7 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Slider label="Revenue growth" value={g} min={-10} max={40} onChange={setG} suffix="%" />
         <Slider label="Gross margin" value={gm} min={5} max={95} onChange={setGm} suffix="%" />
-        <Slider label="P/E multiple" value={pe} min={5} max={60} onChange={setPe} suffix="×" />
+        <Slider label="Forward P/E" value={pe} min={5} max={60} onChange={setPe} suffix="×" />
       </div>
 
       <div className="overflow-x-auto">
