@@ -84,6 +84,11 @@ function EarningsReactions({ symbol }: { symbol: string }) {
           </tbody>
         </table>
       )}
+      {Array.isArray(data) && data.length > 0 && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--text-4)]">
+          EPS surprise comes from Yahoo (≈ last 4 reported quarters); “—” = not published for older dates. The next-day move is computed from price history, so it reaches further back.
+        </p>
+      )}
     </Card>
   );
 }
