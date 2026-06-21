@@ -14,3 +14,6 @@ data/iwv-holdings.*
 _*.html
 _*.json
 _*.csv
+
+# Licensed research corpus — never commit (raw PDFs + extracted/derived data)
+data/.research/
