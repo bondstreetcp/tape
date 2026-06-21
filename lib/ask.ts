@@ -71,6 +71,48 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
   return { name: display, text };
 }
 
+/** A compact reported-financials block (valuation, margins, growth, and the multi-year
+ *  income-statement / cash-flow trend) from our structured market data — handy to pair
+ *  with a filing's narrative when the filing's own financial-statement tables aren't in
+ *  the extracted text. Returns "" if nothing useful is available. */
+export async function financialSnapshot(symbol: string): Promise<string> {
+  const [stats, fin] = await Promise.all([
+    getCompanyStats(symbol).catch(() => null),
+    getFinancials(symbol).catch(() => ({ annual: [] as FinPeriod[], quarterly: [] as FinPeriod[] })),
+  ]);
+  let text = "";
+  if (stats) {
+    text += `Market cap ${big(stats.marketCap)}, EV ${big(stats.enterpriseValue)}. `;
+    text += `Valuation: trailing P/E ${r1(stats.trailingPE)}, fwd P/E ${r1(stats.forwardPE)}, P/S ${r1(stats.priceToSales)}, EV/EBITDA ${r1(stats.evToEbitda)}.\n`;
+    text += `Margins: gross ${pct(stats.grossMargins)}, operating ${pct(stats.operatingMargins)}, net ${pct(stats.profitMargins)}. ROE ${pct(stats.returnOnEquity)}. `;
+    text += `Growth (YoY): revenue ${pct(stats.revenueGrowth)}, earnings ${pct(stats.earningsGrowth)}. Net debt/EBITDA proxy: debt/equity ${r1(stats.debtToEquity)}, FCF ${big(stats.freeCashflow)}.\n`;
+    if (stats.surprises?.length) {
+      const s = stats.surprises[stats.surprises.length - 1];
+      text += `Latest EPS surprise: ${s.surprisePercent == null ? "n/a" : (s.surprisePercent * 100).toFixed(1) + "%"} (${s.quarter}).\n`;
+    }
+  }
+  if (fin?.annual?.length) {
+    const recent = fin.annual.slice(-5);
+    const fnum = (p: FinPeriod, ks: string[]) => {
+      for (const k of ks) { const v = p[k]; if (typeof v === "number") return v; }
+      return null;
+    };
+    const series = (label: string, ks: string[], fmt: (v: number) => string) => {
+      const xs = recent.map((p) => { const v = fnum(p, ks); return v == null ? null : `FY${p.date.slice(2, 4)} ${fmt(v)}`; }).filter(Boolean);
+      return xs.length ? `${label}: ${xs.join(" → ")}.` : "";
+    };
+    const lines = [
+      series("Revenue", ["totalRevenue"], big),
+      series("Operating income", ["operatingIncome"], big),
+      series("Net income", ["netIncome", "netIncomeCommonStockholders"], big),
+      series("Free cash flow", ["freeCashFlow"], big),
+      series("Diluted EPS", ["dilutedEPS"], (v) => `$${v.toFixed(2)}`),
+    ].filter(Boolean);
+    if (lines.length) text += `Annual trend (oldest→newest):\n${lines.join("\n")}\n`;
+  }
+  return text;
+}
+
 export interface AskSource { title: string; uri: string }
 export interface AskResult { answer: string; sources: AskSource[] }
 
@@ -124,13 +166,15 @@ export async function askGemini(
 }
 
 /** Focused summary of a provided source text (no web grounding) — e.g. an earnings-call
- *  transcript. Reasoning on; strictly grounded in the supplied text. */
-export async function summarizeText(title: string, instruction: string, text: string): Promise<AskResult | null> {
+ *  transcript or an SEC filing. Reasoning on; strictly grounded in the supplied text.
+ *  `maxChars` bounds how much of the source is sent (filings are long, so they pass a
+ *  much larger cap than the ~45k default). */
+export async function summarizeText(title: string, instruction: string, text: string, maxChars = 45000): Promise<AskResult | null> {
   if (!KEY) return null;
   const system =
     `You are a sharp equity-research analyst. Follow the instruction precisely and base everything ` +
     `STRICTLY on the provided source text — do not invent figures or quotes. Use clean, concise markdown.`;
-  const prompt = `${instruction}\n\n=== SOURCE: ${title} ===\n${text.slice(0, 45000)}`;
+  const prompt = `${instruction}\n\n=== SOURCE: ${title} ===\n${text.slice(0, maxChars)}`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
