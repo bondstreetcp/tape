@@ -1,0 +1,56 @@
+name: Daily data refresh
+
+# Refreshes the committed data snapshots and pushes, which triggers a Vercel redeploy.
+# Runs after the US close so the options-flow scan captures the day's volume.
+on:
+  schedule:
+    - cron: "0 22 * * 1-5" # 22:00 UTC, Mon–Fri (≈1–2h after the 4pm ET close)
+  workflow_dispatch: {} # manual "Run workflow" button in the Actions tab
+
+# Allow the job to push the refreshed data back to the repo.
+permissions:
+  contents: write
+
+# Never run two refreshes at once.
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Each refresh is independent — keep going if one source hiccups.
+      - name: Refresh US universes (prices, returns, fundamentals)
+        run: npm run refresh-data
+        continue-on-error: true
+
+      - name: Refresh international universes
+        run: npm run refresh-intl
+        continue-on-error: true
+
+      - name: Refresh options flow (S&P 500)
+        run: npm run refresh-flow
+        continue-on-error: true
+
+      - name: Commit & push if the data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --staged --quiet; then
+            echo "No data changes — nothing to commit."
+          else
+            git commit -m "chore: daily data refresh (US + intl + options flow)"
+            git push
+          fi
