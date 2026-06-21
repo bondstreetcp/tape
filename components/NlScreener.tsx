@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import { applyScreen, fieldDef, type ScreenSpec, type ScreenField } from "@/lib/nlScreen";
@@ -32,16 +32,36 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [spec, setSpec] = useState<ScreenSpec | null>(null);
-  const [results, setResults] = useState<StockRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ranQuery, setRanQuery] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const { list: saved, save, remove } = useSavedScreens();
 
+  // Results derive from the spec + the CURRENT universe's stocks, so the active screen
+  // re-applies automatically when you switch universe (the `stocks` prop changes).
+  const results = useMemo(() => (spec ? applyScreen(stocks, spec) : null), [spec, stocks]);
+
+  // Persist the active screen so it carries across navigation + universe switches even
+  // when the component remounts (restore once on mount; save on every change after).
+  const skipPersist = useRef(true);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("tape.activeScreen");
+      if (raw) { const v = JSON.parse(raw); if (v?.spec) { setQ(v.query || ""); setRanQuery(v.query || ""); setSpec(v.spec); } }
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    if (skipPersist.current) { skipPersist.current = false; return; }
+    try {
+      if (spec) localStorage.setItem("tape.activeScreen", JSON.stringify({ query: ranQuery, spec }));
+      else localStorage.removeItem("tape.activeScreen");
+    } catch { /* ignore */ }
+  }, [spec, ranQuery]);
+
   // Re-run a saved screen instantly — the spec is stored, so no AI call needed.
   const runSaved = (s: SavedScreen) => {
     setQ(s.query); setRanQuery(s.query); setError(null);
-    setSpec(s.spec); setResults(applyScreen(stocks, s.spec));
+    setSpec(s.spec);
   };
 
   const run = async (query: string) => {
@@ -54,9 +74,9 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text }),
       }).then((r) => r.json());
-      if (d.configured === false) { setError("AI screening needs GEMINI_API_KEY configured."); setResults(null); setSpec(null); }
-      else if (d.error || !d.spec) { setError(d.error || "Couldn't parse that — try rephrasing."); setResults(null); setSpec(null); }
-      else { setSpec(d.spec); setResults(applyScreen(stocks, d.spec)); }
+      if (d.configured === false) { setError("AI screening needs GEMINI_API_KEY configured."); setSpec(null); }
+      else if (d.error || !d.spec) { setError(d.error || "Couldn't parse that — try rephrasing."); setSpec(null); }
+      else { setSpec(d.spec); }
     } catch {
       setError("Something went wrong reaching the AI.");
     }
@@ -184,7 +204,7 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
           )}
           {results && results.length > 0 && (
             <p className="mt-1.5 text-[11px] text-[var(--text-4)]">
-              {results.length} match{results.length === 1 ? "" : "es"} for &ldquo;{ranQuery}&rdquo; · click a row to open · <button onClick={() => { setSpec(null); setResults(null); setQ(""); }} className="underline hover:text-[var(--text-2)]">clear</button>
+              {results.length} match{results.length === 1 ? "" : "es"} for &ldquo;{ranQuery}&rdquo; · click a row to open · <button onClick={() => { setSpec(null); setQ(""); setRanQuery(""); }} className="underline hover:text-[var(--text-2)]">clear</button>
             </p>
           )}
         </div>

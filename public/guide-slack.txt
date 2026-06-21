@@ -1,0 +1,35 @@
+*📈 Tape — quick start guide*
+
+Tape is a Bloomberg-style equity research terminal in your browser — charts, fundamentals, screens, backtests, macro, options, and an AI analyst.
+Open it → https://stock-chart-screener-woad.vercel.app/u/sp500
+
+*Getting around*
+• *Pick a universe* — top-right switcher: S&P 500, Nasdaq 100, Russell 1000/3000, or international (FTSE, DAX, Nikkei, KOSPI…).
+• *Search anything* — the search box finds any company across every universe; just type a name or ticker.
+• *Top nav* — Home · Screener · Heatmap · Markets · Economy · Backtest, and more.
+
+*The essentials*
+• *Home* — the 11 sectors with their returns & heat, market breadth (advancers/decliners, 52-week highs/lows), and the day's biggest movers.
+• *Stock pages* — one tabbed view: price chart (line or candlestick, with SMA/EMA/Bollinger/MACD/RSI), financial statements + forward estimates, DCF & scenario tools, insider trades, institutional holders, SEC filings, earnings-call AI summaries, the options chain, and a 10-year shares-outstanding history.
+• *Heatmap & Markets* — a treemap of the whole universe (sized by market cap, colored by return), plus a cross-asset monitor (indices, rates, FX, commodities, crypto).
+
+*Screening & backtesting*
+• *Screener* — filter by valuation, growth, margins, quality, technicals — or run a named strategy: Magic Formula, Net-Net (Graham), Piotroski F-Score, Shareholder Yield (Faber). Hover the ⓘ next to the Strategy menu for what each one does.
+• *Plain-English screener* — type something like "profitable companies under 20× earnings growing over 15%" and the AI builds the filter for you.
+• *Backtest* — test a price strategy or a factor-screen basket over ~5 years vs. the cap-weighted benchmark, with an equity curve + CAGR / max-drawdown / Sharpe.
+
+*Macro, options & AI*
+• *Economy & Rates* — Treasury yield curve, inflation (CPI/PCE/breakevens), growth & jobs, financial conditions (NFCI, VIX, M2), and credit spreads.
+• *Options flow* — market-wide unusual options activity, plus per-stock chains, IV skew, and a payoff builder.
+• *AI analyst* — Ask AI about any company, generate a buy-side research note, explain a price move, or compare two names head-to-head.
+• *Watchlist* — star tickers for live prices + the day's move and an AI digest of what's happening to your names.
+
+*For beta testers — what would help most*
+• Do the screens & backtests look sensible? Anything obviously wrong?
+• Try odd tickers and the international universes — where is data missing or off?
+• Push the AI — ask hard questions; flag anything inaccurate or generic.
+• Note anything slow, broken, or confusing (wording, layout, dead ends).
+
+_Heads up: data is a daily snapshot (live quotes only on the watchlist), Yahoo serves ~4–5 yrs of annual financials, and this is research, not investment advice — verify before relying on anything._
+
+Full interactive guide → https://stock-chart-screener-woad.vercel.app/guide.html
