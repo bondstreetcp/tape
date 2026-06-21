@@ -11,11 +11,10 @@ import { getNews } from "./news";
 import { getFinancials, type FinPeriod } from "./financials";
 
 const KEY = process.env.GEMINI_API_KEY;
-// gemini-2.5-flash with REASONING enabled (thinkingConfig below) — much sharper than
-// flash with thinking off, and unlike 2.5-pro it works on the free API tier (pro
-// returns HTTP 429 / quota there). Set GEMINI_MODEL=gemini-2.5-pro once the key has a
-// paid/billing tier for the most capable model.
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// gemini-2.5-pro — the most capable model, with reasoning enabled (thinkingConfig
+// below). Needs a billed API key (free tier returns HTTP 429 for pro); the user has
+// prepay billing set up. Override with GEMINI_MODEL=gemini-2.5-flash if ever needed.
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
 
 export const askConfigured = () => !!KEY;
 

@@ -59,6 +59,15 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
 
   const ip = impliedPrice(g, gm, pe);
   const upside = ip != null && price ? ip / price - 1 : null;
+  // Reverse the model: the revenue growth that makes the implied price equal today's
+  // market price (holding the chosen margin & P/E) — i.e. what the market is pricing in.
+  const impliedG = (() => {
+    if (!price) return null;
+    const epsAtGm = (base.rev * (gm / 100 - base.opexPct) * (1 - base.taxRate)) / base.shares;
+    const p0 = epsAtGm * pe; // implied price at 0% growth
+    if (!(p0 > 0)) return null;
+    return (price / p0 - 1) * 100;
+  })();
   const gms = [gm - 4, gm - 2, gm, gm + 2, gm + 4];
   const gs = [g - 4, g - 2, g, g + 2, g + 4];
   const cellColor = (u: number | null) => (u == null ? "var(--text-4)" : u > 0.15 ? "#22c55e" : u > -0.15 ? "var(--text-2)" : "#ef4444");
@@ -79,6 +88,16 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
           <div className="text-[11px] text-[var(--text-4)]">vs price {price ? fmtMoney(price, currency) : "—"}</div>
           <div className="font-mono text-2xl font-bold tabular-nums" style={{ color: upside == null ? "var(--text-3)" : upside >= 0 ? "#22c55e" : "#ef4444" }}>
             {upside == null ? "—" : `${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(0)}%`}
+          </div>
+        </div>
+        <div className="rounded-lg border border-[#a855f7]/40 bg-[#a855f7]/10 px-3 py-1.5">
+          <div className="text-[11px] text-[#c4b5fd]">Market is pricing in</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-2xl font-bold tabular-nums text-[var(--text)]">{impliedG == null ? "—" : `${impliedG >= 0 ? "+" : ""}${impliedG.toFixed(0)}%`}</span>
+            <span className="text-[11px] text-[var(--text-3)]">rev growth/yr</span>
+            {impliedG != null && (
+              <button onClick={() => setG(Math.round(clamp(impliedG, -10, 40)))} title="Set the growth slider to the market-implied rate" className="ml-0.5 rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)]">set ↩</button>
+            )}
           </div>
         </div>
       </div>
@@ -117,7 +136,7 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
         </table>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-4)]">
-        Forward revenue = FY{base.fy} revenue × (1 + growth); apply your gross margin, hold operating costs at {(base.opexPct * 100).toFixed(0)}% of revenue and the {(base.taxRate * 100).toFixed(0)}% tax rate → net income ÷ {(base.shares / 1e6).toFixed(0)}M shares → EPS × the P/E. A driver-based what-if, not a forecast.
+        Forward revenue = FY{base.fy} revenue × (1 + growth); apply your gross margin, hold operating costs at {(base.opexPct * 100).toFixed(0)}% of revenue and the {(base.taxRate * 100).toFixed(0)}% tax rate → net income ÷ {(base.shares / 1e6).toFixed(0)}M shares → EPS × the P/E. A driver-based what-if, not a forecast. <span className="text-[#c4b5fd]">&ldquo;Market is pricing in&rdquo;</span> reverses it — the revenue growth that makes the model&apos;s price equal today&apos;s, at the margin &amp; P/E set above; lower the P/E to a conservative multiple to see the growth baked into the price.
       </p>
     </section>
   );
