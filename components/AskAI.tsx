@@ -1,12 +1,18 @@
 "use client";
 import { useState } from "react";
+import MarkdownLite from "./MarkdownLite";
 
 const SUGGESTIONS = [
-  "What does this company do?",
   "How does its valuation compare to its growth?",
   "What stands out in its recent results?",
   "What are the key risks?",
+  "Who are its main competitors?",
 ];
+
+const researchNote = (label: string) =>
+  `Write a concise research note on ${label}, with specific numbers throughout. Use clear sections: ` +
+  `**What it does**, **Bull case**, **Bear case & key risks**, **Valuation** (is it cheap or expensive vs. its growth & peers, and why), and **What to watch next** (catalysts). ` +
+  `Draw on the financial data plus current web info; be balanced and concrete, not promotional.`;
 
 interface Source { title: string; uri: string }
 interface Msg { q: string; a: string; sources?: Source[] }
@@ -20,10 +26,11 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
   const [configured, setConfigured] = useState(true);
   const label = name || symbol;
 
-  const ask = (question: string) => {
+  const ask = (question: string, display?: string) => {
     const q = question.trim();
     if (!q || loading) return;
-    setInput(""); setError(null); setPending(q); setLoading(true);
+    const shown = display || q;
+    setInput(""); setError(null); setPending(shown); setLoading(true);
     const history = messages.map((m) => ({ q: m.q, a: m.a }));
     fetch(`/api/ask/${encodeURIComponent(symbol)}`, {
       method: "POST",
@@ -34,7 +41,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       .then((d) => {
         setLoading(false); setPending(null);
         if (d.configured === false) { setConfigured(false); return; }
-        if (d.answer) setMessages((m) => [...m, { q, a: d.answer, sources: d.sources }]);
+        if (d.answer) setMessages((m) => [...m, { q: shown, a: d.answer, sources: d.sources }]);
         else setError(d.error || "Couldn't get an answer.");
       })
       .catch((e) => { setLoading(false); setPending(null); setError(String(e)); });
@@ -66,7 +73,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
           <div className="mb-1 flex justify-end">
             <span className="max-w-[85%] rounded-lg rounded-br-sm bg-[#2563eb]/15 px-3 py-1.5 text-[13px] text-[var(--text)]">{m.q}</span>
           </div>
-          <div className="whitespace-pre-wrap rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] leading-relaxed text-[var(--text-body)]">{m.a}</div>
+          <div className="rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-body)]"><MarkdownLite text={m.a} /></div>
           {m.sources && m.sources.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {m.sources.map((src, j) => (
@@ -103,12 +110,20 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       </form>
 
       {!started && configured && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {SUGGESTIONS.map((x) => (
-            <button key={x} onClick={() => ask(x)} className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)]">
-              {x}
-            </button>
-          ))}
+        <div className="mt-2">
+          <button
+            onClick={() => ask(researchNote(label), `📝 Research note on ${label}`)}
+            className="mb-2 inline-flex items-center gap-1.5 rounded-lg bg-[#a855f7] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#9333ea]"
+          >
+            📝 Generate research note
+          </button>
+          <div className="flex flex-wrap gap-1.5">
+            {SUGGESTIONS.map((x) => (
+              <button key={x} onClick={() => ask(x)} className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[var(--text-3)] hover:border-[var(--border-strong)] hover:text-[var(--text)]">
+                {x}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       {!configured && (
