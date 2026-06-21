@@ -95,7 +95,12 @@ export function sliceSeries(
       cutoff = now - 366 * DAY;
       break;
   }
-  const pts = daily.filter((p) => p.t >= cutoff);
+  // Include the bar just before the window as the period baseline, so a chart anchors
+  // to the period's starting price (YTD starts at the prior-year close, not the first
+  // January bar) and the window's change ties out with the canonical returns[tf] shown
+  // in the header and the screener.
+  const i = daily.findIndex((p) => p.t >= cutoff);
+  const pts = i < 0 ? [] : daily.slice(i > 0 ? i - 1 : 0);
   return pts.length > 1 ? pts : daily;
 }
 

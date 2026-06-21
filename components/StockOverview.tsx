@@ -88,8 +88,8 @@ export default function StockOverview({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg font-semibold tabular-nums" style={{ color: trendColor(windowChange ?? row.returns[tf]) }}>
-          {fmtPct(windowChange ?? row.returns[tf])}{" "}
+        <span className="text-lg font-semibold tabular-nums" style={{ color: trendColor(row.returns[tf] ?? windowChange) }}>
+          {fmtPct(row.returns[tf] ?? windowChange)}{" "}
           <span className="text-xs font-normal text-[var(--text-3)]">over {TIMEFRAMES.find((t) => t.key === tf)?.label}</span>
         </span>
         <TimeframeSelector value={tf} onChange={setTf} />

@@ -136,9 +136,9 @@ export default function SectorView({
           </h2>
           <span
             className="text-sm font-semibold tabular-nums"
-            style={{ color: trendColor(windowChange) }}
+            style={{ color: trendColor(sectorReturn) }}
           >
-            {fmtPct(windowChange)} this range
+            {fmtPct(sectorReturn)} this range
           </span>
         </div>
         <IndicatorChart
