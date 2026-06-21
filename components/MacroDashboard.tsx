@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
@@ -278,6 +279,7 @@ export default function MacroDashboard({
   releases?: Record<string, ReleaseData>;
 }) {
   const router = useRouter();
+  const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
   const [refreshing, setRefreshing] = useState(false);
   const [detail, setDetail] = useState<MacroInd | null>(null);
   const [openRows, setOpenRows] = useState<Set<number>>(new Set());
@@ -316,6 +318,9 @@ export default function MacroDashboard({
           </div>
         </div>
         <YieldCurve curve={curve} />
+        <div className="mt-2 text-right">
+          <Link href={`/u/${universe}/rates`} className="text-xs font-medium text-[#60a5fa] hover:underline">Rates &amp; credit detail — curve spreads, inversion &amp; OAS trends →</Link>
+        </div>
       </section>
 
       {volOil && (volOil.vix.length > 1 || volOil.oil.length > 1) && (
