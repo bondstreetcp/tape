@@ -1,8 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
+
+interface Item { href: string; label: string }
+interface Group { label: string; items: Item[] }
 
 export default function AppHeader({
   universe,
@@ -13,21 +17,74 @@ export default function AppHeader({
 }) {
   const pathname = usePathname();
   const base = `/u/${universe}`;
+  const [open, setOpen] = useState<string | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const navRef = useRef<HTMLElement | null>(null);
+  const dropRef = useRef<HTMLDivElement | null>(null);
 
-  const NavLink = ({ href, label, exact = false }: { href: string; label: string; exact?: boolean }) => {
-    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
-    return (
-      <Link
-        href={href}
-        className={
-          "shrink-0 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
-          (active ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]")
-        }
-      >
-        {label}
-      </Link>
-    );
+  const groups: Group[] = [
+    {
+      label: "Markets",
+      items: [
+        { href: `${base}/heatmap`, label: "Heatmap" },
+        { href: `${base}/market`, label: "Cross-Asset Monitor" },
+        { href: `${base}/rotation`, label: "Sector Rotation" },
+        { href: `${base}/flow`, label: "Options Flow" },
+      ],
+    },
+    {
+      label: "Research",
+      items: [
+        { href: `${base}/compare`, label: "Compare" },
+        { href: `${base}/backtest`, label: "Backtest" },
+        { href: `${base}/research`, label: "Filings & Docs" },
+      ],
+    },
+    {
+      label: "Economy",
+      items: [
+        { href: `${base}/macro`, label: "Macro & Rates" },
+        { href: `${base}/earnings`, label: "Earnings Calendar" },
+        { href: `${base}/briefing`, label: "Daily Briefing" },
+      ],
+    },
+  ];
+
+  // Close the dropdown on outside-click, scroll, or navigation.
+  useEffect(() => { setOpen(null); }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!navRef.current?.contains(t) && !dropRef.current?.contains(t)) setOpen(null);
+    };
+    const onScroll = () => setOpen(null);
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+
+  const isActive = (href: string, exact = false) =>
+    exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
+  const groupActive = (g: Group) => g.items.some((it) => isActive(it.href));
+
+  const linkCls = (active: boolean) =>
+    "shrink-0 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
+    (active ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]");
+
+  const toggle = (label: string, e: React.MouseEvent) => {
+    if (open === label) { setOpen(null); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPos({ left: Math.round(r.left), top: Math.round(r.bottom + 5) });
+    setOpen(label);
   };
+
+  const active = groups.find((g) => g.label === open);
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--divider)] bg-[var(--bg)]/90 backdrop-blur">
@@ -37,20 +94,27 @@ export default function AppHeader({
             <span className="text-[#60a5fa]">▦</span>
             <span className="hidden font-bold tracking-tight sm:inline">Tape</span>
           </Link>
-          <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <NavLink href={base} label="Home" exact />
-            <NavLink href={`${base}/screener`} label="Screener" />
-            <NavLink href={`${base}/heatmap`} label="Heatmap" />
-            <NavLink href={`${base}/market`} label="Markets" />
-            <NavLink href={`${base}/flow`} label="Options" />
-            <NavLink href={`${base}/macro`} label="Economy" />
-            <NavLink href={`${base}/rotation`} label="Sectors" />
-            <NavLink href={`${base}/research`} label="Filings" />
-            <NavLink href={`${base}/earnings`} label="Earnings" />
-            <NavLink href={`${base}/compare`} label="Compare" />
-            <NavLink href={`${base}/backtest`} label="Backtest" />
-            <NavLink href={`${base}/briefing`} label="Briefing" />
-            <NavLink href={`${base}/watchlist`} label="★" />
+          <nav ref={navRef} className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Link href={base} className={linkCls(isActive(base, true))}>Home</Link>
+            <Link href={`${base}/screener`} className={linkCls(isActive(`${base}/screener`))}>Screener</Link>
+            {groups.map((g) => (
+              <button
+                key={g.label}
+                onClick={(e) => toggle(g.label, e)}
+                aria-haspopup="menu"
+                aria-expanded={open === g.label}
+                className={
+                  "flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
+                  (groupActive(g) || open === g.label ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]")
+                }
+              >
+                {g.label}
+                <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden className={"transition-transform " + (open === g.label ? "rotate-180" : "")}>
+                  <path d="M2.5 4.5l3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+            <Link href={`${base}/watchlist`} className={linkCls(isActive(`${base}/watchlist`))} title="Watchlist">★</Link>
           </nav>
         </div>
         <div className="flex items-center gap-1.5">
@@ -67,6 +131,31 @@ export default function AppHeader({
           <ThemeToggle />
         </div>
       </div>
+
+      {/* Dropdown panel — fixed so it isn't clipped by the scrollable nav. */}
+      {active && (
+        <div
+          ref={dropRef}
+          role="menu"
+          style={{ position: "fixed", left: pos.left, top: pos.top }}
+          className="z-50 min-w-[190px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-xl"
+        >
+          {active.items.map((it) => (
+            <Link
+              key={it.href}
+              href={it.href}
+              role="menuitem"
+              onClick={() => setOpen(null)}
+              className={
+                "block rounded-md px-2.5 py-1.5 text-sm transition-colors " +
+                (isActive(it.href) ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]")
+              }
+            >
+              {it.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </header>
   );
 }
