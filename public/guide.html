@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tape — Beta Tester Walkthrough</title>
+<style>
+  :root{
+    --bg:#0b0d12; --surface:#13161d; --surface2:#1a1e27; --border:#262b36; --divider:#1f242e;
+    --text:#e8eaed; --text2:#c2c7d0; --text3:#8b93a1; --text4:#5b6373;
+    --blue:#60a5fa; --blue-d:#2563eb; --purple:#a855f7; --purple-l:#d8b4fe; --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:880px;margin:0 auto;padding:0 20px 80px}
+  /* hero */
+  .hero{padding:64px 0 36px;text-align:center;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--purple-l);background:rgba(168,85,247,.14);border:1px solid rgba(168,85,247,.35);border-radius:999px;padding:4px 12px;margin-bottom:18px}
+  .hero h1{font-size:44px;margin:0 0 8px;letter-spacing:-.02em}
+  .hero h1 .dot{color:var(--blue)}
+  .hero p{color:var(--text3);font-size:17px;max-width:620px;margin:0 auto}
+  .cta{display:inline-block;margin-top:24px;background:var(--blue-d);color:#fff;font-weight:600;padding:11px 22px;border-radius:10px}
+  .cta:hover{background:#1d4ed8;text-decoration:none}
+  /* quick start */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:34px 0}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px}
+  .step .n{width:26px;height:26px;border-radius:999px;background:var(--blue-d);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-bottom:10px}
+  .step h3{margin:0 0 4px;font-size:15px}
+  .step p{margin:0;color:var(--text3);font-size:13px}
+  /* sections */
+  h2.sec{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:48px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--divider)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:14px}
+  .card h3{margin:0 0 6px;font-size:18px;display:flex;align-items:center;gap:9px}
+  .card h3 .emo{font-size:20px}
+  .card p{margin:0 0 10px;color:var(--text2)}
+  .card p.muted{color:var(--text3);font-size:13.5px}
+  .try{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--blue);background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.28);border-radius:8px;padding:6px 12px;margin-top:4px}
+  .try:hover{text-decoration:none;border-color:var(--blue)}
+  .tip{margin-top:12px;font-size:12.5px;color:var(--text3);border-left:2px solid var(--amber);padding:2px 0 2px 12px}
+  .tip b{color:var(--amber)}
+  ul.feat{margin:6px 0 0;padding-left:18px;color:var(--text2);font-size:14px}
+  ul.feat li{margin:3px 0}
+  /* strategy block */
+  .strat{border-top:1px solid var(--divider);padding-top:12px;margin-top:12px}
+  .strat:first-child{border:0;padding-top:0;margin-top:0}
+  .strat .name{font-weight:700;color:var(--purple-l);font-size:14.5px}
+  .strat .what{font-style:italic;color:var(--text3);font-size:13px;margin:2px 0 4px}
+  .strat .how{color:var(--text2);font-size:13px;margin:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  /* beta box */
+  .beta{background:linear-gradient(180deg,rgba(168,85,247,.08),rgba(37,99,235,.05));border:1px solid rgba(168,85,247,.3);border-radius:14px;padding:22px 24px;margin-top:18px}
+  .beta h3{margin:0 0 10px;font-size:18px}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text2)}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--border);color:var(--text4);font-size:12.5px;text-align:center}
+  @media(max-width:680px){.steps,.grid2{grid-template-columns:1fr}.hero h1{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <span class="badge">Private Beta · Thanks for testing</span>
+    <h1>Tape<span class="dot">.</span></h1>
+    <p>A Bloomberg-style equity research terminal in your browser — charts, fundamentals, screens, backtests, macro, options, and an AI analyst. This is a 5-minute tour of what to try.</p>
+    <a class="cta" id="open-link" href="https://stock-chart-screener-woad.vercel.app/u/sp500" target="_blank" rel="noreferrer">Open Tape →</a>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>Pick a universe</h3><p>Top-right switcher: S&amp;P 500, Nasdaq 100, Russell 1000/3000, or international (FTSE, DAX, Nikkei, KOSPI…).</p></div>
+    <div class="step"><div class="n">2</div><h3>Search anything</h3><p>The search box (top bar) finds any company across every universe — type a name or ticker.</p></div>
+    <div class="step"><div class="n">3</div><h3>Explore the tabs</h3><p>The nav row across the top moves between Home, Screener, Heatmap, Markets, Economy, Backtest and more.</p></div>
+  </div>
+
+  <h2 class="sec">The essentials</h2>
+
+  <div class="card">
+    <h3><span class="emo">🏠</span> Home dashboard</h3>
+    <p>Your starting point for a universe: the 11 sectors with their returns &amp; heat, market breadth (advancers/decliners, names near 52-week highs/lows), and the day's biggest movers.</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500" target="_blank" rel="noreferrer">Try the S&amp;P 500 home →</a>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">📈</span> Stock pages</h3>
+    <p>Click any ticker to open its page. One tabbed view covers everything:</p>
+    <ul class="feat">
+      <li><b>Overview</b> — price chart (line or candlestick) with SMA/EMA/Bollinger/MACD/RSI, volume, a compare box (overlay any ticker), 52-week range, seasonality, and an AI "explain the move".</li>
+      <li><b>Statements · Estimates · Peers · Ownership · Filings &amp; Calls · Options · Profile</b> — financial statements (with forward estimates), DCF &amp; scenario tools, insider trades, institutional holders, SEC filings, earnings-call transcripts &amp; AI summaries, the options chain, and more.</li>
+    </ul>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/stock/AAPL" target="_blank" rel="noreferrer">Open Apple →</a>
+    <div class="tip"><b>New:</b> the Statements tab now has a <b>shares-outstanding-over-time</b> chart at the bottom — see buybacks (falling) vs. dilution (rising) at a glance.</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">🔲</span> Heatmap &amp; Markets</h3>
+    <p>The <b>Heatmap</b> is a finviz-style treemap of the whole universe, sized by market cap and colored by return. <b>Markets</b> is a cross-asset monitor — indices, rates, FX, commodities, crypto — each tile opens a chart.</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/heatmap" target="_blank" rel="noreferrer">Open the heatmap →</a>
+  </div>
+
+  <h2 class="sec">Screening &amp; backtesting</h2>
+
+  <div class="card">
+    <h3><span class="emo">🔍</span> The Screener</h3>
+    <p>Filter the universe by valuation, growth, margins, quality, technicals — or run a <b>named strategy preset</b> from the purple <span style="color:var(--purple-l)">Strategy</span> dropdown. Hover the <span class="kbd">i</span> next to it for an in-app explanation of each. What they do:</p>
+    <div class="strat"><div class="name">✦ Magic Formula (Greenblatt)</div><div class="what">Good businesses at cheap prices.</div><p class="how">Ranks every name by earnings yield (cheapness) + return on capital (quality), sums the ranks, takes the best.</p></div>
+    <div class="strat"><div class="name">Net-Net / NCAV (Graham)</div><div class="what">Deep value — a dollar of working capital for less than a dollar.</div><p class="how">Trades below net current assets minus all liabilities. Very rare in large caps (usually 0 in the S&amp;P 500) — try Broad 1500 or Russell 3000.</p></div>
+    <div class="strat"><div class="name">Piotroski F-Score (0–9)</div><div class="what">A 9-point fundamental-strength checklist.</div><p class="how">Profitability, cash flow, leverage, margins &amp; efficiency trends. 7–9 = strengthening; pair with cheap stocks to avoid value traps.</p></div>
+    <div class="strat"><div class="name">Shareholder Yield (Faber)</div><div class="what">All the cash a company returns to owners.</div><p class="how">Dividends + net buybacks + net debt paydown — not just the dividend. Higher = more capital returned.</p></div>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/screener" target="_blank" rel="noreferrer">Open the screener →</a>
+    <div class="tip"><b>Also try:</b> the plain-English screener at the top — type something like <i>"profitable companies under 20× earnings growing over 15%"</i> and the AI builds the filter.</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">⏮️</span> Backtest</h3>
+    <p>Test a strategy over ~5 years vs. the cap-weighted benchmark, with an equity curve and CAGR / max-drawdown / Sharpe. Two button rows: <b>price strategies</b> (momentum, trend, low-vol, equal-weight) and the <b>factor screens</b> above (hold the Magic/Net-Net/Piotroski/Shareholder-Yield basket).</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/backtest" target="_blank" rel="noreferrer">Open the backtester →</a>
+    <div class="tip"><b>Read the fine print:</b> factor-screen backtests apply <i>today's</i> fundamentals across all of history (look-ahead bias) and use today's constituents (survivorship bias) — they're indicative, not a live track record. The UI flags this in red.</div>
+  </div>
+
+  <h2 class="sec">Macro, options &amp; AI</h2>
+
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="emo">🏦</span> Economy &amp; Rates</h3>
+      <p class="muted">The Treasury yield curve, inflation (CPI/PCE/breakevens), growth &amp; jobs, financial conditions (NFCI, VIX, M2), and <b>credit spreads</b> (IG/HY OAS + a long-run Baa spread) with a 1M–10Y timeframe bar. Click "Rates &amp; credit detail" for the deep view.</p>
+      <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/macro" target="_blank" rel="noreferrer">Open the Economy page →</a>
+    </div>
+    <div class="card">
+      <h3><span class="emo">⚡</span> Options flow</h3>
+      <p class="muted">Market-wide unusual options activity across the S&amp;P 500 — the day's biggest premium trades, call-vs-put sentiment, and unusual volume flags. Per-stock, the Options tab has the chain, IV skew, and a strategy payoff builder.</p>
+      <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/flow" target="_blank" rel="noreferrer">Open options flow →</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">🤖</span> The AI analyst</h3>
+    <p>Throughout the app, AI (Google Gemini, web-grounded) helps you read the data:</p>
+    <ul class="feat">
+      <li><b>Ask AI</b> — conversational Q&amp;A on any company (Overview tab), with web sources.</li>
+      <li><b>Generate research note</b> — a one-click buy-side memo (thesis, variant view, valuation scenarios, catalysts, risks).</li>
+      <li><b>Explain the move</b> — why a stock moved over the window you've selected on the chart.</li>
+      <li><b>Head-to-head compare</b> &amp; <b>earnings-call summaries</b> — on the Peers and Filings tabs.</li>
+    </ul>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/stock/NVDA" target="_blank" rel="noreferrer">Try it on NVIDIA →</a>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">⭐</span> Watchlist</h3>
+    <p>Star any ticker to add it to your watchlist — it overlays <b>live</b> prices and the day's move, with a market-state pill (live / pre-market / after-hours / closed), plus an AI digest of what's happening to your names.</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/watchlist" target="_blank" rel="noreferrer">Open the watchlist →</a>
+  </div>
+
+  <div class="beta">
+    <h3>📝 For beta testers</h3>
+    <p style="color:var(--text2);margin:0 0 12px">A few things that would help us most:</p>
+    <ul class="feat">
+      <li><b>Kick the tires on the screens &amp; backtests</b> — do the results look sensible? Anything obviously wrong?</li>
+      <li><b>Try odd tickers and the international universes</b> — tell us where data is missing or looks off.</li>
+      <li><b>Push the AI</b> — ask hard questions, generate research notes; flag anything inaccurate or generic.</li>
+      <li><b>Note anything slow, broken, or confusing</b> — wording, layout, dead ends.</li>
+    </ul>
+    <p style="color:var(--text3);font-size:13px;margin:12px 0 0">
+      <b>Known beta notes:</b> data is a daily snapshot (intraday only for live quotes on watchlists); Yahoo serves ~4–5 years of annual financials; some international names carry less data; the AI needs a moment to think on big questions. Not investment advice — verify before relying on anything here.
+    </p>
+  </div>
+
+  <footer>
+    Tape · private research beta · data from Yahoo Finance, SEC EDGAR &amp; FRED. Built for research, not investment advice.
+  </footer>
+
+</div>
+<script>
+  // When served over http(s) (the deployed site, a preview, or localhost), rewrite the
+  // hard-coded production links to the current origin so testers stay on their environment.
+  // Opened as a local file:// it keeps the production links.
+  (function () {
+    try {
+      if (/^https?:$/.test(location.protocol)) {
+        document.querySelectorAll('a[href^="https://stock-chart-screener-woad.vercel.app"]').forEach(function (a) {
+          a.href = a.href.replace("https://stock-chart-screener-woad.vercel.app", location.origin);
+        });
+      }
+    } catch (e) {}
+  })();
+</script>
+</body>
+</html>
