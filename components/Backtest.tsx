@@ -1,15 +1,21 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { runStrategy, strategyLabel, type BacktestMatrix, type BacktestResult, type StrategyKey } from "@/lib/backtest";
+import { screenSymbols, SCREEN_LABEL, type ScreenKey } from "@/lib/screens";
+import type { StockRow } from "@/lib/types";
 
 const STRATS: StrategyKey[] = ["momentum", "trend", "lowvol", "equal"];
+const SCREENS: ScreenKey[] = ["magic", "netnet", "piotroski", "shyield"];
+const SCREEN_SHORT: Record<ScreenKey, string> = { magic: "Magic Formula", netnet: "Net-Net", piotroski: "Piotroski", shyield: "Sh. Yield" };
 const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 
-export default function Backtest({ universe }: { universe: string }) {
+export default function Backtest({ universe, stocks = [] }: { universe: string; stocks?: StockRow[] }) {
   const [matrix, setMatrix] = useState<BacktestMatrix | "loading" | "err" | null>("loading");
   const [strategy, setStrategy] = useState<StrategyKey>("momentum");
+  const [screen, setScreen] = useState<ScreenKey | null>(null);
   const [topN, setTopN] = useState(20);
   const [lookback, setLookback] = useState(6);
+  const [pioMin, setPioMin] = useState(7);
 
   useEffect(() => {
     let a = true;
@@ -21,14 +27,20 @@ export default function Backtest({ universe }: { universe: string }) {
     return () => { a = false; };
   }, [universe]);
 
-  const result = useMemo<BacktestResult | null>(
-    () => (matrix && matrix !== "loading" && matrix !== "err" ? runStrategy(matrix, { strategy, topN, lookback }) : null),
-    [matrix, strategy, topN, lookback],
-  );
+  // For a factor screen, hold its passing names (today's fundamentals → look-ahead, flagged below).
+  const holdings = useMemo(() => (screen ? screenSymbols(screen, stocks, { topN, pioMin }) : undefined), [screen, stocks, topN, pioMin]);
+
+  const result = useMemo<BacktestResult | null>(() => {
+    if (!matrix || matrix === "loading" || matrix === "err") return null;
+    return screen
+      ? runStrategy(matrix, { strategy: "screen", holdings })
+      : runStrategy(matrix, { strategy, topN, lookback });
+  }, [matrix, strategy, screen, holdings, topN, lookback]);
 
   if (matrix === "loading") return <Box>Loading price history…</Box>;
   if (matrix === "err" || !matrix) return <Box>Backtest data isn’t available for this universe yet.</Box>;
-  const usesParams = strategy === "momentum" || strategy === "lowvol";
+  const usesParams = !screen && (strategy === "momentum" || strategy === "lowvol");
+  const nHold = holdings?.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -37,20 +49,41 @@ export default function Backtest({ universe }: { universe: string }) {
           {STRATS.map((s) => (
             <button
               key={s}
-              onClick={() => setStrategy(s)}
+              onClick={() => { setStrategy(s); setScreen(null); }}
               title={strategyLabel(s)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (strategy === s ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (!screen && strategy === s ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {strategyLabel(s).split(" (")[0]}
             </button>
           ))}
         </div>
+        <div className="inline-flex flex-wrap rounded-lg border border-[#a855f7]/40 bg-[var(--surface)] p-0.5">
+          {SCREENS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setScreen(s)}
+              title={`Backtest the ${SCREEN_LABEL[s]} screen — hold its passing names equal-weight`}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (screen === s ? "bg-[#a855f7] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+            >
+              {SCREEN_SHORT[s]}
+            </button>
+          ))}
+        </div>
         {usesParams && <Select label="Hold" value={topN} onChange={setTopN} opts={[10, 20, 30, 50]} suffix=" names" />}
         {usesParams && <Select label="Lookback" value={lookback} onChange={setLookback} opts={[3, 6, 12]} suffix=" mo" />}
+        {screen && (screen === "magic" || screen === "shyield") && <Select label="Top" value={topN} onChange={setTopN} opts={[20, 30, 50, 75]} />}
+        {screen === "piotroski" && <Select label="F ≥" value={pioMin} onChange={setPioMin} opts={[5, 6, 7, 8, 9]} />}
       </div>
 
+      {screen && (
+        <div className="text-xs text-[var(--text-3)]">
+          Holding the <span className="font-semibold text-[#d8b4fe]">{SCREEN_LABEL[screen]}</span> basket — {nHold} name{nHold === 1 ? "" : "s"}, equal-weight.
+          {nHold === 0 && <span className="text-[var(--text-4)]"> Nothing passes in this universe{screen === "netnet" ? " (net-nets are rare outside small caps — try Broad 1500 / Russell 3000)" : ""}.</span>}
+        </div>
+      )}
+
       {!result ? (
-        <Box>Not enough price history to backtest.</Box>
+        <Box>{screen && nHold === 0 ? "No names pass this screen in the current universe." : "Not enough price history to backtest."}</Box>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -63,17 +96,21 @@ export default function Backtest({ universe }: { universe: string }) {
 
           <EquityChart result={result} />
 
-          {strategy !== "equal" && result.holdingsLast.length > 0 && (
+          {(screen || strategy !== "equal") && result.holdingsLast.length > 0 && (
             <div className="text-xs text-[var(--text-3)]">
-              <span className="font-medium text-[var(--text-2)]">Current holdings:</span> {result.holdingsLast.slice(0, 25).join(", ")}
-              {result.holdingsLast.length > 25 ? "…" : ""}
+              <span className="font-medium text-[var(--text-2)]">Holdings:</span> {result.holdingsLast.slice(0, 25).join(", ")}
+              {result.holdingsLast.length > 25 ? `… (+${result.holdingsLast.length - 25})` : ""}
             </div>
           )}
 
           <p className="text-[11px] leading-relaxed text-[var(--text-4)]">
-            Monthly rebalance, equal-weight, drawn from the top {matrix.symbols.length} names by market cap; benchmark is the cap-weighted
-            group. {result.metrics.months} months. Price signals only — no fundamental look-ahead. Uses <em>today’s</em> constituents, so
-            results carry <span className="text-[var(--text-3)]">survivorship bias</span> (delisted names are absent) — treat as indicative, not a track record.
+            Monthly rebalance, equal-weight; benchmark is the cap-weighted group ({result.metrics.months} months).{" "}
+            {screen ? (
+              <span className="text-[#fca5a5]">This factor screen applies <em>today’s</em> fundamentals across all of history (look-ahead bias) — it shows how today’s basket would have traded, not a point-in-time strategy.</span>
+            ) : (
+              <>Price signals only — no fundamental look-ahead.</>
+            )}{" "}
+            Uses <em>today’s</em> constituents, so results also carry <span className="text-[var(--text-3)]">survivorship bias</span> — treat as indicative, not a track record.
           </p>
         </>
       )}

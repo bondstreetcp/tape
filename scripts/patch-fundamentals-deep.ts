@@ -30,8 +30,51 @@ async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => 
   return ret;
 }
 
-function computeFund(raw: any[]): Fundamentals | null {
-  const f = (x: any, k: string) => (typeof x?.[k] === "number" && Number.isFinite(x[k]) ? x[k] : null);
+type FGet = (x: any, k: string) => number | null;
+
+/** Piotroski F-score (0–9): 9 binary fundamental-strength signals, latest FY vs prior. */
+function piotroski(r: any[], f: FGet): number | null {
+  if (r.length < 2) return null;
+  const ni0 = f(r[0], "netIncome"), ni1 = f(r[1], "netIncome");
+  const ta0 = f(r[0], "totalAssets"), ta1 = f(r[1], "totalAssets");
+  if (ni0 == null || ta0 == null || ta0 === 0) return null;
+  const cfo0 = f(r[0], "operatingCashFlow") ?? f(r[0], "cashFlowFromContinuingOperatingActivities");
+  const ltd0 = f(r[0], "longTermDebt") ?? f(r[0], "totalDebt"), ltd1 = f(r[1], "longTermDebt") ?? f(r[1], "totalDebt");
+  const ca0 = f(r[0], "currentAssets"), cl0 = f(r[0], "currentLiabilities"), ca1 = f(r[1], "currentAssets"), cl1 = f(r[1], "currentLiabilities");
+  const sh0 = f(r[0], "ordinarySharesNumber") ?? f(r[0], "shareIssued"), sh1 = f(r[1], "ordinarySharesNumber") ?? f(r[1], "shareIssued");
+  const gp0 = f(r[0], "grossProfit"), gp1 = f(r[1], "grossProfit"), rev0 = f(r[0], "totalRevenue"), rev1 = f(r[1], "totalRevenue");
+  const roa0 = ni0 / ta0, roa1 = ni1 != null && ta1 ? ni1 / ta1 : null;
+  let s = 0;
+  if (roa0 > 0) s++;                                                                  // 1 positive ROA
+  if (cfo0 != null && cfo0 > 0) s++;                                                  // 2 positive operating cash flow
+  if (roa1 != null && roa0 > roa1) s++;                                               // 3 ROA rising
+  if (cfo0 != null && cfo0 > ni0) s++;                                                // 4 quality of earnings (CFO > NI)
+  if (ltd0 != null && ltd1 != null && ta1 && ltd0 / ta0 < ltd1 / ta1) s++;            // 5 leverage falling
+  if (ca0 != null && cl0 && ca1 != null && cl1 && ca0 / cl0 > ca1 / cl1) s++;         // 6 current ratio rising
+  if (sh0 != null && sh1 != null && sh0 <= sh1 * 1.001) s++;                          // 7 no share dilution
+  if (gp0 != null && rev0 && gp1 != null && rev1 && gp0 / rev0 > gp1 / rev1) s++;     // 8 gross margin rising
+  if (rev0 != null && rev1 != null && ta1 && rev0 / ta0 > rev1 / ta1) s++;            // 9 asset turnover rising
+  return s;
+}
+
+/** Meb Faber shareholder yield = dividend + net buyback + net debt-paydown, as a fraction. */
+function shYield(r: any[], f: FGet, meta?: { marketCap: number; divYield: number | null }): number | null {
+  if (!meta || r.length < 2) return null;
+  const sh0 = f(r[0], "ordinarySharesNumber") ?? f(r[0], "shareIssued"), sh1 = f(r[1], "ordinarySharesNumber") ?? f(r[1], "shareIssued");
+  const debt0 = f(r[0], "totalDebt"), debt1 = f(r[1], "totalDebt");
+  const div = meta.divYield ?? 0;
+  // Clamp the buyback & debt components to ±20% — a one-year share-count or debt swing
+  // beyond that is almost always a spinoff/split/one-off deleveraging, not a repeatable
+  // capital return, and would otherwise dominate the ranking with noise.
+  const clamp = (x: number) => Math.max(-0.2, Math.min(0.2, x));
+  const buyback = sh0 != null && sh1 ? clamp((sh1 - sh0) / sh1) : null;                // +ve when share count shrank
+  const debtPay = debt0 != null && debt1 != null && meta.marketCap ? clamp((debt1 - debt0) / meta.marketCap) : 0; // +ve when debt fell
+  if (buyback == null && !meta.divYield) return null;
+  return div + (buyback ?? 0) + debtPay;
+}
+
+function computeFund(raw: any[], meta?: { marketCap: number; divYield: number | null }): Fundamentals | null {
+  const f: FGet = (x: any, k: string) => (typeof x?.[k] === "number" && Number.isFinite(x[k]) ? x[k] : null);
   const r = (raw || [])
     .filter((x) => x?.totalRevenue != null && x?.date)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -48,6 +91,8 @@ function computeFund(raw: any[]): Fundamentals | null {
   const debt0 = f(r[0], "totalDebt");
   const ebitda0 = f(r[0], "EBITDA");
   const cash0 = f(r[0], "cashAndCashEquivalents");
+  // Graham NCAV = current assets − total liabilities (a name is a "net-net" when market cap < ⅔ NCAV).
+  const totalLiab0 = f(r[0], "totalLiabilitiesNetMinorityInterest") ?? sub(f(r[0], "totalAssets"), f(r[0], "stockholdersEquity"));
   return {
     revGrowth: ratio(rev(0), rev(1)) != null ? rev(0)! / rev(1)! - 1 : null,
     revCagr3y: r.length >= 4 && rev(0) && rev(3) ? Math.pow(rev(0)! / rev(3)!, 1 / 3) - 1 : null,
@@ -63,6 +108,9 @@ function computeFund(raw: any[]): Fundamentals | null {
     roe: ratio(f(r[0], "netIncome"), f(r[0], "stockholdersEquity")),
     netDebtEbitda: debt0 != null && ebitda0 && ebitda0 !== 0 ? (debt0 - (cash0 ?? 0)) / ebitda0 : null,
     currentRatio: ratio(f(r[0], "currentAssets"), f(r[0], "currentLiabilities")),
+    ncav: sub(f(r[0], "currentAssets"), totalLiab0),
+    fScore: piotroski(r, f),
+    shareholderYield: shYield(r, f, meta),
     asOf: r[0].date ? new Date(r[0].date).toISOString().slice(0, 10) : null,
   };
 }
@@ -78,6 +126,10 @@ async function main() {
       /* skip */
     }
   }
+  // marketCap + dividend yield per symbol (for shareholder yield) from any snapshot carrying it.
+  const metaBySym = new Map<string, { marketCap: number; divYield: number | null }>();
+  for (const u of UNIVERSES) for (const st of snaps[u.id]?.stocks ?? []) if (!metaBySym.has(st.symbol)) metaBySym.set(st.symbol, { marketCap: st.marketCap, divYield: st.dividendYield ?? null });
+
   const symbols = [...syms];
   console.log(`Fetching annual fundamentals for ${symbols.length} symbols…`);
   const fundMap = new Map<string, Fundamentals>();
@@ -89,7 +141,7 @@ async function main() {
         { period1: "2019-01-01", type: "annual", module: "all" } as any,
         { validateResult: false },
       );
-      const fund = computeFund(Array.isArray(r) ? r : []);
+      const fund = computeFund(Array.isArray(r) ? r : [], metaBySym.get(sym));
       if (fund) {
         fundMap.set(sym, fund);
         ok++;

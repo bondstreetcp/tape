@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { StockRow } from "@/lib/types";
+import { screenSymbols } from "@/lib/screens";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { fmtPct, fmtMarketCap, fmtMoney, fmtDateTime } from "@/lib/format";
@@ -48,6 +49,16 @@ const dsoColor = (v: any) => (v == null ? undefined : v > 0.5 ? "#ef4444" : v < 
 
 const LIMIT = 250;
 
+// Named preset screens (mutually exclusive). "none" = manual filters only.
+type Strategy = "none" | "magic" | "netnet" | "piotroski" | "shyield";
+const STRATEGIES: { v: Strategy; label: string }[] = [
+  { v: "none", label: "Strategy: none" },
+  { v: "magic", label: "✦ Magic Formula (Greenblatt)" },
+  { v: "netnet", label: "Net-Net / NCAV (Graham)" },
+  { v: "piotroski", label: "Piotroski F-Score" },
+  { v: "shyield", label: "Shareholder Yield (Faber)" },
+];
+
 export default function ScreenerView({
   universe,
   stocks,
@@ -85,30 +96,23 @@ export default function ScreenerView({
   const [minYld, setMinYld] = useState<number | null>(null);
   const [minRoe, setMinRoe] = useState<number | null>(null);
   const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
-  const [magic, setMagic] = useState(false); // Greenblatt magic formula
-  const [magicCount, setMagicCount] = useState(30); // how many names the magic list shows
+  const [strategy, setStrategy] = useState<Strategy>("none"); // named preset screen
+  const [topN, setTopN] = useState(30); // names shown for Magic Formula & Shareholder Yield
+  const [pioMin, setPioMin] = useState(7); // minimum Piotroski F-score
 
   // Magic Formula (Greenblatt): rank every name by earnings yield and by return
   // on capital, sum the two ranks, take the best ~30 — good companies at cheap
   // prices. He excludes financials & utilities (the EBIT/capital math doesn't fit)
   // and tiny caps. The free snapshot has P/E + ROE, so we proxy earnings yield with
   // 1/(P/E) and return-on-capital with ROE. Returns symbol → magic rank (0 = best).
-  const magicRank = useMemo(() => {
-    if (!magic) return null;
-    const valid = stocks.filter(
-      (s) => (s.trailingPE ?? 0) > 0 && s.fund?.roe != null && s.etf !== "XLF" && s.etf !== "XLU" && (s.marketCap || 0) >= 5e8,
-    );
-    if (valid.length < 20) return new Map<string, number>();
-    const ey = new Map<string, number>(); // earnings-yield rank (high = better)
-    [...valid].sort((a, b) => 1 / b.trailingPE! - 1 / a.trailingPE!).forEach((s, i) => ey.set(s.symbol, i));
-    const roc = new Map<string, number>(); // return-on-capital rank (high = better)
-    [...valid].sort((a, b) => b.fund!.roe! - a.fund!.roe!).forEach((s, i) => roc.set(s.symbol, i));
-    const ranked = valid
-      .map((s) => ({ sym: s.symbol, score: ey.get(s.symbol)! + roc.get(s.symbol)! }))
-      .sort((a, b) => a.score - b.score)
-      .slice(0, magicCount);
-    return new Map(ranked.map((r, i) => [r.sym, i]));
-  }, [magic, stocks, magicCount]);
+  // Preset screens (Magic / Net-Net / Piotroski / Shareholder Yield) share lib/screens
+  // with the backtester so a screen and its backtest hold identical names. `set` filters
+  // the table; `rank` carries the screen's natural order (best first).
+  const screenResult = useMemo(() => {
+    if (strategy === "none") return null;
+    const syms = screenSymbols(strategy, stocks, { topN, pioMin });
+    return { set: new Set(syms), rank: new Map(syms.map((s, i) => [s, i] as const)) };
+  }, [strategy, stocks, topN, pioMin]);
 
   const currency = currencyOf(universe);
   const columns: Col[] = useMemo(() => {
@@ -138,8 +142,13 @@ export default function ScreenerView({
       { key: "fcfM", label: "FCF Mgn", num: true, get: (s) => s.fund?.fcfMargin ?? null, fmt: pctFrac, align: "right" },
       { key: "roe", label: "ROE", num: true, get: (s) => s.fund?.roe ?? null, fmt: pctFrac, align: "right" },
     ];
-    return [...base, ...(colSet === "fundamentals" ? fund : valuation)];
-  }, [tf, colSet, currency]);
+    const stratCol: Col | null =
+      strategy === "netnet" ? { key: "mktncav", label: "Mkt / NCAV", num: true, get: (s) => { const n = s.fund?.ncav; return n != null && n > 0 ? s.marketCap / n : null; }, fmt: (v) => (v == null ? "—" : `${v.toFixed(2)}×`), color: (v) => (v == null ? undefined : v < 0.67 ? "#22c55e" : v < 1 ? "#fbbf24" : undefined), align: "right" }
+      : strategy === "piotroski" ? { key: "fscore", label: "F-Score", num: true, get: (s) => s.fund?.fScore ?? null, fmt: (v) => (v == null ? "—" : `${v} / 9`), color: (v) => (v == null ? undefined : v >= 8 ? "#22c55e" : v <= 3 ? "#ef4444" : undefined), align: "right" }
+      : strategy === "shyield" ? { key: "shyield", label: "Sh. Yield", num: true, get: (s) => s.fund?.shareholderYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" }
+      : null;
+    return [...base, ...(stratCol ? [stratCol] : []), ...(colSet === "fundamentals" ? fund : valuation)];
+  }, [tf, colSet, currency, strategy]);
 
   const filtered = useMemo(() => {
     let r = stocks;
@@ -159,12 +168,12 @@ export default function ScreenerView({
     if (minYld != null) r = r.filter((s) => (s.dividendYield ?? 0) >= minYld);
     if (minRoe != null) r = r.filter((s) => (s.fund?.roe ?? -Infinity) >= minRoe);
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
-    if (magicRank) r = r.filter((s) => magicRank.has(s.symbol));
+    if (screenResult) r = r.filter((s) => screenResult.set.has(s.symbol));
 
     // When Magic Formula is on, order by the magic rank (best first) by default —
     // but only until the user clicks a column header (which sets sortKey to that
     // column, overriding the magic order while keeping the top-30 filter).
-    if (magicRank && sortKey === "magic") return [...r].sort((a, b) => (magicRank.get(a.symbol) ?? 999) - (magicRank.get(b.symbol) ?? 999));
+    if (strategy === "magic" && sortKey === "magic" && screenResult) return [...r].sort((a, b) => (screenResult.rank.get(a.symbol) ?? 999) - (screenResult.rank.get(b.symbol) ?? 999));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -181,7 +190,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, magicRank, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, strategy, screenResult, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -287,30 +296,31 @@ export default function ScreenerView({
         <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
           Above 200-day avg
         </button>
-        <button
-          onClick={() => {
-            const next = !magic;
-            setMagic(next);
-            // Default to the magic-rank order when turning it on; restore a normal
-            // column sort when turning it off (or if magic sort was active).
-            if (next) { setSortKey("magic"); setSortDir("asc"); }
-            else if (sortKey === "magic") { setSortKey("cap"); setSortDir("desc"); }
+        <select
+          value={strategy}
+          onChange={(e) => {
+            const v = e.target.value as Strategy;
+            setStrategy(v);
+            // Default each preset to its natural ranking (user can still click a header).
+            if (v === "magic") { setSortKey("magic"); setSortDir("asc"); }
+            else if (v === "netnet") { setSortKey("mktncav"); setSortDir("asc"); }
+            else if (v === "piotroski") { setSortKey("fscore"); setSortDir("desc"); }
+            else if (v === "shyield") { setSortKey("shyield"); setSortDir("desc"); }
+            else { setSortKey("cap"); setSortDir("desc"); }
           }}
-          title="Greenblatt Magic Formula: every name ranked by earnings yield + return on capital, the two ranks summed, the best N shown best-first (ex-financials & utilities, ≥$500M cap). Good companies at cheap prices. Proxies earnings yield with 1/(P/E) and return-on-capital with ROE; needs fundamentals (US universes). Choose how many names with the Top-N selector; click a column header to re-sort them."
-          className={"rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors " + (magic ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
+          title="Named value/quality screens. Magic Formula: good companies at cheap prices (earnings yield + ROE rank). Net-Net: price below net current asset value (Graham deep value — rare in large caps). Piotroski F-Score: 9-point fundamental-strength score. Shareholder Yield: dividends + net buybacks + net debt paydown (Faber). US universes; needs fundamentals."
+          className={"cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none transition-colors " + (strategy !== "none" ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
         >
-          ✦ Magic Formula
-        </button>
-        {magic && (
-          <select
-            value={magicCount}
-            onChange={(e) => setMagicCount(Number(e.target.value))}
-            title="How many names the Magic Formula list shows"
-            className="rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]"
-          >
-            {[20, 30, 40, 50, 75, 100].map((n) => (
-              <option key={n} value={n}>Top {n}</option>
-            ))}
+          {STRATEGIES.map((s) => (<option key={s.v} value={s.v}>{s.label}</option>))}
+        </select>
+        {(strategy === "magic" || strategy === "shyield") && (
+          <select value={topN} onChange={(e) => setTopN(Number(e.target.value))} title="How many names the list shows" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
+            {[20, 30, 40, 50, 75, 100].map((n) => (<option key={n} value={n}>Top {n}</option>))}
+          </select>
+        )}
+        {strategy === "piotroski" && (
+          <select value={pioMin} onChange={(e) => setPioMin(Number(e.target.value))} title="Minimum Piotroski F-score (0–9)" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
+            {[9, 8, 7, 6, 5].map((n) => (<option key={n} value={n}>F-Score ≥ {n}</option>))}
           </select>
         )}
       </div>
@@ -359,9 +369,14 @@ export default function ScreenerView({
       )}
 
       <div className="mb-2 text-xs text-[var(--text-3)]">
-        {magic ? (
-          <span><span className="font-semibold text-[#d8b4fe]">✦ Magic Formula</span> — top {filtered.length} ranked by earnings yield + return on capital (best first){sectorEtf !== "all" ? " in this sector" : ""}. </span>
-        ) : null}
+        {strategy !== "none" && (
+          <span><span className="font-semibold text-[#d8b4fe]">{STRATEGIES.find((s) => s.v === strategy)?.label}</span> — {
+            strategy === "magic" ? `top ${filtered.length} by earnings yield + return on capital (best first)`
+            : strategy === "netnet" ? `${filtered.length} trading below net current asset value (deep value — rare outside small caps)`
+            : strategy === "piotroski" ? `${filtered.length} with F-Score ≥ ${pioMin} (of 9)`
+            : `top ${filtered.length} by shareholder yield`
+          }{sectorEtf !== "all" ? " in this sector" : ""}. </span>
+        )}
         Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}
         {filtered.length > LIMIT && ` (first ${LIMIT} — refine filters or sort)`} · click a row to open
       </div>
