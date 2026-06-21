@@ -157,20 +157,28 @@ export default function CandleChart({
           <span className="text-[var(--text-3)]">Vol {fmtVol(hb.v)}</span>
         </div>
         <div className="flex items-center gap-1">
-          {SMA_DEFS.map((d) => (
-            <button
-              key={d.period}
-              onClick={() => setSmaOn((p) => { const n = new Set(p); n.has(d.period) ? n.delete(d.period) : n.add(d.period); return n; })}
-              className="rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors"
-              style={{
-                borderColor: smaOn.has(d.period) ? d.color : "var(--border)",
-                color: smaOn.has(d.period) ? d.color : "var(--text-3)",
-                background: smaOn.has(d.period) ? d.color + "1a" : "transparent",
-              }}
-            >
-              SMA{d.period}
-            </button>
-          ))}
+          {SMA_DEFS.map((d) => {
+            // An n-period SMA needs ≥ n bars. The intraday (1D/1W) view only has ~78 bars,
+            // so SMA150/200 can't be computed there — disable rather than silently show nothing.
+            const enough = source.length >= d.period;
+            const on = smaOn.has(d.period) && enough;
+            return (
+              <button
+                key={d.period}
+                disabled={!enough}
+                onClick={() => setSmaOn((p) => { const n = new Set(p); n.has(d.period) ? n.delete(d.period) : n.add(d.period); return n; })}
+                title={enough ? `${d.period}-period simple moving average` : `SMA${d.period} needs ≥ ${d.period} bars — switch to a longer timeframe (this view has ${source.length})`}
+                className="rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                style={{
+                  borderColor: on ? d.color : "var(--border)",
+                  color: on ? d.color : "var(--text-3)",
+                  background: on ? d.color + "1a" : "transparent",
+                }}
+              >
+                SMA{d.period}
+              </button>
+            );
+          })}
         </div>
       </div>
 
