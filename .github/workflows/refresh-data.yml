@@ -68,6 +68,13 @@ jobs:
         run: npm run refresh-sectors
         continue-on-error: true
 
+      # Backfill any per-symbol price history the big chart fetch dropped to rate-limits
+      # (re-fetches only the empty/missing series, so it's cheap).
+      - name: Backfill missing price history
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-series
+        continue-on-error: true
+
       - name: Refresh international universes
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-intl
