@@ -24,8 +24,11 @@ interface FieldSpec { field: string; concepts: string[]; kind: Kind; unit?: stri
 const FIELDS: FieldSpec[] = [
   // income statement (duration)
   { field: "totalRevenue", kind: "dur",
-    concepts: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax", "RegulatedAndUnregulatedOperatingRevenue"],
-    components: ["SalesRevenueGoodsNet", "SalesRevenueServicesNet", "RegulatedOperatingRevenue", "UnregulatedOperatingRevenue"] },
+    concepts: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax", "RegulatedAndUnregulatedOperatingRevenue", "RevenueMineralSales", "RevenuesExcludingInterestAndDividends"],
+    // components are summed ONLY when no total above is tagged — keeps a REIT's lease revenue
+    // (and goods/services or regulated/unregulated splits) from ever displacing a normal
+    // company's `Revenues` total.
+    components: ["SalesRevenueGoodsNet", "SalesRevenueServicesNet", "RegulatedOperatingRevenue", "UnregulatedOperatingRevenue", "OperatingLeasesIncomeStatementLeaseRevenue", "RealEstateRevenueNet"] },
   // NB: cost of revenue is NOT reconstructed from component parts — many filers (Oracle,
   // defense) split cost across several concepts we can't fully enumerate, so summing a
   // subset would UNDERCOUNT cost and overstate gross margin. Better an honest gap than a
@@ -150,6 +153,21 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
       if (!m.size) continue;
       if (spec.negate) for (const [k, v] of m) m.set(k, -Math.abs(v));
       maps[spec.field] = m;
+    }
+
+    // Calibrated operating-income fallback: where OperatingIncomeLoss isn't tagged, reconstruct
+    // it as gross profit − SG&A − R&D — but ONLY for issuers where that formula tracks their
+    // ACTUAL operating income closely on overlapping periods (≥3 points, ≥70% within 12%).
+    // Otherwise un-captured operating costs would overstate it, so we leave an honest gap.
+    {
+      const oiM = maps["operatingIncome"], gpM = maps["grossProfit"], sgaM = maps["sellingGeneralAndAdministration"], rndM = maps["researchAndDevelopment"];
+      if (oiM && gpM && sgaM) {
+        const derived = new Map<string, number>();
+        for (const [end, gp] of gpM) { const sga = sgaM.get(end); if (typeof sga === "number") derived.set(end, gp - sga - (rndM?.get(end) ?? 0)); }
+        let total = 0, ok = 0;
+        for (const [end, d] of derived) { const a = oiM.get(end); if (typeof a === "number" && a !== 0) { total++; if (Math.abs(d - a) / Math.abs(a) <= 0.12) ok++; } }
+        if (total >= 3 && ok / total >= 0.7) for (const [end, d] of derived) if (!oiM.has(end)) oiM.set(end, d);
+      }
     }
 
     // quarter-end dates = union of the income-statement discrete ends
