@@ -96,6 +96,19 @@ function groupBulleted(lines: string[]): BriefBlock[] {
 const NUM_ROW = /^[-+$]?\d[\d,]*\.?\d*%?(?:\s+[-+$]?\d[\d,]*\.?\d*%?){1,6}$/;
 const TRAILING_PRICES = /(?:\s[-+]?\d[\d,]*\.\d+){2,}\s*$/;
 const MONITOR_HDR = /\bchng\b/i;
+
+// A line that reads as data (a price/number row, a trailing price/time, a column header)
+// rather than prose. Used to tell a genuine tabular section (GAINERS, ECONOMIC EVENTS) from
+// spliced narrow-column prose that merely got tagged with a "list" heading (The Day Ahead's
+// "Coming Up", which is paragraphs and must be reflowed, not printed line-by-line).
+const TAB_LINE = (l: string) =>
+  NUM_ROW.test(l) || TRAILING_PRICES.test(l) || MONITOR_HDR.test(l) ||
+  /\s[-+$]?\d[\d,]*\.?\d*%?$/.test(l) || /\b\d{3,4}\b/.test(l);
+function looksTabular(lines: string[]): boolean {
+  if (lines.length < 2) return false;
+  return lines.filter(TAB_LINE).length / lines.length >= 0.4;
+}
+
 function isTableRow(l: string, lines: string[], i: number): boolean {
   if (NUM_ROW.test(l) || TRAILING_PRICES.test(l) || MONITOR_HDR.test(l)) return true;
   // A short, unpunctuated line sitting directly above a price row or the column
@@ -168,17 +181,22 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
 
   const sections: BriefSection[] = raw
     .filter((s) => s.lines.length)
-    .map((s) =>
-      s.kind === "list"
+    .map((s) => {
+      // Narrow multi-column PDFs (The Day Ahead) splice prose into short fragments, so a
+      // "list" heading doesn't mean tabular — decide by the actual content (Coming Up is
+      // prose; Gainers/Economic Events are real tables). Wide PDFs (Morning News Call) keep
+      // the heading-based split.
+      const isList = narrow ? looksTabular(s.lines) : s.kind === "list";
+      return isList
         ? { heading: s.heading, kind: "list" as const, lines: s.lines }
-        : { heading: s.heading, kind: "prose" as const, blocks: groupSection(s.lines, wrapWidth, narrow) },
-    )
+        : { heading: s.heading, kind: "prose" as const, blocks: groupSection(s.lines, wrapWidth, narrow) };
+    })
     .filter((s) => (s.kind === "list" ? s.lines!.length : s.blocks!.length));
 
   // Multi-column PDFs (e.g. The Day Ahead) don't linearise into clean sections — a
   // runaway "list" section means the columns ran together and headings no longer mark
   // real breaks. Reflow the whole body into readable story blocks instead.
-  if (sections.some((s) => s.kind === "list" && s.lines!.length > 50)) {
+  if (sections.length <= 2 && sections.some((s) => s.kind === "list" && s.lines!.length > 60)) {
     const blocks = groupProse(lines.filter((l) => !isHeader(l)), wrapWidth, narrow);
     if (blocks.length) return { date, sections: [{ heading: "Briefing", kind: "prose", blocks }] };
   }
