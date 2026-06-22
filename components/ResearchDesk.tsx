@@ -7,6 +7,7 @@ interface Doc { id: string; ticker: string; company: string; source: string; ana
 interface MetricRow { source: string; value: number | null; priorValue: number | null; unit: string | null; vsConsensus: string | null }
 interface Consensus { docCount: number; ratings: { rating: string; count: number }[]; priceTargets: { source: string; date: string; target: number; prior: number | null }[]; ptStats: { min: number; max: number; median: number } | null; battlegrounds: { label: string; rows: MetricRow[] }[]; entitlements: string[] }
 type IndexRow = { ticker: string; company: string; count: number; latest: string };
+interface Signal { id: string; ticker: string; source: string; date: string; rating: string | null; ratingChanged: boolean; pt: number | null; ptChangePct: number | null; topRevision: { metric: string; period: string; changePct: number } | null; mgmtColor: number; score: number }
 
 const ratingColor = (r: string | null) => /buy|outperform|overweight|add|accumulate/i.test(r || "") ? "#22c55e" : /sell|underperform|underweight|reduce/i.test(r || "") ? "#ef4444" : "#eab308";
 const money = (v: number | null, unit?: string | null) => {
@@ -26,12 +27,20 @@ export default function ResearchDesk() {
   const [answer, setAnswer] = useState<string | "loading" | null>(null);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [idea, setIdea] = useState<string | "loading" | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const loadIndex = useCallback(() => {
     fetch("/api/research").then((r) => r.json()).then((d) => { setAvailable(d.available !== false); setIndex(d.index || []); });
+    fetch("/api/research/actionable").then((r) => r.json()).then((d) => setSignals(d.signals || []));
   }, []);
   useEffect(() => { loadIndex(); }, [loadIndex]);
+
+  const scanIdeas = () => {
+    setIdea("loading");
+    fetch("/api/research/actionable", { method: "POST" }).then((r) => r.json()).then((d) => setIdea(d.digest || (d.error ? `_${d.error}_` : null))).catch(() => setIdea(null));
+  };
 
   const openTicker = (t: string) => {
     setTicker(t); setData(null); setSynth(null); setAnswer(null); setQ("");
@@ -93,6 +102,29 @@ export default function ResearchDesk() {
         {uploadBtn}
       </div>
       {busy && <div className="rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text-3)]">{busy}</div>}
+
+      {/* actionable — idea generation across the whole corpus */}
+      {!ticker && signals.length > 0 && (
+        <section className="rounded-xl border border-[#a855f7]/40 bg-[#a855f7]/[0.06] p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-medium text-[var(--text-2)]"><span className="text-base">🎯</span> Actionable — idea generation <span className="text-[11px] font-normal text-[var(--text-4)]">— the Street's biggest moves across your research</span></span>
+            <button onClick={scanIdeas} disabled={idea === "loading"} className="rounded-lg bg-[#7c3aed] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#6d28d9] disabled:opacity-60">{idea === "loading" ? "Scanning…" : "✨ Scan for ideas"}</button>
+          </div>
+          {idea && idea !== "loading" && <div className="mb-3 rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-body)]"><MarkdownLite text={idea} /></div>}
+          <div className="space-y-0.5">
+            {signals.slice(0, 8).map((s) => (
+              <button key={s.id} onClick={() => openTicker(s.ticker)} className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md px-2 py-1 text-left text-xs hover:bg-[var(--surface-hover)]">
+                <span className="w-12 shrink-0 font-mono font-semibold text-[var(--text)]">{s.ticker}</span>
+                <span className="text-[var(--text-3)]">{s.source.split(" ")[0]}</span>
+                {s.ptChangePct != null && <span className="tabular-nums font-medium" style={{ color: s.ptChangePct >= 0 ? "#22c55e" : "#ef4444" }}>PT {s.ptChangePct >= 0 ? "+" : ""}{s.ptChangePct.toFixed(0)}%</span>}
+                {s.ratingChanged && <span className="rounded bg-[#eab308]/20 px-1 text-[#eab308]">rating Δ</span>}
+                {s.topRevision && <span className="tabular-nums text-[var(--text-3)]">{s.topRevision.metric} {s.topRevision.changePct >= 0 ? "+" : ""}{s.topRevision.changePct.toFixed(0)}%</span>}
+                {s.mgmtColor > 0 && <span className="text-[#22c55e]">👤 {s.mgmtColor}</span>}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* corpus index */}
       {!ticker && (
