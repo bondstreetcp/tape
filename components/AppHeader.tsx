@@ -36,7 +36,8 @@ export default function AppHeader({
     {
       label: "Research",
       items: [
-        { href: `${base}/compare`, label: "Compare" },
+        { href: `${base}/compare-stocks`, label: "Compare Stocks" },
+        { href: `${base}/compare`, label: "Sector Compare" },
         { href: `${base}/backtest`, label: "Backtest" },
         { href: `${base}/research`, label: "Filings & Docs" },
         { href: `${base}/research-desk`, label: "Research Desk" },
