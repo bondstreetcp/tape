@@ -1,9 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { StockRow } from "@/lib/types";
-import { screenSymbols } from "@/lib/screens";
+import { combinedScreenSymbols, SCREEN_LABEL, SCREEN_SHORT, SCREEN_ORDER, type ScreenKey } from "@/lib/screens";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { fmtPct, fmtMarketCap, fmtMoney, fmtDateTime } from "@/lib/format";
@@ -50,17 +50,35 @@ const dsoColor = (v: any) => (v == null ? undefined : v > 0.5 ? "#ef4444" : v < 
 
 const LIMIT = 250;
 
-// Named preset screens (mutually exclusive). "none" = manual filters only.
-type Strategy = "none" | "magic" | "erp5" | "netnet" | "piotroski" | "shyield" | "moat";
-const STRATEGIES: { v: Strategy; label: string }[] = [
-  { v: "none", label: "Strategy: none" },
-  { v: "magic", label: "✦ Magic Formula (Greenblatt)" },
-  { v: "erp5", label: "✦ ERP5 (4-Factor Value)" },
-  { v: "netnet", label: "Net-Net / NCAV (Graham)" },
-  { v: "piotroski", label: "Piotroski F-Score" },
-  { v: "shyield", label: "Shareholder Yield (Faber)" },
-  { v: "moat", label: "🏰 Buffett–Munger Moat" },
-];
+// The signature column a screen adds to the table when active (Magic has none — it's a pure
+// rank). When screens are stacked, each active screen's column shows, de-duplicated by key.
+function stratColFor(key: ScreenKey): Col | null {
+  switch (key) {
+    case "erp5": return { key: "fcfYld", label: "FCF Yld", num: true, get: (s) => s.fund?.fcfYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" };
+    case "moat":
+    case "qualval": return { key: "roic", label: "ROIC", num: true, get: (s) => s.fund?.roic ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.2 ? "#22c55e" : undefined), align: "right" };
+    case "netnet": return { key: "mktncav", label: "Mkt / NCAV", num: true, get: (s) => { const n = s.fund?.ncav; return n != null && n > 0 ? s.marketCap / n : null; }, fmt: (v) => (v == null ? "—" : `${v.toFixed(2)}×`), color: (v) => (v == null ? undefined : v < 0.67 ? "#22c55e" : v < 1 ? "#fbbf24" : undefined), align: "right" };
+    case "piotroski": return { key: "fscore", label: "F-Score", num: true, get: (s) => s.fund?.fScore ?? null, fmt: (v) => (v == null ? "—" : `${v} / 9`), color: (v) => (v == null ? undefined : v >= 8 ? "#22c55e" : v <= 3 ? "#ef4444" : undefined), align: "right" };
+    case "shyield": return { key: "shyield", label: "Sh. Yield", num: true, get: (s) => s.fund?.shareholderYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" };
+    default: return null; // magic — pure rank, no signature column
+  }
+}
+
+// One-line description for a single active screen (the stacked case is handled inline).
+function screenBlurb(key: ScreenKey, n: number, pioMin: number): string {
+  switch (key) {
+    case "magic": return `top ${n} by earnings yield + return on capital (best first)`;
+    case "erp5": return `top ${n} by the 4-factor ERP5 rank — earnings yield + return on capital + price-to-book + cash-flow yield (best first)`;
+    case "qualval": return `top ${n} by the quality + value composite — value & quality factors blended equally (best first)`;
+    case "netnet": return `${n} trading below net current asset value (deep value — rare outside small caps)`;
+    case "piotroski": return `${n} with F-Score ≥ ${pioMin} (of 9)`;
+    case "shyield": return `top ${n} by shareholder yield`;
+    case "moat": return `${n} wide-moat names — ROIC ≥ 15%, operating margin ≥ 20%, low debt (best first)`;
+  }
+}
+
+// Screens that produce a ranked Top-N (so the Top-N selector applies); the rest are pure filters.
+const RANKED_SCREENS: ScreenKey[] = ["magic", "erp5", "qualval", "shyield", "moat"];
 
 export default function ScreenerView({
   universe,
@@ -99,23 +117,20 @@ export default function ScreenerView({
   const [minYld, setMinYld] = useState<number | null>(null);
   const [minRoe, setMinRoe] = useState<number | null>(null);
   const [aboveMA, setAboveMA] = useState(false); // price above 200-day average
-  const [strategy, setStrategy] = useState<Strategy>("none"); // named preset screen
-  const [topN, setTopN] = useState(30); // names shown for Magic Formula & Shareholder Yield
+  const [activeScreens, setActiveScreens] = useState<ScreenKey[]>([]); // stacked preset screens (hard AND)
+  const [topN, setTopN] = useState(30); // names shown for ranked screens / the stacked intersection
   const [pioMin, setPioMin] = useState(7); // minimum Piotroski F-score
 
-  // Magic Formula (Greenblatt): rank every name by earnings yield and by return
-  // on capital, sum the two ranks, take the best ~30 — good companies at cheap
-  // prices. He excludes financials & utilities (the EBIT/capital math doesn't fit)
-  // and tiny caps. The free snapshot has P/E + ROE, so we proxy earnings yield with
-  // 1/(P/E) and return-on-capital with ROE. Returns symbol → magic rank (0 = best).
-  // Preset screens (Magic / Net-Net / Piotroski / Shareholder Yield) share lib/screens
-  // with the backtester so a screen and its backtest hold identical names. `set` filters
-  // the table; `rank` carries the screen's natural order (best first).
+  // Preset screens stack with a hard AND: a name must pass every active screen, and the
+  // survivors are ranked by their combined position across all of them (combinedScreenSymbols,
+  // shared with the backtester so screen and backtest hold identical names). With one screen
+  // this is just that screen; with none, manual filters only. `set` filters the table; `rank`
+  // carries the combined best-first order.
   const screenResult = useMemo(() => {
-    if (strategy === "none") return null;
-    const syms = screenSymbols(strategy, stocks, { topN, pioMin });
+    if (activeScreens.length === 0) return null;
+    const syms = combinedScreenSymbols(activeScreens, stocks, { topN, pioMin });
     return { set: new Set(syms), rank: new Map(syms.map((s, i) => [s, i] as const)) };
-  }, [strategy, stocks, topN, pioMin]);
+  }, [activeScreens, stocks, topN, pioMin]);
 
   const currency = currencyOf(universe);
   const columns: Col[] = useMemo(() => {
@@ -145,15 +160,16 @@ export default function ScreenerView({
       { key: "fcfM", label: "FCF Mgn", num: true, get: (s) => s.fund?.fcfMargin ?? null, fmt: pctFrac, align: "right" },
       { key: "roe", label: "ROE", num: true, get: (s) => s.fund?.roe ?? null, fmt: pctFrac, align: "right" },
     ];
-    const stratCol: Col | null =
-      strategy === "erp5" ? { key: "fcfYld", label: "FCF Yld", num: true, get: (s) => s.fund?.fcfYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" }
-      : strategy === "moat" ? { key: "roic", label: "ROIC", num: true, get: (s) => s.fund?.roic ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.2 ? "#22c55e" : undefined), align: "right" }
-      : strategy === "netnet" ? { key: "mktncav", label: "Mkt / NCAV", num: true, get: (s) => { const n = s.fund?.ncav; return n != null && n > 0 ? s.marketCap / n : null; }, fmt: (v) => (v == null ? "—" : `${v.toFixed(2)}×`), color: (v) => (v == null ? undefined : v < 0.67 ? "#22c55e" : v < 1 ? "#fbbf24" : undefined), align: "right" }
-      : strategy === "piotroski" ? { key: "fscore", label: "F-Score", num: true, get: (s) => s.fund?.fScore ?? null, fmt: (v) => (v == null ? "—" : `${v} / 9`), color: (v) => (v == null ? undefined : v >= 8 ? "#22c55e" : v <= 3 ? "#ef4444" : undefined), align: "right" }
-      : strategy === "shyield" ? { key: "shyield", label: "Sh. Yield", num: true, get: (s) => s.fund?.shareholderYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" }
-      : null;
-    return [...base, ...(stratCol ? [stratCol] : []), ...(colSet === "fundamentals" ? fund : valuation)];
-  }, [tf, colSet, currency, strategy]);
+    // one signature column per active screen, de-duplicated by key (e.g. Moat + Quality+Value
+    // both want ROIC → show it once).
+    const stratCols: Col[] = [];
+    const seen = new Set<string>();
+    for (const k of activeScreens) {
+      const c = stratColFor(k);
+      if (c && !seen.has(c.key)) { seen.add(c.key); stratCols.push(c); }
+    }
+    return [...base, ...stratCols, ...(colSet === "fundamentals" ? fund : valuation)];
+  }, [tf, colSet, currency, activeScreens]);
 
   const filtered = useMemo(() => {
     let r = stocks;
@@ -175,10 +191,10 @@ export default function ScreenerView({
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
     if (screenResult) r = r.filter((s) => screenResult.set.has(s.symbol));
 
-    // When a rank-sum screen (Magic Formula / ERP5) is on, order by its combined rank
-    // (best first) by default — but only until the user clicks a column header (which sets
-    // sortKey to that column, overriding the rank order while keeping the top-N filter).
-    if (screenResult && ((strategy === "magic" && sortKey === "magic") || (strategy === "erp5" && sortKey === "erp5"))) return [...r].sort((a, b) => (screenResult.rank.get(a.symbol) ?? 999) - (screenResult.rank.get(b.symbol) ?? 999));
+    // With screens active, order by the combined screen rank (best first) by default — until the
+    // user clicks a column header, which switches sortKey to that column (overriding the rank order
+    // while keeping the intersection). "screen" is the synthetic sort key for that rank order.
+    if (screenResult && sortKey === "screen") return [...r].sort((a, b) => (screenResult.rank.get(a.symbol) ?? 1e9) - (screenResult.rank.get(b.symbol) ?? 1e9));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -195,7 +211,7 @@ export default function ScreenerView({
       }
       return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, strategy, screenResult, columns, sortKey, sortDir]);
+  }, [stocks, query, sectorEtf, capMin, hl, threshold, minRevG, expanding, dsoRising, profitable, maxPE, minYld, minRoe, aboveMA, activeScreens, screenResult, columns, sortKey, sortDir]);
 
   const onSort = (key: string, num: boolean) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -204,6 +220,22 @@ export default function ScreenerView({
       setSortDir(num ? "desc" : "asc");
     }
   };
+
+  // Functional update so rapid/batched toggles don't clobber each other (each sees the latest set).
+  const toggleScreen = (k: ScreenKey) => setActiveScreens((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
+  const showTopN = activeScreens.length >= 2 || activeScreens.some((k) => RANKED_SCREENS.includes(k));
+
+  // When screens switch on/off, default the sort to the combined rank (or back to cap). Keyed on the
+  // active/inactive boundary so it doesn't fire on every added chip, nor clobber a URL-driven initial sort.
+  const screensActive = activeScreens.length > 0;
+  const prevScreensActive = useRef(screensActive);
+  useEffect(() => {
+    if (screensActive !== prevScreensActive.current) {
+      prevScreensActive.current = screensActive;
+      setSortKey(screensActive ? "screen" : "cap");
+      setSortDir(screensActive ? "asc" : "desc");
+    }
+  }, [screensActive]);
 
   const shown = filtered.slice(0, LIMIT);
 
@@ -301,35 +333,37 @@ export default function ScreenerView({
         <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
           Above 200-day avg
         </button>
-        <select
-          value={strategy}
-          onChange={(e) => {
-            const v = e.target.value as Strategy;
-            setStrategy(v);
-            // Default each preset to its natural ranking (user can still click a header).
-            if (v === "magic") { setSortKey("magic"); setSortDir("asc"); }
-            else if (v === "erp5") { setSortKey("erp5"); setSortDir("asc"); }
-            else if (v === "netnet") { setSortKey("mktncav"); setSortDir("asc"); }
-            else if (v === "piotroski") { setSortKey("fscore"); setSortDir("desc"); }
-            else if (v === "shyield") { setSortKey("shyield"); setSortDir("desc"); }
-            else if (v === "moat") { setSortKey("roic"); setSortDir("desc"); }
-            else { setSortKey("cap"); setSortDir("desc"); }
-          }}
-          title="Named value/quality screens. Magic Formula: good companies at cheap prices (earnings yield + ROE rank). ERP5: four-factor value (earnings yield + return on capital + price-to-book + cash-flow yield). Net-Net: price below net current asset value (Graham deep value — rare in large caps). Piotroski F-Score: 9-point fundamental-strength score. Shareholder Yield: dividends + net buybacks + net debt paydown (Faber). Moat: durable quality (high ROIC, fat operating margins, low debt). US universes; needs fundamentals."
-          className={"cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none transition-colors " + (strategy !== "none" ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
-        >
-          {STRATEGIES.map((s) => (<option key={s.v} value={s.v}>{s.label}</option>))}
-        </select>
+        <span className="ml-1 text-xs font-medium text-[var(--text-3)]">Screens:</span>
+        <div className="inline-flex flex-wrap rounded-lg border border-[#a855f7]/40 bg-[var(--surface)] p-0.5" title="Toggle one or more screens. Stacking two or more requires a name to pass ALL of them (intersection), ranked by combined factor rank.">
+          {SCREEN_ORDER.map((k) => {
+            const on = activeScreens.includes(k);
+            return (
+              <button
+                key={k}
+                onClick={() => toggleScreen(k)}
+                title={SCREEN_LABEL[k]}
+                className={"rounded-md px-2 py-1 text-xs font-medium transition-colors " + (on ? "bg-[#a855f7] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              >
+                {SCREEN_SHORT[k]}
+              </button>
+            );
+          })}
+        </div>
         <StrategyTip />
-        {(strategy === "magic" || strategy === "erp5" || strategy === "shyield" || strategy === "moat") && (
+        {showTopN && (
           <select value={topN} onChange={(e) => setTopN(Number(e.target.value))} title="How many names the list shows" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
             {[20, 30, 40, 50, 75, 100].map((n) => (<option key={n} value={n}>Top {n}</option>))}
           </select>
         )}
-        {strategy === "piotroski" && (
+        {activeScreens.includes("piotroski") && (
           <select value={pioMin} onChange={(e) => setPioMin(Number(e.target.value))} title="Minimum Piotroski F-score (0–9)" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
             {[9, 8, 7, 6, 5].map((n) => (<option key={n} value={n}>F-Score ≥ {n}</option>))}
           </select>
+        )}
+        {activeScreens.length > 0 && (
+          <button onClick={() => setActiveScreens([])} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--text-3)] hover:text-[var(--text)]" title="Clear all screens">
+            Clear
+          </button>
         )}
       </div>
 
@@ -377,14 +411,11 @@ export default function ScreenerView({
       )}
 
       <div className="mb-2 text-xs text-[var(--text-3)]">
-        {strategy !== "none" && (
-          <span><span className="font-semibold text-[#d8b4fe]">{STRATEGIES.find((s) => s.v === strategy)?.label}</span> — {
-            strategy === "magic" ? `top ${filtered.length} by earnings yield + return on capital (best first)`
-            : strategy === "erp5" ? `top ${filtered.length} by the 4-factor ERP5 rank — earnings yield + return on capital + price-to-book + cash-flow yield (best first)`
-            : strategy === "netnet" ? `${filtered.length} trading below net current asset value (deep value — rare outside small caps)`
-            : strategy === "piotroski" ? `${filtered.length} with F-Score ≥ ${pioMin} (of 9)`
-            : strategy === "moat" ? `${filtered.length} wide-moat names — ROIC ≥ 15%, operating margin ≥ 20%, low debt (best first)`
-            : `top ${filtered.length} by shareholder yield`
+        {activeScreens.length > 0 && (
+          <span><span className="font-semibold text-[#d8b4fe]">{activeScreens.map((k) => SCREEN_SHORT[k]).join(" ∩ ")}</span> — {
+            activeScreens.length > 1
+              ? `${filtered.length} name${filtered.length === 1 ? "" : "s"} passing all ${activeScreens.length} screens, ranked by combined factor rank (best first)`
+              : screenBlurb(activeScreens[0], filtered.length, pioMin)
           }{sectorEtf !== "all" ? " in this sector" : ""}. </span>
         )}
         Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}

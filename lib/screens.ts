@@ -6,17 +6,32 @@
  */
 import type { StockRow } from "./types";
 
-export type ScreenKey = "magic" | "erp5" | "netnet" | "piotroski" | "shyield" | "moat";
+export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat";
 export interface ScreenOpts { topN?: number; pioMin?: number }
 
 export const SCREEN_LABEL: Record<ScreenKey, string> = {
   magic: "Magic Formula (Greenblatt)",
   erp5: "ERP5 (4-Factor Value)",
+  qualval: "Quality + Value Composite",
   netnet: "Net-Net / NCAV (Graham)",
   piotroski: "Piotroski F-Score",
   shyield: "Shareholder Yield (Faber)",
   moat: "Buffett–Munger Moat",
 };
+
+/** Short labels for the toggle chips (shared by the Screener + Backtester). */
+export const SCREEN_SHORT: Record<ScreenKey, string> = {
+  magic: "Magic Formula",
+  erp5: "ERP5",
+  qualval: "Quality+Value",
+  netnet: "Net-Net",
+  piotroski: "Piotroski",
+  shyield: "Sh. Yield",
+  moat: "Moat",
+};
+
+/** Display order for the screen chips and tooltips. */
+export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat"];
 
 /** Detailed, plain-English descriptions for the strategy tooltip + the beta-tester guide. */
 export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: string; read: string }> = {
@@ -31,6 +46,12 @@ export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: s
     what: "An extension of Greenblatt's Magic Formula (popularised by Evan Bleker) — it widens the net from two factors to four, leaning deeper value.",
     how: "Ranks every company four ways — earnings yield (1/(P/E)), return on capital (ROIC, falling back to ROE), price-to-book (cheap), and free-cash-flow yield (FCF ÷ market cap) — sums the four ranks, and takes the best names. Financials & utilities are excluded and sub-$500M caps dropped, same as the Magic Formula.",
     read: "Lower combined rank = better; shown best-first. Folding price-to-book and cash-flow yield into the Magic Formula's earnings-yield + return-on-capital tilts the list toward asset-cheap, cash-generative names. Use Top-N to widen/narrow.",
+  },
+  qualval: {
+    name: "Quality + Value Composite",
+    what: "A single blended rank that scores every company on cheapness and business quality at once — “wonderful companies at fair prices” in one number.",
+    how: "Sums six factor ranks — three value (earnings yield, free-cash-flow yield, low price-to-book) and three quality (ROIC, operating margin, low net debt/EBITDA), value and quality weighted equally — and takes the best names. Ex financials/utilities, ≥$500M.",
+    read: "Lower combined rank = better; best-first. Unlike stacking two screens (a hard AND), this is a soft blend — a name can rank near the top overall without topping any single screen, so it surfaces the best all-round profiles rather than the rare names that ace every filter.",
   },
   netnet: {
     name: "Net-Net / NCAV (Graham)",
@@ -116,6 +137,37 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
       .map((x) => x.sym);
   }
 
+  if (key === "qualval") {
+    // Quality + Value composite: blend three value factors (earnings yield, FCF yield, cheap P/B)
+    // with three quality factors (ROIC, operating margin, low leverage), value and quality weighted
+    // equally. A soft rank over the whole universe — ex financials/utilities, ≥$500M, all inputs present.
+    const valid = stocks.filter(
+      (s) =>
+        (s.trailingPE ?? 0) > 0 &&
+        (s.priceToBook ?? 0) > 0 &&
+        s.fund?.fcfYield != null &&
+        s.fund?.roic != null &&
+        s.fund?.opMargin != null &&
+        s.etf !== "XLF" && s.etf !== "XLU" && (s.marketCap || 0) >= 5e8,
+    );
+    if (valid.length < 20) return [];
+    const rEY = rankMap(valid, (s) => 1 / s.trailingPE!);
+    const rFCF = rankMap(valid, (s) => s.fund!.fcfYield!);
+    const rPB = rankMap(valid, (s) => -s.priceToBook!);
+    const rROIC = rankMap(valid, (s) => s.fund!.roic!);
+    const rOM = rankMap(valid, (s) => s.fund!.opMargin!);
+    const rLev = rankMap(valid, (s) => -(s.fund!.netDebtEbitda ?? 0)); // less leverage = better
+    return valid
+      .map((s) => {
+        const value = rEY.get(s.symbol)! + rFCF.get(s.symbol)! + rPB.get(s.symbol)!;
+        const quality = rROIC.get(s.symbol)! + rOM.get(s.symbol)! + rLev.get(s.symbol)!;
+        return { sym: s.symbol, score: value + quality };
+      })
+      .sort((a, b) => a.score - b.score)
+      .slice(0, topN)
+      .map((x) => x.sym);
+  }
+
   if (key === "moat") {
     // Buffett–Munger moat: durable high returns on capital, fat operating margins, little debt.
     // A quality FILTER (not a rank-sum) — survivors ranked by ROIC + operating margin, best first.
@@ -149,4 +201,27 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
     .sort((a, b) => a.score - b.score)
     .slice(0, topN)
     .map((x) => x.sym);
+}
+
+/**
+ * Stack several screens with a hard AND: a name must pass EVERY selected screen.
+ * The survivors are ranked by the sum of their positions across the screens, so a
+ * name that ranks high in all of them floats to the top. With one screen this is
+ * exactly screenSymbols; with none, empty. Each screen is evaluated over the full
+ * universe (not pre-sliced to Top-N) so the intersection is honest, then the final
+ * list is capped at opts.topN.
+ */
+export function combinedScreenSymbols(keys: ScreenKey[], stocks: StockRow[], opts: ScreenOpts = {}): string[] {
+  if (keys.length === 0) return [];
+  if (keys.length === 1) return screenSymbols(keys[0], stocks, opts);
+  const full: ScreenOpts = { ...opts, topN: 1e9 }; // every passing name, fully ranked
+  const lists = keys.map((k) => screenSymbols(k, stocks, full));
+  if (lists.some((l) => l.length === 0)) return []; // a screen with no names ⇒ empty intersection
+  const pos = lists.map((l) => new Map(l.map((s, i) => [s, i] as const)));
+  const inAll = lists[0].filter((s) => pos.every((m) => m.has(s)));
+  return inAll
+    .map((s) => ({ s, score: pos.reduce((acc, m) => acc + (m.get(s) ?? 0), 0) }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, opts.topN ?? 30)
+    .map((x) => x.s);
 }
