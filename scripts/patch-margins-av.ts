@@ -73,8 +73,8 @@ async function validate(sym: string, av: AvQ[]): Promise<boolean> {
 }
 
 async function main() {
-  const key = loadKey(await fs.readFile(path.join(process.cwd(), ".env.local"), "utf8").catch(() => ""));
-  if (!key) { console.error("ALPHAVANTAGE_API_KEY not in .env.local"); process.exit(1); }
+  const key = process.env.ALPHAVANTAGE_API_KEY || loadKey(await fs.readFile(path.join(process.cwd(), ".env.local"), "utf8").catch(() => ""));
+  if (!key) { console.error("ALPHAVANTAGE_API_KEY not set (env or .env.local)"); process.exit(1); }
 
   const cache: Record<string, Cached> = JSON.parse(await fs.readFile(CACHE, "utf8").catch(() => "{}"));
   const wanted = process.argv.slice(2).length ? process.argv.slice(2).map((s) => s.toUpperCase()) : GAP_NAMES;
