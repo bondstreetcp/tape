@@ -6,6 +6,8 @@
  * the narrative adds the judgement.
  */
 import type { StoredDoc, ResearchEstimate } from "./types";
+import { searchChunks, getDoc } from "./store";
+import { embedQuery } from "./embed";
 
 const MODEL = () => process.env.GEMINI_MODEL || "gemini-2.5-pro";
 
@@ -187,4 +189,38 @@ export async function actionableScan(docs: StoredDoc[]): Promise<string | null> 
   if (!res.ok) throw new Error(`Gemini ${res.status}`);
   const j: any = await res.json();
   return (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null;
+}
+
+// ---- Semantic search across the whole corpus (pgvector retrieval) ------------------
+
+export interface SearchHit { docId: string; ticker: string; source: string; date: string; snippet: string; score: number }
+
+/** Embed the query, retrieve the most relevant passages across ALL notes (or one ticker),
+ *  and answer grounded in them with source citations. The cross-corpus idea-gen surface:
+ *  "find me research that says X" regardless of which name it's filed under. */
+export async function corpusSearch(query: string, ticker?: string): Promise<{ answer: string | null; hits: SearchHit[] }> {
+  const qe = await embedQuery(query);
+  if (!qe) return { answer: null, hits: [] };
+  const chunks = await searchChunks(qe, ticker, 14);
+  if (!chunks.length) return { answer: null, hits: [] };
+  const ids = [...new Set(chunks.map((c) => c.docId))];
+  const docs = await Promise.all(ids.map((id) => getDoc(id)));
+  const byId = new Map(docs.filter(Boolean).map((d) => [d!.id, d!]));
+  const hits: SearchHit[] = chunks.map((c) => {
+    const d = byId.get(c.docId);
+    return { docId: c.docId, ticker: c.ticker, source: d?.source || "?", date: d?.publishDate || "", snippet: c.text, score: c.score };
+  });
+  const KEY = process.env.GEMINI_API_KEY;
+  if (!KEY) return { answer: null, hits };
+  const ctx = hits.map((h, i) => `[${i + 1}] ${h.ticker} · ${h.source} (${h.date}):\n${h.snippet}`).join("\n\n");
+  const prompt =
+    `Answer the question using ONLY these research passages retrieved from across the corpus. Cite the ticker + source firm for each point; synthesize where multiple passages bear on it. If they don't address the question, say so.\n\n` +
+    `Question: ${query}\n\n=== PASSAGES ===\n${ctx}`;
+  const res2 = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 3072, thinkingConfig: { thinkingBudget: -1 } } }),
+  });
+  const j2: any = res2.ok ? await res2.json() : null;
+  const answer = j2 ? (j2?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null : null;
+  return { answer, hits };
 }

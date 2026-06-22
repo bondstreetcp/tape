@@ -55,6 +55,7 @@ const SCHEMA = {
 const INSTRUCTION =
   `Extract structured data from this equity-research report into the schema. Rules:\n` +
   `- source: the PUBLISHING firm (e.g. "RBC Capital", "TD Securities", "Citi", "Stifel", "Bloomberg Intelligence"), not the covered company.\n` +
+  `- publishDate: the report's OWN publication/cover date (usually in the header or masthead of the first page), as ISO YYYY-MM-DD — never today's date, and not a date referenced inside the body text.\n` +
   `- For community / buy-side idea write-ups (e.g. Value Investors Club, independent theses, internal memos): set docType to "idea", source to the platform or author (e.g. "Value Investors Club"), and analysts to the author/username. These usually carry no formal rating or 12-month price target — leave those null unless explicitly stated — and their edge is the variant perception (why the market is wrong): capture that in thesis, and any fair-value/target in estimates.\n` +
   `- For research providers that don't issue ratings/price targets (e.g. Bloomberg Intelligence), set rating, ratingPrior, priceTarget, priceTargetPrior to null.\n` +
   `- priceTarget / priceTargetPrior: the NEW and PRIOR 12-month price targets as plain numbers (1500, not "$1,500.00").\n` +

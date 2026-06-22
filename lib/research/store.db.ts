@@ -47,6 +47,15 @@ export async function ensureSchema(): Promise<void> {
     body text
   )`;
   await sql`create index if not exists research_docs_ticker_idx on research_docs (ticker)`;
+  await sql`create table if not exists research_chunks (
+    doc_id text references research_docs(id) on delete cascade,
+    ordinal int not null,
+    ticker text,
+    text text,
+    embedding vector(768),
+    primary key (doc_id, ordinal)
+  )`;
+  await sql`create index if not exists research_chunks_ticker_idx on research_chunks (ticker)`;
   schemaReady = true;
 }
 async function ready() { if (!schemaReady) await ensureSchema(); }
@@ -101,4 +110,29 @@ export async function dbCorpusIndex(): Promise<{ ticker: string; company: string
   const sql = db();
   const rows = await sql`select ticker, max(company) as company, count(*)::int as count, max(publish_date) as latest from research_docs group by ticker order by count desc`;
   return rows.map((r: any) => ({ ticker: r.ticker, company: r.company || "", count: r.count, latest: r.latest || "" }));
+}
+
+const vlit = (v: number[]) => "[" + v.join(",") + "]";
+
+export async function dbSaveChunks(docId: string, ticker: string, rows: { ordinal: number; text: string; embedding: number[] }[]): Promise<void> {
+  await ready();
+  const sql = db();
+  await sql`delete from research_chunks where doc_id = ${docId}`;
+  for (const r of rows) {
+    await sql`insert into research_chunks (doc_id, ordinal, ticker, text, embedding)
+      values (${docId}, ${r.ordinal}, ${ticker}, ${r.text}, ${vlit(r.embedding)}::vector)`;
+  }
+}
+
+export interface ChunkHit { docId: string; ordinal: number; ticker: string; text: string; score: number }
+
+/** Top-k chunks by cosine similarity to the query embedding (optionally scoped to a ticker). */
+export async function dbSearchChunks(queryEmbedding: number[], ticker: string | undefined, k: number): Promise<ChunkHit[]> {
+  await ready();
+  const sql = db();
+  const q = vlit(queryEmbedding);
+  const rows = ticker
+    ? await sql`select doc_id, ordinal, ticker, text, 1 - (embedding <=> ${q}::vector) as score from research_chunks where ticker = ${ticker} order by embedding <=> ${q}::vector limit ${k}`
+    : await sql`select doc_id, ordinal, ticker, text, 1 - (embedding <=> ${q}::vector) as score from research_chunks order by embedding <=> ${q}::vector limit ${k}`;
+  return rows.map((r: any) => ({ docId: r.doc_id, ordinal: r.ordinal, ticker: r.ticker, text: r.text, score: Number(r.score) }));
 }

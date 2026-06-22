@@ -8,6 +8,7 @@ interface MetricRow { source: string; value: number | null; priorValue: number |
 interface Consensus { docCount: number; ratings: { rating: string; count: number }[]; priceTargets: { source: string; date: string; target: number; prior: number | null }[]; ptStats: { min: number; max: number; median: number } | null; battlegrounds: { label: string; rows: MetricRow[] }[]; entitlements: string[] }
 type IndexRow = { ticker: string; company: string; count: number; latest: string };
 interface Signal { id: string; ticker: string; source: string; date: string; rating: string | null; ratingChanged: boolean; pt: number | null; ptChangePct: number | null; topRevision: { metric: string; period: string; changePct: number } | null; mgmtColor: number; score: number }
+interface Hit { docId: string; ticker: string; source: string; date: string; snippet: string; score: number }
 
 const ratingColor = (r: string | null) => /buy|outperform|overweight|add|accumulate/i.test(r || "") ? "#22c55e" : /sell|underperform|underweight|reduce/i.test(r || "") ? "#ef4444" : "#eab308";
 const money = (v: number | null, unit?: string | null) => {
@@ -29,7 +30,16 @@ export default function ResearchDesk() {
   const [busy, setBusy] = useState<string | null>(null);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [idea, setIdea] = useState<string | "loading" | null>(null);
+  const [sq, setSq] = useState("");
+  const [sres, setSres] = useState<{ answer: string | null; hits: Hit[] } | "loading" | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const runSearch = () => {
+    if (!sq.trim()) return;
+    setSres("loading");
+    fetch("/api/research/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: sq }) })
+      .then((r) => r.json()).then((d) => setSres(d.available === false ? { answer: null, hits: [] } : { answer: d.answer, hits: d.hits || [] })).catch(() => setSres(null));
+  };
 
   const loadIndex = useCallback(() => {
     fetch("/api/research").then((r) => r.json()).then((d) => { setAvailable(d.available !== false); setIndex(d.index || []); });
@@ -102,6 +112,33 @@ export default function ResearchDesk() {
         {uploadBtn}
       </div>
       {busy && <div className="rounded-md bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--text-3)]">{busy}</div>}
+
+      {/* semantic search across the whole corpus */}
+      {!ticker && (
+        <section className="rounded-xl border border-[#3b82f6]/40 bg-[#3b82f6]/[0.06] p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--text-2)]"><span className="text-base">🔭</span> Search all research <span className="text-[11px] font-normal text-[var(--text-4)]">— semantic search across every note, regardless of ticker</span></div>
+          <div className="flex gap-2">
+            <input value={sq} onChange={(e) => setSq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runSearch()} placeholder='e.g. "HBM 2027 pricing", "channel checks on demand", "China supply risk"' className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]" />
+            <button onClick={runSearch} disabled={sres === "loading" || !sq.trim()} className="rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">{sres === "loading" ? "…" : "Search"}</button>
+          </div>
+          {sres === "loading" && <div className="mt-3 text-[13px] text-[var(--text-3)]">Retrieving the most relevant passages…</div>}
+          {sres && sres !== "loading" && (
+            <div className="mt-3 space-y-3">
+              {sres.answer && <div className="rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-body)]"><MarkdownLite text={sres.answer} /></div>}
+              {sres.hits.length === 0 ? <div className="text-xs text-[var(--text-3)]">No matching passages yet — ingest more research.</div> : (
+                <div className="space-y-1.5">
+                  {sres.hits.slice(0, 8).map((h, i) => (
+                    <button key={i} onClick={() => openTicker(h.ticker)} className="block w-full rounded-md border border-[var(--divider)] px-3 py-2 text-left hover:bg-[var(--surface-hover)]">
+                      <div className="mb-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-4)]"><span className="font-mono font-semibold text-[var(--text-2)]">{h.ticker}</span> · {h.source} · {h.date} · <span className="tabular-nums">{(h.score * 100).toFixed(0)}% match</span></div>
+                      <div className="text-[12px] leading-snug text-[var(--text-3)]">{h.snippet.slice(0, 240)}{h.snippet.length > 240 ? "…" : ""}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* actionable — idea generation across the whole corpus */}
       {!ticker && signals.length > 0 && (

@@ -35,8 +35,9 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
 
 (async () => {
   const { extractResearch, extractConfigured } = await import("../lib/research/extract");
-  const { saveDoc } = await import("../lib/research/store");
+  const { saveDoc, saveChunks, semanticSearchAvailable } = await import("../lib/research/store");
   const { uploadPdf } = await import("../lib/research/blob");
+  const { embedChunks } = await import("../lib/research/embed");
   if (!extractConfigured()) { console.error("GEMINI_API_KEY not set (.env.local)"); process.exit(1); }
   const dest = process.env.RESEARCH_DATABASE_URL ? "Supabase/Postgres" : OUT;
   console.log(`destination: ${dest}\n`);
@@ -52,9 +53,11 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
       const blobKey = await uploadPdf(id, buf);
       const stored = { ...doc, id, fileName: path.basename(p), pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey, text };
       await saveDoc(stored);
+      let nChunks = 0;
+      if (semanticSearchAvailable()) { const rows = await embedChunks(text); await saveChunks(id, doc.ticker, rows); nChunks = rows.length; }
       const pt = doc.priceTarget != null ? `$${doc.priceTarget}` : "—";
       const ptp = doc.priceTargetPrior != null ? `$${doc.priceTargetPrior}` : "—";
-      console.log(`  ok  ${doc.source.padEnd(22)} ${(doc.rating || "—").padEnd(11)} PT ${ptp}→${pt}  est:${doc.estimates.length}  ${doc.entitlement ? "[entitled]" : ""}`);
+      console.log(`  ok  ${doc.source.padEnd(22)} ${(doc.rating || "—").padEnd(11)} PT ${ptp}→${pt}  est:${doc.estimates.length}  chunks:${nChunks}  ${doc.entitlement ? "[entitled]" : ""}`);
     } catch (e: any) {
       console.log("  FAIL", path.basename(p), String(e?.message || e).slice(0, 80));
     }
