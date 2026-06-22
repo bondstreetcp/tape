@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import MarkdownLite from "./MarkdownLite";
 
 interface Estimate { metric: string; period: string; value: number | null; unit?: string | null; priorValue: number | null; vsConsensus: string | null }
-interface Doc { id: string; ticker: string; company: string; source: string; analysts: string[]; publishDate: string; docType: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; targetBasis: string | null; thesis: string[]; risks: string[]; catalysts: string[]; estimates: Estimate[]; summary: string; entitlement: string | null; fileName: string; pageCount: number }
+interface Doc { id: string; ticker: string; company: string; source: string; analysts: string[]; publishDate: string; docType: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; targetBasis: string | null; thesis: string[]; risks: string[]; catalysts: string[]; estimates: Estimate[]; summary: string; entitlement: string | null; fileName: string; pageCount: number; blobKey: string | null }
 interface MetricRow { source: string; value: number | null; priorValue: number | null; unit: string | null; vsConsensus: string | null }
 interface Consensus { docCount: number; ratings: { rating: string; count: number }[]; priceTargets: { source: string; date: string; target: number; prior: number | null }[]; ptStats: { min: number; max: number; median: number } | null; battlegrounds: { label: string; rows: MetricRow[] }[]; entitlements: string[] }
 type IndexRow = { ticker: string; company: string; count: number; latest: string };
@@ -203,7 +203,10 @@ export default function ResearchDesk() {
                     {d.rating && <span className="rounded px-1.5 py-0.5 text-[11px] font-medium" style={{ background: ratingColor(d.rating) + "22", color: ratingColor(d.rating) }}>{d.rating}</span>}
                     {d.priceTarget != null && <span className="text-xs tabular-nums text-[var(--text-2)]">PT {d.priceTargetPrior != null ? `$${d.priceTargetPrior} → ` : ""}<span className="font-semibold text-[var(--text)]">${d.priceTarget}</span></span>}
                   </div>
-                  <span className="text-[11px] text-[var(--text-4)]">{d.publishDate} · {d.analysts.slice(0, 2).join(", ")}</span>
+                  <span className="flex items-center gap-2 text-[11px] text-[var(--text-4)]">
+                    {d.blobKey && <a href={`/api/research/pdf?id=${d.id}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">📄 PDF</a>}
+                    {d.publishDate} · {d.analysts.slice(0, 2).join(", ")}
+                  </span>
                 </div>
                 <div className="text-xs text-[var(--text-3)]">{d.title}</div>
                 {d.summary && <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--text-body)]">{d.summary}</p>}

@@ -3,13 +3,14 @@ import crypto from "node:crypto";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { extractResearch, extractConfigured } from "@/lib/research/extract";
 import { saveDoc } from "@/lib/research/store";
+import { uploadPdf } from "@/lib/research/blob";
 import type { StoredDoc } from "@/lib/research/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 
-// POST multipart (file=<pdf>) → parse → Gemini structured extraction → store → { doc }.
-// MVP writes to the local store (dev only); production swaps saveDoc to Supabase + Blob.
+// POST multipart (file=<pdf>) → parse → Gemini structured extraction → store the raw PDF
+// (Supabase Storage) + the extracted fields (Postgres or local FS) → { doc }.
 export async function POST(req: NextRequest) {
   if (!extractConfigured()) return NextResponse.json({ error: "GEMINI_API_KEY not set" }, { status: 400 });
   let file: File | null = null;
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest) {
     const id = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16);
     const doc = await extractResearch(text);
     if (!doc) return NextResponse.json({ error: "extraction failed" });
-    const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null, text };
+    const blobKey = await uploadPdf(id, buf);
+    const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey, text };
     await saveDoc(stored);
     return NextResponse.json({ ok: true, doc: stored });
   } catch (e: any) {

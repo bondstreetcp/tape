@@ -13,6 +13,7 @@ export type DocType =
   | "earnings-review"
   | "event-reaction"
   | "industry-research"
+  | "idea"   // community / buy-side thesis (e.g. Value Investors Club, internal memo)
   | "note"
   | "other";
 

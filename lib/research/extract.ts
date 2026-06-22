@@ -20,7 +20,7 @@ const SCHEMA = {
     source: { type: "string" },
     analysts: { type: "array", items: { type: "string" } },
     publishDate: { type: "string", description: "ISO date YYYY-MM-DD" },
-    docType: { type: "string", enum: ["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "note", "other"] },
+    docType: { type: "string", enum: ["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "idea", "note", "other"] },
     title: { type: "string" },
     rating: { type: "string", nullable: true },
     ratingPrior: { type: "string", nullable: true },
@@ -55,6 +55,7 @@ const SCHEMA = {
 const INSTRUCTION =
   `Extract structured data from this equity-research report into the schema. Rules:\n` +
   `- source: the PUBLISHING firm (e.g. "RBC Capital", "TD Securities", "Citi", "Stifel", "Bloomberg Intelligence"), not the covered company.\n` +
+  `- For community / buy-side idea write-ups (e.g. Value Investors Club, independent theses, internal memos): set docType to "idea", source to the platform or author (e.g. "Value Investors Club"), and analysts to the author/username. These usually carry no formal rating or 12-month price target — leave those null unless explicitly stated — and their edge is the variant perception (why the market is wrong): capture that in thesis, and any fair-value/target in estimates.\n` +
   `- For research providers that don't issue ratings/price targets (e.g. Bloomberg Intelligence), set rating, ratingPrior, priceTarget, priceTargetPrior to null.\n` +
   `- priceTarget / priceTargetPrior: the NEW and PRIOR 12-month price targets as plain numbers (1500, not "$1,500.00").\n` +
   `- estimates: the key forward numbers — EPS, Revenue, Gross margin, ASP — each with its period (F3Q26, FY26, FY27, CY27, etc.), the priorValue when a revision is shown, and vsConsensus if the report states how it compares to the Street. The financial-summary tables often appear as run-together text (e.g. "Target Price$550.00$1,500.00" means prior $550, current $1,500) — parse current vs prior carefully. Express revenue in $B, EPS in $/share, margins in %.\n` +
