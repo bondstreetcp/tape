@@ -259,20 +259,32 @@ async function main() {
     let dailyXY: XY[] = [];
     let intradayXY: XY[] = [];
     let lastClose: number | null = null;
-    try {
-      const ch: any = await yf.chart(
-        sym,
-        { period1: dailyPeriod1, interval: "1d" },
-        { validateResult: false },
-      );
-      meta = ch?.meta || {};
-      const pts = toPoints(ch?.quotes);
-      if (pts.length) lastClose = pts[pts.length - 1].c;
-      returns = returnsFromPoints(pts);
-      dailyXY = toXY(pts);
-    } catch {
-      /* no data */
+    // Daily history — retry past Yahoo's rate-limiting (it throttles deep into a
+    // ~3,000-symbol run, which used to blank a third of the series). On a persistent
+    // miss, fall back to the existing series file so a transient failure never wipes a
+    // name's chart/returns.
+    let pts: SeriesPoint[] = [];
+    for (let attempt = 0; attempt < 3 && pts.length === 0; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 300 + attempt * 500));
+      try {
+        const ch: any = await yf.chart(sym, { period1: dailyPeriod1, interval: "1d" }, { validateResult: false });
+        meta = ch?.meta || meta;
+        pts = toPoints(ch?.quotes);
+      } catch {
+        /* retry */
+      }
     }
+    if (pts.length === 0) {
+      try {
+        const prev = JSON.parse(await fs.readFile(path.join(SYMBOL_DIR, symbolFile(sym)), "utf8"));
+        if (Array.isArray(prev.daily) && prev.daily.length) pts = (prev.daily as XY[]).map(([t, c]) => ({ t, c }));
+      } catch {
+        /* no prior series */
+      }
+    }
+    if (pts.length) lastClose = pts[pts.length - 1].c;
+    returns = returnsFromPoints(pts);
+    dailyXY = toXY(pts);
     if (needIntraday.has(sym)) {
       try {
         const ch: any = await yf.chart(
@@ -293,10 +305,13 @@ async function main() {
     const high = q?.fiftyTwoWeekHigh ?? meta.fiftyTwoWeekHigh ?? 0;
     const low = q?.fiftyTwoWeekLow ?? meta.fiftyTwoWeekLow ?? 0;
 
-    await fs.writeFile(
-      path.join(SYMBOL_DIR, symbolFile(sym)),
-      JSON.stringify({ daily: dailyXY, intraday: intradayXY } satisfies StockSeries),
-    );
+    // Never clobber a good series with an empty fetch — only write when we have data
+    // (a dead/delisted symbol simply keeps whatever was there, or no file).
+    if (dailyXY.length)
+      await fs.writeFile(
+        path.join(SYMBOL_DIR, symbolFile(sym)),
+        JSON.stringify({ daily: dailyXY, intraday: intradayXY } satisfies StockSeries),
+      );
 
     metricBySym.set(sym, {
       name: q?.longName || q?.shortName || classBySym.get(sym)?.name || sym,
