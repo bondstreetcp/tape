@@ -1,7 +1,5 @@
 "use client";
-import { SCREEN_INFO, type ScreenKey } from "@/lib/screens";
-
-const ORDER: ScreenKey[] = ["magic", "erp5", "netnet", "piotroski", "shyield", "moat"];
+import { SCREEN_INFO, SCREEN_ORDER } from "@/lib/screens";
 
 /** ⓘ info icon → hover/focus card explaining each preset screen in detail. */
 export default function StrategyTip() {
@@ -21,7 +19,7 @@ export default function StrategyTip() {
       >
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-3)]">Preset screens — what each one does</div>
         <div className="space-y-2.5">
-          {ORDER.map((k) => {
+          {SCREEN_ORDER.map((k) => {
             const s = SCREEN_INFO[k];
             return (
               <div key={k} className="border-t border-[var(--divider)] pt-2 first:border-0 first:pt-0">
