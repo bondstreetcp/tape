@@ -16,6 +16,7 @@ import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
 import TickerResearch from "./TickerResearch";
 import SharesChart from "./SharesChart";
+import MarginsChart from "./MarginsChart";
 import OptionsChain from "./OptionsChain";
 import DcfPanel from "./DcfPanel";
 import ScenarioPanel from "./ScenarioPanel";
@@ -464,6 +465,7 @@ export default function FinancialsView({
               </>
             )}
           </p>
+          <MarginsChart symbol={symbol} />
           <DuPontPanel periods={financials.annual} />
           <SegmentsPanel symbol={symbol} currency={currency} />
           <SharesChart symbol={symbol} financials={financials} />
