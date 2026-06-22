@@ -112,14 +112,19 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
 
     const maps: Record<string, Map<string, number>> = {};
     for (const spec of FIELDS) {
-      let chosen: any[] | null = null;
       const unit = spec.unit || "USD";
+      // Merge facts across ALL alias concepts rather than taking the first that has any
+      // data — issuers re-tag line items over the years (e.g. Lockheed's cost of revenue
+      // moved CostOfGoodsAndServicesSold → CostOfRevenue in 2022, and revenue lives under
+      // "Revenues"), so first-match-wins drops whole spans. durMap/instMap dedup by
+      // period-end (latest filing wins), so concatenating is safe.
+      let facts: any[] = [];
       for (const c of spec.concepts) {
         const arr = gaap[c]?.units?.[unit];
-        if (Array.isArray(arr) && arr.length) { chosen = arr; break; }
+        if (Array.isArray(arr) && arr.length) facts = facts.length ? facts.concat(arr) : arr;
       }
-      if (!chosen) continue;
-      const m = spec.kind === "dur" ? durMap(chosen) : instMap(chosen);
+      if (!facts.length) continue;
+      const m = spec.kind === "dur" ? durMap(facts) : instMap(facts);
       if (spec.negate) for (const [k, v] of m) m.set(k, -Math.abs(v));
       maps[spec.field] = m;
     }
