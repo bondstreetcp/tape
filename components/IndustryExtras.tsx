@@ -30,25 +30,34 @@ export default function IndustryExtras({ stocks, tf, universe, label }: { stocks
     return () => { on = false; };
   }, [stocks]);
 
-  const gainers = [...stocks].filter((s) => s.returns[tf] != null).sort((a, b) => (b.returns[tf] as number) - (a.returns[tf] as number)).slice(0, 8);
+  const ranked = [...stocks].filter((s) => s.returns[tf] != null).sort((a, b) => (b.returns[tf] as number) - (a.returns[tf] as number));
+  const gainers = ranked.slice(0, 8);
+  const losers = ranked.slice(-8).reverse(); // worst performers, most-negative first
+
+  const MoverPanel = ({ title, rows }: { title: string; rows: StockRow[] }) => (
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h3 className="mb-2 text-sm font-semibold text-[var(--text-2)]">{title} · {label}</h3>
+      <div className="grid grid-cols-2 gap-2">
+        {rows.map((s) => (
+          <Link key={s.symbol} href={`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`} className="rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] px-2.5 py-2 hover:border-[var(--border-strong)]">
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-mono text-sm font-semibold">{s.symbol}</span>
+              <span className="text-sm font-semibold tabular-nums" style={{ color: trendColor(s.returns[tf]) }}>{fmtPct(s.returns[tf], 1)}</span>
+            </div>
+            <div className="truncate text-[11px] text-[var(--text-3)]">{s.name}</div>
+          </Link>
+        ))}
+        {rows.length === 0 && <Muted>No data.</Muted>}
+      </div>
+    </section>
+  );
 
   return (
     <div className="space-y-3">
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h3 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Top gainers · {label}</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {gainers.map((s) => (
-            <Link key={s.symbol} href={`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`} className="rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] px-2.5 py-2 hover:border-[var(--border-strong)]">
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-mono text-sm font-semibold">{s.symbol}</span>
-                <span className="text-sm font-semibold tabular-nums" style={{ color: trendColor(s.returns[tf]) }}>{fmtPct(s.returns[tf], 1)}</span>
-              </div>
-              <div className="truncate text-[11px] text-[var(--text-3)]">{s.name}</div>
-            </Link>
-          ))}
-          {gainers.length === 0 && <Muted>No data.</Muted>}
-        </div>
-      </section>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <MoverPanel title="▲ Top gainers" rows={gainers} />
+        <MoverPanel title="▼ Top losers" rows={losers} />
+      </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
