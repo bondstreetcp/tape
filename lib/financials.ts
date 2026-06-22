@@ -111,3 +111,44 @@ export async function getFinancials(symbol: string): Promise<Financials> {
   ]);
   return { annual, quarterly: edgarQ.length ? mergeQuarterly(edgarQ, quarterly) : quarterly };
 }
+
+/** One quarter of the income-statement essentials, for the margins/growth chart. */
+export interface QuarterPoint {
+  date: string; // YYYY-MM-DD period end
+  rev: number | null; // total revenue
+  gp: number | null; // gross profit
+  oi: number | null; // operating income (EBIT)
+}
+
+/**
+ * Deep QUARTERLY revenue / gross profit / operating income for the margins & growth chart —
+ * the same EDGAR-deep + Yahoo-recent merge as getFinancials but UNCAPPED (Yahoo wins on
+ * overlap, EDGAR fills the older years), trimmed to the last `maxQuarters` (~11yr). Kept
+ * separate from getFinancials so the statement TABLE stays at ~5yr of columns while the
+ * chart can reach back a decade. Non-US filers (no EDGAR) fall back to Yahoo's ~5yr.
+ */
+export async function getQuarterlyHistory(symbol: string, maxQuarters = 44): Promise<QuarterPoint[]> {
+  const [yahoo, edgar] = await Promise.all([
+    fetchType(symbol, "quarterly"),
+    getEdgarQuarterly(symbol).catch(() => [] as FinPeriod[]),
+  ]);
+  const key = (d: string) => d.slice(0, 7); // YYYY-MM (the two sources differ by a few days)
+  const byKey = new Map<string, FinPeriod>();
+  for (const p of edgar) byKey.set(key(p.date), p);
+  for (const p of yahoo) byKey.set(key(p.date), { ...(byKey.get(key(p.date)) || {}), ...p });
+  const merged = [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  const num = (p: FinPeriod, k: string) => (typeof p[k] === "number" ? (p[k] as number) : null);
+  const grossProfit = (p: FinPeriod) => {
+    const g = num(p, "grossProfit");
+    if (g != null) return g;
+    const r = num(p, "totalRevenue"), c = num(p, "costOfRevenue");
+    return r != null && c != null ? r - c : null;
+  };
+  return merged.slice(-maxQuarters).map((p) => ({
+    date: p.date,
+    rev: num(p, "totalRevenue"),
+    gp: grossProfit(p),
+    oi: num(p, "operatingIncome") ?? num(p, "EBIT"),
+  }));
+}
