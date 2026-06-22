@@ -49,8 +49,8 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
     currency: "EUR",
     tickers: [
       "ADYEN.AS", "AD.AS", "AKZA.AS", "MT.AS", "ASM.AS", "ASML.AS", "ASRNL.AS",
-      "BESI.AS", "ABN.AS", "AGN.AS", "DSFIR.AS", "GLPG.AS", "HEIA.AS", "IMCD.AS",
-      "INGA.AS", "KPN.AS", "NN.AS", "PHIA.AS", "PRX.AS", "RAND.AS", "REN.AS",
+      "BESI.AS", "ABN.AS", "AGN.AS", "DSFIR.AS", "EXO.AS", "HEIA.AS", "IMCD.AS",
+      "INGA.AS", "KPN.AS", "NN.AS", "PHIA.AS", "PRX.AS", "SBMO.AS", "REN.AS",
       "SHELL.AS", "UMG.AS", "UNA.AS", "WKL.AS",
       "MICC.AS", // The Magnum Ice Cream Company (Unilever ice-cream spinoff) — AEX member
     ],
