@@ -132,23 +132,27 @@ export async function getQuarterlyHistory(symbol: string, maxQuarters = 44): Pro
     fetchType(symbol, "quarterly"),
     getEdgarQuarterly(symbol).catch(() => [] as FinPeriod[]),
   ]);
-  const key = (d: string) => d.slice(0, 7); // YYYY-MM (the two sources differ by a few days)
-  const byKey = new Map<string, FinPeriod>();
-  for (const p of edgar) byKey.set(key(p.date), p);
-  for (const p of yahoo) byKey.set(key(p.date), { ...(byKey.get(key(p.date)) || {}), ...p });
-  const merged = [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date));
-
   const num = (p: FinPeriod, k: string) => (typeof p[k] === "number" ? (p[k] as number) : null);
-  const grossProfit = (p: FinPeriod) => {
+  const gp = (p: FinPeriod) => {
     const g = num(p, "grossProfit");
     if (g != null) return g;
     const r = num(p, "totalRevenue"), c = num(p, "costOfRevenue");
     return r != null && c != null ? r - c : null;
   };
-  return merged.slice(-maxQuarters).map((p) => ({
-    date: p.date,
-    rev: num(p, "totalRevenue"),
-    gp: grossProfit(p),
-    oi: num(p, "operatingIncome") ?? num(p, "EBIT"),
-  }));
+  const toPt = (p: FinPeriod, edgarSrc: boolean) => ({ date: p.date, rev: num(p, "totalRevenue"), gp: gp(p), oi: num(p, "operatingIncome") ?? num(p, "EBIT"), e: edgarSrc });
+
+  // EDGAR (deep, authoritative) + Yahoo (recent), sorted, then collapse near-duplicate
+  // quarter-ends: the two sources date the same fiscal quarter a few days apart, which can
+  // straddle a month boundary and otherwise leaves a stray half-empty quarter (the gap).
+  const DAY = 86_400_000;
+  const all = [...edgar.map((p) => toPt(p, true)), ...yahoo.map((p) => toPt(p, false))].sort((a, b) => a.date.localeCompare(b.date));
+  const out: ReturnType<typeof toPt>[] = [];
+  for (const p of all) {
+    const last = out[out.length - 1];
+    if (last && Date.parse(p.date) - Date.parse(last.date) < 25 * DAY) {
+      for (const k of ["rev", "gp", "oi"] as const) if (p[k] != null && (last[k] == null || (p.e && !last.e))) last[k] = p[k]; // prefer EDGAR, fill gaps
+      if (p.e) { last.date = p.date; last.e = true; }
+    } else out.push({ ...p });
+  }
+  return out.slice(-maxQuarters).map(({ date, rev, gp, oi }) => ({ date, rev, gp, oi }));
 }
