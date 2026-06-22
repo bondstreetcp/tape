@@ -126,7 +126,7 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
 
     // quarter-end dates = union of the income-statement discrete ends
     const ends = new Set<string>();
-    for (const f of ["totalRevenue", "netIncome", "operatingIncome"]) {
+    for (const f of ["totalRevenue", "netIncome", "operatingIncome", "grossProfit"]) {
       const m = maps[f];
       if (m) for (const k of m.keys()) ends.add(k);
     }
@@ -141,6 +141,11 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
       }
       if (typeof p.operatingCashFlow === "number" && typeof p.capitalExpenditure === "number" && p.freeCashFlow == null)
         p.freeCashFlow = (p.operatingCashFlow as number) + (p.capitalExpenditure as number);
+      // Revenue is tagged inconsistently in XBRL for some issuers (concept changes,
+      // dimensional facts) even when gross profit AND cost of revenue both are — recover it
+      // (rev = gross profit + cost), which restores deep margin history (e.g. Tesla, Macy's).
+      if (p.totalRevenue == null && typeof p.grossProfit === "number" && typeof p.costOfRevenue === "number")
+        p.totalRevenue = (p.grossProfit as number) + (p.costOfRevenue as number);
       if (p.grossProfit == null && typeof p.totalRevenue === "number" && typeof p.costOfRevenue === "number")
         p.grossProfit = (p.totalRevenue as number) - (p.costOfRevenue as number);
       if (any) periods.push(p);
