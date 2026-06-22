@@ -5,13 +5,15 @@ import { getEdgarQuarterly } from "./edgarFinancials";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
-// Validated Alpha Vantage gross-profit backfill (data/av-margins.json, built by
-// scripts/patch-margins-av.ts) — fills deep margin gaps for issuers whose SEC XBRL doesn't
-// cleanly tag a cost-of-revenue total. Only entries that matched EDGAR on overlap are trusted.
-let _avCache: Promise<Record<string, { trusted: boolean; q: [string, number | null, number | null, number | null][] }>> | null = null;
-function avCache() {
-  if (!_avCache) _avCache = fsp.readFile(path.join(process.cwd(), "data", "av-margins.json"), "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
-  return _avCache;
+// Validated gross-profit backfills (data/{av,simfin}-margins.json, built by the
+// patch-margins-* scripts) — fill deep margin gaps for issuers whose SEC XBRL doesn't tag a
+// clean cost-of-revenue total. Only entries that matched EDGAR on overlap are trusted. Alpha
+// Vantage reaches ~20yr, SimFin ~2019+, so AV fills first and SimFin fills whatever's left.
+type Backfill = Record<string, { trusted: boolean; q: [string, number | null, number | null, number | null][] }>;
+const _bf: Record<string, Promise<Backfill>> = {};
+function backfillCache(file: string): Promise<Backfill> {
+  if (!_bf[file]) _bf[file] = fsp.readFile(path.join(process.cwd(), "data", file), "utf8").then((s) => JSON.parse(s) as Backfill).catch(() => ({} as Backfill));
+  return _bf[file];
 }
 
 export interface FinPeriod {
@@ -166,12 +168,14 @@ export async function getQuarterlyHistory(symbol: string, maxQuarters = 44): Pro
     } else out.push({ ...p });
   }
 
-  // Fill any remaining gaps from the validated Alpha Vantage backfill (matched by quarter-end).
-  const avc = (await avCache())[symbol.toUpperCase()];
-  if (avc?.trusted && avc.q.length) {
+  // Fill any remaining gaps from the validated backfills (AV first — deeper; then SimFin).
+  const sym = symbol.toUpperCase();
+  for (const file of ["av-margins.json", "simfin-margins.json"]) {
+    const c = (await backfillCache(file))[sym];
+    if (!c?.trusted || !c.q.length) continue;
     for (const p of out) {
       if (p.rev != null && p.gp != null && p.oi != null) continue;
-      const a = avc.q.find(([d]) => Math.abs(Date.parse(d) - Date.parse(p.date)) < 25 * DAY);
+      const a = c.q.find(([d]) => Math.abs(Date.parse(d) - Date.parse(p.date)) < 25 * DAY);
       if (!a) continue;
       if (p.rev == null && a[1] != null) p.rev = a[1];
       if (p.gp == null && a[2] != null) p.gp = a[2];
