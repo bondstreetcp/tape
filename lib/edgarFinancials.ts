@@ -155,18 +155,38 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
       maps[spec.field] = m;
     }
 
-    // Calibrated operating-income fallback: where OperatingIncomeLoss isn't tagged, reconstruct
-    // it as gross profit − SG&A − R&D — but ONLY for issuers where that formula tracks their
-    // ACTUAL operating income closely on overlapping periods (≥3 points, ≥70% within 12%).
-    // Otherwise un-captured operating costs would overstate it, so we leave an honest gap.
+    // Calibrated cross-check on the income-statement identity GrossProfit − SG&A − R&D =
+    // OperatingIncome. Where one side isn't tagged but the other (plus opex) is, reconstruct it
+    // — gross profit ← operating income + SG&A + R&D, or operating income ← gross profit − SG&A
+    // − R&D — but ONLY for issuers where the identity actually holds on overlapping periods
+    // (≥3 points, ≥70% within 12%), i.e. SG&A + R&D really are the whole below-gross opex.
+    // Otherwise un-captured costs would skew it, so we leave an honest gap. Snapshots of the
+    // ACTUAL maps keep the two derivations from feeding each other.
     {
-      const oiM = maps["operatingIncome"], gpM = maps["grossProfit"], sgaM = maps["sellingGeneralAndAdministration"], rndM = maps["researchAndDevelopment"];
-      if (oiM && gpM && sgaM) {
-        const derived = new Map<string, number>();
-        for (const [end, gp] of gpM) { const sga = sgaM.get(end); if (typeof sga === "number") derived.set(end, gp - sga - (rndM?.get(end) ?? 0)); }
-        let total = 0, ok = 0;
-        for (const [end, d] of derived) { const a = oiM.get(end); if (typeof a === "number" && a !== 0) { total++; if (Math.abs(d - a) / Math.abs(a) <= 0.12) ok++; } }
-        if (total >= 3 && ok / total >= 0.7) for (const [end, d] of derived) if (!oiM.has(end)) oiM.set(end, d);
+      const gpM = maps["grossProfit"], oiM = maps["operatingIncome"], sgaM = maps["sellingGeneralAndAdministration"], rndM = maps["researchAndDevelopment"];
+      if (sgaM && (gpM || oiM)) {
+        const gpA = gpM ? new Map(gpM) : new Map<string, number>();
+        const oiA = oiM ? new Map(oiM) : new Map<string, number>();
+        const opex = (end: string) => { const s = sgaM.get(end); return typeof s === "number" ? s + (rndM?.get(end) ?? 0) : null; };
+        const reliable = (derived: Map<string, number>, actual: Map<string, number>) => {
+          let total = 0, ok = 0;
+          for (const [end, d] of derived) { const a = actual.get(end); if (typeof a === "number" && a !== 0) { total++; if (Math.abs(d - a) / Math.abs(a) <= 0.12) ok++; } }
+          return total >= 3 && ok / total >= 0.7;
+        };
+        const apply = (field: string, derived: Map<string, number>) => {
+          if (!maps[field]) maps[field] = new Map();
+          for (const [end, v] of derived) if (!maps[field].has(end)) maps[field].set(end, v);
+        };
+        if (oiM) { // gross profit ← operating income + opex
+          const d = new Map<string, number>();
+          for (const [end, oi] of oiA) { const ox = opex(end); if (ox != null) d.set(end, oi + ox); }
+          if (reliable(d, gpA)) apply("grossProfit", d);
+        }
+        if (gpM) { // operating income ← gross profit − opex
+          const d = new Map<string, number>();
+          for (const [end, gp] of gpA) { const ox = opex(end); if (ox != null) d.set(end, gp - ox); }
+          if (reliable(d, oiA)) apply("operatingIncome", d);
+        }
       }
     }
 
