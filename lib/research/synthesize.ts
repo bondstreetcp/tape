@@ -70,6 +70,7 @@ function digest(docs: StoredDoc[]): string {
       `Thesis: ${d.thesis.join(" | ")}`,
       d.risks.length ? `Risks: ${d.risks.join(" | ")}` : "",
       d.catalysts.length ? `Catalysts: ${d.catalysts.join(" | ")}` : "",
+      d.managementInsights?.length ? `Management/expert color: ${d.managementInsights.join(" | ")}` : "",
       est ? `Estimates: ${est}` : "",
     ].filter(Boolean).join("\n");
   }).join("\n\n");
@@ -124,6 +125,64 @@ export async function searchCorpus(docs: StoredDoc[], question: string): Promise
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: -1 } } }),
+  });
+  if (!res.ok) throw new Error(`Gemini ${res.status}`);
+  const j: any = await res.json();
+  return (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null;
+}
+
+// ---- Idea generation: cross-corpus actionable signals -----------------------------
+
+export interface DocSignal {
+  id: string; ticker: string; company: string; source: string; date: string;
+  rating: string | null; ratingChanged: boolean;
+  pt: number | null; ptChangePct: number | null;
+  topRevision: { metric: string; period: string; changePct: number } | null;
+  mgmtColor: number; // # of management/expert takeaways
+  score: number;     // movement / conviction score for ranking
+}
+
+const pctChange = (v: number, prior: number) => (prior ? (v / prior - 1) * 100 : 0);
+
+export function signalsFor(d: StoredDoc): DocSignal {
+  const ptChangePct = d.priceTarget != null && d.priceTargetPrior ? pctChange(d.priceTarget, d.priceTargetPrior) : null;
+  const ratingChanged = !!(d.rating && d.ratingPrior && d.rating.toLowerCase() !== d.ratingPrior.toLowerCase());
+  let topRevision: DocSignal["topRevision"] = null;
+  for (const e of d.estimates) {
+    if (e.value != null && e.priorValue) {
+      const ch = pctChange(e.value, e.priorValue);
+      if (!topRevision || Math.abs(ch) > Math.abs(topRevision.changePct)) topRevision = { metric: e.metric, period: e.period, changePct: ch };
+    }
+  }
+  const mgmtColor = d.managementInsights?.length ?? 0;
+  const score = Math.max(Math.abs(ptChangePct ?? 0), Math.abs(topRevision?.changePct ?? 0)) + (ratingChanged ? 60 : 0) + mgmtColor * 12;
+  return { id: d.id, ticker: d.ticker, company: d.company, source: d.source, date: d.publishDate, rating: d.rating, ratingChanged, pt: d.priceTarget, ptChangePct, topRevision, mgmtColor, score };
+}
+
+/** Every note ranked by how hard it's moving / how much conviction it carries. */
+export function actionableSignals(docs: StoredDoc[]): DocSignal[] {
+  return docs.map(signalsFor).sort((a, b) => b.score - a.score);
+}
+
+/** Idea-generation pass across the WHOLE corpus: what's actionable and why. */
+export async function actionableScan(docs: StoredDoc[]): Promise<string | null> {
+  const KEY = process.env.GEMINI_API_KEY;
+  if (!KEY || docs.length === 0) return null;
+  const lines = actionableSignals(docs).map((s) => "- " + [
+    `${s.ticker} — ${s.source} (${s.date}) — ${s.rating ?? "research"}`,
+    s.ptChangePct != null ? `PT ${s.ptChangePct >= 0 ? "+" : ""}${s.ptChangePct.toFixed(0)}% to $${s.pt}` : "",
+    s.ratingChanged ? "RATING CHANGED" : "",
+    s.topRevision ? `${s.topRevision.metric} ${s.topRevision.period} revised ${s.topRevision.changePct >= 0 ? "+" : ""}${s.topRevision.changePct.toFixed(0)}%` : "",
+    s.mgmtColor ? `${s.mgmtColor} management/expert takeaway(s)` : "",
+  ].filter(Boolean).join("; "));
+  const color = docs.filter((d) => d.managementInsights?.length).map((d) => `${d.ticker} (${d.source}): ${d.managementInsights.join(" | ")}`);
+  const prompt =
+    `You are a buy-side PM scanning sell-side research for IDEA GENERATION. From the signals below, surface the most ACTIONABLE items — names where the Street is re-rating hard (large price-target or estimate revisions, rating changes), where management/expert access adds conviction, or where there's a sharp debate/outlier worth a look. Be selective and rank by actionability. For each: **Ticker** — the signal in one line — why it's actionable — and the one thing to check next. End with any cross-cutting theme.\n\n` +
+    `=== SIGNALS (pre-ranked by movement) ===\n${lines.join("\n")}\n\n` +
+    (color.length ? `=== MANAGEMENT / EXPERT COLOR ===\n${color.join("\n")}\n` : "");
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: -1 } } }),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}`);
   const j: any = await res.json();

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import MarkdownLite from "./MarkdownLite";
 
 interface Estimate { metric: string; period: string; value: number | null; unit?: string | null; priorValue: number | null; vsConsensus: string | null }
-interface Doc { id: string; source: string; analysts: string[]; publishDate: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; thesis: string[]; risks: string[]; estimates: Estimate[]; summary: string; entitlement: string | null }
+interface Doc { id: string; source: string; analysts: string[]; publishDate: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; thesis: string[]; risks: string[]; managementInsights: string[]; estimates: Estimate[]; summary: string; entitlement: string | null }
 interface Consensus { docCount: number; ratings: { rating: string; count: number }[]; ptStats: { min: number; max: number; median: number } | null; entitlements: string[] }
 
 const ratingColor = (r: string | null) => /buy|outperform|overweight|add|accumulate/i.test(r || "") ? "#22c55e" : /sell|underperform|underweight|reduce/i.test(r || "") ? "#ef4444" : "#eab308";
@@ -99,6 +99,14 @@ export default function TickerResearch({ symbol, name }: { symbol: string; name?
               <span className="text-[11px] text-[var(--text-4)]">{d.publishDate}</span>
             </div>
             {d.summary && <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-3)]">{d.summary}</p>}
+            {d.managementInsights?.length > 0 && (
+              <div className="mt-2 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/[0.06] p-2">
+                <div className="mb-0.5 text-[11px] font-semibold text-[#22c55e]">👤 Management &amp; expert color</div>
+                <ul className="list-disc space-y-0.5 pl-4 text-[12px] text-[var(--text-2)]">
+                  {d.managementInsights.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
+              </div>
+            )}
           </section>
         ))}
       </div>

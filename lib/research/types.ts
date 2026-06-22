@@ -44,6 +44,11 @@ export interface ResearchDoc {
   risks: string[];
   catalysts: string[];   // what-to-watch / upcoming events
 
+  /** Takeaways the analyst attributes to DIRECT ACCESS — management meetings/commentary,
+   *  fireside chats, NDRs, expert/industry/channel checks. The primary-source conviction
+   *  signal (distinct from the analyst's own modelling). Empty when the note has none. */
+  managementInsights: string[];
+
   estimates: ResearchEstimate[];
   summary: string;       // tight buy-side memo
 

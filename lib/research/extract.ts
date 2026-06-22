@@ -30,6 +30,7 @@ const SCHEMA = {
     thesis: { type: "array", items: { type: "string" } },
     risks: { type: "array", items: { type: "string" } },
     catalysts: { type: "array", items: { type: "string" } },
+    managementInsights: { type: "array", items: { type: "string" } },
     estimates: {
       type: "array",
       items: {
@@ -48,7 +49,7 @@ const SCHEMA = {
     summary: { type: "string" },
     entitlement: { type: "string", nullable: true },
   },
-  required: ["ticker", "company", "source", "publishDate", "docType", "title", "thesis", "risks", "catalysts", "estimates", "summary"],
+  required: ["ticker", "company", "source", "publishDate", "docType", "title", "thesis", "risks", "catalysts", "managementInsights", "estimates", "summary"],
 };
 
 const INSTRUCTION =
@@ -58,6 +59,7 @@ const INSTRUCTION =
   `- priceTarget / priceTargetPrior: the NEW and PRIOR 12-month price targets as plain numbers (1500, not "$1,500.00").\n` +
   `- estimates: the key forward numbers — EPS, Revenue, Gross margin, ASP — each with its period (F3Q26, FY26, FY27, CY27, etc.), the priorValue when a revision is shown, and vsConsensus if the report states how it compares to the Street. The financial-summary tables often appear as run-together text (e.g. "Target Price$550.00$1,500.00" means prior $550, current $1,500) — parse current vs prior carefully. Express revenue in $B, EPS in $/share, margins in %.\n` +
   `- thesis: 3–5 concise bullets capturing the argument. risks: the key risks. catalysts: upcoming events / what-to-watch.\n` +
+  `- managementInsights: takeaways the analyst attributes to DIRECT ACCESS — management meetings, management commentary/guidance, fireside chats, non-deal roadshows (NDRs), or expert/industry/channel checks. Each a concise point of what was actually learned from that primary source (this is the conviction signal, distinct from the analyst's own modelling). Empty array if the note has no such access.\n` +
   `- entitlement: any "for the exclusive use of <name/firm>" or "not for redistribution" watermark text, else null.\n` +
   `- summary: a tight 3–4 sentence buy-side takeaway. Base everything strictly on the report; never invent numbers.`;
 
@@ -105,6 +107,7 @@ export async function extractResearch(text: string): Promise<ResearchDoc | null>
       thesis: Array.isArray(d.thesis) ? d.thesis : [],
       risks: Array.isArray(d.risks) ? d.risks : [],
       catalysts: Array.isArray(d.catalysts) ? d.catalysts : [],
+      managementInsights: Array.isArray(d.managementInsights) ? d.managementInsights : [],
       estimates: Array.isArray(d.estimates) ? d.estimates.map((e: any) => ({
         metric: e.metric || "", period: e.period || "", value: typeof e.value === "number" ? e.value : null,
         unit: e.unit ?? null, priorValue: typeof e.priorValue === "number" ? e.priorValue : null, vsConsensus: e.vsConsensus ?? null,
