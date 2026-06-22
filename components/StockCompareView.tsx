@@ -9,6 +9,7 @@ import { trendColor } from "@/lib/color";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import UniverseSwitcher from "./UniverseSwitcher";
 import CompareOverlay from "./CompareOverlay";
+import CompareVerdict from "./CompareVerdict";
 
 const PALETTE = ["#60a5fa", "#34d399", "#f59e0b", "#a78bfa", "#f472b6"];
 const MAX = 5;
@@ -142,6 +143,9 @@ export default function StockCompareView({ universe, stocks, initial, generatedA
               </Link>
             ))}
           </div>
+
+          {/* AI head-to-head verdict (opt-in) */}
+          <CompareVerdict tickers={picked.map((s) => ({ symbol: s.symbol, name: s.name }))} />
 
           {/* margin / growth overlay */}
           <CompareOverlay tickers={picked.map((s, i) => ({ symbol: s.symbol, color: colorOf(i) }))} />
