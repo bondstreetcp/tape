@@ -30,6 +30,7 @@ export default function AppHeader({
         { href: `${base}/market`, label: "Cross-Asset Monitor" },
         { href: `${base}/rotation`, label: "Sector Rotation" },
         { href: `${base}/flow`, label: "Options Flow" },
+        { href: `${base}/earnings`, label: "Earnings Calendar" },
       ],
     },
     {
@@ -45,7 +46,6 @@ export default function AppHeader({
       label: "Economy",
       items: [
         { href: `${base}/macro`, label: "Macro & Rates" },
-        { href: `${base}/earnings`, label: "Earnings Calendar" },
         { href: `${base}/briefing`, label: "Daily Briefing" },
       ],
     },

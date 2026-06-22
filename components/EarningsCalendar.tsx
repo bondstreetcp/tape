@@ -129,11 +129,11 @@ export default function EarningsCalendar({
                         <td className="px-2 py-1.5 text-xs" style={{ color: tm.color }}>
                           {tm.label}{s.earningsEstimate ? " · est" : ""}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{fmtMarketCap(s.marketCap)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title="Market cap">{fmtMarketCap(s.marketCap)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]" title="Forward annual EPS estimate">
                           {s.epsForward != null ? `$${s.epsForward.toFixed(2)}` : "—"}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.returns.ytd) }}>
+                        <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.returns.ytd) }} title="Year-to-date price return">
                           {fmtPct(s.returns.ytd, 1)}
                         </td>
                       </tr>
