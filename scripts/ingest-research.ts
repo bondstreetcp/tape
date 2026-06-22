@@ -35,9 +35,11 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
 
 (async () => {
   const { extractResearch, extractConfigured } = await import("../lib/research/extract");
+  const { saveDoc } = await import("../lib/research/store");
   if (!extractConfigured()) { console.error("GEMINI_API_KEY not set (.env.local)"); process.exit(1); }
+  const dest = process.env.RESEARCH_DATABASE_URL ? "Supabase/Postgres" : OUT;
+  console.log(`destination: ${dest}\n`);
   const paths = process.argv.slice(2).length ? process.argv.slice(2) : SAMPLE;
-  fs.mkdirSync(OUT, { recursive: true });
   for (const p of paths) {
     try {
       const buf = fs.readFileSync(p);
@@ -47,7 +49,7 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
       const doc = await extractResearch(text);
       if (!doc) { console.log("  extract failed:", path.basename(p)); continue; }
       const stored = { ...doc, id, fileName: path.basename(p), pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null, text };
-      fs.writeFileSync(path.join(OUT, `${id}.json`), JSON.stringify(stored, null, 2));
+      await saveDoc(stored);
       const pt = doc.priceTarget != null ? `$${doc.priceTarget}` : "—";
       const ptp = doc.priceTargetPrior != null ? `$${doc.priceTargetPrior}` : "—";
       console.log(`  ok  ${doc.source.padEnd(22)} ${(doc.rating || "—").padEnd(11)} PT ${ptp}→${pt}  est:${doc.estimates.length}  ${doc.entitlement ? "[entitled]" : ""}`);
@@ -55,5 +57,5 @@ const OUT = path.join(process.cwd(), "data", ".research", "docs");
       console.log("  FAIL", path.basename(p), String(e?.message || e).slice(0, 80));
     }
   }
-  console.log(`\nwrote → ${OUT}`);
+  console.log(`\nwrote → ${dest}`);
 })();

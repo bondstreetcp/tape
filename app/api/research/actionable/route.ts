@@ -9,11 +9,11 @@ export const maxDuration = 60;
 // POST → LLM idea-generation digest ("what's actionable and why").
 export async function GET() {
   if (!storeAvailable()) return NextResponse.json({ available: false, signals: [] });
-  return NextResponse.json({ available: true, signals: actionableSignals(listDocs()) });
+  return NextResponse.json({ available: true, signals: actionableSignals(await listDocs()) });
 }
 
 export async function POST() {
-  const docs = listDocs();
+  const docs = await listDocs();
   if (!docs.length) return NextResponse.json({ error: "no documents" });
   try {
     return NextResponse.json({ digest: await actionableScan(docs) });
