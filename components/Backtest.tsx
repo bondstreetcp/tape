@@ -6,8 +6,8 @@ import type { StockRow } from "@/lib/types";
 import StrategyTip from "./StrategyTip";
 
 const STRATS: StrategyKey[] = ["momentum", "trend", "lowvol", "equal"];
-const SCREENS: ScreenKey[] = ["magic", "netnet", "piotroski", "shyield"];
-const SCREEN_SHORT: Record<ScreenKey, string> = { magic: "Magic Formula", netnet: "Net-Net", piotroski: "Piotroski", shyield: "Sh. Yield" };
+const SCREENS: ScreenKey[] = ["magic", "erp5", "netnet", "piotroski", "shyield", "moat"];
+const SCREEN_SHORT: Record<ScreenKey, string> = { magic: "Magic Formula", erp5: "ERP5", netnet: "Net-Net", piotroski: "Piotroski", shyield: "Sh. Yield", moat: "Moat" };
 const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 
 export default function Backtest({ universe, stocks = [] }: { universe: string; stocks?: StockRow[] }) {
@@ -73,7 +73,7 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
         <StrategyTip />
         {usesParams && <Select label="Hold" value={topN} onChange={setTopN} opts={[10, 20, 30, 50]} suffix=" names" />}
         {usesParams && <Select label="Lookback" value={lookback} onChange={setLookback} opts={[3, 6, 12]} suffix=" mo" />}
-        {screen && (screen === "magic" || screen === "shyield") && <Select label="Top" value={topN} onChange={setTopN} opts={[20, 30, 50, 75]} />}
+        {screen && (screen === "magic" || screen === "erp5" || screen === "shyield" || screen === "moat") && <Select label="Top" value={topN} onChange={setTopN} opts={[20, 30, 50, 75]} />}
         {screen === "piotroski" && <Select label="F ≥" value={pioMin} onChange={setPioMin} opts={[5, 6, 7, 8, 9]} />}
       </div>
 

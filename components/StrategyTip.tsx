@@ -1,7 +1,7 @@
 "use client";
 import { SCREEN_INFO, type ScreenKey } from "@/lib/screens";
 
-const ORDER: ScreenKey[] = ["magic", "netnet", "piotroski", "shyield"];
+const ORDER: ScreenKey[] = ["magic", "erp5", "netnet", "piotroski", "shyield", "moat"];
 
 /** ⓘ info icon → hover/focus card explaining each preset screen in detail. */
 export default function StrategyTip() {

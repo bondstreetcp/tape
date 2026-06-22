@@ -51,13 +51,15 @@ const dsoColor = (v: any) => (v == null ? undefined : v > 0.5 ? "#ef4444" : v < 
 const LIMIT = 250;
 
 // Named preset screens (mutually exclusive). "none" = manual filters only.
-type Strategy = "none" | "magic" | "netnet" | "piotroski" | "shyield";
+type Strategy = "none" | "magic" | "erp5" | "netnet" | "piotroski" | "shyield" | "moat";
 const STRATEGIES: { v: Strategy; label: string }[] = [
   { v: "none", label: "Strategy: none" },
   { v: "magic", label: "✦ Magic Formula (Greenblatt)" },
+  { v: "erp5", label: "✦ ERP5 (4-Factor Value)" },
   { v: "netnet", label: "Net-Net / NCAV (Graham)" },
   { v: "piotroski", label: "Piotroski F-Score" },
   { v: "shyield", label: "Shareholder Yield (Faber)" },
+  { v: "moat", label: "🏰 Buffett–Munger Moat" },
 ];
 
 export default function ScreenerView({
@@ -144,7 +146,9 @@ export default function ScreenerView({
       { key: "roe", label: "ROE", num: true, get: (s) => s.fund?.roe ?? null, fmt: pctFrac, align: "right" },
     ];
     const stratCol: Col | null =
-      strategy === "netnet" ? { key: "mktncav", label: "Mkt / NCAV", num: true, get: (s) => { const n = s.fund?.ncav; return n != null && n > 0 ? s.marketCap / n : null; }, fmt: (v) => (v == null ? "—" : `${v.toFixed(2)}×`), color: (v) => (v == null ? undefined : v < 0.67 ? "#22c55e" : v < 1 ? "#fbbf24" : undefined), align: "right" }
+      strategy === "erp5" ? { key: "fcfYld", label: "FCF Yld", num: true, get: (s) => s.fund?.fcfYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" }
+      : strategy === "moat" ? { key: "roic", label: "ROIC", num: true, get: (s) => s.fund?.roic ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.2 ? "#22c55e" : undefined), align: "right" }
+      : strategy === "netnet" ? { key: "mktncav", label: "Mkt / NCAV", num: true, get: (s) => { const n = s.fund?.ncav; return n != null && n > 0 ? s.marketCap / n : null; }, fmt: (v) => (v == null ? "—" : `${v.toFixed(2)}×`), color: (v) => (v == null ? undefined : v < 0.67 ? "#22c55e" : v < 1 ? "#fbbf24" : undefined), align: "right" }
       : strategy === "piotroski" ? { key: "fscore", label: "F-Score", num: true, get: (s) => s.fund?.fScore ?? null, fmt: (v) => (v == null ? "—" : `${v} / 9`), color: (v) => (v == null ? undefined : v >= 8 ? "#22c55e" : v <= 3 ? "#ef4444" : undefined), align: "right" }
       : strategy === "shyield" ? { key: "shyield", label: "Sh. Yield", num: true, get: (s) => s.fund?.shareholderYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" }
       : null;
@@ -171,10 +175,10 @@ export default function ScreenerView({
     if (aboveMA) r = r.filter((s) => s.twoHundredDayAverage != null && s.price > s.twoHundredDayAverage);
     if (screenResult) r = r.filter((s) => screenResult.set.has(s.symbol));
 
-    // When Magic Formula is on, order by the magic rank (best first) by default —
-    // but only until the user clicks a column header (which sets sortKey to that
-    // column, overriding the magic order while keeping the top-30 filter).
-    if (strategy === "magic" && sortKey === "magic" && screenResult) return [...r].sort((a, b) => (screenResult.rank.get(a.symbol) ?? 999) - (screenResult.rank.get(b.symbol) ?? 999));
+    // When a rank-sum screen (Magic Formula / ERP5) is on, order by its combined rank
+    // (best first) by default — but only until the user clicks a column header (which sets
+    // sortKey to that column, overriding the rank order while keeping the top-N filter).
+    if (screenResult && ((strategy === "magic" && sortKey === "magic") || (strategy === "erp5" && sortKey === "erp5"))) return [...r].sort((a, b) => (screenResult.rank.get(a.symbol) ?? 999) - (screenResult.rank.get(b.symbol) ?? 999));
 
     const col = columns.find((c) => c.key === sortKey) ?? columns[0];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -304,18 +308,20 @@ export default function ScreenerView({
             setStrategy(v);
             // Default each preset to its natural ranking (user can still click a header).
             if (v === "magic") { setSortKey("magic"); setSortDir("asc"); }
+            else if (v === "erp5") { setSortKey("erp5"); setSortDir("asc"); }
             else if (v === "netnet") { setSortKey("mktncav"); setSortDir("asc"); }
             else if (v === "piotroski") { setSortKey("fscore"); setSortDir("desc"); }
             else if (v === "shyield") { setSortKey("shyield"); setSortDir("desc"); }
+            else if (v === "moat") { setSortKey("roic"); setSortDir("desc"); }
             else { setSortKey("cap"); setSortDir("desc"); }
           }}
-          title="Named value/quality screens. Magic Formula: good companies at cheap prices (earnings yield + ROE rank). Net-Net: price below net current asset value (Graham deep value — rare in large caps). Piotroski F-Score: 9-point fundamental-strength score. Shareholder Yield: dividends + net buybacks + net debt paydown (Faber). US universes; needs fundamentals."
+          title="Named value/quality screens. Magic Formula: good companies at cheap prices (earnings yield + ROE rank). ERP5: four-factor value (earnings yield + return on capital + price-to-book + cash-flow yield). Net-Net: price below net current asset value (Graham deep value — rare in large caps). Piotroski F-Score: 9-point fundamental-strength score. Shareholder Yield: dividends + net buybacks + net debt paydown (Faber). Moat: durable quality (high ROIC, fat operating margins, low debt). US universes; needs fundamentals."
           className={"cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none transition-colors " + (strategy !== "none" ? "border-[#a855f7] bg-[#a855f7]/20 text-[#d8b4fe]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}
         >
           {STRATEGIES.map((s) => (<option key={s.v} value={s.v}>{s.label}</option>))}
         </select>
         <StrategyTip />
-        {(strategy === "magic" || strategy === "shyield") && (
+        {(strategy === "magic" || strategy === "erp5" || strategy === "shyield" || strategy === "moat") && (
           <select value={topN} onChange={(e) => setTopN(Number(e.target.value))} title="How many names the list shows" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
             {[20, 30, 40, 50, 75, 100].map((n) => (<option key={n} value={n}>Top {n}</option>))}
           </select>
@@ -374,8 +380,10 @@ export default function ScreenerView({
         {strategy !== "none" && (
           <span><span className="font-semibold text-[#d8b4fe]">{STRATEGIES.find((s) => s.v === strategy)?.label}</span> — {
             strategy === "magic" ? `top ${filtered.length} by earnings yield + return on capital (best first)`
+            : strategy === "erp5" ? `top ${filtered.length} by the 4-factor ERP5 rank — earnings yield + return on capital + price-to-book + cash-flow yield (best first)`
             : strategy === "netnet" ? `${filtered.length} trading below net current asset value (deep value — rare outside small caps)`
             : strategy === "piotroski" ? `${filtered.length} with F-Score ≥ ${pioMin} (of 9)`
+            : strategy === "moat" ? `${filtered.length} wide-moat names — ROIC ≥ 15%, operating margin ≥ 20%, low debt (best first)`
             : `top ${filtered.length} by shareholder yield`
           }{sectorEtf !== "all" ? " in this sector" : ""}. </span>
         )}

@@ -93,6 +93,15 @@ function computeFund(raw: any[], meta?: { marketCap: number; divYield: number | 
   const cash0 = f(r[0], "cashAndCashEquivalents");
   // Graham NCAV = current assets − total liabilities (a name is a "net-net" when market cap < ⅔ NCAV).
   const totalLiab0 = f(r[0], "totalLiabilitiesNetMinorityInterest") ?? sub(f(r[0], "totalAssets"), f(r[0], "stockholdersEquity"));
+  // FCF yield = free cash flow ÷ market cap (a true valuation yield, vs. FCF margin which is FCF ÷ revenue).
+  const fcf0 = f(r[0], "freeCashFlow");
+  // ROIC = NOPAT ÷ invested capital. NOPAT ≈ operating income taxed at the effective rate (default 23% if
+  // we can't derive it); invested capital = debt + equity − cash (or Yahoo's investedCapital field if present).
+  const ebit0 = f(r[0], "operatingIncome") ?? f(r[0], "EBIT");
+  const tax0 = f(r[0], "taxProvision"), pretax0 = f(r[0], "pretaxIncome");
+  const taxRate = tax0 != null && pretax0 != null && pretax0 > 0 ? Math.min(0.35, Math.max(0, tax0 / pretax0)) : 0.23;
+  const equity0 = f(r[0], "stockholdersEquity");
+  const investedCap = f(r[0], "investedCapital") ?? (equity0 != null ? equity0 + (debt0 ?? 0) - (cash0 ?? 0) : null);
   return {
     revGrowth: ratio(rev(0), rev(1)) != null ? rev(0)! / rev(1)! - 1 : null,
     revCagr3y: r.length >= 4 && rev(0) && rev(3) ? Math.pow(rev(0)! / rev(3)!, 1 / 3) - 1 : null,
@@ -104,8 +113,10 @@ function computeFund(raw: any[], meta?: { marketCap: number; divYield: number | 
     netMarginChg: sub(margin("netIncome", 0), margin("netIncome", 1)),
     dso: dsoAt(0),
     dsoChg: sub(dsoAt(0), dsoAt(1)),
-    fcfMargin: ratio(f(r[0], "freeCashFlow"), rev(0)),
+    fcfMargin: ratio(fcf0, rev(0)),
+    fcfYield: fcf0 != null && meta?.marketCap ? fcf0 / meta.marketCap : null,
     roe: ratio(f(r[0], "netIncome"), f(r[0], "stockholdersEquity")),
+    roic: ebit0 != null && investedCap != null && investedCap > 0 ? (ebit0 * (1 - taxRate)) / investedCap : null,
     netDebtEbitda: debt0 != null && ebitda0 && ebitda0 !== 0 ? (debt0 - (cash0 ?? 0)) / ebitda0 : null,
     currentRatio: ratio(f(r[0], "currentAssets"), f(r[0], "currentLiabilities")),
     ncav: sub(f(r[0], "currentAssets"), totalLiab0),

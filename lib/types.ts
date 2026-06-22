@@ -15,7 +15,9 @@ export interface Fundamentals {
   dso: number | null; // days sales outstanding
   dsoChg: number | null; // YoY change in DSO (days)
   fcfMargin: number | null;
+  fcfYield: number | null; // free cash flow ÷ market cap (cash-flow yield) — used by the ERP5 screen
   roe: number | null;
+  roic: number | null; // NOPAT ÷ invested capital (return on invested capital) — used by the Moat screen
   netDebtEbitda: number | null;
   currentRatio: number | null;
   // deep-value / quality screen metrics (computed in patch-fundamentals-deep)
