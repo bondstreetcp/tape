@@ -75,7 +75,15 @@ export default function MarginsChart({ symbol }: { symbol: string }) {
 
   if (raw == null) return <Shell><div className="py-10 text-center text-xs text-[var(--text-3)]">Loading…</div></Shell>;
 
-  const hasMargins = win.filter((p) => p.gm != null || p.om != null).length >= 2;
+  // Decide which margin lines have enough real history to plot. Gross margin only shows when
+  // it isn't a sparse stub (issuers like Visa that barely report gross profit get a handful of
+  // recent quarters from Yahoo — misleading next to a full EBIT history); EBIT shows whenever present.
+  const gmN = win.filter((p) => p.gm != null).length;
+  const omN = win.filter((p) => p.om != null).length;
+  const marginLines: Line[] = [];
+  if (gmN >= 2 && (gmN >= 8 || gmN >= 0.4 * omN)) marginLines.push({ key: "gm", color: GM, label: "Gross margin", tip: "Gross" });
+  if (omN >= 2) marginLines.push({ key: "om", color: OM, label: "EBIT margin", tip: "EBIT" });
+  const hasMargins = marginLines.length > 0;
   const hasGrowth = win.filter((p) => p.g != null).length >= 2;
   if (!hasMargins && !hasGrowth)
     return <Shell><div className="py-10 text-center text-xs text-[var(--text-3)]">Not enough quarterly history for {symbol}.</div></Shell>;
@@ -104,8 +112,8 @@ export default function MarginsChart({ symbol }: { symbol: string }) {
       {hasMargins && (
         <Panel
           title="Operating margins"
-          win={win} hi={hi} setHi={setHi} fmt={pct1} height={188}
-          lines={[{ key: "gm", color: GM, label: "Gross margin", tip: "Gross" }, { key: "om", color: OM, label: "EBIT margin", tip: "EBIT" }]}
+          win={win} hi={hi} setHi={setHi} fmt={pct1} height={188} legend
+          lines={marginLines}
         />
       )}
       {hasGrowth && (
@@ -124,9 +132,9 @@ export default function MarginsChart({ symbol }: { symbol: string }) {
   );
 }
 
-function Panel({ title, win, lines, fmt, includeZero, height, hi, setHi }: {
+function Panel({ title, win, lines, fmt, includeZero, height, hi, setHi, legend }: {
   title: string; win: Pt[]; lines: Line[]; fmt: (f: number) => string;
-  includeZero?: boolean; height: number; hi: number | null; setHi: (i: number | null) => void;
+  includeZero?: boolean; height: number; hi: number | null; setHi: (i: number | null) => void; legend?: boolean;
 }) {
   const H = height, MT = 14, MB = 26;
   const n = win.length;
@@ -158,7 +166,7 @@ function Panel({ title, win, lines, fmt, includeZero, height, hi, setHi }: {
     <div className="mt-3">
       <div className="mb-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
         <span className="text-xs font-medium text-[var(--text-3)]">{title}</span>
-        {lines.length > 1 && lines.map((l) => <Legend key={l.key} color={l.color} label={l.label} />)}
+        {legend && lines.map((l) => <Legend key={l.key} color={l.color} label={l.label} />)}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }} onMouseLeave={() => setHi(null)}>
         {ticks.map((v, i) => (
