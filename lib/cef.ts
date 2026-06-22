@@ -10,11 +10,15 @@ import { promises as fsp } from "fs";
 import path from "path";
 
 // Coarse asset-class buckets for the quick filter ("which class is out of favor").
-export type CefGroup = "Fixed Income" | "Equity" | "Allocation" | "Other";
+// "Alternatives" = private equity / property / infrastructure / renewables / commodities —
+// big in the UK investment-trust space and exactly where discounts blow out.
+export type CefGroup = "Fixed Income" | "Alternatives" | "Equity" | "Allocation" | "Other";
 
 export interface Cef {
   ticker: string;
   name: string;
+  region: "US" | "UK"; // US = CEF Connect; UK = London-listed investment trust (Morningstar)
+  currency: string; // major-currency code for price/NAV/cap display (USD, GBP, EUR…)
   sponsor: string;
   category: string; // Morningstar category, prefix stripped (e.g. "High Yield")
   group: CefGroup;
@@ -56,18 +60,20 @@ export function loadCef(): Promise<CefData | null> {
   return _cache;
 }
 
-export const CEF_GROUPS: CefGroup[] = ["Fixed Income", "Equity", "Allocation", "Other"];
+export const CEF_GROUPS: CefGroup[] = ["Fixed Income", "Alternatives", "Equity", "Allocation", "Other"];
 
-/** Bucket a Morningstar category / strategy into a coarse asset class. */
+/** Bucket a Morningstar category / strategy into a coarse asset class. Order matters —
+ *  "Private Equity" must hit Alternatives before the generic "equity" test. */
 export function cefGroup(category: string, strategy: string | null): CefGroup {
   const c = category.toLowerCase();
   const s = (strategy || "").toLowerCase();
   if (
     s.startsWith("fixed income") ||
-    /municipal|high yield|senior loan|investment grade|preferred|multi-sector|bond|income|credit|duration|debt|taxable|emerging market debt/.test(c)
+    /municipal|high yield|senior loan|investment grade|preferred|multi-sector|bond|income|credit|duration|debt|taxable|loan|emerging market debt/.test(c)
   )
     return "Fixed Income";
-  if (/allocation|balanced/.test(c)) return "Allocation";
-  if (/equity|covered call|option|sector|infrastructure|real estate|reit|mlp|energy|commodit/.test(c) || s.startsWith("equity")) return "Equity";
+  if (/private equity|property|real estate|reit|infrastructure|renewable|commodit|natural resources|royalt|leasing|farmland|forestry|mlp|energy/.test(c)) return "Alternatives";
+  if (/allocation|balanced|flexible/.test(c)) return "Allocation";
+  if (/equity|covered call|option|sector/.test(c) || s.startsWith("equity")) return "Equity";
   return "Other";
 }

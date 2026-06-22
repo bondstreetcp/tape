@@ -4,11 +4,13 @@ import Link from "next/link";
 import type { CefData, Cef, CefGroup } from "@/lib/cef";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
-const GROUPS: ("All" | CefGroup)[] = ["All", "Fixed Income", "Equity", "Allocation", "Other"];
+const GROUPS: ("All" | CefGroup)[] = ["All", "Fixed Income", "Alternatives", "Equity", "Allocation", "Other"];
+const REGIONS: ("All" | "US" | "UK")[] = ["All", "US", "UK"];
 const pc = (v: number | null, d = 1) => (v == null ? "—" : `${v >= 0 ? "" : ""}${v.toFixed(d)}%`);
 const sx = (v: number | null) => (v == null ? "—" : v.toFixed(2));
-const money = (v: number) => `$${v.toFixed(2)}`;
-const capf = (m: number | null) => (m == null ? "—" : m >= 1000 ? `$${(m / 1000).toFixed(1)}B` : `$${m.toFixed(0)}M`);
+const curSym = (c: string) => (c === "GBP" ? "£" : c === "USD" ? "$" : c === "EUR" ? "€" : `${c} `);
+const money = (v: number, c: string) => `${curSym(c)}${v.toFixed(2)}`;
+const capf = (m: number | null, c: string) => (m == null ? "—" : `${curSym(c)}${m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(0)}M`}`);
 // discount (negative) = cheap = green; premium (positive) = rich = red
 const discColor = (d: number) => (d <= -0.5 ? "#22c55e" : d >= 0.5 ? "#ef4444" : "var(--text-3)");
 const zColor = (z: number | null) => (z == null ? "var(--text-3)" : z <= -1 ? "#22c55e" : z >= 1 ? "#ef4444" : "var(--text-3)");
@@ -17,6 +19,7 @@ type SortKey = "discount" | "z1y" | "distRate" | "leverage" | "mktCapM" | "disc5
 interface Col { id: string; label: string; align: "left" | "right"; sort?: SortKey; get: (f: Cef) => number | string | null; render: (f: Cef) => React.ReactNode; }
 
 export default function CefScreenerView({ universe, data }: { universe: string; data: CefData }) {
+  const [region, setRegion] = useState<"All" | "US" | "UK">("All");
   const [group, setGroup] = useState<"All" | CefGroup>("All");
   const [cat, setCat] = useState<string>("All");
   const [q, setQ] = useState("");
@@ -25,7 +28,10 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
   const [sort, setSort] = useState<SortKey>("discount");
   const [dir, setDir] = useState<1 | -1>(1); // 1 = asc (most-discounted first for `discount`)
 
-  const inGroup = useMemo(() => data.funds.filter((f) => group === "All" || f.group === group), [data.funds, group]);
+  const inGroup = useMemo(
+    () => data.funds.filter((f) => (region === "All" || f.region === region) && (group === "All" || f.group === group)),
+    [data.funds, group, region],
+  );
 
   // "which asset class is out of favor" — per-category averages within the active group
   const catStats = useMemo(() => {
@@ -76,13 +82,19 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
         <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
         <h1 className="mt-1 text-2xl font-bold">Closed-End Fund Screener</h1>
         <p className="mt-1 text-xs text-[var(--text-3)]">
-          {data.funds.length} U.S. closed-end funds · hunting discounts to NAV (price below the value of the assets) · NAV as of {data.asOf} ·
-          data from <a href="https://www.cefconnect.com" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">CEF Connect</a>
+          {data.funds.length} closed-end funds &amp; investment trusts (US + UK) · hunting discounts to NAV (price below the value of the assets) ·
+          data from <a href="https://www.cefconnect.com" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">CEF Connect</a> &amp; <a href="https://www.theaic.co.uk" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Morningstar/AIC</a>
         </p>
       </div>
 
       {/* filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+          {REGIONS.map((r) => (
+            <button key={r} onClick={() => setRegion(r)}
+              className={"rounded-md px-2.5 py-1 text-xs font-semibold transition-colors " + (region === r ? "bg-[#7c3aed] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{r === "All" ? "US + UK" : r}</button>
+          ))}
+        </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {GROUPS.map((g) => (
             <button key={g} onClick={() => { setGroup(g); setCat("All"); }}
@@ -140,7 +152,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
           </thead>
           <tbody>
             {rows.map((f) => (
-              <tr key={f.ticker} className="border-b border-[var(--divider)] hover:bg-[var(--surface-hover)]">
+              <tr key={`${f.region}:${f.ticker}`} className="border-b border-[var(--divider)] hover:bg-[var(--surface-hover)]">
                 {COLS.map((c) => (
                   <td key={c.id} className={"whitespace-nowrap px-3 py-1.5 " + (c.align === "right" ? "text-right tabular-nums" : "text-left")}>
                     {c.render(f)}
@@ -153,22 +165,23 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
         {rows.length === 0 && <div className="px-4 py-10 text-center text-sm text-[var(--text-3)]">No funds match these filters.</div>}
       </div>
       <p className="mt-2 text-[11px] text-[var(--text-4)]">
-        Discount = price vs NAV (negative = trading below asset value). Z-score = how far today&apos;s discount sits from the fund&apos;s own trailing-1yr average (≤ −1 = unusually cheap). Distribution rates aren&apos;t guaranteed and can include return of capital. Not investment advice.
+        Discount = price vs NAV (negative = trading below asset value). Z-score = how far today&apos;s discount sits from the fund&apos;s own trailing-1yr average (≤ −1 = unusually cheap). UK investment-trust NAV is derived from the published premium/discount; the z-score and leverage columns are US-only for now. Prices shown in each fund&apos;s native currency. Distribution rates aren&apos;t guaranteed and can include return of capital. Not investment advice.
       </p>
     </main>
   );
 }
 
 const COLS: Col[] = [
-  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={`https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[#60a5fa] hover:underline">{f.ticker}</a> },
-  { id: "name", label: "Name", align: "left", get: (f) => f.name, render: (f) => <span className="block max-w-[15rem] truncate text-[var(--text-2)]" title={f.name}>{f.name}</span> },
+  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[#60a5fa] hover:underline">{f.ticker}</a> },
+  { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[#2563eb]/15 text-[#60a5fa]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
+  { id: "name", label: "Name", align: "left", get: (f) => f.name, render: (f) => <span className="block max-w-[14rem] truncate text-[var(--text-2)]" title={f.name}>{f.name}</span> },
   { id: "category", label: "Category", align: "left", get: (f) => f.category, render: (f) => <span className="text-xs text-[var(--text-3)]">{f.category}</span> },
   { id: "discount", label: "Disc/Prem", align: "right", sort: "discount", get: (f) => f.discount, render: (f) => <span className="font-semibold" style={{ color: discColor(f.discount) }}>{f.discount >= 0 ? "+" : ""}{f.discount.toFixed(1)}%</span> },
   { id: "z1y", label: "Z 1Y", align: "right", sort: "z1y", get: (f) => f.z1y, render: (f) => <span style={{ color: zColor(f.z1y) }}>{sx(f.z1y)}</span> },
   { id: "disc52w", label: "52w Avg", align: "right", sort: "disc52w", get: (f) => f.disc52w, render: (f) => <span className="text-[var(--text-3)]">{pc(f.disc52w)}</span> },
   { id: "distRate", label: "Distr Yld", align: "right", sort: "distRate", get: (f) => f.distRate, render: (f) => <span className="text-[var(--text)]">{pc(f.distRate)}</span> },
   { id: "leverage", label: "Lev", align: "right", sort: "leverage", get: (f) => f.leverage, render: (f) => <span className="text-[var(--text-3)]">{pc(f.leverage, 0)}</span> },
-  { id: "price", label: "Price", align: "right", get: (f) => f.price, render: (f) => <span className="text-[var(--text-3)]">{money(f.price)}</span> },
-  { id: "nav", label: "NAV", align: "right", get: (f) => f.nav, render: (f) => <span className="text-[var(--text-3)]">{money(f.nav)}</span> },
-  { id: "mktcap", label: "Mkt Cap", align: "right", sort: "mktCapM", get: (f) => f.mktCapM, render: (f) => <span className="text-[var(--text-3)]">{capf(f.mktCapM)}</span> },
+  { id: "price", label: "Price", align: "right", get: (f) => f.price, render: (f) => <span className="text-[var(--text-3)]">{money(f.price, f.currency)}</span> },
+  { id: "nav", label: "NAV", align: "right", get: (f) => f.nav, render: (f) => <span className="text-[var(--text-3)]">{money(f.nav, f.currency)}</span> },
+  { id: "mktcap", label: "Mkt Cap", align: "right", sort: "mktCapM", get: (f) => f.mktCapM, render: (f) => <span className="text-[var(--text-3)]">{capf(f.mktCapM, f.currency)}</span> },
 ];
