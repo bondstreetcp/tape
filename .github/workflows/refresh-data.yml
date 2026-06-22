@@ -120,6 +120,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         continue-on-error: true
 
+      # Closed-end fund discount-to-NAV screener data (CEF Connect daily pricing). Public, no
+      # key; one call for the whole ~360-fund universe. NAV updates end-of-day, so daily is right.
+      - name: Refresh closed-end funds
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-cef
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow
