@@ -23,6 +23,7 @@ import ScenarioPanel from "./ScenarioPanel";
 import DividendPanel from "./DividendPanel";
 import ShortInterestPanel from "./ShortInterestPanel";
 import StockOverview from "./StockOverview";
+import QualityScorecard from "./QualityScorecard";
 import WatchStar from "./WatchStar";
 import UniverseSwitcher from "./UniverseSwitcher";
 import type { SeriesPoint } from "@/lib/types";
@@ -316,7 +317,10 @@ export default function FinancialsView({
 
       {view === "overview" ? (
         row ? (
-          <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} currency={currency} stats={stats} />
+          <div className="space-y-4">
+            <StockOverview row={row} daily={daily} intraday={intraday} generatedAt={generatedAt} currency={currency} stats={stats} />
+            <QualityScorecard row={row} peers={peers} peerGroup={peerGroup} />
+          </div>
         ) : (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">No overview data for {symbol}.</div>
         )
