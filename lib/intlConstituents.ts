@@ -52,6 +52,7 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "BESI.AS", "ABN.AS", "AGN.AS", "DSFIR.AS", "GLPG.AS", "HEIA.AS", "IMCD.AS",
       "INGA.AS", "KPN.AS", "NN.AS", "PHIA.AS", "PRX.AS", "RAND.AS", "REN.AS",
       "SHELL.AS", "UMG.AS", "UNA.AS", "WKL.AS",
+      "MICC.AS", // The Magnum Ice Cream Company (Unilever ice-cream spinoff) — AEX member
     ],
   },
   {
