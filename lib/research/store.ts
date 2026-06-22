@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { StoredDoc } from "./types";
-import { dbListDocs, dbGetDoc, dbSaveDoc, dbCorpusIndex } from "./store.db";
+import { dbListDocs, dbGetDoc, dbSaveDoc, dbCorpusIndex, dbSaveChunks, dbSearchChunks, type ChunkHit } from "./store.db";
 
 const DIR = path.join(process.cwd(), "data", ".research", "docs");
 const useDb = !!process.env.RESEARCH_DATABASE_URL;
@@ -69,4 +69,14 @@ export async function saveDoc(doc: StoredDoc): Promise<void> {
 }
 export async function corpusIndex(): Promise<{ ticker: string; company: string; count: number; latest: string }[]> {
   return useDb ? dbCorpusIndex() : fsCorpusIndex();
+}
+
+// Semantic retrieval (pgvector) — DB-backed only; a no-op without RESEARCH_DATABASE_URL.
+export const semanticSearchAvailable = (): boolean => useDb;
+export async function saveChunks(docId: string, ticker: string, rows: { ordinal: number; text: string; embedding: number[] }[]): Promise<void> {
+  if (useDb) await dbSaveChunks(docId, normTicker(ticker), rows);
+}
+export async function searchChunks(queryEmbedding: number[], ticker: string | undefined, k = 12): Promise<ChunkHit[]> {
+  if (!useDb) return [];
+  return dbSearchChunks(queryEmbedding, ticker ? normTicker(ticker) : undefined, k);
 }

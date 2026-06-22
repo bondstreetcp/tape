@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { extractResearch, extractConfigured } from "@/lib/research/extract";
-import { saveDoc } from "@/lib/research/store";
+import { saveDoc, saveChunks, semanticSearchAvailable } from "@/lib/research/store";
 import { uploadPdf } from "@/lib/research/blob";
+import { embedChunks } from "@/lib/research/embed";
 import type { StoredDoc } from "@/lib/research/types";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
     const blobKey = await uploadPdf(id, buf);
     const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey, text };
     await saveDoc(stored);
-    return NextResponse.json({ ok: true, doc: stored });
+    if (semanticSearchAvailable()) { try { await saveChunks(id, doc.ticker, await embedChunks(text)); } catch { /* embeddings best-effort */ } }
+    return NextResponse.json({ ok: true, doc: { ...stored, text: undefined } });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e).slice(0, 160) });
   }
