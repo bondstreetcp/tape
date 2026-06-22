@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const ticker = String(body.ticker || "").toUpperCase();
   if (!ticker) return NextResponse.json({ error: "ticker required" }, { status: 400 });
-  const docs = listDocs(ticker);
+  const docs = await listDocs(ticker);
   if (!docs.length) return NextResponse.json({ error: "no documents for this ticker" });
   try {
     const out = body.question ? await searchCorpus(docs, String(body.question)) : await synthesize(docs);

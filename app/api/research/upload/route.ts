@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const doc = await extractResearch(text);
     if (!doc) return NextResponse.json({ error: "extraction failed" });
     const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey: null, text };
-    saveDoc(stored);
+    await saveDoc(stored);
     return NextResponse.json({ ok: true, doc: stored });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e).slice(0, 160) });

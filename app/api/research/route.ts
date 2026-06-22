@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   if (!storeAvailable()) return NextResponse.json({ available: false, index: [], docs: [] });
   const ticker = req.nextUrl.searchParams.get("ticker")?.toUpperCase() || null;
-  if (!ticker) return NextResponse.json({ available: true, index: corpusIndex() });
-  const docs = listDocs(ticker);
+  if (!ticker) return NextResponse.json({ available: true, index: await corpusIndex() });
+  const docs = await listDocs(ticker);
   // strip the full report text from the list payload — it's large and licensed; the
   // server keeps it for grounded search.
   const lite = docs.map(({ text, ...rest }) => rest);
