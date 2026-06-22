@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Snapshot } from "@/lib/types";
+import type { CatalystMap } from "@/lib/catalysts";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { returnColor, trendColor } from "@/lib/color";
@@ -22,9 +23,11 @@ import IndexChart from "./IndexChart";
 export default function HomeDashboard({
   snapshot,
   universe,
+  catalysts = {},
 }: {
   snapshot: Snapshot;
   universe: string;
+  catalysts?: CatalystMap;
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
@@ -154,7 +157,7 @@ export default function HomeDashboard({
         </div>
       )}
 
-      <MoversSection universe={universe} stocks={snapshot.stocks} tf={tf} />
+      <MoversSection universe={universe} stocks={snapshot.stocks} tf={tf} catalysts={catalysts} />
 
       <AnalystFeed universe={universe} />
 

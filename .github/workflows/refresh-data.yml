@@ -110,6 +110,16 @@ jobs:
           OPENFIGI_API_KEY: ${{ secrets.OPENFIGI_API_KEY }}
         continue-on-error: true
 
+      # "Why it moved" catalyst lines for the Movers panel — needs the refreshed snapshots
+      # above to know who the movers are. A 7-day per-symbol TTL keeps this cheap (only the
+      # newly-rotated movers regenerate); skipped cleanly if GEMINI_API_KEY isn't set.
+      - name: Refresh mover catalysts
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-catalysts
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow
