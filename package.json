@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "refresh-data": "tsx scripts/build-data.ts",
+    "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "fetch-constituents": "tsx scripts/fetch-constituents.ts",
     "patch-fundamentals": "tsx scripts/patch-fundamentals.ts",
     "patch-fundamentals-deep": "tsx scripts/patch-fundamentals-deep.ts",
