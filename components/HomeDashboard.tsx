@@ -66,14 +66,43 @@ export default function HomeDashboard({
     return { up, down, nearHigh, nearLow, total: snapshot.stocks.length };
   }, [snapshot, tf, threshold]);
 
+  // Cap-weighted return of the constituents for the selected timeframe — a faithful stand-in
+  // for the index's move (the published indices are cap-weighted too). We weight by each
+  // name's START-of-period cap, recovered as cap/(1+return); weighting by the current cap
+  // would over-count names that already rallied (their cap is inflated by the very move we're
+  // averaging), badly skewing longer windows. Returns are stored in percent.
+  const indexReturn = useMemo(() => {
+    let wsum = 0;
+    let rsum = 0;
+    for (const s of snapshot.stocks) {
+      const r = s.returns[tf];
+      const cap = s.marketCap;
+      if (r == null || cap == null || !(cap > 0)) continue;
+      const denom = 1 + r / 100;
+      if (denom <= 0) continue; // skip ~total-loss outliers (start cap → ∞)
+      const cap0 = cap / denom;
+      wsum += cap0;
+      rsum += cap0 * r;
+    }
+    return wsum > 0 ? rsum / wsum : null;
+  }, [snapshot, tf]);
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <header className="mb-6 flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {UNIVERSE_BY_ID[universe]?.name ?? "Markets"}
-            </h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                {UNIVERSE_BY_ID[universe]?.name ?? "Markets"}
+              </h1>
+              {indexReturn != null && (
+                <span className="text-lg font-semibold tabular-nums sm:text-xl" style={{ color: trendColor(indexReturn) }}>
+                  {fmtPct(indexReturn, 2)}
+                  <span className="ml-1 align-middle text-xs font-normal text-[var(--text-4)]">{tf.toUpperCase()}</span>
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-sm text-[var(--text-3)]">
               {breadth.total} constituents{intl ? "" : ` · ${snapshot.sectors.length} sectors`} · as of{" "}
               {fmtDateTime(snapshot.generatedAt)}
