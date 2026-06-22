@@ -1,7 +1,18 @@
+import { promises as fsp } from "fs";
+import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { getEdgarQuarterly } from "./edgarFinancials";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+
+// Validated Alpha Vantage gross-profit backfill (data/av-margins.json, built by
+// scripts/patch-margins-av.ts) — fills deep margin gaps for issuers whose SEC XBRL doesn't
+// cleanly tag a cost-of-revenue total. Only entries that matched EDGAR on overlap are trusted.
+let _avCache: Promise<Record<string, { trusted: boolean; q: [string, number | null, number | null, number | null][] }>> | null = null;
+function avCache() {
+  if (!_avCache) _avCache = fsp.readFile(path.join(process.cwd(), "data", "av-margins.json"), "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
+  return _avCache;
+}
 
 export interface FinPeriod {
   date: string; // YYYY-MM-DD period end
@@ -153,6 +164,19 @@ export async function getQuarterlyHistory(symbol: string, maxQuarters = 44): Pro
       for (const k of ["rev", "gp", "oi"] as const) if (p[k] != null && (last[k] == null || (p.e && !last.e))) last[k] = p[k]; // prefer EDGAR, fill gaps
       if (p.e) { last.date = p.date; last.e = true; }
     } else out.push({ ...p });
+  }
+
+  // Fill any remaining gaps from the validated Alpha Vantage backfill (matched by quarter-end).
+  const avc = (await avCache())[symbol.toUpperCase()];
+  if (avc?.trusted && avc.q.length) {
+    for (const p of out) {
+      if (p.rev != null && p.gp != null && p.oi != null) continue;
+      const a = avc.q.find(([d]) => Math.abs(Date.parse(d) - Date.parse(p.date)) < 25 * DAY);
+      if (!a) continue;
+      if (p.rev == null && a[1] != null) p.rev = a[1];
+      if (p.gp == null && a[2] != null) p.gp = a[2];
+      if (p.oi == null && a[3] != null) p.oi = a[3];
+    }
   }
   return out.slice(-maxQuarters).map(({ date, rev, gp, oi }) => ({ date, rev, gp, oi }));
 }

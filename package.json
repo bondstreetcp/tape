@@ -15,7 +15,8 @@
     "refresh-macro": "tsx scripts/build-macro.ts",
     "refresh-flow": "tsx scripts/build-flow.ts",
     "refresh-sectors": "tsx scripts/patch-sectors.ts",
-    "refresh-series": "tsx scripts/patch-series.ts"
+    "refresh-series": "tsx scripts/patch-series.ts",
+    "refresh-margins-av": "tsx scripts/patch-margins-av.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",
