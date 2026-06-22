@@ -15,11 +15,21 @@ const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 
 type Kind = "dur" | "inst";
-interface FieldSpec { field: string; concepts: string[]; kind: Kind; unit?: string; negate?: boolean }
+// `concepts` are TOTAL line items (any one is the whole figure — merged, latest filing wins).
+// `components` are PARTS that must be SUMMED, used only for a period where no total is tagged
+// (e.g. older filings split revenue into goods + services, or cost into CostOfGoodsSold +
+// CostOfServices). Never mix a total with its own parts in the same period — totals win.
+interface FieldSpec { field: string; concepts: string[]; kind: Kind; unit?: string; negate?: boolean; components?: string[] }
 
 const FIELDS: FieldSpec[] = [
   // income statement (duration)
-  { field: "totalRevenue", kind: "dur", concepts: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax"] },
+  { field: "totalRevenue", kind: "dur",
+    concepts: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "RevenueFromContractWithCustomerIncludingAssessedTax", "RegulatedAndUnregulatedOperatingRevenue"],
+    components: ["SalesRevenueGoodsNet", "SalesRevenueServicesNet", "RegulatedOperatingRevenue", "UnregulatedOperatingRevenue"] },
+  // NB: cost of revenue is NOT reconstructed from component parts — many filers (Oracle,
+  // defense) split cost across several concepts we can't fully enumerate, so summing a
+  // subset would UNDERCOUNT cost and overstate gross margin. Better an honest gap than a
+  // wrong line; rev−cost only fires when a total cost concept is tagged.
   { field: "costOfRevenue", kind: "dur", concepts: ["CostOfGoodsAndServicesSold", "CostOfRevenue", "CostOfGoodsSold"] },
   { field: "grossProfit", kind: "dur", concepts: ["GrossProfit"] },
   { field: "researchAndDevelopment", kind: "dur", concepts: ["ResearchAndDevelopmentExpense"] },
@@ -111,20 +121,33 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
     if (!gaap) return [];
 
     const maps: Record<string, Map<string, number>> = {};
-    for (const spec of FIELDS) {
-      const unit = spec.unit || "USD";
-      // Merge facts across ALL alias concepts rather than taking the first that has any
-      // data — issuers re-tag line items over the years (e.g. Lockheed's cost of revenue
-      // moved CostOfGoodsAndServicesSold → CostOfRevenue in 2022, and revenue lives under
-      // "Revenues"), so first-match-wins drops whole spans. durMap/instMap dedup by
+    const facetMap = (concepts: string[], unit: string, kind: Kind) => {
+      // Merge facts across ALL alias concepts rather than first-match-wins — issuers re-tag
+      // line items over the years (e.g. Lockheed's cost of revenue moved
+      // CostOfGoodsAndServicesSold → CostOfRevenue in 2022). durMap/instMap dedup by
       // period-end (latest filing wins), so concatenating is safe.
       let facts: any[] = [];
-      for (const c of spec.concepts) {
-        const arr = gaap[c]?.units?.[unit];
-        if (Array.isArray(arr) && arr.length) facts = facts.length ? facts.concat(arr) : arr;
+      for (const c of concepts) { const arr = gaap[c]?.units?.[unit]; if (Array.isArray(arr) && arr.length) facts = facts.length ? facts.concat(arr) : arr; }
+      return facts.length ? (kind === "dur" ? durMap(facts) : instMap(facts)) : new Map<string, number>();
+    };
+    for (const spec of FIELDS) {
+      const unit = spec.unit || "USD";
+      const m = facetMap(spec.concepts, unit, spec.kind);
+      // Component fallback: for any period the total concepts DON'T cover, sum the parts
+      // (e.g. SalesRevenueGoodsNet + SalesRevenueServicesNet, or CostOfGoodsSold +
+      // CostOfServices). Totals always win where present, so no double-counting.
+      if (spec.components) {
+        const compMaps = spec.components.map((c) => facetMap([c], unit, spec.kind));
+        const ends = new Set<string>();
+        for (const cm of compMaps) for (const k of cm.keys()) ends.add(k);
+        for (const end of ends) {
+          if (m.has(end)) continue;
+          let sum = 0, any = false;
+          for (const cm of compMaps) { const v = cm.get(end); if (typeof v === "number") { sum += v; any = true; } }
+          if (any) m.set(end, sum);
+        }
       }
-      if (!facts.length) continue;
-      const m = spec.kind === "dur" ? durMap(facts) : instMap(facts);
+      if (!m.size) continue;
       if (spec.negate) for (const [k, v] of m) m.set(k, -Math.abs(v));
       maps[spec.field] = m;
     }
