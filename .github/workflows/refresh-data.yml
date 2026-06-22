@@ -75,6 +75,25 @@ jobs:
         run: npm run refresh-series
         continue-on-error: true
 
+      # Validated gross-profit backfills for the Margins chart (only the gap names; each
+      # validated against EDGAR before trusting). SimFin runs the whole list each time (no
+      # rate limit); Alpha Vantage is capped (~25/day free) so it works through the list over
+      # a few nights. Both skip already-cached names, so they no-op once the list is covered.
+      - name: Backfill margins — SimFin
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-margins-simfin
+        env:
+          SIMFIN_API_KEY: ${{ secrets.SIMFIN_API_KEY }}
+        continue-on-error: true
+
+      - name: Backfill margins — Alpha Vantage (capped)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-margins-av
+        env:
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          AV_BUDGET: "20"
+        continue-on-error: true
+
       - name: Refresh international universes
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-intl

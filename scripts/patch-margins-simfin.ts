@@ -66,8 +66,8 @@ async function validate(sym: string, sf: Q[]): Promise<boolean> {
 
 async function main() {
   const env = await fs.readFile(path.join(process.cwd(), ".env.local"), "utf8").catch(() => "");
-  const key = (env.match(/^SIMFIN_API_KEY=(.*)$/m) || [])[1]?.trim();
-  if (!key) { console.error("SIMFIN_API_KEY not in .env.local"); process.exit(1); }
+  const key = process.env.SIMFIN_API_KEY || (env.match(/^SIMFIN_API_KEY=(.*)$/m) || [])[1]?.trim();
+  if (!key) { console.error("SIMFIN_API_KEY not set (env or .env.local)"); process.exit(1); }
 
   const cache: Record<string, Cached> = JSON.parse(await fs.readFile(CACHE, "utf8").catch(() => "{}"));
   const wanted = process.argv.slice(2).length ? process.argv.slice(2).map((s) => s.toUpperCase()) : GAP_NAMES;
