@@ -99,6 +99,17 @@ jobs:
         run: npm run refresh-intl
         continue-on-error: true
 
+      # Super-investor 13F holdings. The data only changes quarterly (filed ~45 days after
+      # quarter-end), so most nights this no-ops; the CUSIP→ticker cache (data/cusip-map.json)
+      # accretes so a given security is only ever mapped once. OPENFIGI_API_KEY is optional —
+      # the keyless tier works, just slower.
+      - name: Refresh super-investor 13F holdings
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-13f
+        env:
+          OPENFIGI_API_KEY: ${{ secrets.OPENFIGI_API_KEY }}
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow

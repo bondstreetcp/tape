@@ -17,7 +17,8 @@
     "refresh-sectors": "tsx scripts/patch-sectors.ts",
     "refresh-series": "tsx scripts/patch-series.ts",
     "refresh-margins-av": "tsx scripts/patch-margins-av.ts",
-    "refresh-margins-simfin": "tsx scripts/patch-margins-simfin.ts"
+    "refresh-margins-simfin": "tsx scripts/patch-margins-simfin.ts",
+    "refresh-13f": "tsx scripts/refresh-13f.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",
