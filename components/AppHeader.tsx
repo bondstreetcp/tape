@@ -39,6 +39,7 @@ export default function AppHeader({
         { href: `${base}/compare-stocks`, label: "Compare Stocks" },
         { href: `${base}/compare`, label: "Sector Compare" },
         { href: `${base}/superinvestors`, label: "Super-Investors" },
+        { href: `${base}/congress`, label: "Congress Trades" },
         { href: `${base}/cef`, label: "CEF Screener" },
         { href: `${base}/backtest`, label: "Backtest" },
         { href: `${base}/research`, label: "Filings & Docs" },
