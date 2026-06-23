@@ -286,3 +286,47 @@ export async function getBriefings(): Promise<Briefing[]> {
   if (data.length) cache = { at: Date.now(), data };
   return cache?.data ?? data;
 }
+
+// ---- Per-ticker briefing stories (for the stock page news section) -------------------------
+// The briefing is fetched live and never persisted (the text is Reuters/LSEG-copyrighted), so
+// this just filters the in-memory parse for stories whose HEADLINE names the company. Matching
+// on the headline (not the body) keeps it to stories *about* the name, not competitor mentions.
+
+export interface BriefingStory { source: string; cadence: string; date: string | null; headline: string; snippet: string }
+
+const NAME_SUFFIX = /\b(?:inc|incorporated|corp|corporation|co|company|companies|ltd|plc|llc|lp|nv|sa|ag|group|holdings?|the|class\s+[a-c]|cl\s+[a-c]|international|intl|technologies|technology|systems|solutions|enterprises|industries|& ?co|& ?company|com|plc\.)\b/gi;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Distinctive name tokens to match a story headline against this company.
+function brandTokens(name: string): string[] {
+  const n = name.replace(/[.,]/g, " ").replace(NAME_SUFFIX, " ").replace(/\s+/g, " ").trim();
+  const words = n.split(" ").filter(Boolean);
+  const toks: string[] = [];
+  if (words[0] && words[0].length >= 4) toks.push(words[0]); // brand: Apple, AbbVie, Micron, Amazon
+  if (words.length >= 2 && words.slice(0, 2).join(" ").length >= 7) toks.push(words.slice(0, 2).join(" ")); // Berkshire Hathaway
+  return [...new Set(toks)];
+}
+
+export async function briefingStoriesFor(name: string): Promise<BriefingStory[]> {
+  const tokens = brandTokens(name || "");
+  if (!tokens.length) return [];
+  const regs = tokens.map((t) => new RegExp(`\\b${escapeRe(t)}\\b`, "i"));
+  const briefings = await getBriefings();
+  const out: BriefingStory[] = [];
+  const seen = new Set<string>();
+  for (const b of briefings) {
+    for (const s of b.sections) {
+      if (s.kind !== "prose" || !s.blocks) continue;
+      for (const bl of s.blocks) {
+        const hl = (bl.headline || "").trim();
+        if (!hl || !regs.some((r) => r.test(hl))) continue;
+        const key = hl.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const body = (bl.text || "").trim();
+        out.push({ source: b.title, cadence: b.cadence, date: b.date, headline: hl, snippet: body.length > 240 ? body.slice(0, 240).trim() + "…" : body });
+      }
+    }
+  }
+  return out.slice(0, 8);
+}
