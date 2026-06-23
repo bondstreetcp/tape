@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Snapshot } from "@/lib/types";
+import type { Snapshot, StockRow } from "@/lib/types";
 import type { CatalystMap } from "@/lib/catalysts";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
@@ -19,6 +19,25 @@ import { useIsLight } from "./useIsLight";
 import MarketAlert from "./MarketAlert";
 import Treemap from "./Treemap";
 import IndexChart from "./IndexChart";
+
+// Cap-weighted return over a set of names for a timeframe. We weight by each name's
+// START-of-period cap, recovered as cap/(1+return); weighting by the current (post-move) cap
+// would over-count names that already rallied and skew longer windows. Returns are in percent.
+function capWeightedReturn(stocks: StockRow[], tf: TimeframeKey): number | null {
+  let wsum = 0;
+  let rsum = 0;
+  for (const s of stocks) {
+    const r = s.returns[tf];
+    const cap = s.marketCap;
+    if (r == null || cap == null || !(cap > 0)) continue;
+    const denom = 1 + r / 100;
+    if (denom <= 0) continue; // skip ~total-loss outliers (start cap → ∞)
+    const cap0 = cap / denom;
+    wsum += cap0;
+    rsum += cap0 * r;
+  }
+  return wsum > 0 ? rsum / wsum : null;
+}
 
 export default function HomeDashboard({
   snapshot,
@@ -46,9 +65,12 @@ export default function HomeDashboard({
           if (isNearHigh(m, threshold)) nearHigh++;
           if (isNearLow(m, threshold)) nearLow++;
         }
-        return { ...sec, nearHigh, nearLow };
+        // This universe's OWN return for the sector — cap-weighted from its constituents, not
+        // the S&P-based sector ETF (which reads identically across every universe).
+        const ret = capWeightedReturn(members, tf);
+        return { ...sec, nearHigh, nearLow, ret };
       })
-      .sort((a, b) => (b.returns[tf] ?? -999) - (a.returns[tf] ?? -999));
+      .sort((a, b) => (b.ret ?? -999) - (a.ret ?? -999));
   }, [snapshot, tf, threshold]);
 
   const breadth = useMemo(() => {
@@ -66,26 +88,9 @@ export default function HomeDashboard({
     return { up, down, nearHigh, nearLow, total: snapshot.stocks.length };
   }, [snapshot, tf, threshold]);
 
-  // Cap-weighted return of the constituents for the selected timeframe — a faithful stand-in
-  // for the index's move (the published indices are cap-weighted too). We weight by each
-  // name's START-of-period cap, recovered as cap/(1+return); weighting by the current cap
-  // would over-count names that already rallied (their cap is inflated by the very move we're
-  // averaging), badly skewing longer windows. Returns are stored in percent.
-  const indexReturn = useMemo(() => {
-    let wsum = 0;
-    let rsum = 0;
-    for (const s of snapshot.stocks) {
-      const r = s.returns[tf];
-      const cap = s.marketCap;
-      if (r == null || cap == null || !(cap > 0)) continue;
-      const denom = 1 + r / 100;
-      if (denom <= 0) continue; // skip ~total-loss outliers (start cap → ∞)
-      const cap0 = cap / denom;
-      wsum += cap0;
-      rsum += cap0 * r;
-    }
-    return wsum > 0 ? rsum / wsum : null;
-  }, [snapshot, tf]);
+  // The universe's own cap-weighted move for the selected timeframe (same method as the
+  // per-sector tiles) — a faithful stand-in for the index, which is cap-weighted too.
+  const indexReturn = useMemo(() => capWeightedReturn(snapshot.stocks, tf), [snapshot, tf]);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -154,7 +159,7 @@ export default function HomeDashboard({
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {sectorStats.map((sec) => {
-            const r = sec.returns[tf];
+            const r = sec.ret;
             return (
               <Link
                 key={sec.etf}
