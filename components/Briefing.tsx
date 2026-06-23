@@ -153,6 +153,10 @@ export default function Briefing() {
 // to scan than the raw run-on text. Best-effort: anything that doesn't parse as a data
 // row just shows as a sub-header line, so it always degrades gracefully.
 const NUM_TOK = /^[-+$]?\d[\d,]*\.?\d*(?:\/\d+)?%?$/; // 1,234.5 · -0.37 · 6.84% · -15/32 · $74.82
+// A value-column token: a number, or a placeholder for a missing one ("-", "n/a"). Economic-
+// events rows ("ADP pulse 0815 - 25,500") use a lone dash for a blank Poll/Prior, which would
+// otherwise split the row in the wrong place and glue the ET time onto the label.
+const isVal = (t: string) => NUM_TOK.test(t) || /^[-–—]+$/.test(t) || /^n\/?a$/i.test(t);
 
 function tokenize(line: string): string[] {
   const out: string[] = [];
@@ -175,7 +179,7 @@ function parseDataRows(lines: string[]): DataRow[] {
     if (!line) continue;
     const toks = tokenize(line);
     let numStart = toks.length;
-    for (let i = toks.length - 1; i >= 0 && NUM_TOK.test(toks[i]); i--) numStart = i;
+    for (let i = toks.length - 1; i >= 0 && isVal(toks[i]); i--) numStart = i;
     if (numStart === toks.length) { flush(); pending = line; }                                   // no trailing numbers → label/sub-header
     else if (numStart === 0) { rows.push({ label: pending ?? "", nums: toks }); pending = null; } // numbers only → pair with the held label
     else { flush(); rows.push({ label: toks.slice(0, numStart).join(" "), nums: toks.slice(numStart) }); } // label + numbers on one line
@@ -195,7 +199,7 @@ function isDataTable(lines: string[]): boolean {
     if (/^[•▪·‣]/.test(l)) { bullets++; continue; }
     const toks = tokenize(l);
     let ns = toks.length;
-    for (let i = toks.length - 1; i >= 0 && NUM_TOK.test(toks[i]); i--) ns = i;
+    for (let i = toks.length - 1; i >= 0 && isVal(toks[i]); i--) ns = i;
     const numCount = toks.length - ns;
     const labelLen = toks.slice(0, ns).join(" ").length;
     if (numCount === toks.length) tab++;               // pure numbers
@@ -212,10 +216,10 @@ function DataSection({ lines }: { lines: string[] }) {
   const blocks: { header?: string; rows: { label: string; nums: string[] }[] }[] = [];
   let cur: { header?: string; rows: { label: string; nums: string[] }[] } = { rows: [] };
   for (const r of rows) {
-    if ("subheader" in r) { if (cur.rows.length || cur.header) blocks.push(cur); cur = { header: r.subheader, rows: [] }; }
+    if ("subheader" in r) { if (cur.rows.length) blocks.push(cur); cur = { header: r.subheader, rows: [] }; }
     else cur.rows.push(r);
   }
-  if (cur.rows.length || cur.header) blocks.push(cur);
+  if (cur.rows.length) blocks.push(cur); // drop dangling header-only blocks (e.g. a mis-ordered column header)
 
   return (
     <div className="space-y-2.5">
