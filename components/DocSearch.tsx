@@ -62,7 +62,11 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
       fetch(`/api/docsearch?${u.toString().replace(/\+/g, "%20")}`)
         .then((r) => r.json())
         .then((d: Result) => {
-          setData((prev) => (append && prev ? { ...d, hits: [...prev.hits, ...(d.hits || [])] } : d));
+          setData((prev) => {
+            const hits = append && prev ? [...prev.hits, ...(d.hits || [])] : d.hits || [];
+            hits.sort((a, b) => (b.date || "").localeCompare(a.date || "")); // reverse chronological — newest first
+            return { ...d, hits };
+          });
           // Global search: also search the transcripts of the top companies that
           // matched in the filing results (per-ticker search is handled in onSearch).
           if (!append && !ticker) {
