@@ -22,6 +22,21 @@ function timing(iso: string): { label: string; color: string } {
   return { label: "TBD", color: "var(--text-3)" };
 }
 
+// Order within a day when sorting by session: before-open (BMO) → after-close (AMC) → unknown.
+function sessionRank(iso: string): number {
+  const h = new Date(iso).getUTCHours();
+  if (h > 0 && h < 14) return 0;
+  if (h >= 19) return 1;
+  return 2;
+}
+
+const SORTS = [
+  { id: "session", label: "Session" },
+  { id: "mktcap", label: "Mkt cap" },
+  { id: "alpha", label: "A–Z" },
+] as const;
+type SortMode = (typeof SORTS)[number]["id"];
+
 function dayLabel(date: string): string {
   const d = new Date(date + "T12:00:00Z");
   return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -40,6 +55,7 @@ export default function EarningsCalendar({
   const { has, toggle } = useWatchlist();
   const [days, setDays] = useState(14);
   const [watchOnly, setWatchOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>("session");
   const intl = !!UNIVERSE_BY_ID[universe]?.international; // before/after-open timing is US-centric
 
   const groups = useMemo(() => {
@@ -57,10 +73,22 @@ export default function EarningsCalendar({
       if (!byDate.has(d)) byDate.set(d, []);
       byDate.get(d)!.push(s);
     }
+    const byCap = (a: StockRow, b: StockRow) => (b.marketCap || 0) - (a.marketCap || 0);
+    const byAlpha = (a: StockRow, b: StockRow) => a.symbol.localeCompare(b.symbol);
+    // Session (default): group before-open then after-close, biggest first within each block.
+    // Intl timing is US-centric/unreliable, so there it falls back to market cap. Mkt cap / A–Z
+    // sort the whole day's list without grouping.
+    const cmp =
+      sortMode === "mktcap" ? byCap
+      : sortMode === "alpha" ? byAlpha
+      : (a: StockRow, b: StockRow) => {
+          if (!intl) { const r = sessionRank(a.earningsDate!) - sessionRank(b.earningsDate!); if (r) return r; }
+          return byCap(a, b);
+        };
     return [...byDate.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, rows]) => ({ date, rows: rows.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)) }));
-  }, [stocks, days, watchOnly, has]);
+      .map(([date, rows]) => ({ date, rows: rows.sort(cmp) }));
+  }, [stocks, days, watchOnly, has, sortMode, intl]);
 
   const total = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -82,6 +110,21 @@ export default function EarningsCalendar({
             <input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[#60a5fa]" />
             ★ Watchlist only
           </label>
+          <div className="inline-flex items-center gap-1">
+            <span className="text-[11px] text-[var(--text-4)]">Sort</span>
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
+              {SORTS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSortMode(s.id)}
+                  title={s.id === "session" ? "Group before-open, then after-close" : s.id === "mktcap" ? "Largest market cap first" : "Alphabetical by ticker"}
+                  className={"rounded-md px-2.5 py-1 " + (sortMode === s.id ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
             {RANGES.map((r) => (
               <button
