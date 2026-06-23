@@ -23,7 +23,7 @@ import {
 
 const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
-const MIN_MKTCAP = 1e9;
+const MIN_MKTCAP = 0.5e9;
 const MIN_ROE = 0.15;
 const MAX_PE = 25;
 const R = 0.043; // risk-free approx (~3M T-bill); only affects delta/IV at the margin
