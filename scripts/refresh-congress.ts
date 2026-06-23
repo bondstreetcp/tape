@@ -9,6 +9,9 @@
 import * as cheerio from "cheerio";
 import { promises as fs } from "fs";
 import path from "path";
+import { inflateRawSync } from "zlib";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { loadSnapshot } from "../lib/data";
 import type { CongressTrade, TickerTally, MemberTally, CongressData, TradeType } from "../lib/congress";
 
 const BASE = "https://efdsearch.senate.gov";
@@ -24,7 +27,7 @@ function setCookies(res: Response) {
 }
 const cookie = () => Object.entries(jar).map(([k, v]) => `${k}=${v}`).join("; ");
 const mdy = (d: Date) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()} 00:00:00`;
-const iso = (mdy: string) => { const m = mdy.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[1]}-${m[2]}` : ""; };
+const iso = (mdy: string) => { const m = (mdy || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : ""; };
 const isTicker = (t: string) => /^[A-Z][A-Z.]{0,6}$/.test(t) && t !== "N/A";
 
 function parseAmount(s: string): [number, number] {
@@ -40,6 +43,101 @@ function parseType(s: string): TradeType | null {
   if (l.includes("sale")) return "sell";
   if (l.includes("exchange")) return "exchange";
   return null;
+}
+
+// ---- House: annual disclosure ZIP index → e-filed PTR PDFs ----------------------------------
+// The House Clerk publishes {YEAR}FD.ZIP (a tab-delimited index of every filing). PTRs are
+// FilingType "P"; their transactions live in a PDF. e-filed PTRs have 8-digit DocIDs starting
+// with "2" and extract as text; the 7-digit (8…/9…) ones are scans with no text → skipped.
+function unzip(buf: Buffer): Record<string, Buffer> {
+  const out: Record<string, Buffer> = {};
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0 && i > buf.length - 22 - 65536; i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return out;
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  for (let n = 0; n < count && p + 46 <= buf.length; n++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(p + 10), compSize = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32);
+    const lho = buf.readUInt32LE(p + 42);
+    const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    const dataStart = lho + 30 + buf.readUInt16LE(lho + 26) + buf.readUInt16LE(lho + 28);
+    const data = buf.subarray(dataStart, dataStart + compSize);
+    try { out[name] = method === 8 ? inflateRawSync(data) : Buffer.from(data); } catch { /* skip */ }
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+// One transaction in the e-filed PTR text: "{asset} ({TICKER}) [{CODE}] {TYPE}{txDate}{notifDate}{amount}".
+const HOUSE_TXN = /([A-Za-z0-9 .,&'’\/()\-]{2,70}?)\(([A-Z][A-Z.]{0,6})\)\s*\[([A-Z]{2})\]\s*(P|E|S \(partial\)|S \(full\)|S)\b\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\$[\d,]+\s*-\s*\$[\d,]+|Over \$[\d,]+|\$[\d,]+)/g;
+
+function parseHousePtr(text: string, member: string, filedDate: string): CongressTrade[] {
+  const t = (text || "").replace(/\s+/g, " ");
+  const out: CongressTrade[] = [];
+  let m: RegExpExecArray | null;
+  HOUSE_TXN.lastIndex = 0;
+  while ((m = HOUSE_TXN.exec(t))) {
+    const ticker = m[2].toUpperCase();
+    if (!isTicker(ticker) || m[3] === "GS" || m[3] === "OP") continue; // skip treasuries / options
+    const type: TradeType = m[4][0] === "P" ? "buy" : m[4][0] === "E" ? "exchange" : "sell";
+    const txDate = iso(m[5]);
+    const [amountLow, amountHigh] = parseAmount(m[7]);
+    if (!txDate || amountLow <= 0) continue;
+    // The disclosed asset name extracts noisily from the PDF (owner codes / broker boilerplate
+    // bleed in), so keep just the ticker — a clean issuer name is filled from our universe in main().
+    const lagDays = filedDate && txDate ? Math.round((Date.parse(filedDate) - Date.parse(txDate)) / DAY) : 0;
+    out.push({ member, chamber: "House", ticker, asset: ticker, type, txDate, filedDate, lagDays, amountLow, amountHigh, owner: "" });
+  }
+  return out;
+}
+
+async function fetchHouse(): Promise<CongressTrade[]> {
+  const yr = new Date().getFullYear();
+  const cutoff = Date.now() - (WINDOW_DAYS + 45) * DAY;
+  const cands: { member: string; doc: string; filedDate: string; y: number }[] = [];
+  for (const y of [yr, yr - 1]) {
+    try {
+      const z = await fetch(`https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${y}FD.ZIP`, { headers: { "User-Agent": UA } });
+      if (!z.ok) continue;
+      const files = unzip(Buffer.from(await z.arrayBuffer()));
+      const idx = (files[`${y}FD.txt`] || Object.values(files).sort((a, b) => b.length - a.length)[0])?.toString("utf8") || "";
+      for (const line of idx.split(/\r?\n/).slice(1)) {
+        const c = line.split("\t");
+        if (c[4] !== "P") continue; // PTR
+        const doc = (c[8] || "").trim();
+        if (!/^2\d{7}$/.test(doc)) continue; // e-filed only
+        const filed = iso(c[7] || "");
+        if (!filed || Date.parse(filed) < cutoff) continue;
+        cands.push({ member: `${(c[2] || "").trim()} ${(c[1] || "").trim()}`.trim(), doc, filedDate: filed, y });
+      }
+    } catch (e: any) { console.log(`  House ${y}FD.ZIP: ${e.message}`); }
+  }
+  cands.sort((a, b) => b.filedDate.localeCompare(a.filedDate));
+  const top = cands.slice(0, 500);
+  console.log(`House: ${top.length} e-filed PTRs in window (of ${cands.length})`);
+  const trades = (await pool(top, 4, async (c) => {
+    try {
+      const r = await fetch(`https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${c.y}/${c.doc}.pdf`, { headers: { "User-Agent": UA } });
+      if (!r.ok) return [] as CongressTrade[];
+      const data = await pdfParse(Buffer.from(await r.arrayBuffer()));
+      return parseHousePtr(data.text || "", c.member, c.filedDate);
+    } catch { return [] as CongressTrade[]; }
+  })).flat();
+  console.log(`House: ${trades.length} stock transactions parsed`);
+  return trades;
+}
+
+// Clean issuer names keyed by ticker, from our universe snapshots — used to give House trades
+// a readable asset name (the PDF-parsed one is unreliable).
+async function tickerNames(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  for (const u of ["russell3000", "sp1500", "nasdaq100"]) {
+    const snap = await loadSnapshot(u).catch(() => null);
+    for (const s of snap?.stocks || []) if (!map.has(s.symbol)) map.set(s.symbol, s.name);
+  }
+  return map;
 }
 
 async function handshake() {
@@ -123,9 +221,13 @@ async function main() {
   console.log(`${reports.length} e-filed PTRs in the last ${WINDOW_DAYS}d`);
 
   const parsed = await pool(reports, 4, (r) => parseReport(r).catch(() => [] as CongressTrade[]));
-  let trades = parsed.flat().filter((t) => t.amountLow > 0);
+  const senate = parsed.flat().filter((t) => t.amountLow > 0);
+  console.log(`Senate: ${senate.length} stock/ETF transactions`);
+  const house = await fetchHouse().catch((e) => { console.log("House failed:", e.message); return [] as CongressTrade[]; });
+  if (house.length) { const names = await tickerNames(); for (const t of house) t.asset = names.get(t.ticker) || t.ticker; }
+  let trades = [...senate, ...house];
   trades.sort((a, b) => b.txDate.localeCompare(a.txDate));
-  console.log(`${trades.length} stock/ETF transactions`);
+  console.log(`Total: ${trades.length} (Senate ${senate.length}, House ${house.length})`);
 
   // aggregates
   const tk = new Map<string, TickerTally & { _members: Set<string>; _not: number }>();
