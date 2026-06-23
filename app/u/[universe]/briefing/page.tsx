@@ -4,7 +4,7 @@ export const metadata = { title: "Daily Briefing" };
 
 export default function BriefingPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <header className="mb-4">
         <h1 className="text-2xl font-bold">Daily Briefing</h1>
         <p className="mt-1 text-xs leading-relaxed text-[var(--text-3)]">

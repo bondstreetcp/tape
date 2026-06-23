@@ -6,6 +6,21 @@ interface Section { heading: string; kind: "prose" | "list"; blocks?: Block[]; l
 interface Brief { id: string; title: string; edition: string; cadence: string; date: string | null; sections: Section[]; sourceUrl: string; chars: number }
 type State = "loading" | "need-auth" | "unconfigured" | "ready" | "error";
 
+// Long market-wrap blocks (e.g. "Key Results") arrive as one giant run-on paragraph. Break them
+// at sentence boundaries into ~paragraph-sized chunks so they're readable instead of a wall.
+function splitParagraphs(text: string): string[] {
+  if (text.length <= 380) return [text];
+  const sents = text.split(/(?<=[.!?])\s+(?=[A-Z“"])/);
+  const paras: string[] = [];
+  let cur = "";
+  for (const s of sents) {
+    cur = cur ? `${cur} ${s}` : s;
+    if (cur.length >= 300) { paras.push(cur); cur = ""; }
+  }
+  if (cur.trim()) paras.push(cur.trim());
+  return paras.length ? paras : [text];
+}
+
 export default function Briefing() {
   const [state, setState] = useState<State>("loading");
   const [briefings, setBriefings] = useState<Brief[]>([]);
@@ -100,6 +115,7 @@ export default function Briefing() {
         </div>
       )}
       {briefings.length === 0 && <Notice title="Nothing parsed">The newsletters returned no readable sections this load.</Notice>}
+      <div className="grid items-start gap-5 xl:grid-cols-2">
       {briefings.map((b) => (
         <section key={b.id} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
@@ -127,9 +143,11 @@ export default function Briefing() {
                 ) : (
                   <div className="space-y-3">
                     {s.blocks!.map((bl, j) => (
-                      <div key={j}>
+                      <div key={j} className="space-y-2">
                         {bl.headline && <div className="text-sm font-semibold leading-snug text-[var(--text)]">{bl.headline}</div>}
-                        {bl.text && <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--text-body)]">{bl.text}</p>}
+                        {bl.text && splitParagraphs(bl.text).map((para, k) => (
+                          <p key={k} className="text-[13px] leading-relaxed text-[var(--text-body)]">{para}</p>
+                        ))}
                       </div>
                     ))}
                   </div>
@@ -139,6 +157,7 @@ export default function Briefing() {
           </div>
         </section>
       ))}
+      </div>
       <p className="text-[11px] leading-relaxed text-[var(--text-4)]">
         © Reuters / LSEG. Shown for your private research use, parsed from the source PDFs — not redistributed. Headline/paragraph grouping is best-effort from the PDF text.
       </p>
