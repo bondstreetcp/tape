@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -45,6 +45,24 @@ export default function IndustryCompareView({
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
 
+  // The 1D/1W lines plot the per-symbol intraday series, which only rebuilds after the close —
+  // so mid-session they'd show the prior day. Fetch live intraday on demand for those tenors and
+  // swap it in. (Daily / 3M+ keep the static series.)
+  const intradayTf = tf === "1d" || tf === "1w";
+  const [live, setLive] = useState<{ industries: Record<string, XY[]>; etf: XY[] } | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  useEffect(() => {
+    if (!intradayTf || live) return;
+    let alive = true;
+    setLiveLoading(true);
+    fetch(`/api/industry-intraday?universe=${encodeURIComponent(universe)}&etf=${encodeURIComponent(meta.etf)}`)
+      .then((r) => r.json())
+      .then((d) => { if (alive) setLive({ industries: d.industries || {}, etf: d.etf || [] }); })
+      .catch(() => {})
+      .finally(() => alive && setLiveLoading(false));
+    return () => { alive = false; };
+  }, [intradayTf, universe, meta.etf, live]);
+
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
   const colorByKey = useMemo(() => {
@@ -54,23 +72,25 @@ export default function IndustryCompareView({
   }, [industries, meta.etf]);
 
   const { rows, endPct } = useMemo(() => {
+    const useLive = intradayTf && !!live;
+    const winNow = intradayTf ? Date.now() : now; // window live intraday against the real clock
     const items = [
       {
         symbol: meta.etf,
-        intraday: etfSeries?.intraday ?? [],
+        intraday: useLive && live!.etf.length ? xyToPoints(live!.etf) : (etfSeries?.intraday ?? []),
         daily: etfSeries?.daily ?? [],
       },
       ...industries.map((ind) => ({
         symbol: ind.industry,
-        intraday: xyToPoints(ind.intraday),
+        intraday: useLive && live!.industries[ind.industry]?.length ? xyToPoints(live!.industries[ind.industry]) : xyToPoints(ind.intraday),
         daily: xyToPoints(ind.daily),
       })),
     ];
-    const { rows, meta: cmeta } = buildComparison(items, tf, now);
+    const { rows, meta: cmeta } = buildComparison(items, tf, winNow);
     const endPct: Record<string, number | null> = {};
     for (const m of cmeta) endPct[m.symbol] = m.endPct;
     return { rows, endPct };
-  }, [industries, etfSeries, meta.etf, tf, now]);
+  }, [industries, etfSeries, meta.etf, tf, now, intradayTf, live]);
 
   const chartSeries: SeriesDef[] = useMemo(
     () => [
@@ -124,6 +144,7 @@ export default function IndustryCompareView({
             {industries.length} sub-industries · each line = a cap-weighted index
             rebased to % · dashed white = {meta.etf} (whole sector) · as of{" "}
             {fmtDateTime(generatedAt)}
+            {intradayTf && (liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : live ? <span className="text-[#22c55e]"> · live intraday</span> : null)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
