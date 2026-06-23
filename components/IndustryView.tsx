@@ -48,7 +48,7 @@ export default function IndustryView({
   const [liveLoading, setLiveLoading] = useState(false);
   useEffect(() => {
     if (!intradayTf || live) return;
-    const syms = [meta.etf, ...stocks.slice(0, 60).map((s) => s.symbol)];
+    const syms = [meta.etf, ...stocks.map((s) => s.symbol)]; // all constituents (route caps + throttles)
     let alive = true;
     setLiveLoading(true);
     fetch(`/api/intraday?symbols=${encodeURIComponent(syms.join(","))}`)
