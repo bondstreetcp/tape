@@ -39,9 +39,13 @@ async function buildOne(uni: IntlUniverse) {
   const rows: any[] = [];
   for (const ticker of uni.tickers) {
     try {
-      const [qs, ch]: any = await Promise.all([
+      const [qs, ch, ich]: any = await Promise.all([
         yf.quoteSummary(ticker, { modules: ["price", "assetProfile", "summaryDetail", "defaultKeyStatistics", "calendarEvents"] as any }, { validateResult: false }),
         yf.chart(ticker, { period1: new Date(Date.now() - 6 * 365 * DAY), interval: "1d" } as any, { validateResult: false }),
+        // Intraday 15m bars (~last 8 days) so the 1D / 1W chart ranges work for intl names too —
+        // those ranges read the intraday series, which was previously never built. Optional: a
+        // failed intraday pull must not drop the name's daily series, so swallow it.
+        yf.chart(ticker, { period1: new Date(Date.now() - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false }).catch(() => ({ quotes: [] })),
       ]);
       const price = qs.price || {}, prof = qs.assetProfile || {}, sd = qs.summaryDetail || {}, dks = qs.defaultKeyStatistics || {};
       // Yahoo carries upcoming earnings dates for most intl names via calendarEvents (quote()'s
@@ -52,6 +56,9 @@ async function buildOne(uni: IntlUniverse) {
         .filter((q: any) => q?.date && q.close != null)
         .map((q: any) => ({ t: new Date(q.date).getTime(), c: q.close }));
       if (closes.length < 20) { console.log("  skip (no series):", ticker); continue; }
+      const intradayXY: [number, number][] = (ich?.quotes || [])
+        .filter((q: any) => q?.date && q.close != null)
+        .map((q: any) => [new Date(q.date).getTime(), q.close]);
       const last = closes[closes.length - 1].c;
       const etf = YAHOO_SECTOR_TO_ETF[prof.sector] || "XLK";
       const hi = num(sd.fiftyTwoWeekHigh), lo = num(sd.fiftyTwoWeekLow);
@@ -79,7 +86,7 @@ async function buildOne(uni: IntlUniverse) {
       });
       const dir = path.join(ROOT, "series", "symbols");
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, symbolFile(ticker)), JSON.stringify({ daily: closes.map((c: any) => [c.t, c.c]) }));
+      fs.writeFileSync(path.join(dir, symbolFile(ticker)), JSON.stringify({ daily: closes.map((c: any) => [c.t, c.c]), intraday: intradayXY }));
       console.log("  ok:", ticker.padEnd(11), rows[rows.length - 1].sector);
     } catch (e: any) {
       console.log("  FAIL:", ticker, String(e?.message || e).slice(0, 50));
