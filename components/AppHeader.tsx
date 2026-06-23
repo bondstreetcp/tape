@@ -31,6 +31,15 @@ export default function AppHeader({
         { href: `${base}/rotation`, label: "Sector Rotation" },
         { href: `${base}/flow`, label: "Options Flow" },
         { href: `${base}/earnings`, label: "Earnings Calendar" },
+        { href: `${base}/macro`, label: "Macro & Rates" },
+      ],
+    },
+    {
+      label: "Strategies",
+      items: [
+        { href: `${base}/put-writing`, label: "Put-Writing" },
+        { href: `${base}/cef`, label: "CEF Screener" },
+        { href: `${base}/backtest`, label: "Backtest" },
       ],
     },
     {
@@ -40,17 +49,8 @@ export default function AppHeader({
         { href: `${base}/compare`, label: "Sector Compare" },
         { href: `${base}/superinvestors`, label: "Super-Investors" },
         { href: `${base}/congress`, label: "Congress Trades" },
-        { href: `${base}/cef`, label: "CEF Screener" },
-        { href: `${base}/put-writing`, label: "Put-Writing" },
-        { href: `${base}/backtest`, label: "Backtest" },
         { href: `${base}/research`, label: "Filings & Docs" },
         { href: `${base}/research-desk`, label: "Research Desk" },
-      ],
-    },
-    {
-      label: "Economy",
-      items: [
-        { href: `${base}/macro`, label: "Macro & Rates" },
       ],
     },
   ];
