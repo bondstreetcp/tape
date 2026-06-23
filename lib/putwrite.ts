@@ -30,6 +30,15 @@ export interface PutSuggestion {
   breakeven: number; // strike - premium
 }
 
+// Tenors the screen prices a put for. Two styles: the standard ~1-month / ~16-delta CSP, and a
+// lower-delta, longer-dated ~3-month / ~10-delta put (further OTM ≈ 15%+, less market-beta risk).
+// `z` is the standard-normal quantile N⁻¹(1 − targetDelta) used to locate the strike.
+export const PUT_TENORS = [
+  { id: "m1", short: "~1M", note: "≈16Δ · 30–45 DTE", targetDte: 35, dteMin: 18, dteMax: 66, prefMin: 30, prefMax: 45, z: 0.9945 },
+  { id: "m3", short: "~3M", note: "≈10Δ · ~3-month · further OTM", targetDte: 95, dteMin: 70, dteMax: 125, prefMin: 82, prefMax: 105, z: 1.2816 },
+] as const;
+export type TenorId = (typeof PUT_TENORS)[number]["id"];
+
 export interface PutWriteCandidate {
   symbol: string;
   name: string;
@@ -44,7 +53,7 @@ export interface PutWriteCandidate {
   atmIV: number | null; // ATM implied vol at the chosen expiry (fraction)
   ivRank: number | null; // 0-100 IV percentile; null until enough IV history accrues
   ivPremium: number | null; // atmIV / rvol — options pricing in more vol than realized = rich
-  put: PutSuggestion | null;
+  puts: Record<TenorId, PutSuggestion | null>; // one suggestion per tenor (m1 ≈16Δ/1mo, m3 ≈10Δ/3mo)
 }
 
 export interface PutWriteData {

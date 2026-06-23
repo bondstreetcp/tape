@@ -17,8 +17,8 @@ import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
 import { getOptions } from "../lib/options";
 import {
-  ivFromPut, putDelta, realizedVol, realizedVolRank, ivPercentile, Z_16DELTA,
-  type PutWriteCandidate, type PutWriteData, type PutSuggestion,
+  ivFromPut, putDelta, realizedVol, realizedVolRank, ivPercentile, PUT_TENORS,
+  type TenorId, type PutWriteCandidate, type PutWriteData, type PutSuggestion,
 } from "../lib/putwrite";
 
 const DATA = path.join(process.cwd(), "data");
@@ -27,11 +27,9 @@ const MIN_MKTCAP = 0.5e9;
 const MIN_ROE = 0.15;
 const MAX_PE = 25;
 const R = 0.043; // risk-free approx (~3M T-bill); only affects delta/IV at the margin
-// Prefer the user's 30-45 DTE band, but fall back to the nearest listed expiry in a wider
-// window — monthly-only names (no weeklies) jump from ~23 to ~58 DTE, straddling 30-45, so a
-// narrow window silently drops every such name. Widen to always catch a tradeable monthly.
-const DTE_MIN = 18, DTE_MAX = 66, DTE_TARGET = 35;
-const PREF_MIN = 30, PREF_MAX = 45;
+// Expiry windows + the target delta per tenor live in PUT_TENORS (lib/putwrite). Each prefers a
+// tight band but falls back to the nearest listed expiry in a wider one — monthly-only names (no
+// weeklies) have gaps, so a narrow window would silently drop them.
 const IVHIST = path.join(DATA, "putwrite-ivhist.json");
 const IVHIST_CAP = 300;
 
@@ -71,6 +69,54 @@ async function chainRetry(sym: string, date?: string) {
   return getOptions(sym, date);
 }
 
+// For one tenor: pick the expiry (prefer the tight band, else nearest in the wide window), back
+// ATM IV out of the premium, locate the put at the tenor's target delta (via z), and sanity-check
+// it. Returns the put plus the ATM IV (used for the per-name vol signal).
+async function buildPutAtTenor(
+  sym: string, base: any, spot: number, tenor: (typeof PUT_TENORS)[number],
+): Promise<{ put: PutSuggestion | null; atmIV: number | null }> {
+  const now = Date.now();
+  const allExp = base.expirations
+    .map((d: string) => ({ d, dte: Math.round((Date.parse(d + "T00:00:00Z") - now) / 86_400_000) }))
+    .filter((e: { dte: number }) => e.dte >= tenor.dteMin && e.dte <= tenor.dteMax);
+  const pref = allExp.filter((e: { dte: number }) => e.dte >= tenor.prefMin && e.dte <= tenor.prefMax);
+  const exp = (pref.length ? pref : allExp).sort(
+    (a: { dte: number }, b: { dte: number }) => Math.abs(a.dte - tenor.targetDte) - Math.abs(b.dte - tenor.targetDte),
+  )[0];
+  if (!exp) return { put: null, atmIV: null };
+  const chain = exp.d === base.selected ? base : await chainRetry(sym, exp.d);
+  const T = exp.dte / 365;
+  const midOf = (o: any): number | null => (o.bid && o.ask ? (o.bid + o.ask) / 2 : o.last);
+  const puts = chain.puts.map((p: any) => ({ ...p, m: midOf(p) })).filter((p: any) => p.strike < spot && p.m && p.m > 0);
+  if (!puts.length) return { put: null, atmIV: null };
+  const atm = puts.reduce((a: any, b: any) => (Math.abs(b.strike - spot) < Math.abs(a.strike - spot) ? b : a));
+  const ai = ivFromPut(spot, atm.strike, T, R, atm.m);
+  const atmIV = ai && ai > 0.05 && ai < 2 ? ai : null;
+  const kTarget = atmIV
+    ? spot * Math.exp((R + (atmIV * atmIV) / 2) * T - tenor.z * atmIV * Math.sqrt(T))
+    : spot * (1 - 0.1 * Math.sqrt(tenor.targetDte / 35)); // crude fallback, scaled by √time
+  const pick = puts.reduce((a: any, b: any) => (Math.abs(b.strike - kTarget) < Math.abs(a.strike - kTarget) ? b : a));
+  const iv = ivFromPut(spot, pick.strike, T, R, pick.m);
+  const delta = iv ? putDelta(spot, pick.strike, T, R, iv) : null;
+  const yieldPct = (pick.m / pick.strike) * 100;
+  let put: PutSuggestion | null = {
+    expiry: exp.d, dte: exp.dte, strike: pick.strike,
+    delta: delta != null ? +delta.toFixed(2) : 0,
+    iv: iv != null ? +iv.toFixed(3) : atmIV ?? 0,
+    premium: +pick.m.toFixed(2), premiumSrc: pick.bid && pick.ask ? "mid" : "last",
+    yieldPct: +yieldPct.toFixed(2), annPct: +((yieldPct * 365) / exp.dte).toFixed(1),
+    cushionPct: +(((spot - pick.strike) / spot) * 100).toFixed(1),
+    breakeven: +(pick.strike - pick.m).toFixed(2),
+  };
+  // Reject stale/illiquid prints: a real cash-secured put doesn't yield 75%+ annualized (stale
+  // last trade on a thin option), and the strike should be a sane distance OTM. Same guard for
+  // both tenors — the longer-dated/lower-delta put just naturally sits well inside these bounds.
+  if (put.iv < 0.05 || put.iv > 1.5 || Math.abs(put.delta) < 0.02 || Math.abs(put.delta) > 0.45 || put.cushionPct < 2.5 || put.annPct > 65) {
+    put = null;
+  }
+  return { put, atmIV };
+}
+
 async function main() {
   // 1. union the US universes into one de-duped candidate pool
   const seen = new Set<string>();
@@ -102,52 +148,20 @@ async function main() {
       rvolRank = realizedVolRank(closes, 20, 252);
     }
 
-    // options: chain nearest 35 DTE → ATM IV from premium → ~16-delta put
-    let put: PutSuggestion | null = null, atmIV: number | null = null, spot: number | null = null;
+    // options: from one chain pull, build the put at each tenor (~1M ≈16Δ and ~3M ≈10Δ)
+    const puts: Record<TenorId, PutSuggestion | null> = { m1: null, m3: null };
+    let atmIV: number | null = null, spot: number | null = null;
     try {
       const base = await chainRetry(sym);
       spot = base.underlying ?? s.price ?? null;
       if (spot && base.expirations.length) {
-        const now = Date.now();
-        const allExp = base.expirations
-          .map((d) => ({ d, dte: Math.round((Date.parse(d + "T00:00:00Z") - now) / 86_400_000) }))
-          .filter((e) => e.dte >= DTE_MIN && e.dte <= DTE_MAX);
-        const pref = allExp.filter((e) => e.dte >= PREF_MIN && e.dte <= PREF_MAX);
-        const exp = (pref.length ? pref : allExp).sort((a, b) => Math.abs(a.dte - DTE_TARGET) - Math.abs(b.dte - DTE_TARGET))[0];
-        if (exp) {
-          const chain = exp.d === base.selected ? base : await chainRetry(sym, exp.d);
-          const T = exp.dte / 365;
-          const midOf = (o: any): number | null => (o.bid && o.ask ? (o.bid + o.ask) / 2 : o.last);
-          const puts = chain.puts.map((p: any) => ({ ...p, m: midOf(p) })).filter((p: any) => p.strike < spot! && p.m && p.m > 0);
-          if (puts.length) {
-            const atm = puts.reduce((a: any, b: any) => (Math.abs(b.strike - spot!) < Math.abs(a.strike - spot!) ? b : a));
-            const ai = ivFromPut(spot, atm.strike, T, R, atm.m);
-            atmIV = ai && ai > 0.05 && ai < 2 ? ai : null;
-            const kTarget = atmIV ? spot * Math.exp((R + (atmIV * atmIV) / 2) * T - Z_16DELTA * atmIV * Math.sqrt(T)) : spot * 0.9;
-            const pick = puts.reduce((a: any, b: any) => (Math.abs(b.strike - kTarget) < Math.abs(a.strike - kTarget) ? b : a));
-            const iv = ivFromPut(spot, pick.strike, T, R, pick.m);
-            const delta = iv ? putDelta(spot, pick.strike, T, R, iv) : null;
-            const yieldPct = (pick.m / pick.strike) * 100;
-            put = {
-              expiry: exp.d, dte: exp.dte, strike: pick.strike,
-              delta: delta != null ? +delta.toFixed(2) : 0,
-              iv: iv != null ? +iv.toFixed(3) : atmIV ?? 0,
-              premium: +pick.m.toFixed(2), premiumSrc: pick.bid && pick.ask ? "mid" : "last",
-              yieldPct: +yieldPct.toFixed(2), annPct: +((yieldPct * 365) / exp.dte).toFixed(1),
-              cushionPct: +(((spot - pick.strike) / spot) * 100).toFixed(1),
-              breakeven: +(pick.strike - pick.m).toFixed(2),
-            };
-            // Reject stale/illiquid option prints. A real ~16-delta cash-secured put doesn't yield
-            // 75-200%+ annualized — that's a stale last trade on a thin option (or a name in
-            // freefall, not one you'd be "happy to own"). Also drop unsolvable/blown-out IVs and
-            // strikes that landed nowhere near 16-delta. The name still shows; it just gets no put.
-            if (put.iv < 0.05 || put.iv > 1.5 || Math.abs(put.delta) < 0.03 || Math.abs(put.delta) > 0.45 || put.cushionPct < 2.5 || put.annPct > 65) {
-              put = null;
-            }
-          }
-        }
+        const r1 = await buildPutAtTenor(sym, base, spot, PUT_TENORS[0]); // ~1 month
+        const r3 = await buildPutAtTenor(sym, base, spot, PUT_TENORS[1]); // ~3 months
+        puts.m1 = r1.put;
+        puts.m3 = r3.put;
+        atmIV = r1.atmIV ?? r3.atmIV; // single per-name vol signal (prefer the 1M ATM)
       }
-    } catch { /* leave put null */ }
+    } catch { /* leave puts null */ }
 
     // accrue ATM IV history → IV percentile (null until ~30 days banked)
     let ivRank: number | null = null;
@@ -167,14 +181,14 @@ async function main() {
       atmIV: atmIV != null ? +atmIV.toFixed(3) : null,
       ivRank: ivRank != null ? Math.round(ivRank) : null,
       ivPremium: atmIV != null && rvol != null && rvol > 0 ? +(atmIV / rvol).toFixed(2) : null,
-      put,
+      puts,
     };
     return cand;
   });
 
   const candidates = built
     .filter((c): c is PutWriteCandidate => !!c)
-    .sort((a, b) => (b.put?.annPct ?? -1) - (a.put?.annPct ?? -1));
+    .sort((a, b) => (b.puts.m1?.annPct ?? -1) - (a.puts.m1?.annPct ?? -1));
 
   const data: PutWriteData = {
     generatedAt: new Date().toISOString(),
@@ -185,10 +199,14 @@ async function main() {
   };
   await fsp.writeFile(path.join(DATA, "putwrite.json"), JSON.stringify(data));
   await fsp.writeFile(IVHIST, JSON.stringify(ivhist));
-  const withPut = candidates.filter((c) => c.put).length;
-  console.log(`\nwrote ${candidates.length} candidates (${withPut} with a put suggestion).`);
-  console.log("top by annualized yield:");
-  for (const c of candidates.slice(0, 8)) console.log(`  ${c.symbol.padEnd(6)} ${c.put ? `$${c.put.strike} put ${c.put.dte}d · ${c.put.annPct}% ann · ${c.put.cushionPct}% cushion` : "—"}`);
+  const withM1 = candidates.filter((c) => c.puts.m1).length;
+  const withM3 = candidates.filter((c) => c.puts.m3).length;
+  console.log(`\nwrote ${candidates.length} candidates (${withM1} with a ~1M put, ${withM3} with a ~3M put).`);
+  console.log("top by 1M annualized yield:");
+  for (const c of candidates.slice(0, 8)) {
+    const p1 = c.puts.m1, p3 = c.puts.m3;
+    console.log(`  ${c.symbol.padEnd(6)} 1M ${p1 ? `$${p1.strike} ${p1.dte}d Δ${p1.delta} · ${p1.annPct}% ann · ${p1.cushionPct}% cush` : "—"}  |  3M ${p3 ? `$${p3.strike} ${p3.dte}d Δ${p3.delta} · ${p3.annPct}% ann · ${p3.cushionPct}% cush` : "—"}`);
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
