@@ -1,10 +1,10 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { SectorMeta } from "@/lib/sectors";
-import type { SectorSeries, StockRow, StockSeries } from "@/lib/types";
+import type { SectorSeries, StockRow, StockSeries, XY } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { buildComparison, xyToPoints, isNearHigh, isNearLow } from "@/lib/compute";
@@ -41,6 +41,24 @@ export default function IndustryView({
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
 
+  // 1D/1W plot the per-symbol intraday series, which only rebuilds after the close — so mid-session
+  // it shows the prior day. Fetch live intraday on demand for those tenors and swap it in.
+  const intradayTf = tf === "1d" || tf === "1w";
+  const [live, setLive] = useState<Record<string, XY[]> | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  useEffect(() => {
+    if (!intradayTf || live) return;
+    const syms = [meta.etf, ...stocks.slice(0, 60).map((s) => s.symbol)];
+    let alive = true;
+    setLiveLoading(true);
+    fetch(`/api/intraday?symbols=${encodeURIComponent(syms.join(","))}`)
+      .then((r) => r.json())
+      .then((d) => { if (alive) setLive(d.series || {}); })
+      .catch(() => {})
+      .finally(() => alive && setLiveLoading(false));
+    return () => { alive = false; };
+  }, [intradayTf, stocks, meta.etf, live]);
+
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
   // Stable color per stock, assigned in market-cap order (independent of timeframe).
@@ -51,26 +69,29 @@ export default function IndustryView({
   }, [stocks, meta.etf]);
 
   const { rows, endPct } = useMemo(() => {
+    const useLive = intradayTf && !!live;
+    const winNow = intradayTf ? Date.now() : now; // window live intraday against the real clock
+    const liveOf = (sym: string, fallback: XY[]) => (useLive && live![sym]?.length ? xyToPoints(live![sym]) : xyToPoints(fallback));
     const items = [
       {
         symbol: meta.etf,
-        intraday: etfSeries?.intraday ?? [],
+        intraday: liveOf(meta.etf, etfSeries?.intraday ? etfSeries.intraday.map((p) => [p.t, p.c] as XY) : []),
         daily: etfSeries?.daily ?? [],
       },
       ...stocks.map((s) => {
         const sr = seriesBySymbol[s.symbol];
         return {
           symbol: s.symbol,
-          intraday: xyToPoints(sr?.intraday ?? []),
+          intraday: liveOf(s.symbol, sr?.intraday ?? []),
           daily: xyToPoints(sr?.daily ?? []),
         };
       }),
     ];
-    const { rows, meta: cmeta } = buildComparison(items, tf, now);
+    const { rows, meta: cmeta } = buildComparison(items, tf, winNow);
     const endPct: Record<string, number | null> = {};
     for (const m of cmeta) endPct[m.symbol] = m.endPct;
     return { rows, endPct };
-  }, [stocks, seriesBySymbol, etfSeries, meta.etf, tf, now]);
+  }, [stocks, seriesBySymbol, etfSeries, meta.etf, tf, now, intradayTf, live]);
 
   // Chart series order (ETF first); legend sorted by performance with ETF pinned.
   const chartSeries: SeriesDef[] = useMemo(
@@ -128,6 +149,7 @@ export default function IndustryView({
           <p className="mt-1 text-xs text-[var(--text-3)]">
             {stocks.length} constituents · each line rebased to % change · dashed
             white = {meta.etf} · as of {fmtDateTime(generatedAt)}
+            {intradayTf && (liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : live ? <span className="text-[#22c55e]"> · live intraday</span> : null)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
