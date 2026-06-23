@@ -47,6 +47,7 @@ export default function PutWriteView({
 }) {
   const { has, toggle } = useWatchlist();
   const [minAnn, setMinAnn] = useState(0);
+  const [minCushion, setMinCushion] = useState(0);
   const [elevatedOnly, setElevatedOnly] = useState(false);
   const [watchOnly, setWatchOnly] = useState(false);
   const [q, setQ] = useState("");
@@ -73,13 +74,14 @@ export default function PutWriteView({
     return candidates
       .filter((c) => {
         if (minAnn && (put(c)?.annPct ?? 0) < minAnn) return false;
+        if (minCushion && (put(c)?.cushionPct ?? 0) < minCushion) return false;
         if (elevatedOnly && (volRank(c) ?? 0) < 50) return false;
         if (watchOnly && !has(c.symbol)) return false;
         if (ql && !c.symbol.toLowerCase().includes(ql) && !c.name.toLowerCase().includes(ql)) return false;
         return true;
       })
       .sort((a, b) => get[sort](b) - get[sort](a));
-  }, [candidates, minAnn, elevatedOnly, watchOnly, q, sort, tenor, has]);
+  }, [candidates, minAnn, minCushion, elevatedOnly, watchOnly, q, sort, tenor, has]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
@@ -141,6 +143,12 @@ export default function PutWriteView({
             <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
               {[0, 8, 12, 18].map((v) => (
                 <button key={v} onClick={() => setMinAnn(v)} className={TB(minAnn === v)}>{v === 0 ? "All" : `${v}%`}</button>
+              ))}
+            </div>
+            <span className="text-xs text-[var(--text-4)]">Min cushion</span>
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5" title="Keep only puts at least this far out of the money">
+              {[0, 10, 15, 20].map((v) => (
+                <button key={v} onClick={() => setMinCushion(v)} className={TB(minCushion === v)}>{v === 0 ? "Any" : `${v}%`}</button>
               ))}
             </div>
             <button onClick={() => setElevatedOnly((v) => !v)} className={"rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " + (elevatedOnly ? "border-[#f59e0b] bg-[#f59e0b]/15 text-[#fbbf24]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Keep only names whose volatility rank is in the top half of its 1-year range">
