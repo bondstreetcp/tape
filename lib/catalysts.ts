@@ -11,6 +11,7 @@ import path from "path";
 export interface Catalyst {
   why: string; // the catalyst clause ("" = no clear catalyst)
   ts: string; // ISO timestamp it was generated (for the TTL refresh)
+  tf?: string; // the timeframe the catalyst explains ("1d"/"1w"/"ytd"/"1y") — gates cache reuse
 }
 export type CatalystMap = Record<string, Catalyst>;
 
