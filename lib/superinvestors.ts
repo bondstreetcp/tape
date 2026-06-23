@@ -95,6 +95,7 @@ export const INVESTORS: Investor[] = [
   { slug: "jana", name: "JANA Partners", manager: "Barry Rosenstein", cik: "1998597", blurb: "Activist value; agitates for strategic and operational change." },
   { slug: "situational", name: "Situational Awareness", manager: "Leopold Aschenbrenner", cik: "2045724", blurb: "AGI-thesis fund; concentrated bets on the AI buildout." },
   { slug: "lotus", name: "Lotus Management", manager: "Alap Shah", cik: "2095243", blurb: "Concentrated, fundamental long-term equity investing." },
+  { slug: "praetorian", name: "Praetorian Capital", manager: "Harris Kupperman", cik: "1949877", blurb: "Macro-driven, contrarian bets on energy, commodities & inflation." },
 ];
 
 export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
