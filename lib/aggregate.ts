@@ -19,33 +19,35 @@ function aggregate(series: { cap: number; pts: XY[] }[]): SeriesPoint[] {
   const holders = series
     .map((s) => {
       if (!s.pts.length || !s.cap) return null;
-      const lastPrice = s.pts[s.pts.length - 1][1];
+      const pts = [...s.pts].sort((a, b) => a[0] - b[0]); // ascending by time
+      const lastPrice = pts[pts.length - 1][1];
       if (!lastPrice) return null;
-      const shares = s.cap / lastPrice;
-      const map = new Map<number, number>();
-      for (const [t, c] of s.pts) map.set(t, c);
-      return { shares, map };
+      return { shares: s.cap / lastPrice, pts };
     })
-    .filter((h): h is { shares: number; map: Map<number, number> } => !!h);
+    .filter((h): h is { shares: number; pts: XY[] } => !!h);
 
   if (!holders.length) return [];
 
   const tset = new Set<number>();
-  for (const h of holders) for (const t of h.map.keys()) tset.add(t);
+  for (const h of holders) for (const [t] of h.pts) tset.add(t);
   const ts = [...tset].sort((a, b) => a - b);
 
+  // Forward-fill each name's last-known price across the union timeline. Live 15-minute bars from
+  // different names end on slightly different ticks (the in-progress bar), so without this a name
+  // drops out of the basket at the misaligned tail and the cap-weighted index craters at the last
+  // point. Once a name has started it always contributes its most recent price.
+  const ptr = new Array(holders.length).fill(0);
+  const cur = new Array<number | null>(holders.length).fill(null);
   const raw: SeriesPoint[] = [];
   for (const t of ts) {
     let v = 0;
-    let any = false;
-    for (const h of holders) {
-      const p = h.map.get(t);
-      if (p != null) {
-        v += h.shares * p;
-        any = true;
-      }
+    let started = false;
+    for (let i = 0; i < holders.length; i++) {
+      const pts = holders[i].pts;
+      while (ptr[i] < pts.length && pts[ptr[i]][0] <= t) { cur[i] = pts[ptr[i]][1]; ptr[i]++; }
+      if (cur[i] != null) { v += holders[i].shares * (cur[i] as number); started = true; }
     }
-    if (any) raw.push({ t, c: v });
+    if (started) raw.push({ t, c: v });
   }
   if (!raw.length) return [];
 
