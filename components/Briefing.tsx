@@ -115,11 +115,15 @@ export default function Briefing() {
               <div key={i} className="px-4 py-3">
                 <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#60a5fa]">{s.heading}</h3>
                 {s.kind === "list" ? (
-                  <div className="space-y-1">
-                    {s.lines!.map((l, j) => (
-                      <div key={j} className="text-[13px] leading-snug text-[var(--text-2)] tabular-nums">{l}</div>
-                    ))}
-                  </div>
+                  isDataTable(s.lines!) ? (
+                    <DataSection lines={s.lines!} />
+                  ) : (
+                    <div className="space-y-1">
+                      {s.lines!.map((l, j) => (
+                        <div key={j} className="text-[13px] leading-snug text-[var(--text-2)]">{l}</div>
+                      ))}
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-3">
                     {s.blocks!.map((bl, j) => (
@@ -138,6 +142,110 @@ export default function Briefing() {
       <p className="text-[11px] leading-relaxed text-[var(--text-4)]">
         © Reuters / LSEG. Shown for your private research use, parsed from the source PDFs — not redistributed. Headline/paragraph grouping is best-effort from the PDF text.
       </p>
+    </div>
+  );
+}
+
+// --- Markets / data tables -------------------------------------------------
+// "List" sections (the STOCKS/treasuries/FX/commodities snapshot, gainers/losers,
+// economic events) arrive as flat PDF text lines that run together. Parse each into a
+// row label + its trailing numbers and lay them out in an aligned table — much easier
+// to scan than the raw run-on text. Best-effort: anything that doesn't parse as a data
+// row just shows as a sub-header line, so it always degrades gracefully.
+const NUM_TOK = /^[-+$]?\d[\d,]*\.?\d*(?:\/\d+)?%?$/; // 1,234.5 · -0.37 · 6.84% · -15/32 · $74.82
+
+function tokenize(line: string): string[] {
+  const out: string[] = [];
+  for (const t of line.split(/\s+/)) {
+    // merge a treasury 32nds tick ("-15 /32" → "-15/32") onto the preceding number
+    if (t.startsWith("/") && out.length && NUM_TOK.test(out[out.length - 1])) out[out.length - 1] += t;
+    else out.push(t);
+  }
+  return out;
+}
+
+type DataRow = { label: string; nums: string[] } | { subheader: string };
+
+function parseDataRows(lines: string[]): DataRow[] {
+  const rows: DataRow[] = [];
+  let pending: string | null = null; // a label (or sub-header) awaiting its number row
+  const flush = () => { if (pending != null) rows.push({ subheader: pending }); pending = null; };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const toks = tokenize(line);
+    let numStart = toks.length;
+    for (let i = toks.length - 1; i >= 0 && NUM_TOK.test(toks[i]); i--) numStart = i;
+    if (numStart === toks.length) { flush(); pending = line; }                                   // no trailing numbers → label/sub-header
+    else if (numStart === 0) { rows.push({ label: pending ?? "", nums: toks }); pending = null; } // numbers only → pair with the held label
+    else { flush(); rows.push({ label: toks.slice(0, numStart).join(" "), nums: toks.slice(numStart) }); } // label + numbers on one line
+  }
+  flush();
+  return rows;
+}
+
+// Only treat a list section as a data table when its lines actually read like one (short
+// labels + numbers, e.g. the markets snapshot / gainers / ex-dividends). Bulleted, sentence-y
+// sections (Analysts' Recommendation) stay as plain text lines.
+function isDataTable(lines: string[]): boolean {
+  if (lines.length < 2) return false;
+  let tab = 0, bullets = 0;
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (/^[•▪·‣]/.test(l)) { bullets++; continue; }
+    const toks = tokenize(l);
+    let ns = toks.length;
+    for (let i = toks.length - 1; i >= 0 && NUM_TOK.test(toks[i]); i--) ns = i;
+    const numCount = toks.length - ns;
+    const labelLen = toks.slice(0, ns).join(" ").length;
+    if (numCount === toks.length) tab++;               // pure numbers
+    else if (numCount >= 1 && labelLen <= 46) tab++;   // label + number(s) (company/index name)
+    else if (numCount === 0 && l.length <= 24) tab++;  // short bare label (e.g. an index name)
+  }
+  // Bulleted/sentence-y sections (Analysts' Recommendation) are guarded by the bullet ratio.
+  return bullets <= lines.length * 0.15 && tab >= lines.length * 0.4;
+}
+
+function DataSection({ lines }: { lines: string[] }) {
+  const rows = parseDataRows(lines);
+  // split into sub-tables at each sub-header so columns align within each block
+  const blocks: { header?: string; rows: { label: string; nums: string[] }[] }[] = [];
+  let cur: { header?: string; rows: { label: string; nums: string[] }[] } = { rows: [] };
+  for (const r of rows) {
+    if ("subheader" in r) { if (cur.rows.length || cur.header) blocks.push(cur); cur = { header: r.subheader, rows: [] }; }
+    else cur.rows.push(r);
+  }
+  if (cur.rows.length || cur.header) blocks.push(cur);
+
+  return (
+    <div className="space-y-2.5">
+      {blocks.map((b, i) => {
+        const cols = b.rows.length ? Math.max(...b.rows.map((r) => r.nums.length)) : 0;
+        return (
+          <div key={i}>
+            {b.header && <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{b.header}</div>}
+            {b.rows.length > 0 && (
+              <table className="w-full text-[12px]">
+                <tbody>
+                  {b.rows.map((r, j) => (
+                    <tr key={j} className="border-b border-[var(--divider)] last:border-0">
+                      <td className="whitespace-nowrap py-1 pr-3 text-[var(--text-2)]">{r.label}</td>
+                      {Array.from({ length: cols }, (_, k) => {
+                        const n = r.nums[k];
+                        return (
+                          <td key={k} className="py-1 pl-2 text-right tabular-nums" style={{ color: n && /^-/.test(n) ? "#ef4444" : "var(--text-2)" }}>
+                            {n ?? ""}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
