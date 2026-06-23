@@ -153,9 +153,32 @@ export interface ComparisonResult {
 }
 
 /**
+ * The price a window's % change is measured from. For every tenor except 1D this is the first sliced
+ * point — sliceSeries already prepends the prior-period bar so the change ties out with the canonical
+ * returns[tf]. The 1D window starts at today's open, but the canonical daily return is measured vs the
+ * PRIOR CLOSE, so anchor to the last bar before today's session (fallback: the daily series' last
+ * close). Without this, a name that gapped overnight shows only its since-open move and disagrees with
+ * the header's 1D % (e.g. XLB gaps down 1.3% pre-market → shows ~0% instead of −1.1%).
+ */
+function rebaseBaseline(
+  intraday: SeriesPoint[],
+  daily: SeriesPoint[],
+  tf: TimeframeKey,
+  sliced: SeriesPoint[],
+): number | null {
+  if (tf !== "1d") return sliced.length ? sliced[0].c : null;
+  if (!sliced.length) return null;
+  const d = new Date(sliced[0].t);
+  const startOfToday = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  for (let i = intraday.length - 1; i >= 0; i--) if (intraday[i].t < startOfToday) return intraday[i].c;
+  if (daily.length) return daily[daily.length - 1].c;
+  return sliced[0].c;
+}
+
+/**
  * Slice each series to the timeframe window, rebase it to % change from the
- * first point in the window (so price levels don't matter), and merge them all
- * onto a shared time axis for a multi-line comparison chart.
+ * period baseline (see rebaseBaseline — prior close for 1D, the prepended prior bar
+ * otherwise), and merge them all onto a shared time axis for a multi-line comparison chart.
  */
 export function buildComparison(
   items: ComparisonItem[],
@@ -164,7 +187,7 @@ export function buildComparison(
 ): ComparisonResult {
   const perStock = items.map((it) => {
     const sliced = sliceSeries(it.intraday, it.daily, tf, now);
-    const base = sliced.length ? sliced[0].c : null;
+    const base = rebaseBaseline(it.intraday, it.daily, tf, sliced);
     const points =
       base && base !== 0
         ? sliced.map((p) => ({ t: p.t, v: (p.c / base - 1) * 100 }))
