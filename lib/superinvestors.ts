@@ -84,6 +84,16 @@ export const INVESTORS: Investor[] = [
   { slug: "appaloosa", name: "Appaloosa", manager: "David Tepper", cik: "1656456", blurb: "Opportunistic value; distressed and macro-aware." },
   { slug: "duquesne", name: "Duquesne Family Office", manager: "Stanley Druckenmiller", cik: "1536411", blurb: "Top-down macro meets concentrated stock-picking." },
   { slug: "scion", name: "Scion Asset Mgmt", manager: "Michael Burry", cik: "1649339", blurb: "Contrarian deep value; sporadic, high-conviction bets." },
+  // Activists & newer additions. Greenlight now files under Einhorn's DME Capital Management
+  // (the old "Greenlight Capital Inc" CIK went dormant in 2023); JANA likewise moved to a new
+  // entity. Icahn files personally as "Carl C. Icahn".
+  { slug: "greenlight", name: "Greenlight Capital", manager: "David Einhorn", cik: "1489933", blurb: "Long-short value with a sharp, contrarian short book." },
+  { slug: "elliott", name: "Elliott Management", manager: "Paul Singer", cik: "1791786", blurb: "Aggressive global activist; distressed and special situations." },
+  { slug: "icahn", name: "Icahn Capital", manager: "Carl Icahn", cik: "921669", blurb: "The original activist raider; concentrated, combative value." },
+  { slug: "trian", name: "Trian Partners", manager: "Nelson Peltz", cik: "1345471", blurb: "Operational activist in consumer & industrial brands." },
+  { slug: "starboard", name: "Starboard Value", manager: "Jeff Smith", cik: "1517137", blurb: "Activist value; board seats and operational turnarounds." },
+  { slug: "jana", name: "JANA Partners", manager: "Barry Rosenstein", cik: "1998597", blurb: "Activist value; agitates for strategic and operational change." },
+  { slug: "situational", name: "Situational Awareness", manager: "Leopold Aschenbrenner", cik: "2045724", blurb: "AGI-thesis fund; concentrated bets on the AI buildout." },
 ];
 
 export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
