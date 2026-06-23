@@ -20,7 +20,8 @@
     "refresh-margins-simfin": "tsx scripts/patch-margins-simfin.ts",
     "refresh-13f": "tsx scripts/refresh-13f.ts",
     "refresh-catalysts": "tsx scripts/refresh-catalysts.ts",
-    "refresh-cef": "tsx scripts/refresh-cef.ts"
+    "refresh-cef": "tsx scripts/refresh-cef.ts",
+    "refresh-congress": "tsx scripts/refresh-congress.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",

@@ -127,6 +127,13 @@ jobs:
         run: npm run refresh-cef
         continue-on-error: true
 
+      # Congressional (Senate STOCK Act) trades from the public Senate eFD. No key; polite
+      # throttling built in. Disclosures lag ~30-45 days, so daily is plenty.
+      - name: Refresh congressional trades
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-congress
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow
