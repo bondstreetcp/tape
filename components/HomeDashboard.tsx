@@ -2,13 +2,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Snapshot, StockRow } from "@/lib/types";
+import type { Snapshot } from "@/lib/types";
 import type { CatalystMap } from "@/lib/catalysts";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { returnColor, trendColor } from "@/lib/color";
 import { fmtPct, fmtDateTime } from "@/lib/format";
-import { isNearHigh, isNearLow } from "@/lib/compute";
+import { isNearHigh, isNearLow, capWeightedReturn } from "@/lib/compute";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import TimeframeSelector from "./TimeframeSelector";
 import ThresholdSelector from "./ThresholdSelector";
@@ -19,25 +19,6 @@ import { useIsLight } from "./useIsLight";
 import MarketAlert from "./MarketAlert";
 import Treemap from "./Treemap";
 import IndexChart from "./IndexChart";
-
-// Cap-weighted return over a set of names for a timeframe. We weight by each name's
-// START-of-period cap, recovered as cap/(1+return); weighting by the current (post-move) cap
-// would over-count names that already rallied and skew longer windows. Returns are in percent.
-function capWeightedReturn(stocks: StockRow[], tf: TimeframeKey): number | null {
-  let wsum = 0;
-  let rsum = 0;
-  for (const s of stocks) {
-    const r = s.returns[tf];
-    const cap = s.marketCap;
-    if (r == null || cap == null || !(cap > 0)) continue;
-    const denom = 1 + r / 100;
-    if (denom <= 0) continue; // skip ~total-loss outliers (start cap → ∞)
-    const cap0 = cap / denom;
-    wsum += cap0;
-    rsum += cap0 * r;
-  }
-  return wsum > 0 ? rsum / wsum : null;
-}
 
 export default function HomeDashboard({
   snapshot,
@@ -167,14 +148,21 @@ export default function HomeDashboard({
                 className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
                 style={{ background: returnColor(r, tf, light) }}
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-mono text-lg font-bold leading-none">
-                      {sec.etf}
-                    </div>
-                    <div className="mt-1 text-xs text-white/70">{sec.name}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    {universe === "sp500" ? (
+                      // The XLE/XLK… SPDR sector ETFs are S&P 500-based, so the ticker only
+                      // belongs on the S&P 500. Elsewhere the return is the universe's own —
+                      // show just the sector name.
+                      <>
+                        <div className="font-mono text-lg font-bold leading-none">{sec.etf}</div>
+                        <div className="mt-1 text-xs text-white/70">{sec.name}</div>
+                      </>
+                    ) : (
+                      <div className="text-base font-bold leading-tight">{sec.name}</div>
+                    )}
                   </div>
-                  <div className="text-right text-2xl font-semibold tabular-nums">
+                  <div className="shrink-0 text-right text-2xl font-semibold tabular-nums">
                     {fmtPct(r, 2)}
                   </div>
                 </div>

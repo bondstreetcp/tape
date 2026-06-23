@@ -11,6 +11,29 @@ export function isNearLow(row: StockRow, threshold: number): boolean {
   return row.pctFromLow <= threshold;
 }
 
+/**
+ * Cap-weighted return over a set of names for a timeframe — the universe's OWN move for a
+ * sector (or the whole index), computed from its constituents rather than a fixed sector ETF
+ * (which is S&P-based and reads the same on every universe). We weight by each name's
+ * START-of-period cap, recovered as cap/(1+return); weighting by the current (post-move) cap
+ * would over-count names that already rallied and skew longer windows. Returns are in percent.
+ */
+export function capWeightedReturn(stocks: StockRow[], tf: TimeframeKey): number | null {
+  let wsum = 0;
+  let rsum = 0;
+  for (const s of stocks) {
+    const r = s.returns[tf];
+    const cap = s.marketCap;
+    if (r == null || cap == null || !(cap > 0)) continue;
+    const denom = 1 + r / 100;
+    if (denom <= 0) continue; // skip ~total-loss outliers (start cap → ∞)
+    const cap0 = cap / denom;
+    wsum += cap0;
+    rsum += cap0 * r;
+  }
+  return wsum > 0 ? rsum / wsum : null;
+}
+
 export type HighLowFilter = "all" | "high" | "low" | "either";
 
 export function matchesFilter(

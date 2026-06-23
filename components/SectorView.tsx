@@ -16,6 +16,7 @@ import {
   seriesChangePct,
   isNearHigh,
   isNearLow,
+  capWeightedReturn,
   type HighLowFilter,
 } from "@/lib/compute";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
@@ -82,7 +83,12 @@ export default function SectorView({
   }, [series, tf, now]);
 
   const windowChange = seriesChangePct(chartPoints);
-  const sectorReturn = sector?.returns[tf] ?? windowChange;
+  // The XLE/XLK… SPDR sector ETFs are S&P 500-based, so on any other universe the ETF return
+  // (and ticker) misrepresent the sector. Lead with the sector's OWN cap-weighted return here;
+  // keep the ETF only on the S&P 500 and as the proxy price chart below.
+  const isSp500 = universe === "sp500";
+  const univReturn = useMemo(() => capWeightedReturn(stocks, tf), [stocks, tf]);
+  const headerReturn = univReturn ?? sector?.returns[tf] ?? windowChange;
 
   const counts = useMemo(() => {
     let high = 0;
@@ -108,13 +114,19 @@ export default function SectorView({
             <span className="text-[var(--text-2)]">{meta.name}</span>
           </div>
           <div className="mt-1 flex items-center gap-3">
-            <h1 className="font-mono text-2xl font-bold">{meta.etf}</h1>
-            <span className="text-lg text-[var(--text-2)]">{meta.name}</span>
+            {isSp500 ? (
+              <>
+                <h1 className="font-mono text-2xl font-bold">{meta.etf}</h1>
+                <span className="text-lg text-[var(--text-2)]">{meta.name}</span>
+              </>
+            ) : (
+              <h1 className="text-2xl font-bold">{meta.name}</h1>
+            )}
             <span
               className="text-lg font-semibold tabular-nums"
-              style={{ color: trendColor(sectorReturn) }}
+              style={{ color: trendColor(headerReturn) }}
             >
-              {fmtPct(sectorReturn)}
+              {fmtPct(headerReturn)}
             </span>
           </div>
           <p className="mt-1 text-xs text-[var(--text-3)]">
@@ -132,13 +144,13 @@ export default function SectorView({
       <section className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium text-[var(--text-2)]">
-            {meta.etf} price · {TIMEFRAMES.find((t) => t.key === tf)?.label}
+            {meta.etf} price{isSp500 ? "" : " · S&P sector-ETF proxy"} · {TIMEFRAMES.find((t) => t.key === tf)?.label}
           </h2>
           <span
             className="text-sm font-semibold tabular-nums"
-            style={{ color: trendColor(sectorReturn) }}
+            style={{ color: trendColor(windowChange) }}
           >
-            {fmtPct(sectorReturn)} this range
+            {fmtPct(windowChange)} this range
           </span>
         </div>
         <IndicatorChart
