@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,8 +12,7 @@ import { returnColor, trendColor } from "@/lib/color";
 import { fmtPct, fmtMarketCap, fmtDateTime } from "@/lib/format";
 import {
   matchesFilter,
-  sliceSeries,
-  seriesChangePct,
+  windowChangePct,
   isNearHigh,
   isNearLow,
   capWeightedReturn,
@@ -77,12 +76,16 @@ export default function SectorView({
       `/u/${universe}/sector/${meta.etf.toLowerCase()}/${slugify(industry)}?tf=${tf}`,
     );
 
-  const chartPoints = useMemo(() => {
-    if (!series) return [];
-    return sliceSeries(series.intraday, series.daily, tf, now);
-  }, [series, tf, now]);
-
-  const windowChange = seriesChangePct(chartPoints);
+  // "this range" ties out with the header: vs the prior close for 1D (captures the overnight gap),
+  // vs the window's prior bar for the longer tenors (see windowChangePct / rebaseBaseline). The
+  // stored series is a day stale on 1D/1W, so the chart reports its LIVE figure up and we prefer it.
+  const staticWindowChange = useMemo(
+    () => (series ? windowChangePct(series.intraday, series.daily, tf, now) : null),
+    [series, tf, now],
+  );
+  const [liveRange, setLiveRange] = useState<number | null>(null);
+  useEffect(() => setLiveRange(null), [tf]); // drop the prior tenor's value until the chart re-reports
+  const windowChange = liveRange ?? staticWindowChange;
   // The XLE/XLK… SPDR sector ETFs are S&P 500-based, so on any other universe the ETF return
   // (and ticker) misrepresent the sector. Lead with the sector's OWN cap-weighted return here;
   // keep the ETF only on the S&P 500 and as the proxy price chart below.
@@ -160,6 +163,7 @@ export default function SectorView({
           now={now}
           up={(windowChange ?? 0) >= 0}
           symbol={meta.etf}
+          onRangeChange={setLiveRange}
         />
       </section>
 

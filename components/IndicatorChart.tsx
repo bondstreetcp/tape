@@ -16,7 +16,7 @@ import {
 import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { fmtMoney } from "@/lib/format";
-import { sliceSeries } from "@/lib/compute";
+import { priorCloseFor, sliceSeries, windowChangePct } from "@/lib/compute";
 import {
   OVERLAYS,
   PANELS,
@@ -76,6 +76,7 @@ export default function IndicatorChart({
   up,
   symbol,
   currency = "USD",
+  onRangeChange,
 }: {
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
@@ -84,6 +85,7 @@ export default function IndicatorChart({
   up: boolean;
   symbol?: string;
   currency?: string;
+  onRangeChange?: (pct: number | null) => void;
 }) {
   const [enabled, setEnabled] = useState<Set<IndicatorId>>(new Set(["sma50"]));
 
@@ -136,6 +138,15 @@ export default function IndicatorChart({
   }, [effIntraday, daily, tf, now, source]);
 
   const points = useMemo(() => source.slice(windowStart), [source, windowStart]);
+
+  // Prior session's close — the 1D line plots today's session from the open, so a dashed reference
+  // line here makes the overnight gap (and the vs-prev-close move shown in the header) visible.
+  const prevClose = useMemo(() => priorCloseFor(effIntraday, daily, tf, now), [effIntraday, daily, tf, now]);
+
+  // Report the displayed window's % change (vs the period baseline — prior close for 1D) so the
+  // parent's "this range" badge reflects this LIVE chart, not the day-stale stored series.
+  const rangeChange = useMemo(() => windowChangePct(effIntraday, daily, tf, now), [effIntraday, daily, tf, now]);
+  useEffect(() => { onRangeChange?.(rangeChange); }, [rangeChange, onRangeChange]);
 
   const volumeData = useMemo(() => {
     if (!ohlc) return null;
@@ -270,7 +281,11 @@ export default function IndicatorChart({
               {xAxis}
               <YAxis
                 orientation="right"
-                domain={["auto", "auto"]}
+                domain={
+                  prevClose != null
+                    ? [(min: number) => Math.min(min, prevClose), (max: number) => Math.max(max, prevClose)]
+                    : ["auto", "auto"]
+                }
                 tick={{ fill: "var(--text-3)", fontSize: 11 }}
                 stroke="var(--border)"
                 tickFormatter={(v: number) => fmtMoney(v, currency, priceDecimals)}
@@ -299,6 +314,16 @@ export default function IndicatorChart({
                   isAnimationActive={false}
                 />
               ))}
+              {prevClose != null && (
+                <ReferenceLine
+                  y={prevClose}
+                  stroke="var(--text-4)"
+                  strokeDasharray="4 4"
+                  strokeWidth={1}
+                  ifOverflow="extendDomain"
+                  label={{ value: "prev close", position: "insideTopLeft", fill: "var(--text-4)", fontSize: 10 }}
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
 

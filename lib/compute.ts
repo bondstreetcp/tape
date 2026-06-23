@@ -213,3 +213,42 @@ export function buildComparison(
 
   return { rows, meta: perStock.map((s) => ({ symbol: s.symbol, endPct: s.endPct })) };
 }
+
+/**
+ * % change across the tf window, measured from the period baseline (prior close for 1D — see
+ * rebaseBaseline) rather than the first visible bar. seriesChangePct(sliceSeries(...)) measures
+ * from the first point, which for 1D is today's open and so drops the overnight gap; this ties the
+ * "this range" figure out with the canonical returns[tf] / header. Returns null if no data.
+ */
+export function windowChangePct(
+  intraday: SeriesPoint[],
+  daily: SeriesPoint[],
+  tf: TimeframeKey,
+  now: number,
+): number | null {
+  const sliced = sliceSeries(intraday, daily, tf, now);
+  if (!sliced.length) return null;
+  const base = rebaseBaseline(intraday, daily, tf, sliced);
+  const last = sliced[sliced.length - 1].c;
+  return base ? (last / base - 1) * 100 : null;
+}
+
+/**
+ * The prior session's close for the 1D intraday window — the bar just before today's session in the
+ * intraday feed (fallback: the daily series' last close). Used to draw the 1D chart's prior-close
+ * reference line. Null for non-1D tenors or when no prior bar is available.
+ */
+export function priorCloseFor(
+  intraday: SeriesPoint[],
+  daily: SeriesPoint[],
+  tf: TimeframeKey,
+  now: number,
+): number | null {
+  if (tf !== "1d" || !intraday.length) return null;
+  const sliced = sliceSeries(intraday, daily, tf, now);
+  if (!sliced.length) return null;
+  const d = new Date(sliced[0].t);
+  const startOfToday = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  for (let i = intraday.length - 1; i >= 0; i--) if (intraday[i].t < startOfToday) return intraday[i].c;
+  return daily.length ? daily[daily.length - 1].c : null;
+}
