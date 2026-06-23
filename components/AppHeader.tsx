@@ -41,6 +41,7 @@ export default function AppHeader({
         { href: `${base}/superinvestors`, label: "Super-Investors" },
         { href: `${base}/congress`, label: "Congress Trades" },
         { href: `${base}/cef`, label: "CEF Screener" },
+        { href: `${base}/put-writing`, label: "Put-Writing" },
         { href: `${base}/backtest`, label: "Backtest" },
         { href: `${base}/research`, label: "Filings & Docs" },
         { href: `${base}/research-desk`, label: "Research Desk" },
