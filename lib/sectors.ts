@@ -29,3 +29,11 @@ export const ETF_TO_SECTOR: Record<string, SectorMeta> = Object.fromEntries(
 );
 
 export const SECTOR_ETFS: string[] = SECTORS.map((s) => s.etf);
+
+// Some index-constituent lists carry a GICS sector that contradicts the (correct) industry — e.g.
+// a regional bank tagged "Health Care" (HFWA). Banks/thrifts are unambiguously Financials, so
+// override the sector from the industry. Returns the corrected SectorMeta, or null if no override.
+export function sectorOverrideFromIndustry(industry: string | undefined | null): SectorMeta | null {
+  if (industry && /\bbanks?\b|\bthrifts?\b|mortgage finance/i.test(industry)) return ETF_TO_SECTOR["XLF"];
+  return null;
+}

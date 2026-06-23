@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import YahooFinance from "yahoo-finance2";
 import { INTL_UNIVERSES, YAHOO_SECTOR_TO_ETF, type IntlUniverse } from "../lib/intlConstituents";
-import { ETF_TO_SECTOR } from "../lib/sectors";
+import { ETF_TO_SECTOR, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
 
@@ -60,7 +60,7 @@ async function buildOne(uni: IntlUniverse) {
         .filter((q: any) => q?.date && q.close != null)
         .map((q: any) => [new Date(q.date).getTime(), q.close]);
       const last = closes[closes.length - 1].c;
-      const etf = YAHOO_SECTOR_TO_ETF[prof.sector] || "XLK";
+      const etf = sectorOverrideFromIndustry(prof.industry)?.etf || YAHOO_SECTOR_TO_ETF[prof.sector] || "XLK";
       const hi = num(sd.fiftyTwoWeekHigh), lo = num(sd.fiftyTwoWeekLow);
       rows.push({
         symbol: ticker,

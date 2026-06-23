@@ -15,7 +15,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
-import { GICS_TO_ETF, SECTORS, SECTOR_ETFS } from "../lib/sectors";
+import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
 import type {
@@ -194,17 +194,18 @@ async function main() {
   for (const u of UNIVERSES) {
     for (const e of universeLists[u.id]) {
       const existing = classBySym.get(e.symbol);
+      const ov = sectorOverrideFromIndustry(e.industry); // correct e.g. a bank tagged "Health Care"
       if (!existing) {
         classBySym.set(e.symbol, {
           name: e.name,
-          sector: e.sector,
+          sector: ov ? ov.name : e.sector,
           industry: e.industry,
-          etf: e.sector ? GICS_TO_ETF[e.sector] : undefined,
+          etf: ov ? ov.etf : e.sector ? GICS_TO_ETF[e.sector] : undefined,
         });
       } else if (!existing.sector && e.sector) {
-        existing.sector = e.sector;
+        existing.sector = ov ? ov.name : e.sector;
         existing.industry = e.industry;
-        existing.etf = GICS_TO_ETF[e.sector];
+        existing.etf = ov ? ov.etf : GICS_TO_ETF[e.sector];
       }
       if (intradayUniverses.has(u.id)) needIntraday.add(e.symbol);
     }
