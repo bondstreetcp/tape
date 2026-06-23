@@ -13,6 +13,11 @@ on:
     - cron: "0 16 * * 1-5"
     - cron: "0 18 * * 1-5"
     - cron: "0 20 * * 1-5"
+    # 10:00 UTC (~5–6am ET) — INTERNATIONAL-only refresh after the Asian close (Tokyo 06:00 /
+    # Seoul 06:30 / Shanghai 07:00 / Hong Kong 08:00 UTC). The 22:00 full run captures Asia's
+    # *previous* session, so without this the Asian constituent snapshots read a day stale next
+    # to the live index chart when you view during the US day.
+    - cron: "0 10 * * 1-5"
     # 22:00 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the
     # 4pm ET close (handles EST/EDT) so the options-flow scan captures the settled volume.
     - cron: "0 22 * * 1-5"
@@ -31,10 +36,11 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # FULL = the after-close rebuild (22:00 schedule) or a manual run; any other
-    # scheduled tick is an intraday quotes-only refresh.
+    # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close
+    # international-only refresh (10:00). Any other scheduled tick is an intraday quotes-only refresh.
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '0 22 * * 1-5' }}
+      INTL: ${{ github.event.schedule == '0 10 * * 1-5' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +56,7 @@ jobs:
       # rewrites just the ~15 snapshot files (the heavy per-symbol history series are
       # left untouched for the after-close run).
       - name: Refresh quotes (intraday)
-        if: ${{ env.FULL != 'true' }}
+        if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
         run: npm run refresh-quotes
         continue-on-error: true
 
@@ -95,7 +101,7 @@ jobs:
         continue-on-error: true
 
       - name: Refresh international universes
-        if: ${{ env.FULL == 'true' }}
+        if: ${{ env.FULL == 'true' || env.INTL == 'true' }}
         run: npm run refresh-intl
         continue-on-error: true
 
@@ -162,6 +168,8 @@ jobs:
           fi
           if [ "$SCHED" = "0 22 * * 1-5" ] || [ -z "$SCHED" ]; then
             MSG="chore: daily data refresh ($(date -u +%Y-%m-%d))"
+          elif [ "$SCHED" = "0 10 * * 1-5" ]; then
+            MSG="chore: intl refresh after Asian close ($(date -u +%Y-%m-%d))"
           else
             MSG="chore: intraday quotes ($(date -u +%Y-%m-%dT%H:%MZ))"
           fi
