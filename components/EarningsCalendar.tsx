@@ -7,6 +7,7 @@ import { fmtMarketCap, fmtPct, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { useWatchlist } from "@/lib/watchlist";
+import UniverseSwitcher from "./UniverseSwitcher";
 
 const RANGES = [
   { days: 7, label: "1 week" },
@@ -39,6 +40,7 @@ export default function EarningsCalendar({
   const { has, toggle } = useWatchlist();
   const [days, setDays] = useState(14);
   const [watchOnly, setWatchOnly] = useState(false);
+  const intl = !!UNIVERSE_BY_ID[universe]?.international; // before/after-open timing is US-centric
 
   const groups = useMemo(() => {
     const start = new Date();
@@ -75,6 +77,7 @@ export default function EarningsCalendar({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <UniverseSwitcher current={universe} />
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-3)]">
             <input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[#60a5fa]" />
             ★ Watchlist only
@@ -126,8 +129,8 @@ export default function EarningsCalendar({
                         </td>
                         <td className="px-2 py-1.5 font-mono font-semibold">{s.symbol}</td>
                         <td className="max-w-[16rem] truncate px-2 py-1.5 text-[var(--text-2)]">{s.name}</td>
-                        <td className="px-2 py-1.5 text-xs" style={{ color: tm.color }}>
-                          {tm.label}{s.earningsEstimate ? " · est" : ""}
+                        <td className="px-2 py-1.5 text-xs" style={{ color: intl ? "var(--text-3)" : tm.color }}>
+                          {intl ? (s.earningsEstimate ? "Est. date" : "Reports") : `${tm.label}${s.earningsEstimate ? " · est" : ""}`}
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title="Market cap">{fmtMarketCap(s.marketCap)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]" title="Forward annual EPS estimate">

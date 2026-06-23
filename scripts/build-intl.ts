@@ -40,10 +40,14 @@ async function buildOne(uni: IntlUniverse) {
   for (const ticker of uni.tickers) {
     try {
       const [qs, ch]: any = await Promise.all([
-        yf.quoteSummary(ticker, { modules: ["price", "assetProfile", "summaryDetail", "defaultKeyStatistics"] as any }, { validateResult: false }),
+        yf.quoteSummary(ticker, { modules: ["price", "assetProfile", "summaryDetail", "defaultKeyStatistics", "calendarEvents"] as any }, { validateResult: false }),
         yf.chart(ticker, { period1: new Date(Date.now() - 6 * 365 * DAY), interval: "1d" } as any, { validateResult: false }),
       ]);
       const price = qs.price || {}, prof = qs.assetProfile || {}, sd = qs.summaryDetail || {}, dks = qs.defaultKeyStatistics || {};
+      // Yahoo carries upcoming earnings dates for most intl names via calendarEvents (quote()'s
+      // earningsTimestampStart is garbage for non-US tickers, so use this instead).
+      const earn = qs.calendarEvents?.earnings || {};
+      const earnTs = Array.isArray(earn.earningsDate) ? earn.earningsDate[0] : earn.earningsDate;
       const closes = (ch.quotes || [])
         .filter((q: any) => q?.date && q.close != null)
         .map((q: any) => ({ t: new Date(q.date).getTime(), c: q.close }));
@@ -70,6 +74,8 @@ async function buildOne(uni: IntlUniverse) {
         dividendYield: num(sd.dividendYield),
         fiftyDayAverage: num(sd.fiftyDayAverage),
         twoHundredDayAverage: num(sd.twoHundredDayAverage),
+        earningsDate: earnTs ? new Date(earnTs).toISOString() : null,
+        earningsEstimate: !!earn.isEarningsDateEstimate,
       });
       const dir = path.join(ROOT, "series", "symbols");
       fs.mkdirSync(dir, { recursive: true });
