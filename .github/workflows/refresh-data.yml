@@ -140,6 +140,15 @@ jobs:
         run: npm run refresh-congress
         continue-on-error: true
 
+      # Cash-secured put-writing screen. Uses the refreshed snapshots (ROE / P/E / cap) + price
+      # series above, then pulls option chains for the ~150 large caps that pass the quality/value
+      # filter and prices the ~16-delta / ~35-DTE put. Globally rate-limited (Yahoo throttles
+      # bursty options calls). Premiums are end-of-day last in this after-close pass — indicative.
+      - name: Refresh put-writing screen
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-putwrite
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow
