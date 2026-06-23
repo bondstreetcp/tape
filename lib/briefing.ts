@@ -55,13 +55,68 @@ function isHeader(l: string): boolean {
   return l === u && /^[A-Z][A-Z &'’.\/()-]{5,40}$/.test(l) && l.split(" ").length <= 5 && !/\d/.test(l);
 }
 
+// The Day Ahead (narrow multi-column) glues each bold headline onto its story body in the
+// linearised text, and pdf-parse drops the bold cue. But the body reliably re-states the
+// headline's subject — "AbbVie sharpens…" → "AbbVie said…", "SpaceX turns…" → "Elon Musk's
+// SpaceX turned…" — so we split each story on that subject echo.
+const STOP_SUBJ = new Set(["The", "A", "An", "US", "In", "On", "For", "With", "As", "At", "To", "It", "Its", "This", "These", "Also"]);
+function subjectWord(s: string): string {
+  for (const m of s.matchAll(/[“"']?([A-Z][A-Za-z.&'’-]{2,})/g)) {
+    const w = m[1].replace(/[.,'’]+$/, "");
+    if (!STOP_SUBJ.has(w)) return w;
+  }
+  return "";
+}
+// Stricter than ENDS_SENTENCE: a trailing "U.S.", "Inc.", an initial or a decimal isn't a
+// sentence end (those were breaking paragraphs mid-clause, e.g. "…the 250th anniversary of U.S.").
+function endsSentenceStrict(l: string): boolean {
+  if (!/[.?!][”"']?$/.test(l)) return false;
+  if (/[.?!][”"']$/.test(l)) return true; // closing quote after terminal punctuation
+  if (/\b[A-Z]\.$/.test(l)) return false; // U.S. / U.K. / initials
+  if (/\b(?:Inc|Corp|Co|Ltd|Jr|Sr|Dr|Mr|Mrs|Ms|vs|etc|No|St|Ave|Cos|Bros|Rep|Sen|Gov|Gen|Sept|Oct|Nov|Dec|Jan|Feb)\.$/.test(l)) return false;
+  if (/\d\.$/.test(l)) return false; // decimal
+  return /[.?!]$/.test(l);
+}
+const wordsOf = (s: string) => s.split(/[^A-Za-z0-9]+/).filter(Boolean);
+function echoIndex(lines: string[], subj: string, from: number, to: number): number {
+  for (let j = from; j <= to && j < lines.length; j++) if (wordsOf(lines[j]).includes(subj)) return j;
+  return -1;
+}
+
+// Narrow-PDF prose → headline + body per story via the subject echo. Spliced price rows are
+// dropped; with no story structure it falls back to a single reflowed block.
+function groupProseNarrow(raw: string[]): BriefBlock[] {
+  const lines = raw.filter((l) => !(NUM_ROW.test(l) || TRAILING_PRICES.test(l) || MONITOR_HDR.test(l)));
+  const starts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const subj = subjectWord(lines[i]);
+    if (subj.length < 3) continue;
+    if (i > 0 && !endsSentenceStrict(lines[i - 1])) continue; // a headline follows a finished sentence
+    if (endsSentenceStrict(lines[i])) continue; // …and a headline line itself has no terminal period
+    if (echoIndex(lines, subj, i + 1, i + 4) >= 0) starts.push(i);
+  }
+  const blocks: BriefBlock[] = [];
+  const push = (t: string, headline?: string) => { const x = t.replace(/\s+/g, " ").trim(); if (x || headline) blocks.push(headline ? { headline, text: x } : { text: x }); };
+  if (!starts.length) { push(lines.join(" ")); return blocks.filter((b) => b.text); }
+  if (starts[0] > 0) push(lines.slice(0, starts[0]).join(" ")); // any lead-in before the first headline
+  for (let k = 0; k < starts.length; k++) {
+    const s = starts[k], end = k + 1 < starts.length ? starts[k + 1] : lines.length;
+    const subj = subjectWord(lines[s]);
+    let e = echoIndex(lines, subj, s + 1, end - 1);
+    if (e < 0) e = end;
+    if (e < end) push(lines.slice(e, end).join(" "), lines.slice(s, e).join(" ").replace(/\s+/g, " ").trim());
+    else push(lines.slice(s, end).join(" "));
+  }
+  return blocks;
+}
+
 // Group a section's lines into headline + paragraph blocks. PDF text arrives as
 // hard-wrapped physical lines, so the bold "headline" must come from real structure
 // (a bullet entry, or a short standalone title line) — never from a paragraph's first
 // wrapped line, which lacks end punctuation only because it wrapped mid-sentence.
 function groupSection(lines: string[], wrapWidth: number, narrow: boolean): BriefBlock[] {
   const bullets = lines.filter((l) => /^[•▪·‣]/.test(l)).length;
-  return bullets >= 2 ? groupBulleted(lines) : groupProse(lines, wrapWidth, narrow);
+  return bullets >= 2 ? groupBulleted(lines) : narrow ? groupProseNarrow(lines) : groupProse(lines, wrapWidth, narrow);
 }
 
 // Bulleted sections (e.g. STOCKS TO WATCH "• Company: writeup"): one block per
@@ -197,7 +252,8 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
   // runaway "list" section means the columns ran together and headings no longer mark
   // real breaks. Reflow the whole body into readable story blocks instead.
   if (sections.length <= 2 && sections.some((s) => s.kind === "list" && s.lines!.length > 60)) {
-    const blocks = groupProse(lines.filter((l) => !isHeader(l)), wrapWidth, narrow);
+    const body = lines.filter((l) => !isHeader(l));
+    const blocks = narrow ? groupProseNarrow(body) : groupProse(body, wrapWidth, narrow);
     if (blocks.length) return { date, sections: [{ heading: "Briefing", kind: "prose", blocks }] };
   }
   return { date, sections };
