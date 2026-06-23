@@ -29,13 +29,14 @@ function rankColor(v: number | null | undefined): string {
 type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap";
 
 export default function PutWriteView({
-  universe, candidates, generatedAt, source, intl,
+  universe, candidates, generatedAt, source, intl, minMktCap,
 }: {
   universe: string;
   candidates: PutWriteCandidate[];
   generatedAt: string;
   source: string;
   intl: boolean;
+  minMktCap: number;
 }) {
   const { has, toggle } = useWatchlist();
   const [minAnn, setMinAnn] = useState(0);
@@ -86,7 +87,7 @@ export default function PutWriteView({
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Put-Writing Screener</h1>
           <p className="mt-1 max-w-3xl text-xs text-[var(--text-3)]">
-            Quality large caps you&apos;d be content to own, where options pay you well to sell the downside. Screened for market cap &gt; $10B, ROE &gt; 15%, 0 &lt; P/E &lt; 25; each row shows the ~16-delta put nearest 35 DTE and the cash-secured return. {candidates.length} names · {source} · as of {fmtDateTime(generatedAt)}
+            Quality large caps you&apos;d be content to own, where options pay you well to sell the downside. Screened for market cap &gt; {fmtMarketCap(minMktCap)}, ROE &gt; 15%, 0 &lt; P/E &lt; 25; each row shows the ~16-delta put nearest 35 DTE and the cash-secured return. {candidates.length} names · {source} · as of {fmtDateTime(generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />

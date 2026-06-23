@@ -35,6 +35,7 @@ export default async function PutWritePage({
       candidates={candidates}
       generatedAt={data?.generatedAt ?? new Date().toISOString()}
       source={data?.source ?? "U.S. large/mid caps"}
+      minMktCap={data?.filters?.minMarketCap ?? 1e9}
       intl={intl}
     />
   );

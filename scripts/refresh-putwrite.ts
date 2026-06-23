@@ -2,7 +2,7 @@
  * Builds data/putwrite.json — the cash-secured put-writing screen.
  *
  * 1. Screen the US universes (union of Russell 3000 / S&P 1500 / Nasdaq 100 / …) for names a
- *    put-writer would be happy to own if assigned: large cap (> $10B), ROE > 15%, 0 < P/E < 25.
+ *    put-writer would be happy to own if assigned: established names (> $1B), ROE > 15%, 0 < P/E < 25.
  * 2. For each, pull the option chain at the expiry nearest 35 DTE (25-50 window), back the ATM
  *    implied vol out of the premium (Yahoo's iv field is unreliable), locate the ~16-delta put,
  *    and compute its premium, annualized yield, downside cushion and breakeven.
@@ -23,7 +23,7 @@ import {
 
 const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
-const MIN_MKTCAP = 10e9;
+const MIN_MKTCAP = 1e9;
 const MIN_ROE = 0.15;
 const MAX_PE = 25;
 const R = 0.043; // risk-free approx (~3M T-bill); only affects delta/IV at the margin
@@ -84,7 +84,7 @@ async function main() {
   const screened = pool.filter(
     (s) => s.marketCap > MIN_MKTCAP && (s.fund?.roe ?? -1) > MIN_ROE && s.trailingPE != null && s.trailingPE > 0 && s.trailingPE < MAX_PE,
   );
-  console.log(`pool ${pool.length} US names → ${screened.length} pass (mktcap>$10B, ROE>15%, 0<P/E<25)`);
+  console.log(`pool ${pool.length} US names → ${screened.length} pass (mktcap>$${MIN_MKTCAP / 1e9}B, ROE>15%, 0<P/E<25)`);
 
   let ivhist: Record<string, [string, number][]> = {};
   try { ivhist = JSON.parse(await fsp.readFile(IVHIST, "utf8")); } catch { /* first run */ }
@@ -137,6 +137,13 @@ async function main() {
               cushionPct: +(((spot - pick.strike) / spot) * 100).toFixed(1),
               breakeven: +(pick.strike - pick.m).toFixed(2),
             };
+            // Reject stale/illiquid option prints. A real ~16-delta cash-secured put doesn't yield
+            // 75-200%+ annualized — that's a stale last trade on a thin option (or a name in
+            // freefall, not one you'd be "happy to own"). Also drop unsolvable/blown-out IVs and
+            // strikes that landed nowhere near 16-delta. The name still shows; it just gets no put.
+            if (put.iv < 0.05 || put.iv > 1.5 || Math.abs(put.delta) < 0.03 || Math.abs(put.delta) > 0.45 || put.cushionPct < 2.5 || put.annPct > 65) {
+              put = null;
+            }
           }
         }
       }
