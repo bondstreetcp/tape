@@ -114,18 +114,26 @@ export default function IndicatorChart({
   // The day-based moving averages only make sense on the DAILY series — over the
   // intraday (1D/1W) bars a "50-day" SMA becomes a misleading 50-bar (~2-day)
   // average, so the MA overlays are disabled on those timeframes (see the chips).
+  // On 1D/1W use the LIVE intraday from the on-demand OHLC fetch (already pulled above for volume)
+  // — the stored series only rebuilds after the close, so it would otherwise show the prior
+  // session. Falls back to the static series until the live bars land (or if the fetch fails).
+  const liveIntraday = useMemo<SeriesPoint[] | null>(
+    () => (ohlc?.intraday?.length ? ohlc.intraday.map((b: any) => ({ t: b.t, c: b.c })) : null),
+    [ohlc],
+  );
+  const effIntraday = liveIntraday ?? intraday;
   const intradayTf = tf === "1d" || tf === "1w";
-  const source = intradayTf ? intraday : daily;
+  const source = intradayTf ? effIntraday : daily;
   const closes = useMemo(() => source.map((p) => p.c), [source]);
 
   const windowStart = useMemo(() => {
     if (!source.length) return 0;
-    const win = sliceSeries(intraday, daily, tf, now);
+    const win = sliceSeries(effIntraday, daily, tf, now);
     if (!win.length) return 0;
     const t0 = win[0].t;
     const idx = source.findIndex((p) => p.t >= t0);
     return idx < 0 ? 0 : idx;
-  }, [intraday, daily, tf, now, source]);
+  }, [effIntraday, daily, tf, now, source]);
 
   const points = useMemo(() => source.slice(windowStart), [source, windowStart]);
 
