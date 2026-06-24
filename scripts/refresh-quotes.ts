@@ -101,7 +101,12 @@ function returnsVsPrice(daily: XY[], price: number, day1: number | null): Return
 async function main() {
   // 1) Load existing snapshots (skip universes that haven't been built yet).
   const snaps: { id: string; snap: Snapshot }[] = [];
+  // ONLY=kospi,nikkei,hsi restricts the run to a subset of universes — used by the overnight
+  // Asian-session ticks so we quote ~108 Asian names (live during 00:00–08:00 UTC) instead of the
+  // full ~3,400, keeping the Asian snapshots current with the live index while the US is closed.
+  const only = (process.env.ONLY || "").split(",").map((s) => s.trim()).filter(Boolean);
   for (const u of UNIVERSES) {
+    if (only.length && !only.includes(u.id)) continue;
     try {
       snaps.push({ id: u.id, snap: JSON.parse(await fs.readFile(path.join(DATA_DIR, u.id, "snapshot.json"), "utf8")) as Snapshot });
     } catch {
