@@ -62,7 +62,17 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
       .then((d) => {
         if (!alive) return;
         setData(d);
-        if (!expiry && d.selected) setExpiry(d.selected);
+        // Default to the first expiry ≥2 DTE, not the API's `selected` (which on an expiry day is
+        // today's 0DTE → dte rounds ≤0 → dead Greeks + a hidden scenario grid on first load). ≥2
+        // (not ≥1) so the scenario grid, which needs a couple days to model, also shows on load.
+        if (!expiry) {
+          const now = Date.now();
+          const sorted = [...(d.expirations || [])].sort();
+          const firstReal =
+            sorted.find((e: string) => Math.round((Date.parse(e + "T00:00:00Z") - now) / 86_400_000) >= 2) ??
+            sorted.find((e: string) => Math.round((Date.parse(e + "T00:00:00Z") - now) / 86_400_000) >= 1);
+          if (firstReal || d.selected) setExpiry(firstReal ?? d.selected);
+        }
         if (d.error) setErr(d.error);
       })
       .catch((e) => alive && setErr(String(e)))
