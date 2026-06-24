@@ -6,7 +6,7 @@
  */
 import type { StockRow } from "./types";
 
-export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat";
+export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat" | "rule40" | "mna";
 export interface ScreenOpts { topN?: number; pioMin?: number }
 
 export const SCREEN_LABEL: Record<ScreenKey, string> = {
@@ -17,6 +17,8 @@ export const SCREEN_LABEL: Record<ScreenKey, string> = {
   piotroski: "Piotroski F-Score",
   shyield: "Shareholder Yield (Faber)",
   moat: "Buffett–Munger Moat",
+  rule40: "Rule of 40 (Growth + Profit)",
+  mna: "M&A Target (Takeout)",
 };
 
 /** Short labels for the toggle chips (shared by the Screener + Backtester). */
@@ -28,10 +30,12 @@ export const SCREEN_SHORT: Record<ScreenKey, string> = {
   piotroski: "Piotroski",
   shyield: "Sh. Yield",
   moat: "Moat",
+  rule40: "Rule of 40",
+  mna: "M&A Target",
 };
 
 /** Display order for the screen chips and tooltips. */
-export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat"];
+export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat", "rule40", "mna"];
 
 /** Detailed, plain-English descriptions for the strategy tooltip + the beta-tester guide. */
 export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: string; read: string }> = {
@@ -76,6 +80,18 @@ export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: s
     what: "The wonderful-business filter — a durable competitive advantage that lets a company compound at high returns for years, the kind Buffett & Munger pay up for.",
     how: "Keeps only names with a high return on invested capital (ROIC ≥ 15%), consistently fat operating margins (≥ 20%), and little debt (net debt ≤ 1.5× EBITDA, or net cash); the survivors are ranked by ROIC + operating margin. Financials are excluded — the capital/margin math doesn't translate.",
     read: "A deliberately short, high-conviction list — the thresholds are strict, so many universes return only a handful. It says nothing about price: pair a moat name with valuation work so you don't overpay for quality.",
+  },
+  rule40: {
+    name: "Rule of 40 (Growth + Profitability)",
+    what: "The SaaS/compounder rule of thumb — a healthy growth company's revenue growth rate plus its profit margin should clear 40%.",
+    how: "Adds trailing revenue growth % to free-cash-flow margin % and keeps names where the sum is ≥ 40, ranked by the combined score (best first). A fast grower can run a thin margin and a mature compounder can grow slowly if the margin is fat — either way the total should reach 40. Ex financials (FCF margin doesn't apply to banks), ≥ $500M.",
+    read: "Higher combined score = a better growth-vs-profitability trade-off. Born as a private-software benchmark; applied across the market it surfaces both efficient growers and high-margin steady compounders. Pair with valuation — a great Rule-of-40 score can still be richly priced.",
+  },
+  mna: {
+    name: "M&A Target (Takeout Candidate)",
+    what: "A heuristic for acquisition attractiveness — the profile of a clean, cash-generative business an acquirer could buy and finance, not a prediction that a bid is imminent.",
+    how: "Filters for a digestible size ($300M–$25B), low leverage (net debt ≤ 2× EBITDA, or net cash — room for a buyer to lever it up), real cash generation (positive FCF margin) and margins (operating margin ≥ 8%), and an undemanding multiple (P/E ≤ 25, so there's headroom for a takeout premium). Survivors are ranked by a four-factor score — cheapness, FCF margin, ROIC, and low leverage. Ex financials.",
+    read: "Lower combined rank = a cleaner, cheaper, more financeable target; shown best-first. It flags who looks acquirable on the numbers — not who's actually in play. Cross-check ownership, insider stakes and sector consolidation before reading anything into it.",
   },
 };
 
@@ -183,6 +199,51 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
       .sort((a, b) => b.fund!.roic! + b.fund!.opMargin! - (a.fund!.roic! + a.fund!.opMargin!))
       .slice(0, topN)
       .map((s) => s.symbol);
+  }
+
+  if (key === "rule40") {
+    // Rule of 40: revenue growth % + FCF margin % ≥ 40%. A growth-vs-profitability health check —
+    // fast growers can run thin margins, mature names lean on margin; the sum should clear 40. Needs
+    // both inputs; ranked by the combined score, best first. Ex financials (FCF margin ≈ meaningless
+    // for banks), ≥ $500M.
+    return stocks
+      .filter(
+        (s) =>
+          s.fund?.revGrowth != null &&
+          s.fund?.fcfMargin != null &&
+          s.fund.revGrowth + s.fund.fcfMargin >= 0.4 &&
+          s.etf !== "XLF" && (s.marketCap || 0) >= 5e8,
+      )
+      .sort((a, b) => b.fund!.revGrowth! + b.fund!.fcfMargin! - (a.fund!.revGrowth! + a.fund!.fcfMargin!))
+      .slice(0, topN)
+      .map((s) => s.symbol);
+  }
+
+  if (key === "mna") {
+    // M&A / takeout target (heuristic): a clean, cash-generative mid-cap at an undemanding multiple —
+    // the profile an acquirer can buy and finance. FILTER for digestible size ($300M–$25B), low
+    // leverage (net debt ≤ 2× EBITDA or net cash — room to lever up), positive FCF margin + operating
+    // margin ≥ 8%, and 0 < P/E ≤ 25. Survivors RANKED by a 4-factor takeout score (cheap + cash-
+    // generative + high ROIC + low leverage). Ex financials. A screen for attractiveness, not a bid.
+    const valid = stocks.filter(
+      (s) =>
+        (s.marketCap || 0) >= 3e8 && (s.marketCap || 0) <= 2.5e10 &&
+        (s.trailingPE ?? 0) > 0 && s.trailingPE! <= 25 &&
+        (s.fund?.fcfMargin ?? -1) > 0 &&
+        (s.fund?.opMargin ?? -1) >= 0.08 &&
+        (s.fund?.netDebtEbitda == null || s.fund.netDebtEbitda <= 2) &&
+        s.etf !== "XLF",
+    );
+    if (valid.length < 10) return [];
+    const rCheap = rankMap(valid, (s) => 1 / s.trailingPE!); // low P/E = cheap = better
+    const rFCF = rankMap(valid, (s) => s.fund!.fcfMargin!);
+    const rROIC = rankMap(valid, (s) => s.fund!.roic ?? s.fund!.roe ?? 0);
+    const rLev = rankMap(valid, (s) => -(s.fund!.netDebtEbitda ?? 0)); // less debt = better
+    return valid
+      .map((s) => ({ sym: s.symbol, score: rCheap.get(s.symbol)! + rFCF.get(s.symbol)! + rROIC.get(s.symbol)! + rLev.get(s.symbol)! }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, topN)
+      .map((x) => x.sym);
   }
 
   // Magic Formula (Greenblatt): earnings-yield rank + return-on-capital rank, summed,
