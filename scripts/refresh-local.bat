@@ -20,6 +20,11 @@ REM ============================================================================
 setlocal EnableExtensions
 cd /d "%~dp0.."
 
+REM This repo is owned by the 'bondstreetcp' GitHub account; pushes must use it (the personal
+REM 'richardtruporch' account gets 403 on push). If the gh CLI is the git credential helper, make
+REM it the active account first. Harmless no-op if gh isn't installed or that account isn't set up.
+where gh >nul 2>&1 && gh auth switch --user bondstreetcp >nul 2>&1
+
 set "LOG=%~dp0refresh-local.log"
 echo.>> "%LOG%"
 echo ==== %DATE% %TIME% ====>> "%LOG%"
