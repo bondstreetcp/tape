@@ -87,6 +87,13 @@ jobs:
         run: npm run refresh-data
         continue-on-error: true
 
+      # The broad constituent lists leave a sector-level "Health Care"/"Financials" label on their
+      # small-cap tail; refine those into real GICS sub-industries from Yahoo (cached, so it's cheap).
+      - name: Refine generic sub-industry labels
+        if: ${{ env.FULL == 'true' }}
+        run: npm run patch-industries
+        continue-on-error: true
+
       # The sector ETFs are fetched last in refresh-data, so a tail-of-run rate-limit
       # can blank them (→ null sector returns). Re-fetch just the 11 ETFs to repair.
       - name: Repair sector ETF returns
