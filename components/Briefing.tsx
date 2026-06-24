@@ -21,6 +21,31 @@ function splitParagraphs(text: string): string[] {
   return paras.length ? paras : [text];
 }
 
+// "KEY RESULTS" / earnings sections arrive as one run-on string with several companies glued
+// together — "Micron Technology Q3 AMC <nums> Paychex Q4 BMO <nums> *Includes…". Split it into
+// per-company rows so it reads as a table. Each entry is {Name} {Q#} {when} {nums}; the trailing
+// "*Includes…/**Estimates…" footnote is peeled off. Best-effort — returns no rows if it doesn't
+// match the shape, and the caller falls back to prose so it always degrades gracefully.
+const WHEN = "AMC|BMO|DMT|N/A|TBA|—";
+const EARN_RE = new RegExp(
+  `([A-Z][\\w.&'’\\- ]*?)\\s+(Q[1-4]|H[12]|FY)\\s+(${WHEN})\\s+([-\\d.,$%()NA/—\\s]*?)(?=\\s+[A-Z][\\w.&'’\\- ]*?\\s+(?:Q[1-4]|H[12]|FY)\\s+(?:${WHEN})|\\s*\\*|$)`,
+  "g",
+);
+interface EarnRow { name: string; q: string; when: string; nums: string[] }
+function parseEarnings(text: string): { rows: EarnRow[]; note: string } {
+  const t = text.replace(/\s+/g, " ").trim();
+  const ni = t.search(/\*+\s*(?:Includes|Estimates|All analysts|Release|Times)/i);
+  const body = ni >= 0 ? t.slice(0, ni) : t;
+  const note = ni >= 0 ? t.slice(ni).replace(/\s+/g, " ").trim() : "";
+  const rows: EarnRow[] = [];
+  for (const m of body.matchAll(EARN_RE)) {
+    const nums = m[4].trim().split(/\s+/).filter((x) => /[\d—-]/.test(x));
+    rows.push({ name: m[1].trim(), q: m[2].toUpperCase(), when: m[3].toUpperCase(), nums });
+  }
+  return { rows, note };
+}
+const whenLabel = (w: string) => ({ AMC: "after close", BMO: "before open", DMT: "during", "N/A": "—", TBA: "TBA" }[w] ?? w.toLowerCase());
+
 export default function Briefing() {
   const [state, setState] = useState<State>("loading");
   const [briefings, setBriefings] = useState<Brief[]>([]);
@@ -130,28 +155,7 @@ export default function Briefing() {
             {b.sections.map((s, i) => (
               <div key={i} className="px-4 py-3">
                 <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#60a5fa]">{s.heading}</h3>
-                {s.kind === "list" ? (
-                  isDataTable(s.lines!) ? (
-                    <DataSection lines={s.lines!} />
-                  ) : (
-                    <div className="space-y-1">
-                      {s.lines!.map((l, j) => (
-                        <div key={j} className="text-[13px] leading-snug text-[var(--text-2)]">{l}</div>
-                      ))}
-                    </div>
-                  )
-                ) : (
-                  <div className="space-y-3">
-                    {s.blocks!.map((bl, j) => (
-                      <div key={j} className="space-y-2">
-                        {bl.headline && <div className="text-sm font-semibold leading-snug text-[var(--text)]">{bl.headline}</div>}
-                        {bl.text && splitParagraphs(bl.text).map((para, k) => (
-                          <p key={k} className="text-[13px] leading-relaxed text-[var(--text-body)]">{para}</p>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <SectionBody section={s} />
               </div>
             ))}
           </div>
@@ -269,6 +273,73 @@ function DataSection({ lines }: { lines: string[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function SectionBody({ section: s }: { section: Section }) {
+  // KEY RESULTS / earnings → a per-company table instead of a glued run-on. The data arrives as a
+  // "prose" section (it isn't a recognised list heading), so reflow its block text and re-parse.
+  if (/\b(results|earnings)\b/i.test(s.heading)) {
+    const raw = s.kind === "list"
+      ? (s.lines || []).join(" ")
+      : (s.blocks || []).map((b) => [b.headline, b.text].filter(Boolean).join(" ")).join(" ");
+    const { rows, note } = parseEarnings(raw);
+    if (rows.length >= 1) return <EarningsSection rows={rows} note={note} />;
+  }
+  if (s.kind === "list") {
+    return isDataTable(s.lines!) ? (
+      <DataSection lines={s.lines!} />
+    ) : (
+      <div className="space-y-1">
+        {s.lines!.map((l, j) => <div key={j} className="text-[13px] leading-snug text-[var(--text-2)]">{l}</div>)}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {s.blocks!.map((bl, j) => (
+        <div key={j} className="space-y-2">
+          {bl.headline && <div className="text-sm font-semibold leading-snug text-[var(--text)]">{bl.headline}</div>}
+          {bl.text && splitParagraphs(bl.text).map((para, k) => (
+            <p key={k} className="text-[13px] leading-relaxed text-[var(--text-body)]">{para}</p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EarningsSection({ rows, note }: { rows: EarnRow[]; note: string }) {
+  const cols = rows.reduce((m, r) => Math.max(m, r.nums.length), 0);
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+              <th className="py-1 pr-3 text-left font-medium">Company</th>
+              <th className="py-1 pr-2 text-left font-medium">Qtr</th>
+              <th className="py-1 pr-3 text-left font-medium">Reports</th>
+              {cols > 0 && <th colSpan={cols} className="py-1 pl-2 text-right font-medium">Estimates · LSEG/IBES</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className="border-b border-[var(--divider)] last:border-0">
+                <td className="whitespace-nowrap py-1 pr-3 font-medium text-[var(--text)]">{r.name}</td>
+                <td className="py-1 pr-2 text-[var(--text-3)]">{r.q}</td>
+                <td className="whitespace-nowrap py-1 pr-3 text-[var(--text-3)]">{whenLabel(r.when)}</td>
+                {Array.from({ length: cols }, (_, k) => {
+                  const n = r.nums[k];
+                  return <td key={k} className="py-1 pl-2 text-right tabular-nums" style={{ color: n && /^-/.test(n) ? "#ef4444" : "var(--text-2)" }}>{n ?? ""}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {note && <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-4)]">{note}</p>}
     </div>
   );
 }
