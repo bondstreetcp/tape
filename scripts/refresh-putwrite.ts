@@ -176,6 +176,7 @@ async function main() {
       symbol: sym, name: s.name, sector: s.sector || "—", price: spot ?? s.price,
       marketCap: s.marketCap, roe: s.fund?.roe ?? null, pe: s.trailingPE ?? null,
       divYield: s.dividendYield ?? null,
+      nextEarnings: s.earningsDate ?? null, earningsEstimate: !!s.earningsEstimate,
       rvol: rvol != null ? +rvol.toFixed(3) : null,
       rvolRank: rvolRank != null ? Math.round(rvolRank) : null,
       atmIV: atmIV != null ? +atmIV.toFixed(3) : null,

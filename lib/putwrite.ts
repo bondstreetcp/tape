@@ -48,6 +48,8 @@ export interface PutWriteCandidate {
   roe: number | null; // fraction (0.19 = 19%)
   pe: number | null; // trailing
   divYield: number | null; // fraction
+  nextEarnings: string | null; // ISO datetime of the next earnings report (from the snapshot; often estimated)
+  earningsEstimate: boolean; // true when Yahoo flags the date as an estimate, not yet confirmed
   rvol: number | null; // current 20-day annualized realized vol (fraction)
   rvolRank: number | null; // 0-100, where current rvol sits in its trailing-1y range
   atmIV: number | null; // ATM implied vol at the chosen expiry (fraction)
