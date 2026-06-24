@@ -51,8 +51,8 @@ export default function IndustryCompareView({
   // so mid-session they'd show the prior day. Fetch live intraday on demand for those tenors and
   // swap it in. (Daily / 3M+ keep the static series.)
   const intradayTf = tf === "1d" || tf === "1w";
-  const liveUrl = intradayTf ? `/api/industry-intraday?universe=${encodeURIComponent(universe)}&etf=${encodeURIComponent(meta.etf)}` : null;
-  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl);
+  const liveUrl = intradayTf ? `/api/industry-intraday?universe=${encodeURIComponent(universe)}&etf=${encodeURIComponent(meta.etf)}${tf === "1d" ? "&interval=5m" : ""}` : null;
+  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl, tf === "1d" ? 40_000 : 60_000);
   const live = useMemo(
     () => (liveRaw ? { industries: (liveRaw.industries || {}) as Record<string, XY[]>, etf: (liveRaw.etf || []) as XY[] } : null),
     [liveRaw],

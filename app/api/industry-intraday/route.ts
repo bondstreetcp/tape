@@ -23,10 +23,10 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 let gate: Promise<void> = Promise.resolve();
 const throttle = (gap = 200): Promise<void> => { const p = gate.then(() => sleep(gap)); gate = p; return p; };
 
-async function intradayOf(symbol: string): Promise<XY[]> {
+async function intradayOf(symbol: string, interval: string, days: number): Promise<XY[]> {
   await throttle();
   try {
-    const ch: any = await yf.chart(symbol, { period1: new Date(Date.now() - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false });
+    const ch: any = await yf.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });
     return (ch.quotes || []).filter((q: any) => q?.date && q.close != null).map((q: any) => [new Date(q.date).getTime(), q.close] as XY);
   } catch { return []; }
 }
@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
     .slice(0, TOP);
   const symbols = [...stocks.map((s) => s.symbol), etf];
-  const fetched = await mapPool(symbols, 8, intradayOf);
+  // 1D → fine 5-minute bars (~2 days); else 15-minute (8 days). See /api/intraday for the rationale.
+  const fine = p.get("interval") === "5m";
+  const interval = fine ? "5m" : "15m", days = fine ? 2 : 8;
+  const fetched = await mapPool(symbols, 8, (s) => intradayOf(s, interval, days));
   const liveBy: Record<string, XY[]> = {};
   symbols.forEach((s, i) => { liveBy[s] = fetched[i] || []; });
 
@@ -72,6 +75,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(
     { industries, etf: liveBy[etf] || [] },
-    { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } },
+    { headers: { "Cache-Control": fine ? "public, s-maxage=30, stale-while-revalidate=60" : "public, s-maxage=120, stale-while-revalidate=300" } },
   );
 }

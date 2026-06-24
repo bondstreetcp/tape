@@ -46,10 +46,10 @@ export default function IndustryView({
   // it shows the prior day. Fetch live intraday on demand for those tenors and swap it in.
   const intradayTf = tf === "1d" || tf === "1w";
   const liveUrl = useMemo(
-    () => (intradayTf ? `/api/intraday?symbols=${encodeURIComponent([meta.etf, ...stocks.map((s) => s.symbol)].join(","))}` : null),
-    [intradayTf, stocks, meta.etf],
+    () => (intradayTf ? `/api/intraday?symbols=${encodeURIComponent([meta.etf, ...stocks.map((s) => s.symbol)].join(","))}${tf === "1d" ? "&interval=5m" : ""}` : null),
+    [intradayTf, stocks, meta.etf, tf],
   );
-  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl);
+  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl, tf === "1d" ? 40_000 : 60_000);
   const live = useMemo(() => (liveRaw ? ((liveRaw.series || {}) as Record<string, XY[]>) : null), [liveRaw]);
 
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
