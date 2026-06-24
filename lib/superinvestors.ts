@@ -97,6 +97,7 @@ export const INVESTORS: Investor[] = [
   { slug: "lotus", name: "Lotus Management", manager: "Alap Shah", cik: "2095243", blurb: "Concentrated, fundamental long-term equity investing." },
   { slug: "praetorian", name: "Praetorian Capital", manager: "Harris Kupperman", cik: "1949877", blurb: "Macro-driven, contrarian bets on energy, commodities & inflation." },
   { slug: "coatue", name: "Coatue Management", manager: "Philippe Laffont", cik: "1135730", blurb: "Tiger-cub tech specialist; concentrated growth bets on software, AI & internet." },
+  { slug: "tci", name: "TCI Fund Management", manager: "Chris Hohn", cik: "1647251", blurb: "Highly concentrated, long-term activist in wide-moat, monopoly-like compounders." },
 ];
 
 export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
