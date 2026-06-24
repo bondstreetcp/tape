@@ -8,7 +8,13 @@ type State = "loading" | "need-auth" | "unconfigured" | "ready" | "error";
 
 // Long market-wrap blocks (e.g. "Key Results") arrive as one giant run-on paragraph. Break them
 // at sentence boundaries into ~paragraph-sized chunks so they're readable instead of a wall.
-function splitParagraphs(text: string): string[] {
+// Rejoin words split across PDF lines: "bargain- hunters" → "bargain-hunters" (the hyphen is a real
+// compound; the trailing space is just the line-join artifact). Only a hyphen tight against a word
+// char then whitespace then a word char — leaves real " — " dashes and "U.S." abbreviations alone.
+const dehyph = (s: string) => s.replace(/(\w)-\s+(\w)/g, "$1-$2");
+
+function splitParagraphs(textRaw: string): string[] {
+  const text = dehyph(textRaw);
   if (text.length <= 380) return [text];
   const sents = text.split(/(?<=[.!?])\s+(?=[A-Z“"])/);
   const paras: string[] = [];
@@ -45,6 +51,13 @@ function parseEarnings(text: string): { rows: EarnRow[]; note: string } {
   return { rows, note };
 }
 const whenLabel = (w: string) => ({ AMC: "after close", BMO: "before open", DMT: "during", "N/A": "—", TBA: "TBA" }[w] ?? w.toLowerCase());
+
+// The earnings "note" tail is the small-print disclaimer (…LSEG IBES data.) *plus*, in some editions,
+// the day's market-wrap prose glued on after it. Split them so the wrap renders as real paragraphs.
+function splitNote(note: string): { foot: string; prose: string } {
+  const m = note.match(/^(.*(?:IBES data\.|IBES\.|past practice\.|guidance\.))\s+([A-Z“"].*)$/s);
+  return m ? { foot: m[1].trim(), prose: m[2].trim() } : { foot: note, prose: "" };
+}
 
 export default function Briefing() {
   const [state, setState] = useState<State>("loading");
@@ -321,7 +334,17 @@ function SectionBody({ section: s }: { section: Section }) {
       ? (s.lines || []).join(" ")
       : (s.blocks || []).map((b) => [b.headline, b.text].filter(Boolean).join(" ")).join(" ");
     const { rows, note } = parseEarnings(raw);
-    if (rows.length >= 1) return <EarningsSection rows={rows} note={note} />;
+    if (rows.length >= 1) {
+      const { foot, prose } = splitNote(note);
+      return (
+        <div className="space-y-3">
+          <EarningsSection rows={rows} note={foot} />
+          {prose && splitParagraphs(prose).map((p, k) => (
+            <p key={k} className="text-[13px] leading-relaxed text-[var(--text-body)]">{p}</p>
+          ))}
+        </div>
+      );
+    }
   }
   if (s.kind === "list") {
     return isDataTable(s.lines!) ? (
@@ -336,7 +359,7 @@ function SectionBody({ section: s }: { section: Section }) {
     <div className="space-y-3">
       {s.blocks!.map((bl, j) => (
         <div key={j} className="space-y-2">
-          {bl.headline && <div className="text-sm font-semibold leading-snug text-[var(--text)]">{bl.headline}</div>}
+          {bl.headline && <div className="text-sm font-semibold leading-snug text-[var(--text)]">{dehyph(bl.headline)}</div>}
           {bl.text && splitParagraphs(bl.text).map((para, k) => (
             <p key={k} className="text-[13px] leading-relaxed text-[var(--text-body)]">{para}</p>
           ))}
