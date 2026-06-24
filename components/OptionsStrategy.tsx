@@ -88,10 +88,10 @@ function buildLegs(key: StratKey, ks: number[], ctx: Ctx): Leg[] {
 
 // Position value at a future date `tDays` from now, across price S — Black-Scholes for any leg with
 // time left, intrinsic at/after expiry. At tDays = the near expiry this is the classic payoff diagram.
-const valueAt = (legs: Leg[], tDays: number, stratDte: number, atmIV: number) => (S: number) =>
+const valueAt = (legs: Leg[], tDays: number, stratDte: number, atmIV: number, ivMult = 1) => (S: number) =>
   legs.reduce((acc, l) => {
     const remT = Math.max(0, ((l.dte ?? stratDte) - tDays) / 365);
-    const val = l.kind === "stock" ? S : bsPrice(l.kind, S, l.strike!, remT, (l.iv || atmIV || 0.3));
+    const val = l.kind === "stock" ? S : bsPrice(l.kind, S, l.strike!, remT, (l.iv || atmIV || 0.3) * ivMult);
     return acc + (l.side === "buy" ? 1 : -1) * (val - l.premium) * l.qty;
   }, 0) * 100;
 
@@ -113,6 +113,8 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const [stratKey, setStratKey] = useState<StratKey>("long-call");
   const [ov, setOv] = useState<(number | null)[]>([]); // per-strike overrides; reset on strategy change
   const [showGrid, setShowGrid] = useState(true);
+  const [ivShift, setIvShift] = useState(0); // ± IV %, applied to the scenario-grid valuation only
+  const [cmpKey, setCmpKey] = useState<StratKey | "">(""); // optional 2nd structure to overlay
   const strat = STRATS.find((s) => s.key === stratKey)!;
 
   const at = (off: number) => strikes[Math.min(strikes.length - 1, Math.max(0, atmIdx + off))];
@@ -137,6 +139,17 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const maxProfit = upUnbounded ? null : Math.max(...kinkVals);
   const maxLoss = lossUnboundedUp ? null : Math.min(...kinkVals);
 
+  // Optional 2nd structure overlaid on the payoff chart (at default strikes), with its own quick stats.
+  const cmp = cmpKey ? (() => {
+    const cs = STRATS.find((s) => s.key === cmpKey)!;
+    const clegs = buildLegs(cmpKey, cs.strikes.map((spec) => at(spec.off)), { u, callBy, putBy, stratDte, atmIV, nextDte, nextIV: nextIV ?? null });
+    const cpay = valueAt(clegs, stratDte, stratDte, atmIV);
+    const ck = [0, ...strikes, far].map(cpay);
+    const cslope = cpay(far) - cpay(far - Math.max(0.01, u * 0.002));
+    const cnet = clegs.reduce((s, l) => s + (l.side === "buy" ? 1 : -1) * l.premium * l.qty, 0) * 100;
+    return { label: cs.label, pay: cpay, maxP: cslope > 1e-6 ? null : Math.max(...ck), maxL: cslope < -1e-6 ? null : Math.min(...ck), net: cnet };
+  })() : null;
+
   // probability of profit at the near expiry: lognormal (median ≈ spot, risk-neutral r≈0), σ = ATM IV
   const pop = useMemo(() => {
     const T = stratDte / 365;
@@ -153,19 +166,21 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
   const N = 130;
   const grid = Array.from({ length: N + 1 }, (_, i) => { const S = lo + (i / N) * (hi - lo); return { S, y: pay(S) }; });
+  const cmpYs = cmp ? grid.map((g) => cmp.pay(g.S)) : [];
   const breakevens: number[] = [];
   for (let i = 1; i < grid.length; i++) {
     const a = grid[i - 1], b = grid[i];
     if ((a.y <= 0 && b.y > 0) || (a.y >= 0 && b.y < 0)) { const t = a.y / (a.y - b.y); breakevens.push(a.S + t * (b.S - a.S)); }
   }
 
-  const yMinRaw = Math.min(0, ...grid.map((g) => g.y));
-  const yMaxRaw = Math.max(0, ...grid.map((g) => g.y));
+  const yMinRaw = Math.min(0, ...grid.map((g) => g.y), ...cmpYs);
+  const yMaxRaw = Math.max(0, ...grid.map((g) => g.y), ...cmpYs);
   const padY = (yMaxRaw - yMinRaw) * 0.08 || 50;
   const yMin = yMinRaw - padY, yMax = yMaxRaw + padY;
   const X = (S: number) => ML + ((S - lo) / (hi - lo)) * (CW - ML - MR);
   const Y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin)) * (CH - MT - MB);
   const path = grid.map((g, i) => `${i ? "L" : "M"}${X(g.S).toFixed(1)} ${Y(g.y).toFixed(1)}`).join("");
+  const cmpPath = cmp ? grid.map((g, i) => `${i ? "L" : "M"}${X(g.S).toFixed(1)} ${Y(cmpYs[i]).toFixed(1)}`).join("") : "";
   const y0 = Y(0);
   const frac = Math.max(0, Math.min(1, (y0 - MT) / (CH - MB - MT)));
 
@@ -177,11 +192,11 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
     const ROWS = 9, COLS = 5;
     const prices = Array.from({ length: ROWS }, (_, i) => pHi - (i / (ROWS - 1)) * (pHi - pLo)); // top = highest price
     const days = Array.from({ length: COLS }, (_, j) => Math.round((j / (COLS - 1)) * stratDte));
-    const cells = prices.map((S) => days.map((d) => valueAt(legs, d, stratDte, atmIV)(S)));
+    const cells = prices.map((S) => days.map((d) => valueAt(legs, d, stratDte, atmIV, 1 + ivShift / 100)(S)));
     const mag = Math.max(1, ...cells.flat().map(Math.abs));
     return { prices, days, cells, mag };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [legs, u, atmIV, stratDte]);
+  }, [legs, u, atmIV, stratDte, ivShift]);
 
   const cellColor = (v: number) => {
     const a = Math.min(0.42, Math.abs(v) / (scenario?.mag ?? 1) * 0.42);
@@ -212,6 +227,13 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
             </select>
           </label>
         ))}
+        <label className="flex items-center gap-1 text-xs text-[var(--text-3)]">
+          <span className="text-[var(--text-4)]">vs</span>
+          <select value={cmpKey} onChange={(e) => setCmpKey(e.target.value as StratKey | "")} className="cursor-pointer rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs outline-none">
+            <option value="">compare…</option>
+            {strats.filter((s) => s.key !== stratKey).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </label>
         {dte != null && <span className="ml-auto text-[11px] text-[var(--text-4)]">{expiry} · {dte}d{stratKey === "calendar" && nextExpiry ? ` → ${nextExpiry}` : ""}</span>}
       </div>
 
@@ -222,6 +244,16 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
         <Metric label="Break-even" value={breakevens.length ? breakevens.map(price2).join(" / ") : "—"} />
         <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} />
       </div>
+
+      {cmp && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
+          <span className="font-semibold text-[#60a5fa]">{cmp.label}</span>
+          <span className="text-[var(--text-3)]">net {cmp.net >= 0 ? "debit" : "credit"} <span className="font-mono text-[var(--text-2)]">{dollars(Math.abs(cmp.net))}</span></span>
+          <span className="text-[var(--text-3)]">max profit <span className="font-mono text-[#22c55e]">{cmp.maxP == null ? "Unlimited" : dollars(cmp.maxP)}</span></span>
+          <span className="text-[var(--text-3)]">max loss <span className="font-mono text-[#ef4444]">{cmp.maxL == null ? "Unlimited" : dollars(cmp.maxL)}</span></span>
+          <span className="ml-auto text-[var(--text-4)]">overlaid in blue · default strikes</span>
+        </div>
+      )}
 
       <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }}>
         <defs>
@@ -245,7 +277,16 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
             <text x={X(b)} y={CH - MB - 3} textAnchor="middle" fontSize={8} fill="#c4b5fd">{price2(b)}</text>
           </g>
         ))}
+        {cmp && <path d={cmpPath} fill="none" stroke="#60a5fa" strokeWidth={1.6} strokeDasharray="4 3" />}
         <path d={path} fill="none" stroke="url(#plgrad)" strokeWidth={2} />
+        {cmp && (
+          <g>
+            <line x1={ML + 2} x2={ML + 16} y1={MT + 6} y2={MT + 6} stroke="var(--text-3)" strokeWidth={2} />
+            <text x={ML + 20} y={MT + 9} fontSize={8.5} fill="var(--text-3)">{strat.label}</text>
+            <line x1={ML + 2} x2={ML + 16} y1={MT + 17} y2={MT + 17} stroke="#60a5fa" strokeWidth={1.6} strokeDasharray="4 3" />
+            <text x={ML + 20} y={MT + 20} fontSize={8.5} fill="#60a5fa">{cmp.label}</text>
+          </g>
+        )}
         <text x={CW - MR} y={CH - 5} textAnchor="end" fontSize={9} fill="var(--text-4)">price at {stratKey === "calendar" ? "near exp." : "expiry"} →</text>
       </svg>
 
@@ -261,9 +302,19 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
 
       {/* Scenario grid — P/L at intermediate dates, not just expiry (Black-Scholes). */}
       <div className="mt-4 border-t border-[var(--divider)] pt-3">
-        <button onClick={() => setShowGrid((v) => !v)} className="mb-2 flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
-          <span className="text-[10px]">{showGrid ? "▾" : "▸"}</span> Scenario grid · P/L by price &amp; date
-        </button>
+        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <button onClick={() => setShowGrid((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
+            <span className="text-[10px]">{showGrid ? "▾" : "▸"}</span> Scenario grid · P/L by price &amp; date
+          </button>
+          {showGrid && scenario && (
+            <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-3)]" title="Shift every leg's implied vol — re-prices the grid only (an IV pop/crush what-if)">
+              IV shift
+              <input type="range" min={-50} max={50} step={5} value={ivShift} onChange={(e) => setIvShift(Number(e.target.value))} className="w-24 accent-[#a855f7]" />
+              <span className="w-9 font-mono tabular-nums text-[var(--text-2)]">{ivShift > 0 ? "+" : ""}{ivShift}%</span>
+              {ivShift !== 0 && <button onClick={() => setIvShift(0)} className="text-[var(--text-4)] underline hover:text-[var(--text)]">reset</button>}
+            </label>
+          )}
+        </div>
         {showGrid && (scenario ? (
           <>
             <div className="overflow-x-auto">
