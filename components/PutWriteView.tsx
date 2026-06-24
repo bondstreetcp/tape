@@ -10,6 +10,41 @@ import UniverseSwitcher from "./UniverseSwitcher";
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
 const pctFrac = (v: number | null | undefined, d = 0) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
 const expLabel = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+// next-earnings helpers — the snapshot carries an ISO datetime (frequently Yahoo's estimate)
+const earnLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function earnInfo(iso: string | null | undefined): { t: number; days: number } | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return { t, days: Math.round((t - Date.now()) / 86_400_000) };
+}
+// true when the next report lands on/before the put's expiry — i.e. you'd hold through the event
+function earnsBeforeExpiry(c: PutWriteCandidate, expiry: string | undefined): boolean {
+  const ei = earnInfo(c.nextEarnings);
+  if (!ei || !expiry || ei.days < 0) return false;
+  return ei.t <= Date.parse(expiry + "T23:59:59Z");
+}
+// table cell: date + days-until, amber ⚠ when it precedes expiry, dotted when the date is estimated
+function renderEarn(c: PutWriteCandidate, expiry: string | undefined) {
+  const ei = earnInfo(c.nextEarnings);
+  if (!ei || ei.days < -7) return <span className="text-[var(--text-4)]">—</span>;
+  const reported = ei.days < 0;
+  const before = !reported && earnsBeforeExpiry(c, expiry);
+  const color = before ? "#f59e0b" : reported ? "var(--text-4)" : "var(--text-3)";
+  const title =
+    (c.earningsEstimate ? "Estimated date. " : "Confirmed date. ") +
+    (reported
+      ? `Reported ${-ei.days}d ago — no earnings event before this put expires.`
+      : before
+        ? `⚠ Reports in ${ei.days}d, before this put expires — you'd hold the position through earnings (gap risk).`
+        : `Reports in ${ei.days}d, after this put expires — the trade clears the event.`);
+  return (
+    <span style={{ color }} className={c.earningsEstimate ? "underline decoration-dotted decoration-[var(--text-4)] underline-offset-2" : ""} title={title}>
+      {before && <span className="mr-0.5">⚠</span>}{earnLabel(c.nextEarnings!)}
+      <span className="ml-1 text-[10px] text-[var(--text-4)]">{reported ? `${-ei.days}d ago` : `${ei.days}d`}</span>
+    </span>
+  );
+}
 
 // green ramp for the headline annualized yield
 function annColor(v: number | null | undefined): string {
@@ -26,7 +61,7 @@ function rankColor(v: number | null | undefined): string {
   return "var(--text-3)";
 }
 
-type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap" | "price";
+type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap" | "price" | "earn";
 
 // Tenor tabs (kept in sync with PUT_TENORS in lib/putwrite; inlined to avoid pulling the fs
 // loader into the client bundle). "1M" = the standard ~16Δ CSP; "3M" = lower-delta, further OTM.
@@ -49,6 +84,7 @@ export default function PutWriteView({
   const [minAnn, setMinAnn] = useState(0);
   const [minCushion, setMinCushion] = useState(0);
   const [elevatedOnly, setElevatedOnly] = useState(false);
+  const [clearEarnings, setClearEarnings] = useState(false);
   const [watchOnly, setWatchOnly] = useState(false);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("ann");
@@ -71,18 +107,24 @@ export default function PutWriteView({
       pe: (c) => -(c.pe ?? 1e9), // lower P/E first
       mktcap: (c) => c.marketCap,
       price: (c) => c.price ?? -1,
+      earn: (c) => {
+        const ei = earnInfo(c.nextEarnings);
+        if (!ei || ei.days < -7) return -1e9; // null / stale → bottom
+        return ei.days >= 0 ? 1e9 - ei.days : ei.days; // upcoming soonest-first, then recently-reported
+      },
     };
     return candidates
       .filter((c) => {
         if (minAnn && (put(c)?.annPct ?? 0) < minAnn) return false;
         if (minCushion && (put(c)?.cushionPct ?? 0) < minCushion) return false;
         if (elevatedOnly && (volRank(c) ?? 0) < 50) return false;
+        if (clearEarnings && earnsBeforeExpiry(c, put(c)?.expiry)) return false;
         if (watchOnly && !has(c.symbol)) return false;
         if (ql && !c.symbol.toLowerCase().includes(ql) && !c.name.toLowerCase().includes(ql)) return false;
         return true;
       })
       .sort((a, b) => get[sort](b) - get[sort](a));
-  }, [candidates, minAnn, minCushion, elevatedOnly, watchOnly, q, sort, tenor, has]);
+  }, [candidates, minAnn, minCushion, elevatedOnly, clearEarnings, watchOnly, q, sort, tenor, has]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
@@ -130,6 +172,7 @@ export default function PutWriteView({
         <span><b className="text-[var(--text-2)]">Style</b> {tenor === "m1" ? "standard cash-secured put" : "lower-delta, longer-dated — less market-beta risk"}</span>
         <span><b className="text-[var(--text-2)]">Vol rank</b> = where current vol sits in its 1-yr range; ≥50 = rich</span>
         <span><b className="text-[var(--text-2)]">Cushion</b> = how far it can fall before assignment</span>
+        <span><b className="text-[var(--text-2)]">Earnings</b> <span className="text-[#f59e0b]">⚠</span> = next report lands before the put expires (you&apos;d hold through the event)</span>
       </div>
 
       {intl ? (
@@ -155,6 +198,9 @@ export default function PutWriteView({
             <button onClick={() => setElevatedOnly((v) => !v)} className={"rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " + (elevatedOnly ? "border-[#f59e0b] bg-[#f59e0b]/15 text-[#fbbf24]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Keep only names whose volatility rank is in the top half of its 1-year range">
               ⚡ Elevated vol
             </button>
+            <button onClick={() => setClearEarnings((v) => !v)} className={"rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " + (clearEarnings ? "border-[#16a34a] bg-[#16a34a]/15 text-[#4ade80]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Hide names whose next earnings report falls before the selected put expires — avoid holding a cash-secured put through an earnings event">
+              🛡 Clear of earnings
+            </button>
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-3)]">
               <input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[#fbbf24]" /> ★ Watchlist
             </label>
@@ -164,7 +210,7 @@ export default function PutWriteView({
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            <table className="w-full min-w-[1000px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-3)]">
                   <th className="w-7 px-2 py-2"></th>
@@ -178,6 +224,7 @@ export default function PutWriteView({
                   <SortTh k="iv" cls="text-right">ATM IV</SortTh>
                   <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} put</th>
                   <th className="px-2 py-2 text-right font-medium">Exp</th>
+                  <SortTh k="earn" cls="text-right">Earnings</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Premium</th>
                   <SortTh k="ann" cls="text-right">Ann. yield</SortTh>
                   <SortTh k="cushion" cls="text-right">Cushion</SortTh>
@@ -212,6 +259,7 @@ export default function PutWriteView({
                         {p ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} title="Open the live chain & strategy lab" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[#60a5fa]">${p.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{p.delta.toFixed(2)}</span></Link> : "—"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{p ? <>{expLabel(p.expiry)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{p.dte}d</span></> : "—"}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{renderEarn(c, p?.expiry)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title={p?.premiumSrc === "last" ? "last trade (market closed)" : "bid/ask mid"}>{p ? `$${p.premium.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums" style={{ color: annColor(p?.annPct) }} title={p ? `${p.yieldPct}% over ${p.dte} days` : ""}>{p ? pct(p.annPct) : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{p ? pct(p.cushionPct) : "—"}</td>
@@ -224,7 +272,7 @@ export default function PutWriteView({
             {rows.length === 0 && <div className="px-4 py-10 text-center text-sm text-[var(--text-3)]">No names match these filters.</div>}
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-4)]">
-            Premiums are end-of-day last (or bid/ask mid during market hours) — indicative, not a live fill; confirm on the chain before trading. Strike/delta/IV are Black-Scholes estimates (implied vol solved from the premium, since vendor IV fields are unreliable; dividends approximated). &quot;Vol rank&quot; superscript ʳ = realized-volatility percentile (the proxy shown until ~30 days of IV history accrue, after which it switches to IV percentile). This is a research screen, not investment advice.
+            Premiums are end-of-day last (or bid/ask mid during market hours) — indicative, not a live fill; confirm on the chain before trading. Strike/delta/IV are Black-Scholes estimates (implied vol solved from the premium, since vendor IV fields are unreliable; dividends approximated). &quot;Vol rank&quot; superscript ʳ = realized-volatility percentile (the proxy shown until ~30 days of IV history accrue, after which it switches to IV percentile). Next-earnings dates are from the data vendor and may be estimates (dotted underline) until confirmed; ⚠ flags a report due before the selected put expires. This is a research screen, not investment advice.
           </p>
         </>
       )}
