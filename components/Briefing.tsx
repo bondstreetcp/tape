@@ -208,7 +208,29 @@ function parseDataRows(lines: string[]): DataRow[] {
     else { flush(); rows.push({ label: toks.slice(0, numStart).join(" "), nums: toks.slice(numStart) }); } // label + numbers on one line
   }
   flush();
+  // Repair an index name whose number split off ("S&P 500" → label "S&P" + value "500", then a
+  // label-less data row): fold the name-number back onto the following orphan row's label.
+  for (let i = 0; i < rows.length - 1; i++) {
+    const r = rows[i], nx = rows[i + 1];
+    if ("nums" in r && "nums" in nx && r.label && r.nums.length === 1 && /^\d{2,4}$/.test(r.nums[0]) && nx.label === "" && nx.nums.length >= 2) {
+      nx.label = `${r.label} ${r.nums[0]}`;
+      rows.splice(i, 1); i--;
+    }
+  }
   return rows;
+}
+
+// Map a sub-header / section heading to the market-monitor's STANDARD aligned column labels. The
+// PDF's own header line ("CLOSE % CHNG YR-HIGH YR-LOW CHNG") is jumbled + multi-word and won't
+// tokenise 1:1 with the data columns, so we use the known Reuters layout per asset block instead.
+function colsFor(text: string): { name: string; cols: string[] } | null {
+  const u = text.toUpperCase();
+  if (/TREASUR/.test(u)) return { name: "Treasuries", cols: ["Yield", "Price"] };
+  if (/FOREX|CURRENC/.test(u)) return { name: "Forex", cols: ["Last", "% Chng"] };
+  if (/COMMODIT/.test(u)) return { name: "Commodities", cols: ["Price", "Chng", "% Chng"] };
+  if (/GAINERS|LOSERS/.test(u)) return { name: "", cols: ["Last", "Chng", "% Chng"] };
+  if (/\bSTOCKS?\b/.test(u) || /CLOSE/.test(u) || /YR-HIGH|YR-LOW/.test(u)) return { name: "", cols: ["Close", "Chng", "% Chng", "Yr-high", "Yr-low"] };
+  return null;
 }
 
 // Only treat a list section as a data table when its lines actually read like one (short
@@ -233,7 +255,7 @@ function isDataTable(lines: string[]): boolean {
   return bullets <= lines.length * 0.15 && tab >= lines.length * 0.4;
 }
 
-function DataSection({ lines }: { lines: string[] }) {
+function DataSection({ lines, heading }: { lines: string[]; heading?: string }) {
   const rows = parseDataRows(lines);
   // split into sub-tables at each sub-header so columns align within each block
   const blocks: { header?: string; rows: { label: string; nums: string[] }[] }[] = [];
@@ -248,16 +270,30 @@ function DataSection({ lines }: { lines: string[] }) {
     <div className="space-y-2.5">
       {blocks.map((b, i) => {
         const cols = b.rows.length ? Math.max(...b.rows.map((r) => r.nums.length)) : 0;
+        const map = colsFor(b.header || "") || colsFor(heading || ""); // known aligned headers for this block
+        const head = map && Math.abs(map.cols.length - cols) <= 1 ? map.cols : null;
+        const ncols = head ? Math.max(cols, head.length) : cols;
+        const name = map ? map.name : b.header; // a real asset-class name, else the raw sub-header
         return (
           <div key={i}>
-            {b.header && <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{b.header}</div>}
+            {name && <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{name}</div>}
             {b.rows.length > 0 && (
               <table className="w-full text-[12px]">
+                {head && (
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+                      <th className="py-0.5 pr-3" />
+                      {Array.from({ length: ncols }, (_, k) => (
+                        <th key={k} className="whitespace-nowrap py-0.5 pl-2 text-right font-medium">{head[k] ?? ""}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
                 <tbody>
                   {b.rows.map((r, j) => (
                     <tr key={j} className="border-b border-[var(--divider)] last:border-0">
                       <td className="whitespace-nowrap py-1 pr-3 text-[var(--text-2)]">{r.label}</td>
-                      {Array.from({ length: cols }, (_, k) => {
+                      {Array.from({ length: ncols }, (_, k) => {
                         const n = r.nums[k];
                         return (
                           <td key={k} className="py-1 pl-2 text-right tabular-nums" style={{ color: n && /^-/.test(n) ? "#ef4444" : "var(--text-2)" }}>
@@ -289,7 +325,7 @@ function SectionBody({ section: s }: { section: Section }) {
   }
   if (s.kind === "list") {
     return isDataTable(s.lines!) ? (
-      <DataSection lines={s.lines!} />
+      <DataSection lines={s.lines!} heading={s.heading} />
     ) : (
       <div className="space-y-1">
         {s.lines!.map((l, j) => <div key={j} className="text-[13px] leading-snug text-[var(--text-2)]">{l}</div>)}
