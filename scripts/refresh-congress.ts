@@ -275,6 +275,10 @@ async function main() {
   const house = await fetchHouse().catch((e) => { console.log("House failed:", e.message); return [] as CongressTrade[]; });
   if (house.length) { const names = await tickerNames(); for (const t of house) { const nm = names.get(t.ticker) || t.ticker; t.asset = nm; } }
   let trades = [...senate, ...house];
+  const today = new Date().toISOString().slice(0, 10);
+  const before = trades.length;
+  trades = trades.filter((t) => t.txDate <= today); // a future trade date is a year-misparse — drop it
+  if (before !== trades.length) console.log(`  dropped ${before - trades.length} future-dated (misparsed) trade(s)`);
   trades.sort((a, b) => b.txDate.localeCompare(a.txDate));
   console.log(`Total: ${trades.length} (Senate ${senate.length}, House ${house.length})`);
 
