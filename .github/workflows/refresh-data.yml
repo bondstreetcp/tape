@@ -7,37 +7,44 @@ name: Daily data refresh
 
 on:
   schedule:
-    # Intraday — lightweight quotes-only refresh (snapshots only; history series untouched).
-    # UTC, so ~1h earlier in ET during winter (EST). Roughly 10am / noon / 2pm / 4pm ET.
-    - cron: "0 14 * * 1-5"
-    - cron: "0 16 * * 1-5"
-    - cron: "0 18 * * 1-5"
-    - cron: "0 20 * * 1-5"
-    # 02:00 / 04:00 / 06:00 UTC — OVERNIGHT Asian-session ticks. Tokyo & Seoul trade 00:00–06:00 UTC,
-    # Hong Kong to 08:00 — i.e. the whole US overnight. These quote ONLY the Asian universes
-    # (kospi/nikkei/hsi, ~126 names) so their snapshots track the live session instead of sitting a
-    # day stale next to the live index chart until the 10:00 post-close refresh.
-    - cron: "0 2 * * 1-5"
-    - cron: "0 4 * * 1-5"
-    - cron: "0 6 * * 1-5"
-    # 10:00 UTC (~5–6am ET) — INTERNATIONAL-only refresh after the Asian close (Tokyo 06:00 /
-    # Seoul 06:30 / Shanghai 07:00 / Hong Kong 08:00 UTC). The 22:00 full run captures Asia's
-    # *previous* session, so without this the Asian constituent snapshots read a day stale next
-    # to the live index chart when you view during the US day.
-    - cron: "0 10 * * 1-5"
-    # 22:00 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the
-    # 4pm ET close (handles EST/EDT) so the options-flow scan captures the settled volume.
-    - cron: "0 22 * * 1-5"
+    # ⚠️ Minutes are deliberately staggered OFF :00. GitHub's shared cron scheduler is most congested
+    # at the top of the hour (and :15/:30/:45) — jobs there get delayed 1–2h or silently dropped, which
+    # is exactly what was happening (the :00 runs ran 1–2.5h late and the 10:00 INTL run kept getting
+    # skipped). Odd, off-peak minutes fire far more reliably. KEEP THESE IN SYNC with the FULL/INTL/ASIA
+    # matchers below — the env there compares github.event.schedule against the exact cron string.
+    #
+    # Intraday — lightweight quotes-only refresh (snapshots only; history series untouched). ~10am /
+    # noon / 2pm / 4pm ET.
+    - cron: "13 14 * * 1-5"
+    - cron: "19 16 * * 1-5"
+    - cron: "37 18 * * 1-5"
+    - cron: "43 20 * * 1-5"
+    # ~02 / 04 / 06 UTC — OVERNIGHT Asian-session ticks. Tokyo & Seoul trade 00:00–06:00 UTC, Hong Kong
+    # to 08:00 — the whole US overnight. These quote ONLY the Asian universes (kospi/nikkei/hsi, ~126
+    # names) so their snapshots track the live session instead of sitting a day stale next to the live
+    # index chart until the 10:00 post-close refresh.
+    - cron: "11 2 * * 1-5"
+    - cron: "17 4 * * 1-5"
+    - cron: "23 6 * * 1-5"
+    # ~10 UTC (~5–6am ET) — INTERNATIONAL-only refresh after the Asian close (Tokyo 06:00 / Seoul 06:30 /
+    # Shanghai 07:00 / Hong Kong 08:00 UTC), so the Asian constituents aren't a day stale vs the live
+    # index chart during the US day.
+    - cron: "29 10 * * 1-5"
+    # ~22 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the 4pm ET close
+    # (handles EST/EDT) so the options-flow scan captures the settled volume.
+    - cron: "47 22 * * 1-5"
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab (always a full rebuild)
 
 # Allow the job to push the refreshed data back to the repo.
 permissions:
   contents: write
 
-# Don't let a manual run and a scheduled run stack up.
+# Serialize runs in the group, but do NOT cancel an in-flight one: when GitHub delays a scheduled run
+# so it overlaps the next, finishing the running refresh matters more than starting the newer one — and
+# cancel-in-progress was a way the (already delayed) INTL run could get dropped.
 concurrency:
   group: refresh-data
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   refresh:
@@ -47,9 +54,9 @@ jobs:
     # international-only refresh (10:00). ASIA = an overnight Asian-session quotes tick (02/04/06).
     # Any other scheduled tick is an intraday quotes-only refresh of every universe.
     env:
-      FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '0 22 * * 1-5' }}
-      INTL: ${{ github.event.schedule == '0 10 * * 1-5' }}
-      ASIA: ${{ github.event.schedule == '0 2 * * 1-5' || github.event.schedule == '0 4 * * 1-5' || github.event.schedule == '0 6 * * 1-5' }}
+      FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
+      INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
+      ASIA: ${{ github.event.schedule == '11 2 * * 1-5' || github.event.schedule == '17 4 * * 1-5' || github.event.schedule == '23 6 * * 1-5' }}
     steps:
       - uses: actions/checkout@v4
 
