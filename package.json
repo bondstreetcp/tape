@@ -23,7 +23,8 @@
     "refresh-cef": "tsx scripts/refresh-cef.ts",
     "refresh-congress": "tsx scripts/refresh-congress.ts",
     "refresh-putwrite": "tsx scripts/refresh-putwrite.ts",
-    "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts"
+    "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
+    "patch-industries": "tsx scripts/patch-industries.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",
