@@ -30,12 +30,31 @@ export interface PutSuggestion {
   breakeven: number; // strike - premium
 }
 
+export interface CallSuggestion {
+  expiry: string; // YYYY-MM-DD
+  dte: number;
+  strike: number; // ≥ spot (OTM)
+  delta: number; // positive, ≈ 0.30
+  iv: number; // implied vol backed out of the premium (fraction)
+  premium: number; // per share
+  premiumSrc: "mid" | "last";
+  yieldPct: number; // premium / spot — static income return on the shares this period
+  annPct: number; // static yield annualized (× 365/dte)
+  ifCalledPct: number; // (premium + (strike − spot)) / spot — total return if assigned away
+  ifCalledAnnPct: number; // if-called return annualized
+  capPct: number; // (strike − spot) / spot — upside room before the shares are capped away
+  breakeven: number; // spot − premium — downside cushion the premium buys
+}
+
 // Tenors the screen prices a put for. Two styles: the standard ~1-month / ~16-delta CSP, and a
 // lower-delta, longer-dated ~3-month / ~10-delta put (further OTM ≈ 15%+, less market-beta risk).
 // `z` is the standard-normal quantile N⁻¹(1 − targetDelta) used to locate the strike.
+// Each tenor also carries the covered-CALL side: `callDelta` is the target call delta and `zCall`
+// = N⁻¹(callDelta) (negative ⇒ OTM strike above spot). m1 sells a ~30Δ call (modest cap), m3 a
+// ~20Δ call (more room). The covered call reuses the SAME expiry/chain the put screen already pulls.
 export const PUT_TENORS = [
-  { id: "m1", short: "~1M", note: "≈16Δ · 30–45 DTE", targetDte: 35, dteMin: 18, dteMax: 66, prefMin: 30, prefMax: 45, z: 0.9945 },
-  { id: "m3", short: "~3M", note: "≈10Δ · ~3-month · further OTM", targetDte: 95, dteMin: 70, dteMax: 125, prefMin: 82, prefMax: 105, z: 1.2816 },
+  { id: "m1", short: "~1M", note: "≈16Δ · 30–45 DTE", targetDte: 35, dteMin: 18, dteMax: 66, prefMin: 30, prefMax: 45, z: 0.9945, callDelta: 0.30, zCall: -0.5244 },
+  { id: "m3", short: "~3M", note: "≈10Δ · ~3-month · further OTM", targetDte: 95, dteMin: 70, dteMax: 125, prefMin: 82, prefMax: 105, z: 1.2816, callDelta: 0.20, zCall: -0.8416 },
 ] as const;
 export type TenorId = (typeof PUT_TENORS)[number]["id"];
 
@@ -56,6 +75,7 @@ export interface PutWriteCandidate {
   ivRank: number | null; // 0-100 IV percentile; null until enough IV history accrues
   ivPremium: number | null; // atmIV / rvol — options pricing in more vol than realized = rich
   puts: Record<TenorId, PutSuggestion | null>; // one suggestion per tenor (m1 ≈16Δ/1mo, m3 ≈10Δ/3mo)
+  calls: Record<TenorId, CallSuggestion | null>; // covered-call side, same tenors/expiries (m1 ≈30Δ, m3 ≈20Δ)
 }
 
 export interface PutWriteData {
@@ -101,6 +121,35 @@ export function ivFromPut(S: number, K: number, T: number, r: number, price: num
   for (let i = 0; i < 64; i++) {
     const mid = (lo + hi) / 2;
     if (bsPut(S, K, T, r, mid) > price) hi = mid; else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// ---- Call side (covered-call screen). Mirror of the put helpers. ----
+
+export function bsCall(S: number, K: number, T: number, r: number, sigma: number): number {
+  if (sigma <= 0 || T <= 0) return Math.max(S - K * Math.exp(-r * T), 0);
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  return S * normCdf(d1) - K * Math.exp(-r * T) * normCdf(d2);
+}
+
+export function callDelta(S: number, K: number, T: number, r: number, sigma: number): number {
+  if (sigma <= 0 || T <= 0) return S > K ? 1 : 0;
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  return normCdf(d1); // positive, 0…1
+}
+
+/** Implied vol from a call PRICE via bisection (vendor per-contract iv is unreliable; premium isn't). */
+export function ivFromCall(S: number, K: number, T: number, r: number, price: number): number | null {
+  if (price <= 0 || T <= 0) return null;
+  const intrinsic = Math.max(S - K * Math.exp(-r * T), 0);
+  if (price < intrinsic - 0.02) return null; // arbitrage / stale quote
+  let lo = 0.01, hi = 3;
+  if (bsCall(S, K, T, r, hi) < price) return null; // off the top of the vol range
+  for (let i = 0; i < 64; i++) {
+    const mid = (lo + hi) / 2;
+    if (bsCall(S, K, T, r, mid) > price) hi = mid; else lo = mid;
   }
   return (lo + hi) / 2;
 }
