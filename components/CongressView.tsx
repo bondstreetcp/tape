@@ -1,9 +1,11 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { CongressData, CongressTrade } from "@/lib/congress";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UniverseSwitcher from "./UniverseSwitcher";
+
+type SortKey = "traded" | "disclosed" | "amount";
 
 const k = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`);
 const fmtAmt = (lo: number, hi: number) => (lo === hi ? `${k(lo)}+` : `${k(lo)}–${k(hi)}`);
@@ -15,7 +17,14 @@ export default function CongressView({ universe, data, known }: { universe: stri
   const [side, setSide] = useState<"all" | "buy" | "sell">("all");
   const [chamber, setChamber] = useState<"all" | "Senate" | "House">("all");
   const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("traded");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const hasHouse = useMemo(() => data.trades.some((t) => t.chamber === "House"), [data.trades]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortKey(key); setSortDir("desc"); }
+  };
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
@@ -26,15 +35,32 @@ export default function CongressView({ universe, data, known }: { universe: stri
 
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    return data.trades.filter((t) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const filtered = data.trades.filter((t) => {
+      if (t.txDate > today) return false; // a future trade date is a parse error (wrong year)
       if (side !== "all" && t.type !== side) return false;
       if (chamber !== "all" && t.chamber !== chamber) return false;
       if (ql && !t.ticker.toLowerCase().includes(ql) && !t.member.toLowerCase().includes(ql)) return false;
       return true;
     });
-  }, [data.trades, side, chamber, q]);
+    const val = (t: CongressTrade): number | string =>
+      sortKey === "amount" ? t.amountHigh : sortKey === "disclosed" ? t.filedDate : t.txDate;
+    return filtered.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      let cmp = typeof va === "number" ? va - (vb as number) : String(va).localeCompare(String(vb));
+      cmp = sortDir === "desc" ? -cmp : cmp;
+      return cmp !== 0 ? cmp : b.txDate.localeCompare(a.txDate); // ties → newest trade first
+    });
+  }, [data.trades, side, chamber, q, sortKey, sortDir]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const SortTh = ({ k, children, align = "left" }: { k: SortKey; children: ReactNode; align?: "left" | "right" }) => (
+    <th className={"px-4 py-2 font-medium " + (align === "right" ? "text-right" : "text-left")}>
+      <button onClick={() => toggleSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sortKey === k ? "text-[var(--text)]" : "")}>
+        {children}{sortKey === k && <span className="text-[9px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
+      </button>
+    </th>
+  );
 
   return (
     <main className="mx-auto max-w-[84rem] px-4 py-6 sm:px-6">
@@ -104,13 +130,13 @@ export default function CongressView({ universe, data, known }: { universe: stri
         <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
-              <th className="px-4 py-2 text-left font-medium">Traded</th>
+              <SortTh k="traded">Traded</SortTh>
               <th className="px-4 py-2 text-left font-medium">Member</th>
               <th className="px-4 py-2 text-left font-medium">Type</th>
               <th className="px-4 py-2 text-left font-medium">Ticker</th>
               <th className="px-4 py-2 text-left font-medium">Asset</th>
-              <th className="px-4 py-2 text-right font-medium">Amount</th>
-              <th className="px-4 py-2 text-right font-medium">Disclosed</th>
+              <SortTh k="amount" align="right">Amount</SortTh>
+              <SortTh k="disclosed" align="right">Disclosed</SortTh>
             </tr>
           </thead>
           <tbody>
