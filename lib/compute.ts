@@ -75,19 +75,20 @@ export function sliceSeries(
   daily: SeriesPoint[],
   tf: TimeframeKey,
   now: number,
+  sessionStart?: number,
 ): SeriesPoint[] {
   const DAY = 86_400_000;
   if (tf === "1d") {
-    // last session present in the intraday feed
+    // The 1D window is one session. By default that's the last session in THIS series' own feed, but
+    // a comparison chart passes a shared `sessionStart` (the most-recent session across all series) so
+    // a name whose live feed lags a day isn't sliced to — and drawn on — yesterday next to today's lines.
     if (intraday.length === 0) return [];
-    const lastT = intraday[intraday.length - 1].t;
-    const lastDay = new Date(lastT);
-    const startOfLastDay = new Date(
-      lastDay.getFullYear(),
-      lastDay.getMonth(),
-      lastDay.getDate(),
-    ).getTime();
-    return intraday.filter((p) => p.t >= startOfLastDay);
+    let start = sessionStart;
+    if (start == null) {
+      const lastDay = new Date(intraday[intraday.length - 1].t);
+      start = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate()).getTime();
+    }
+    return intraday.filter((p) => p.t >= start!);
   }
   if (tf === "1w") {
     const cutoff = now - 7 * DAY;
@@ -185,8 +186,17 @@ export function buildComparison(
   tf: TimeframeKey,
   now: number,
 ): ComparisonResult {
+  // 1D: every series shares one session window — the most-recent session across ALL of them — so a
+  // name whose live intraday lags a day (a thin sub-industry Yahoo hasn't ticked today) is windowed
+  // to today and simply has no points, instead of being drawn on yesterday next to today's lines.
+  let sessionStart: number | undefined;
+  if (tf === "1d") {
+    let maxLast = 0;
+    for (const it of items) if (it.intraday.length) maxLast = Math.max(maxLast, it.intraday[it.intraday.length - 1].t);
+    if (maxLast) { const d = new Date(maxLast); sessionStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  }
   const perStock = items.map((it) => {
-    const sliced = sliceSeries(it.intraday, it.daily, tf, now);
+    const sliced = sliceSeries(it.intraday, it.daily, tf, now, sessionStart);
     const base = rebaseBaseline(it.intraday, it.daily, tf, sliced);
     const points =
       base && base !== 0

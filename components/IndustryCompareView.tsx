@@ -25,6 +25,7 @@ interface IndustryAgg {
   cap: number;
   daily: XY[];
   intraday: XY[];
+  returns?: Partial<Record<TimeframeKey, number | null>>; // static cap-weighted fallback when live intraday lags
 }
 
 export default function IndustryCompareView({
@@ -102,9 +103,9 @@ export default function IndustryCompareView({
 
   const legend = useMemo(() => {
     return industries
-      .map((ind) => ({ ...ind, end: endPct[ind.industry] ?? null }))
+      .map((ind) => ({ ...ind, end: endPct[ind.industry] ?? ind.returns?.[tf] ?? null }))
       .sort((a, b) => (b.end ?? -1e9) - (a.end ?? -1e9));
-  }, [industries, endPct]);
+  }, [industries, endPct, tf]);
 
   const toggle = (key: string) =>
     setHidden((prev) => {
