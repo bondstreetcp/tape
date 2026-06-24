@@ -97,6 +97,10 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
     return Math.round((new Date(expiry + "T00:00:00Z").getTime() - Date.now()) / 86_400_000);
   }, [expiry]);
 
+  // The next listed expiry + its ATM IV — the long leg a Call Calendar rolls into.
+  const nextExpiry = useMemo(() => (expiry && data ? (data.expirations.filter((d) => d > expiry).sort()[0] ?? null) : null), [expiry, data]);
+  const nextIV = useMemo(() => term?.find((t) => t.date === nextExpiry)?.atmIV ?? null, [term, nextExpiry]);
+
   if (loading && !data) {
     return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">Loading options chain…</div>;
   }
@@ -133,7 +137,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
         </button>
       </div>
 
-      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} />
+      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} nextExpiry={nextExpiry} nextIV={nextIV} />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">

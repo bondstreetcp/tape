@@ -209,7 +209,7 @@ export default function PutWriteView({
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pctFrac(c.atmIV)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
-                        {p ? <span className="text-[var(--text)]">${p.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{p.delta.toFixed(2)}</span></span> : "—"}
+                        {p ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} title="Open the live chain & strategy lab" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[#60a5fa]">${p.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{p.delta.toFixed(2)}</span></Link> : "—"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{p ? <>{expLabel(p.expiry)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{p.dte}d</span></> : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title={p?.premiumSrc === "last" ? "last trade (market closed)" : "bid/ask mid"}>{p ? `$${p.premium.toFixed(2)}` : "—"}</td>
