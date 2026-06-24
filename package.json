@@ -22,7 +22,8 @@
     "refresh-catalysts": "tsx scripts/refresh-catalysts.ts",
     "refresh-cef": "tsx scripts/refresh-cef.ts",
     "refresh-congress": "tsx scripts/refresh-congress.ts",
-    "refresh-putwrite": "tsx scripts/refresh-putwrite.ts"
+    "refresh-putwrite": "tsx scripts/refresh-putwrite.ts",
+    "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts"
   },
   "dependencies": {
     "d3-hierarchy": "^3.1.2",
