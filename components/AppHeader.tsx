@@ -38,6 +38,7 @@ export default function AppHeader({
       label: "Strategies",
       items: [
         { href: `${base}/put-writing`, label: "Put-Writing" },
+        { href: `${base}/covered-call`, label: "Covered-Call" },
         { href: `${base}/cef`, label: "CEF Screener" },
         { href: `${base}/backtest`, label: "Backtest" },
       ],
