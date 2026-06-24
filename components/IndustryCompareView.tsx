@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -7,6 +7,7 @@ import type { SectorMeta } from "@/lib/sectors";
 import type { SectorSeries, XY } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
+import { usePolledFetch, fmtClock } from "@/lib/usePolledFetch";
 import { buildComparison, xyToPoints } from "@/lib/compute";
 import { colorFor, ETF_LINE_COLOR } from "@/lib/palette";
 import { trendColor } from "@/lib/color";
@@ -50,19 +51,12 @@ export default function IndustryCompareView({
   // so mid-session they'd show the prior day. Fetch live intraday on demand for those tenors and
   // swap it in. (Daily / 3M+ keep the static series.)
   const intradayTf = tf === "1d" || tf === "1w";
-  const [live, setLive] = useState<{ industries: Record<string, XY[]>; etf: XY[] } | null>(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  useEffect(() => {
-    if (!intradayTf || live) return;
-    let alive = true;
-    setLiveLoading(true);
-    fetch(`/api/industry-intraday?universe=${encodeURIComponent(universe)}&etf=${encodeURIComponent(meta.etf)}`)
-      .then((r) => r.json())
-      .then((d) => { if (alive) setLive({ industries: d.industries || {}, etf: d.etf || [] }); })
-      .catch(() => {})
-      .finally(() => alive && setLiveLoading(false));
-    return () => { alive = false; };
-  }, [intradayTf, universe, meta.etf, live]);
+  const liveUrl = intradayTf ? `/api/industry-intraday?universe=${encodeURIComponent(universe)}&etf=${encodeURIComponent(meta.etf)}` : null;
+  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl);
+  const live = useMemo(
+    () => (liveRaw ? { industries: (liveRaw.industries || {}) as Record<string, XY[]>, etf: (liveRaw.etf || []) as XY[] } : null),
+    [liveRaw],
+  );
 
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
@@ -103,9 +97,15 @@ export default function IndustryCompareView({
 
   const legend = useMemo(() => {
     return industries
-      .map((ind) => ({ ...ind, end: endPct[ind.industry] ?? ind.returns?.[tf] ?? null }))
+      .map((ind) => ({
+        ...ind,
+        end: endPct[ind.industry] ?? ind.returns?.[tf] ?? null,
+        // live feed lagging this session: no live point, shown from the static cap-weighted close
+        delayed: intradayTf && !!live && endPct[ind.industry] == null && (ind.returns?.[tf] ?? null) != null,
+      }))
       .sort((a, b) => (b.end ?? -1e9) - (a.end ?? -1e9));
-  }, [industries, endPct, tf]);
+  }, [industries, endPct, tf, intradayTf, live]);
+  const delayedCount = useMemo(() => legend.filter((r) => r.delayed).length, [legend]);
 
   const toggle = (key: string) =>
     setHidden((prev) => {
@@ -145,7 +145,12 @@ export default function IndustryCompareView({
             {industries.length} sub-industries · each line = a cap-weighted index
             rebased to % · dashed white = {meta.etf} (whole sector) · as of{" "}
             {fmtDateTime(generatedAt)}
-            {intradayTf && (liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : live ? <span className="text-[#22c55e]"> · live intraday</span> : null)}
+            {intradayTf && (live ? (
+              <span title="Auto-refreshes ~every minute · 15-minute bars, edge-cached ~2 min" className="text-[#22c55e]">
+                {" "}· live{asOf ? ` · updated ${fmtClock(asOf)}` : ""}{liveLoading ? " ⟳" : ""}
+                {delayedCount > 0 && <span className="text-[#f59e0b]" title="These sub-industries' live feed is lagging this session — shown from their last close"> · {delayedCount} delayed</span>}
+              </span>
+            ) : liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : null)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -206,6 +211,7 @@ export default function IndustryCompareView({
                 color={colorByKey[ind.industry]}
                 meta={`${ind.count} · ${fmtMarketCap(ind.cap)}`}
                 end={ind.end}
+                delayed={ind.delayed}
                 hidden={hidden.has(ind.industry)}
                 onToggle={() => toggle(ind.industry)}
                 onHover={() => setHighlight(ind.industry)}
@@ -229,6 +235,7 @@ function Row({
   color,
   meta,
   end,
+  delayed,
   hidden,
   onToggle,
   onHover,
@@ -240,6 +247,7 @@ function Row({
   color: string;
   meta: string;
   end: number | null;
+  delayed?: boolean;
   hidden: boolean;
   onToggle: () => void;
   onHover: () => void;
@@ -267,10 +275,8 @@ function Row({
           <span className="block text-[11px] text-[var(--text-3)]">{meta}</span>
         </span>
       </button>
-      <span
-        className="w-14 shrink-0 text-right text-sm font-semibold tabular-nums"
-        style={{ color: trendColor(end) }}
-      >
+      <span className="flex w-16 shrink-0 items-center justify-end gap-0.5 text-right text-sm font-semibold tabular-nums" style={{ color: trendColor(end) }}>
+        {delayed && <span className="text-[10px] text-[#f59e0b]" title="Live feed lagging this session — last close">⏱</span>}
         {fmtPct(end, 1)}
       </span>
       <Link

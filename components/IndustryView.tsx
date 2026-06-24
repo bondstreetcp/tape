@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { usePolledFetch, fmtClock } from "@/lib/usePolledFetch";
 import type { SectorMeta } from "@/lib/sectors";
 import type { SectorSeries, StockRow, StockSeries, XY } from "@/lib/types";
 import { TIMEFRAMES, parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
@@ -44,20 +45,12 @@ export default function IndustryView({
   // 1D/1W plot the per-symbol intraday series, which only rebuilds after the close — so mid-session
   // it shows the prior day. Fetch live intraday on demand for those tenors and swap it in.
   const intradayTf = tf === "1d" || tf === "1w";
-  const [live, setLive] = useState<Record<string, XY[]> | null>(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  useEffect(() => {
-    if (!intradayTf || live) return;
-    const syms = [meta.etf, ...stocks.map((s) => s.symbol)]; // all constituents (route caps + throttles)
-    let alive = true;
-    setLiveLoading(true);
-    fetch(`/api/intraday?symbols=${encodeURIComponent(syms.join(","))}`)
-      .then((r) => r.json())
-      .then((d) => { if (alive) setLive(d.series || {}); })
-      .catch(() => {})
-      .finally(() => alive && setLiveLoading(false));
-    return () => { alive = false; };
-  }, [intradayTf, stocks, meta.etf, live]);
+  const liveUrl = useMemo(
+    () => (intradayTf ? `/api/intraday?symbols=${encodeURIComponent([meta.etf, ...stocks.map((s) => s.symbol)].join(","))}` : null),
+    [intradayTf, stocks, meta.etf],
+  );
+  const { data: liveRaw, asOf, loading: liveLoading } = usePolledFetch(intradayTf, liveUrl);
+  const live = useMemo(() => (liveRaw ? ((liveRaw.series || {}) as Record<string, XY[]>) : null), [liveRaw]);
 
   const now = useMemo(() => Date.parse(generatedAt) || Date.now(), [generatedAt]);
 
@@ -108,10 +101,13 @@ export default function IndustryView({
       name: s.name,
       end: endPct[s.symbol] ?? s.returns[tf] ?? null,
       near: isNearHigh(s, 2) ? "high" : isNearLow(s, 2) ? "low" : null,
+      // live feed lagging this session: no live point, shown from the static close
+      delayed: intradayTf && !!live && endPct[s.symbol] == null && (s.returns[tf] ?? null) != null,
     }));
     rowsArr.sort((a, b) => (b.end ?? -1e9) - (a.end ?? -1e9));
     return rowsArr;
-  }, [stocks, endPct, tf]);
+  }, [stocks, endPct, tf, intradayTf, live]);
+  const delayedCount = useMemo(() => legend.filter((r) => r.delayed).length, [legend]);
 
   const toggle = (sym: string) =>
     setHidden((prev) => {
@@ -149,7 +145,12 @@ export default function IndustryView({
           <p className="mt-1 text-xs text-[var(--text-3)]">
             {stocks.length} constituents · each line rebased to % change · dashed
             white = {meta.etf} · as of {fmtDateTime(generatedAt)}
-            {intradayTf && (liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : live ? <span className="text-[#22c55e]"> · live intraday</span> : null)}
+            {intradayTf && (live ? (
+              <span title="Auto-refreshes ~every minute · 15-minute bars, edge-cached ~2 min" className="text-[#22c55e]">
+                {" "}· live{asOf ? ` · updated ${fmtClock(asOf)}` : ""}{liveLoading ? " ⟳" : ""}
+                {delayedCount > 0 && <span className="text-[#f59e0b]" title="These names' live feed is lagging this session — shown from their last close"> · {delayedCount} delayed</span>}
+              </span>
+            ) : liveLoading ? <span className="text-[var(--text-4)]"> · fetching live intraday…</span> : null)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -214,6 +215,7 @@ export default function IndustryView({
                 name={r.name}
                 color={colorBySymbol[r.symbol]}
                 end={r.end}
+                delayed={r.delayed}
                 near={r.near as "high" | "low" | null}
                 hidden={hidden.has(r.symbol)}
                 onToggle={() => toggle(r.symbol)}
@@ -241,6 +243,7 @@ function LegendRow({
   name,
   color,
   end,
+  delayed,
   near,
   hidden,
   onToggle,
@@ -253,6 +256,7 @@ function LegendRow({
   name: string;
   color: string;
   end: number | null;
+  delayed?: boolean;
   near: "high" | "low" | null;
   hidden: boolean;
   onToggle: () => void;
@@ -298,10 +302,8 @@ function LegendRow({
           </span>
         )}
       </button>
-      <span
-        className="w-16 shrink-0 text-right text-sm tabular-nums"
-        style={{ color: trendColor(end) }}
-      >
+      <span className="flex w-16 shrink-0 items-center justify-end gap-0.5 text-right text-sm tabular-nums" style={{ color: trendColor(end) }}>
+        {delayed && <span className="text-[10px] text-[#f59e0b]" title="Live feed lagging this session — last close">⏱</span>}
         {fmtPct(end, 1)}
       </span>
       {href && (
