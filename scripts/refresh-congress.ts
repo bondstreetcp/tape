@@ -71,24 +71,62 @@ function unzip(buf: Buffer): Record<string, Buffer> {
 }
 
 // One transaction in the e-filed PTR text: "{asset} ({TICKER}) [{CODE}] {TYPE}{txDate}{notifDate}{amount}".
-const HOUSE_TXN = /([A-Za-z0-9 .,&'’\/()\-]{2,70}?)\(([A-Z][A-Z.]{0,6})\)\s*\[([A-Z]{2})\]\s*(P|E|S \(partial\)|S \(full\)|S)\b\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\$[\d,]+\s*-\s*\$[\d,]+|Over \$[\d,]+|\$[\d,]+)/g;
+// NB: no \b after the type — newer PDFs glue the type to the date ("P05/29/2026"), so a boundary fails.
+const HOUSE_TXN = /([A-Za-z0-9 .,&'’\/()\-]{2,70}?)\(([A-Z][A-Z.]{0,6})\)\s*\[([A-Z]{2})\]\s*(S \(partial\)|S \(full\)|P|E|S)\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(\$[\d,]+\s*-\s*\$[\d,]+|Over \$[\d,]+|\$[\d,]+)/g;
 
 function parseHousePtr(text: string, member: string, filedDate: string): CongressTrade[] {
   const t = (text || "").replace(/\s+/g, " ");
+  // The live search's results table omits the filing date, so read it from the PDF's signature line;
+  // fall back to the index date for ZIP-sourced reports.
+  const filed = iso((t.match(/Digitally Signed:[^,]*,\s*(\d{1,2}\/\d{1,2}\/\d{4})/) || [])[1] || "") || filedDate;
   const out: CongressTrade[] = [];
   let m: RegExpExecArray | null;
   HOUSE_TXN.lastIndex = 0;
   while ((m = HOUSE_TXN.exec(t))) {
     const ticker = m[2].toUpperCase();
-    if (!isTicker(ticker) || m[3] === "GS" || m[3] === "OP") continue; // skip treasuries / options
+    if (!isTicker(ticker) || m[3] === "GS") continue; // skip treasuries/bonds; options ([OP]) are kept as a directional bet on the underlying (e.g. Pelosi's call buys)
     const type: TradeType = m[4][0] === "P" ? "buy" : m[4][0] === "E" ? "exchange" : "sell";
     const txDate = iso(m[5]);
     const [amountLow, amountHigh] = parseAmount(m[7]);
     if (!txDate || amountLow <= 0) continue;
-    // The disclosed asset name extracts noisily from the PDF (owner codes / broker boilerplate
-    // bleed in), so keep just the ticker — a clean issuer name is filled from our universe in main().
-    const lagDays = filedDate && txDate ? Math.round((Date.parse(filedDate) - Date.parse(txDate)) / DAY) : 0;
-    out.push({ member, chamber: "House", ticker, asset: ticker, type, txDate, filedDate, lagDays, amountLow, amountHigh, owner: "" });
+    // The disclosed asset name extracts noisily from the PDF, so keep just the ticker — a clean issuer
+    // name is filled from our universe in main(). Options are recorded on the underlying ticker.
+    const lagDays = filed && txDate ? Math.round((Date.parse(filed) - Date.parse(txDate)) / DAY) : 0;
+    out.push({ member, chamber: "House", ticker, asset: ticker, type, txDate, filedDate: filed, lagDays, amountLow, amountHigh, owner: "" });
+  }
+  return out;
+}
+
+// House LIVE member-search — the Clerk's search backend lists e-filed PTRs a couple days before they
+// land in the bulk {YEAR}FD.ZIP (which is what made us miss, e.g., Pelosi's freshest filings). Per year:
+// GET the search page for the ASP.NET antiforgery token + cookie, POST the (member-less) search, and
+// scrape the PTR DocIDs. The results grid omits the filing date — parseHousePtr reads it from the PDF.
+async function fetchHouseLive(): Promise<{ member: string; doc: string; y: number }[]> {
+  const H = "https://disclosures-clerk.house.gov/FinancialDisclosure";
+  const cleanName = (raw: string): string => {
+    const s = raw.replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim(); // "Pelosi, Hon.. Nancy"
+    const [last, rest] = s.split(",").map((x) => x.trim());
+    if (!rest) return s;
+    const first = rest.replace(/^(Hon\.*|Mr\.|Mrs\.|Ms\.|Dr\.)\s*/i, "").trim();
+    return `${first} ${last}`.replace(/\s+/g, " ").trim(); // "Nancy Pelosi"
+  };
+  const out: { member: string; doc: string; y: number }[] = [];
+  for (const y of [new Date().getFullYear()]) { // current year only — the recent tail; the ZIP covers history
+    try {
+      const g = await fetch(`${H}/ViewSearch`, { headers: { "User-Agent": UA } });
+      const ck = ((g.headers as any).getSetCookie?.() || []).map((c: string) => c.split(";")[0]).join("; ");
+      const tok = (await g.text()).match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/)?.[1];
+      if (!tok) { console.log(`  House live ${y}: no token`); continue; }
+      const body = new URLSearchParams({ LastName: "", FilingYear: String(y), State: "", District: "", __RequestVerificationToken: tok });
+      const r = await fetch(`${H}/ViewMemberSearchResult`, { method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest", Cookie: ck }, body });
+      const html = await r.text();
+      const re = /href="[^"]*ptr-pdfs\/(\d{4})\/(\d+)\.pdf"[^>]*>([^<]+)<\/a>[\s\S]{0,300}?data-label="Filing">\s*([^<]*?)\s*</gi;
+      let m: RegExpExecArray | null;
+      let n = 0;
+      while ((m = re.exec(html))) { if (!/PTR/i.test(m[4])) continue; out.push({ member: cleanName(m[3]), doc: m[2], y: Number(m[1]) }); n++; }
+      console.log(`  House live ${y}: ${n} PTRs`);
+      await sleep(300);
+    } catch (e: any) { console.log(`  House live ${y}: ${e.message}`); }
   }
   return out;
 }
@@ -114,9 +152,20 @@ async function fetchHouse(): Promise<CongressTrade[]> {
       }
     } catch (e: any) { console.log(`  House ${y}FD.ZIP: ${e.message}`); }
   }
-  cands.sort((a, b) => b.filedDate.localeCompare(a.filedDate));
-  const top = cands.slice(0, 500);
-  console.log(`House: ${top.length} e-filed PTRs in window (of ${cands.length})`);
+  // Merge the LIVE member search — adds e-filed PTRs that haven't hit the bulk ZIP yet (their filing
+  // date comes from the PDF). Sort live-first (no date → newest), then by date, capped.
+  const seen = new Set(cands.map((c) => c.doc));
+  const maxZipDoc = cands.reduce((mx, c) => Math.max(mx, Number(c.doc) || 0), 0); // newest filing the ZIP knows about
+  let live: { member: string; doc: string; y: number }[] = [];
+  try { live = await fetchHouseLive(); } catch (e: any) { console.log("  House live search failed:", e.message); }
+  let added = 0;
+  // Add only filings NEWER than the ZIP's latest (DocIDs are ~chronological) — the few days the ZIP lags,
+  // not the whole back-catalogue the live search also returns.
+  for (const lc of live) if (!seen.has(lc.doc) && (maxZipDoc === 0 || Number(lc.doc) > maxZipDoc)) { seen.add(lc.doc); cands.push({ member: lc.member, doc: lc.doc, filedDate: "", y: lc.y }); added++; }
+  console.log(`House live search: +${added} fresh PTRs ahead of the bulk ZIP (newest ZIP doc ${maxZipDoc})`);
+  cands.sort((a, b) => (b.filedDate || "9999-99").localeCompare(a.filedDate || "9999-99") || Number(b.doc) - Number(a.doc));
+  const top = cands.slice(0, 800);
+  console.log(`House: ${top.length} e-filed PTRs (of ${cands.length})`);
   const trades = (await pool(top, 4, async (c) => {
     try {
       const r = await fetch(`https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/${c.y}/${c.doc}.pdf`, { headers: { "User-Agent": UA } });
@@ -224,7 +273,7 @@ async function main() {
   const senate = parsed.flat().filter((t) => t.amountLow > 0);
   console.log(`Senate: ${senate.length} stock/ETF transactions`);
   const house = await fetchHouse().catch((e) => { console.log("House failed:", e.message); return [] as CongressTrade[]; });
-  if (house.length) { const names = await tickerNames(); for (const t of house) t.asset = names.get(t.ticker) || t.ticker; }
+  if (house.length) { const names = await tickerNames(); for (const t of house) { const nm = names.get(t.ticker) || t.ticker; t.asset = nm; } }
   let trades = [...senate, ...house];
   trades.sort((a, b) => b.txDate.localeCompare(a.txDate));
   console.log(`Total: ${trades.length} (Senate ${senate.length}, House ${house.length})`);
@@ -248,8 +297,9 @@ async function main() {
   }
   const topMembers: MemberTally[] = [...mb.values()].map((e) => ({ member: e.member, chamber: e.chamber, trades: e.trades, buys: e.buys, sells: e.sells, tickers: e._t.size, lastTrade: e.lastTrade })).sort((a, b) => b.trades - a.trades).slice(0, 40);
 
-  // keep the snapshot lean — the most recent ~1500 trades for the table
-  trades = trades.slice(0, 1500);
+  // keep the snapshot lean — preserve both chambers (dense House must not crowd the sparser Senate out)
+  const cap = (ch: string, n: number) => trades.filter((t) => t.chamber === ch).slice(0, n);
+  trades = [...cap("House", 1500), ...cap("Senate", 700)].sort((a, b) => b.txDate.localeCompare(a.txDate));
   const out: CongressData = { generatedAt: new Date().toISOString(), since: trades.length ? trades[trades.length - 1].txDate : "", trades, topTickers, topMembers };
   await fs.writeFile(path.join(process.cwd(), "data", "congress.json"), JSON.stringify(out));
   console.log(`Wrote ${trades.length} trades · ${topTickers.length} top tickers · ${topMembers.length} members.`);
