@@ -169,6 +169,11 @@ jobs:
         run: npm run refresh-putwrite
         continue-on-error: true
 
+      - name: Refresh earnings expected-move screen
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-earnings-move
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow

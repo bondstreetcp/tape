@@ -39,6 +39,8 @@ export default function AppHeader({
       items: [
         { href: `${base}/put-writing`, label: "Put-Writing" },
         { href: `${base}/covered-call`, label: "Covered-Call" },
+        { href: `${base}/credit-spreads`, label: "Credit Spreads" },
+        { href: `${base}/earnings-move`, label: "Earnings Move" },
         { href: `${base}/cef`, label: "CEF Screener" },
         { href: `${base}/backtest`, label: "Backtest" },
       ],

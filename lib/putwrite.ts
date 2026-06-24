@@ -46,6 +46,31 @@ export interface CallSuggestion {
   breakeven: number; // spot − premium — downside cushion the premium buys
 }
 
+// Defined-risk credit spreads built from the same chain (16Δ short / ~8Δ long wings).
+export interface BullPutSuggestion {
+  expiry: string;
+  dte: number;
+  shortStrike: number; // sell the ~16Δ put
+  longStrike: number; // buy the ~8Δ put below it (defines the risk)
+  credit: number; // net premium collected, per share
+  width: number; // shortStrike − longStrike
+  maxLoss: number; // (width − credit) per share — the most you can lose
+  ror: number; // credit / maxLoss — return on risk (fraction)
+  pop: number; // ≈ 1 − |shortDelta| — prob. the short stays OTM
+  breakeven: number; // shortStrike − credit
+}
+export interface IronCondorSuggestion {
+  expiry: string;
+  dte: number;
+  putLong: number; putShort: number; callShort: number; callLong: number; // ~8Δ/16Δ/16Δ/8Δ
+  credit: number; // total net premium per share
+  width: number; // the (wider) wing width — the risk leg
+  maxLoss: number; // (width − credit) per share
+  ror: number; // credit / maxLoss
+  pop: number; // ≈ prob. price finishes between the two short strikes
+  lowBE: number; highBE: number; // breakevens: putShort − credit, callShort + credit
+}
+
 // Tenors the screen prices a put for. Two styles: the standard ~1-month / ~16-delta CSP, and a
 // lower-delta, longer-dated ~3-month / ~10-delta put (further OTM ≈ 15%+, less market-beta risk).
 // `z` is the standard-normal quantile N⁻¹(1 − targetDelta) used to locate the strike.
@@ -76,6 +101,8 @@ export interface PutWriteCandidate {
   ivPremium: number | null; // atmIV / rvol — options pricing in more vol than realized = rich
   puts: Record<TenorId, PutSuggestion | null>; // one suggestion per tenor (m1 ≈16Δ/1mo, m3 ≈10Δ/3mo)
   calls: Record<TenorId, CallSuggestion | null>; // covered-call side, same tenors/expiries (m1 ≈30Δ, m3 ≈20Δ)
+  bullPuts: Record<TenorId, BullPutSuggestion | null>; // defined-risk bull-put spread, same expiries
+  condors: Record<TenorId, IronCondorSuggestion | null>; // iron condor, same expiries
 }
 
 export interface PutWriteData {

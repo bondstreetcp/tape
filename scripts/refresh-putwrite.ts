@@ -19,6 +19,7 @@ import { getOptions } from "../lib/options";
 import {
   ivFromPut, putDelta, ivFromCall, callDelta, realizedVol, realizedVolRank, ivPercentile, PUT_TENORS,
   type TenorId, type PutWriteCandidate, type PutWriteData, type PutSuggestion, type CallSuggestion,
+  type BullPutSuggestion, type IronCondorSuggestion,
 } from "../lib/putwrite";
 
 const DATA = path.join(process.cwd(), "data");
@@ -69,13 +70,21 @@ async function chainRetry(sym: string, date?: string) {
   return getOptions(sym, date);
 }
 
+// Pick the listed option whose strike is nearest the z-quantile target (z>0 ⇒ below spot for put
+// wings, z<0 ⇒ above spot for call wings). Used to locate the credit-spread short/long wings.
+function pickByZ(opts: any[], spot: number, T: number, iv: number, z: number, R: number): any | null {
+  if (!opts.length) return null;
+  const k = spot * Math.exp((R + (iv * iv) / 2) * T - z * iv * Math.sqrt(T));
+  return opts.reduce((a, b) => (Math.abs(b.strike - k) < Math.abs(a.strike - k) ? b : a));
+}
+
 // For one tenor: pick the expiry (prefer the tight band, else nearest in the wide window), back
 // ATM IV out of the premium, then locate BOTH legs from the same chain — the put at the tenor's
 // target delta (via z) and the covered call at its target delta (via zCall) — and sanity-check each.
 // Returns the put, the covered call (same expiry), and the ATM IV (the per-name vol signal).
 async function buildLegsAtTenor(
   sym: string, base: any, spot: number, tenor: (typeof PUT_TENORS)[number],
-): Promise<{ put: PutSuggestion | null; call: CallSuggestion | null; atmIV: number | null }> {
+): Promise<{ put: PutSuggestion | null; call: CallSuggestion | null; bullPut: BullPutSuggestion | null; condor: IronCondorSuggestion | null; atmIV: number | null }> {
   const now = Date.now();
   const allExp = base.expirations
     .map((d: string) => ({ d, dte: Math.round((Date.parse(d + "T00:00:00Z") - now) / 86_400_000) }))
@@ -84,12 +93,12 @@ async function buildLegsAtTenor(
   const exp = (pref.length ? pref : allExp).sort(
     (a: { dte: number }, b: { dte: number }) => Math.abs(a.dte - tenor.targetDte) - Math.abs(b.dte - tenor.targetDte),
   )[0];
-  if (!exp) return { put: null, call: null, atmIV: null };
+  if (!exp) return { put: null, call: null, bullPut: null, condor: null, atmIV: null };
   const chain = exp.d === base.selected ? base : await chainRetry(sym, exp.d);
   const T = exp.dte / 365;
   const midOf = (o: any): number | null => (o.bid && o.ask ? (o.bid + o.ask) / 2 : o.last);
   const puts = chain.puts.map((p: any) => ({ ...p, m: midOf(p) })).filter((p: any) => p.strike < spot && p.m && p.m > 0);
-  if (!puts.length) return { put: null, call: null, atmIV: null };
+  if (!puts.length) return { put: null, call: null, bullPut: null, condor: null, atmIV: null };
   const atm = puts.reduce((a: any, b: any) => (Math.abs(b.strike - spot) < Math.abs(a.strike - spot) ? b : a));
   const ai = ivFromPut(spot, atm.strike, T, R, atm.m);
   const atmIV = ai && ai > 0.05 && ai < 2 ? ai : null;
@@ -144,7 +153,48 @@ async function buildLegsAtTenor(
     }
   }
 
-  return { put, call, atmIV };
+  // Defined-risk credit spreads from the same chain: 16Δ short / ~8Δ long wings.
+  let bullPut: BullPutSuggestion | null = null;
+  let condor: IronCondorSuggestion | null = null;
+  if (atmIV && puts.length >= 2) {
+    const sp = pickByZ(puts, spot, T, atmIV, 0.9945, R); // ~16Δ short put
+    const lp = pickByZ(puts, spot, T, atmIV, 1.4051, R); // ~8Δ long put (the risk-defining wing)
+    if (sp && lp && sp.strike > lp.strike) {
+      const credit = sp.m - lp.m, width = sp.strike - lp.strike, maxLoss = width - credit;
+      const sd = ivFromPut(spot, sp.strike, T, R, sp.m);
+      const pop = sd ? 1 - Math.abs(putDelta(spot, sp.strike, T, R, sd)) : 0.84;
+      // guard: a credit >70% of the width or a sub-coin-flip short = stale prints / too-near-ATM
+      if (credit > 0.02 && maxLoss > 0.02 && credit / width <= 0.7 && pop >= 0.5) {
+        bullPut = {
+          expiry: exp.d, dte: exp.dte, shortStrike: sp.strike, longStrike: lp.strike,
+          credit: +credit.toFixed(2), width: +width.toFixed(2), maxLoss: +maxLoss.toFixed(2),
+          ror: +(credit / maxLoss).toFixed(3), pop: +pop.toFixed(2), breakeven: +(sp.strike - credit).toFixed(2),
+        };
+      }
+    }
+    // iron condor = the bull-put spread + a mirror bear-call spread
+    const sc = pickByZ(calls, spot, T, atmIV, -0.9945, R); // ~16Δ short call
+    const lc = pickByZ(calls, spot, T, atmIV, -1.4051, R); // ~8Δ long call
+    if (sp && lp && sc && lc && sp.strike > lp.strike && lc.strike > sc.strike && sc.strike > sp.strike) {
+      const credit = sp.m - lp.m + (sc.m - lc.m);
+      const width = Math.max(sp.strike - lp.strike, lc.strike - sc.strike), maxLoss = width - credit;
+      const spd = ivFromPut(spot, sp.strike, T, R, sp.m), scd = ivFromCall(spot, sc.strike, T, R, sc.m);
+      const pBelow = spd ? Math.abs(putDelta(spot, sp.strike, T, R, spd)) : 0.16;
+      const pAbove = scd ? callDelta(spot, sc.strike, T, R, scd) : 0.16;
+      const pop = Math.max(0, 1 - pBelow - pAbove);
+      if (credit > 0.05 && maxLoss > 0.05 && credit / width <= 0.7 && pop >= 0.45) {
+        condor = {
+          expiry: exp.d, dte: exp.dte,
+          putLong: lp.strike, putShort: sp.strike, callShort: sc.strike, callLong: lc.strike,
+          credit: +credit.toFixed(2), width: +width.toFixed(2), maxLoss: +maxLoss.toFixed(2),
+          ror: +(credit / maxLoss).toFixed(3), pop: +pop.toFixed(2),
+          lowBE: +(sp.strike - credit).toFixed(2), highBE: +(sc.strike + credit).toFixed(2),
+        };
+      }
+    }
+  }
+
+  return { put, call, bullPut, condor, atmIV };
 }
 
 async function main() {
@@ -181,6 +231,8 @@ async function main() {
     // options: from one chain pull, build the put at each tenor (~1M ≈16Δ and ~3M ≈10Δ)
     const puts: Record<TenorId, PutSuggestion | null> = { m1: null, m3: null };
     const calls: Record<TenorId, CallSuggestion | null> = { m1: null, m3: null };
+    const bullPuts: Record<TenorId, BullPutSuggestion | null> = { m1: null, m3: null };
+    const condors: Record<TenorId, IronCondorSuggestion | null> = { m1: null, m3: null };
     let atmIV: number | null = null, spot: number | null = null;
     try {
       const base = await chainRetry(sym);
@@ -188,8 +240,8 @@ async function main() {
       if (spot && base.expirations.length) {
         const r1 = await buildLegsAtTenor(sym, base, spot, PUT_TENORS[0]); // ~1 month
         const r3 = await buildLegsAtTenor(sym, base, spot, PUT_TENORS[1]); // ~3 months
-        puts.m1 = r1.put; calls.m1 = r1.call;
-        puts.m3 = r3.put; calls.m3 = r3.call;
+        puts.m1 = r1.put; calls.m1 = r1.call; bullPuts.m1 = r1.bullPut; condors.m1 = r1.condor;
+        puts.m3 = r3.put; calls.m3 = r3.call; bullPuts.m3 = r3.bullPut; condors.m3 = r3.condor;
         atmIV = r1.atmIV ?? r3.atmIV; // single per-name vol signal (prefer the 1M ATM)
       }
     } catch { /* leave legs null */ }
@@ -213,7 +265,7 @@ async function main() {
       atmIV: atmIV != null ? +atmIV.toFixed(3) : null,
       ivRank: ivRank != null ? Math.round(ivRank) : null,
       ivPremium: atmIV != null && rvol != null && rvol > 0 ? +(atmIV / rvol).toFixed(2) : null,
-      puts, calls,
+      puts, calls, bullPuts, condors,
     };
     return cand;
   });
@@ -234,7 +286,9 @@ async function main() {
   const withM1 = candidates.filter((c) => c.puts.m1).length;
   const withM3 = candidates.filter((c) => c.puts.m3).length;
   const withC1 = candidates.filter((c) => c.calls.m1).length;
-  console.log(`\nwrote ${candidates.length} candidates (${withM1} with a ~1M put, ${withM3} with a ~3M put, ${withC1} with a ~1M covered call).`);
+  const withBP1 = candidates.filter((c) => c.bullPuts.m1).length;
+  const withIC1 = candidates.filter((c) => c.condors.m1).length;
+  console.log(`\nwrote ${candidates.length} candidates (${withM1} ~1M put, ${withM3} ~3M put, ${withC1} ~1M call, ${withBP1} ~1M bull-put, ${withIC1} ~1M condor).`);
   console.log("top by 1M annualized yield:");
   for (const c of candidates.slice(0, 8)) {
     const p1 = c.puts.m1, p3 = c.puts.m3;
