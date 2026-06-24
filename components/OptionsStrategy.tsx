@@ -49,6 +49,27 @@ const bsPrice = (kind: "call" | "put", S: number, K: number, T: number, sigma: n
   const d2 = d1 - v;
   return kind === "call" ? S * normCdf(d1) - K * Math.exp(-r * T) * normCdf(d2) : K * Math.exp(-r * T) * normCdf(-d2) - S * normCdf(-d1);
 };
+// Per-share Black-Scholes Greeks for one leg (stock = pure delta). Theta is per DAY, vega per 1 vol point.
+const normPdf = (x: number): number => 0.3989422804014327 * Math.exp(-x * x / 2);
+const legGreeks = (kind: "stock" | "call" | "put", S: number, K: number, T: number, sigma: number, r = 0.04) => {
+  if (kind === "stock") return { delta: 1, gamma: 0, theta: 0, vega: 0 };
+  if (T <= 0 || sigma <= 0) {
+    const d = kind === "call" ? (S > K ? 1 : 0) : (S < K ? -1 : 0); // at expiry: pure intrinsic delta
+    return { delta: d, gamma: 0, theta: 0, vega: 0 };
+  }
+  const v = sigma * Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * T) / v;
+  const d2 = d1 - v;
+  const pdf = normPdf(d1);
+  const delta = kind === "call" ? normCdf(d1) : normCdf(d1) - 1;
+  const gamma = pdf / (S * v);
+  const vega = (S * pdf * Math.sqrt(T)) / 100; // per +1 vol point
+  const theta =
+    (kind === "call"
+      ? -(S * pdf * sigma) / (2 * Math.sqrt(T)) - r * K * Math.exp(-r * T) * normCdf(d2)
+      : -(S * pdf * sigma) / (2 * Math.sqrt(T)) + r * K * Math.exp(-r * T) * normCdf(-d2)) / 365; // per day
+  return { delta, gamma, theta, vega };
+};
 
 interface Ctx { u: number; callBy: Map<number, Opt>; putBy: Map<number, Opt>; stratDte: number; atmIV: number; nextDte: number | null; nextIV: number | null }
 
@@ -128,6 +149,16 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const legs = buildLegs(stratKey, ks, { u, callBy, putBy, stratDte, atmIV, nextDte, nextIV: nextIV ?? null });
   const pay = valueAt(legs, stratDte, stratDte, atmIV); // P/L at the near expiry
   const netCost = legs.reduce((s, l) => s + (l.side === "buy" ? 1 : -1) * l.premium * l.qty, 0) * 100;
+
+  // Net position Greeks at spot, ×100 shares/contract: share-equivalent delta, gamma, $/day theta, $/vol-pt vega.
+  const greeks = legs.reduce(
+    (acc, l) => {
+      const g = legGreeks(l.kind, u, l.strike ?? u, (l.dte ?? stratDte) / 365, l.iv || atmIV || 0.3);
+      const sgn = (l.side === "buy" ? 1 : -1) * l.qty * 100;
+      return { delta: acc.delta + sgn * g.delta, gamma: acc.gamma + sgn * g.gamma, theta: acc.theta + sgn * g.theta, vega: acc.vega + sgn * g.vega };
+    },
+    { delta: 0, gamma: 0, theta: 0, vega: 0 },
+  );
 
   // exact extremes at the kinks (0, strikes, far-OTM) + unbounded-tail checks
   const far = u * 3;
@@ -245,6 +276,15 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
         <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} />
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
+        <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">Net Greeks</span>
+        <GreekStat label="Δ" value={(greeks.delta >= 0 ? "+" : "") + greeks.delta.toFixed(0)} sub="≈ shares" color={greeks.delta >= 0 ? "#22c55e" : "#ef4444"} title="Delta — share-equivalent: the position moves like this many shares for a $1 stock move." />
+        <GreekStat label="Γ" value={(greeks.gamma >= 0 ? "+" : "") + greeks.gamma.toFixed(1)} sub="Δ/$1" title="Gamma — how much the net delta itself changes per $1 move in the stock." />
+        <GreekStat label="Θ" value={dollars(greeks.theta)} sub="per day" color={greeks.theta >= 0 ? "#22c55e" : "#ef4444"} title="Theta — P/L from one day of time passing, all else equal. Negative = you pay decay; positive = you collect it." />
+        <GreekStat label="V" value={dollars(greeks.vega)} sub="per +1% IV" color={greeks.vega >= 0 ? "#22c55e" : "#ef4444"} title="Vega — P/L for a 1-point rise in implied vol. Long vega gains when IV rises; short vega gains when it falls." />
+        <span className="ml-auto text-[10px] text-[var(--text-4)]">at spot {price2(u)} · {stratDte}d · ATM IV {Math.round(atmIV * 100)}%</span>
+      </div>
+
       {cmp && (
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
           <span className="font-semibold text-[#60a5fa]">{cmp.label}</span>
@@ -346,6 +386,16 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
         ))}
       </div>
     </div>
+  );
+}
+
+function GreekStat({ label, value, sub, color, title }: { label: string; value: string; sub?: string; color?: string; title?: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1" title={title}>
+      <span className="font-mono text-[var(--text-4)]">{label}</span>
+      <span className="font-mono font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</span>
+      {sub && <span className="text-[10px] text-[var(--text-4)]">{sub}</span>}
+    </span>
   );
 }
 
