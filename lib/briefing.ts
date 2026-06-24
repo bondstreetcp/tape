@@ -44,6 +44,17 @@ const NOISE = [
   /^for .{0,40}\bclick\b/i, /^to .{0,40}\bunsubscribe\b/i, /^\(.*Reuters.*\)$/i,
 ];
 
+// Reuters link/graphic teasers linearise INLINE into the prose ("…last year. To read more, click
+// here Carnival forecasts…", "…Exxon Click on the chart for an interactive graphic brought against…")
+// — strip them so they don't bury the next headline or split a sentence mid-clause.
+function stripTeasers(l: string): string {
+  return l
+    .replace(/\bClick on the chart for an?[^.]{0,40}?graphics?\b\.?/gi, "")
+    .replace(/\b(?:To read more,?\s*|For more,?\s*)?[Cc]lick here\b\.?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 const DATE_RE = /((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+[A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/;
 // A line ends a sentence when it closes with terminal punctuation or a closing quote.
 const ENDS_SENTENCE = /[.?!:”"']$/;
@@ -92,7 +103,9 @@ function groupProseNarrow(raw: string[]): BriefBlock[] {
   for (let i = 0; i < lines.length; i++) {
     const subj = subjectWord(lines[i]);
     if (subj.length < 3) continue;
-    if (i > 0 && !endsSentenceStrict(lines[i - 1])) continue; // a headline follows a finished sentence
+    // a headline follows a finished sentence; also accept a prior line ending in a year ("…of 1976.")
+    // — endsSentenceStrict treats a trailing digit-period as a broken decimal, but a year ends a sentence.
+    if (i > 0 && !endsSentenceStrict(lines[i - 1]) && !(/(?:19|20)\d{2}\.["”']?$/.test(lines[i - 1]) && /^["“]?[A-Z]/.test(lines[i]))) continue;
     if (endsSentenceStrict(lines[i])) continue; // …and a headline line itself has no terminal period
     if (echoIndex(lines, subj, i + 1, i + 4) >= 0) starts.push(i);
   }
@@ -214,7 +227,7 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
     const m = l.match(DATE_RE);
     if (m) { date = m[1].replace(/\s+/g, " "); break; }
   }
-  const lines = rawLines.filter((l) => l && !NOISE.some((re) => re.test(l)));
+  const lines = rawLines.map(stripTeasers).filter((l) => l && !NOISE.some((re) => re.test(l)));
   const wrapWidth = lines.reduce((m, l) => Math.max(m, l.length), 80);
   // A small typical line length means a narrow multi-column PDF (The Day Ahead), whose
   // text can't be cleanly split into headline + body — flag it so prose stays unbolded.
