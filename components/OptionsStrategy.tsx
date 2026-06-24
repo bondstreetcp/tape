@@ -5,15 +5,20 @@ import { currencyPrefix } from "@/lib/format";
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
 interface Leg { kind: "stock" | "call" | "put"; side: "buy" | "sell"; strike?: number; premium: number; qty: number }
 
+// Each strike is selectable; `off` is the default index offset from the at-the-money strike.
 const STRATS = [
-  { key: "long-call", label: "Long Call", outlook: "Bullish", strikes: 1 },
-  { key: "long-put", label: "Long Put", outlook: "Bearish", strikes: 1 },
-  { key: "covered-call", label: "Covered Call", outlook: "Neutral · income", strikes: 1 },
-  { key: "csp", label: "Cash-Secured Put", outlook: "Neutral-bullish · income", strikes: 1 },
-  { key: "bull-call", label: "Bull Call Spread", outlook: "Bullish · defined risk", strikes: 2 },
-  { key: "bear-put", label: "Bear Put Spread", outlook: "Bearish · defined risk", strikes: 2 },
-  { key: "straddle", label: "Long Straddle", outlook: "Big move either way", strikes: 1 },
-  { key: "strangle", label: "Long Strangle", outlook: "Big move · cheaper", strikes: 2 },
+  { key: "long-call", label: "Long Call", outlook: "Bullish", strikes: [{ label: "Strike", off: 0 }] },
+  { key: "long-put", label: "Long Put", outlook: "Bearish", strikes: [{ label: "Strike", off: 0 }] },
+  { key: "covered-call", label: "Covered Call", outlook: "Neutral · income", strikes: [{ label: "Call", off: 2 }] },
+  { key: "csp", label: "Cash-Secured Put", outlook: "Neutral-bullish · income", strikes: [{ label: "Put", off: -2 }] },
+  { key: "bull-call", label: "Bull Call Spread", outlook: "Bullish · defined risk", strikes: [{ label: "Long", off: 0 }, { label: "Short", off: 3 }] },
+  { key: "bear-put", label: "Bear Put Spread", outlook: "Bearish · defined risk", strikes: [{ label: "Short", off: -3 }, { label: "Long", off: 0 }] },
+  { key: "straddle", label: "Long Straddle", outlook: "Big move either way", strikes: [{ label: "Strike", off: 0 }] },
+  { key: "strangle", label: "Long Strangle", outlook: "Big move · cheaper", strikes: [{ label: "Put", off: -2 }, { label: "Call", off: 2 }] },
+  { key: "short-straddle", label: "Short Straddle", outlook: "Range-bound · sell vol", strikes: [{ label: "Strike", off: 0 }] },
+  { key: "short-strangle", label: "Short Strangle", outlook: "Range-bound · income", strikes: [{ label: "Put", off: -2 }, { label: "Call", off: 2 }] },
+  { key: "iron-condor", label: "Iron Condor", outlook: "Range-bound · defined risk", strikes: [{ label: "Long put", off: -4 }, { label: "Short put", off: -2 }, { label: "Short call", off: 2 }, { label: "Long call", off: 4 }] },
+  { key: "iron-butterfly", label: "Iron Butterfly", outlook: "Pinned · defined risk", strikes: [{ label: "Long put", off: -3 }, { label: "ATM", off: 0 }, { label: "Long call", off: 3 }] },
 ] as const;
 type StratKey = (typeof STRATS)[number]["key"];
 
@@ -25,18 +30,36 @@ const mid = (o: Opt | undefined): number => {
 const fmtDollars = (v: number, sym: string) => `${v < 0 ? "−" : ""}${sym}${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 const fmtPrice2 = (v: number, sym: string) => `${sym}${v.toFixed(2)}`;
 
-function buildLegs(strat: StratKey, kA: number, kB: number, u: number, callBy: Map<number, Opt>, putBy: Map<number, Opt>): Leg[] {
+// Construct the legs of `strat` from the (ascending) chosen strikes `ks`. Multi-leg neutral
+// strategies (condor/butterfly) and the short-vol income strategies sell premium; the rest match
+// the classic single/two-leg payoffs.
+function buildLegs(key: StratKey, ks: number[], u: number, callBy: Map<number, Opt>, putBy: Map<number, Opt>): Leg[] {
   const c = (k: number) => mid(callBy.get(k));
   const p = (k: number) => mid(putBy.get(k));
-  switch (strat) {
-    case "long-call": return [{ kind: "call", side: "buy", strike: kA, premium: c(kA), qty: 1 }];
-    case "long-put": return [{ kind: "put", side: "buy", strike: kA, premium: p(kA), qty: 1 }];
-    case "covered-call": return [{ kind: "stock", side: "buy", premium: u, qty: 1 }, { kind: "call", side: "sell", strike: kA, premium: c(kA), qty: 1 }];
-    case "csp": return [{ kind: "put", side: "sell", strike: kA, premium: p(kA), qty: 1 }];
-    case "bull-call": { const lo = Math.min(kA, kB), hi = Math.max(kA, kB); return [{ kind: "call", side: "buy", strike: lo, premium: c(lo), qty: 1 }, { kind: "call", side: "sell", strike: hi, premium: c(hi), qty: 1 }]; }
-    case "bear-put": { const lo = Math.min(kA, kB), hi = Math.max(kA, kB); return [{ kind: "put", side: "buy", strike: hi, premium: p(hi), qty: 1 }, { kind: "put", side: "sell", strike: lo, premium: p(lo), qty: 1 }]; }
-    case "straddle": return [{ kind: "call", side: "buy", strike: kA, premium: c(kA), qty: 1 }, { kind: "put", side: "buy", strike: kA, premium: p(kA), qty: 1 }];
-    case "strangle": { const lo = Math.min(kA, kB), hi = Math.max(kA, kB); return [{ kind: "put", side: "buy", strike: lo, premium: p(lo), qty: 1 }, { kind: "call", side: "buy", strike: hi, premium: c(hi), qty: 1 }]; }
+  const s = [...ks].sort((a, b) => a - b); // ascending, so leg roles are positional
+  switch (key) {
+    case "long-call": return [{ kind: "call", side: "buy", strike: ks[0], premium: c(ks[0]), qty: 1 }];
+    case "long-put": return [{ kind: "put", side: "buy", strike: ks[0], premium: p(ks[0]), qty: 1 }];
+    case "covered-call": return [{ kind: "stock", side: "buy", premium: u, qty: 1 }, { kind: "call", side: "sell", strike: ks[0], premium: c(ks[0]), qty: 1 }];
+    case "csp": return [{ kind: "put", side: "sell", strike: ks[0], premium: p(ks[0]), qty: 1 }];
+    case "bull-call": return [{ kind: "call", side: "buy", strike: s[0], premium: c(s[0]), qty: 1 }, { kind: "call", side: "sell", strike: s[1], premium: c(s[1]), qty: 1 }];
+    case "bear-put": return [{ kind: "put", side: "buy", strike: s[1], premium: p(s[1]), qty: 1 }, { kind: "put", side: "sell", strike: s[0], premium: p(s[0]), qty: 1 }];
+    case "straddle": return [{ kind: "call", side: "buy", strike: ks[0], premium: c(ks[0]), qty: 1 }, { kind: "put", side: "buy", strike: ks[0], premium: p(ks[0]), qty: 1 }];
+    case "strangle": return [{ kind: "put", side: "buy", strike: s[0], premium: p(s[0]), qty: 1 }, { kind: "call", side: "buy", strike: s[1], premium: c(s[1]), qty: 1 }];
+    case "short-straddle": return [{ kind: "call", side: "sell", strike: ks[0], premium: c(ks[0]), qty: 1 }, { kind: "put", side: "sell", strike: ks[0], premium: p(ks[0]), qty: 1 }];
+    case "short-strangle": return [{ kind: "put", side: "sell", strike: s[0], premium: p(s[0]), qty: 1 }, { kind: "call", side: "sell", strike: s[1], premium: c(s[1]), qty: 1 }];
+    case "iron-condor": return [
+      { kind: "put", side: "buy", strike: s[0], premium: p(s[0]), qty: 1 },
+      { kind: "put", side: "sell", strike: s[1], premium: p(s[1]), qty: 1 },
+      { kind: "call", side: "sell", strike: s[2], premium: c(s[2]), qty: 1 },
+      { kind: "call", side: "buy", strike: s[3], premium: c(s[3]), qty: 1 },
+    ];
+    case "iron-butterfly": return [
+      { kind: "put", side: "buy", strike: s[0], premium: p(s[0]), qty: 1 },
+      { kind: "put", side: "sell", strike: s[1], premium: p(s[1]), qty: 1 },
+      { kind: "call", side: "sell", strike: s[1], premium: c(s[1]), qty: 1 },
+      { kind: "call", side: "buy", strike: s[2], premium: c(s[2]), qty: 1 },
+    ];
   }
 }
 
@@ -45,6 +68,25 @@ const payoffOf = (legs: Leg[]) => (S: number) =>
     const intr = l.kind === "stock" ? S : l.kind === "call" ? Math.max(0, S - l.strike!) : Math.max(0, l.strike! - S);
     return t + (l.side === "buy" ? 1 : -1) * (intr - l.premium) * l.qty;
   }, 0) * 100;
+
+// Probability the position is profitable at expiry, from a lognormal model of the underlying
+// (median ≈ spot via the risk-neutral, r≈0 drift; σ = ATM IV, T = DTE). Numerically integrate the
+// pdf over the price region where the payoff is positive. Null when IV/DTE are missing.
+function probOfProfit(pay: (S: number) => number, u: number, sigma: number | null, T: number | null): number | null {
+  if (!sigma || sigma <= 0 || !T || T <= 0 || !u) return null;
+  const sd = sigma * Math.sqrt(T);
+  const mu = Math.log(u) - 0.5 * sigma * sigma * T;
+  const N = 600, Slo = u * 0.1, Shi = u * 5, dS = (Shi - Slo) / N;
+  let inProfit = 0, total = 0;
+  for (let i = 0; i < N; i++) {
+    const S = Slo + (i + 0.5) * dS;
+    const z = (Math.log(S) - mu) / sd;
+    const w = (Math.exp(-0.5 * z * z) / (S * sd * Math.sqrt(2 * Math.PI))) * dS;
+    total += w;
+    if (pay(S) > 0) inProfit += w;
+  }
+  return total > 0 ? inProfit / total : null;
+}
 
 const CW = 520, CH = 200, ML = 44, MR = 12, MT = 12, MB = 22;
 
@@ -57,44 +99,33 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const putBy = useMemo(() => new Map(puts.map((p) => [p.strike, p])), [puts]);
   const strikes = useMemo(() => [...new Set([...callBy.keys(), ...putBy.keys()])].sort((a, b) => a - b), [callBy, putBy]);
   const atmIdx = useMemo(() => { let best = Infinity, idx = 0; strikes.forEach((s, i) => { const d = Math.abs(s - u); if (d < best) { best = d; idx = i; } }); return idx; }, [strikes, u]);
+  const atmIV = useMemo(() => (strikes.length ? (callBy.get(strikes[atmIdx])?.iv ?? putBy.get(strikes[atmIdx])?.iv ?? null) : null), [strikes, atmIdx, callBy, putBy]);
 
   const [stratKey, setStratKey] = useState<StratKey>("long-call");
-  const [aOv, setAOv] = useState<number | null>(null);
-  const [bOv, setBOv] = useState<number | null>(null);
+  const [ov, setOv] = useState<(number | null)[]>([]); // per-strike overrides; reset on strategy change
   const strat = STRATS.find((s) => s.key === stratKey)!;
 
   const at = (off: number) => strikes[Math.min(strikes.length - 1, Math.max(0, atmIdx + off))];
-  const defaults = useMemo(() => {
-    switch (stratKey) {
-      case "covered-call": return { a: at(2), b: at(2) };
-      case "csp": return { a: at(-2), b: at(-2) };
-      case "bull-call": return { a: at(0), b: at(3) };
-      case "bear-put": return { a: at(-3), b: at(0) };
-      case "strangle": return { a: at(-2), b: at(2) };
-      default: return { a: at(0), b: at(0) };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stratKey, strikes, atmIdx]);
 
   if (strikes.length < 2 || !u) {
     return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">Not enough chain data to model strategies for this expiry.</div>;
   }
 
-  const kA = aOv ?? defaults.a;
-  const kB = bOv ?? defaults.b;
-  const legs = buildLegs(stratKey, kA, kB, u, callBy, putBy);
+  const ks = strat.strikes.map((spec, i) => ov[i] ?? at(spec.off));
+  const legs = buildLegs(stratKey, ks, u, callBy, putBy);
   const pay = payoffOf(legs);
-
   const netCost = legs.reduce((s, l) => s + (l.side === "buy" ? 1 : -1) * l.premium * l.qty, 0) * 100;
 
-  // exact extremes at the kinks (0, strikes, far-OTM) + unbounded-upside check
+  // exact extremes at the kinks (0, strikes, far-OTM) + unbounded-tail checks
   const far = u * 3;
   const kinks = [0, ...strikes, far];
   const kinkVals = kinks.map(pay);
   const slopeUp = pay(far) - pay(far - Math.max(0.01, u * 0.002));
-  const upUnbounded = slopeUp > 1e-6;
+  const upUnbounded = slopeUp > 1e-6; // profit grows without bound up (a naked long call leg)
+  const lossUnboundedUp = slopeUp < -1e-6; // loss grows without bound up (a naked short call leg)
   const maxProfit = upUnbounded ? null : Math.max(...kinkVals);
-  const maxLoss = Math.min(...kinkVals);
+  const maxLoss = lossUnboundedUp ? null : Math.min(...kinkVals);
+  const pop = probOfProfit(pay, u, atmIV, dte != null ? dte / 365 : null);
 
   // chart grid + break-evens
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
@@ -119,42 +150,39 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const y0 = Y(0);
   const frac = Math.max(0, Math.min(1, (y0 - MT) / (CH - MB - MT)));
 
-  const strikeOpts = strikes;
-
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-sm font-semibold text-[var(--text-2)]">Strategy payoff</span>
         <select
           value={stratKey}
-          onChange={(e) => { setStratKey(e.target.value as StratKey); setAOv(null); setBOv(null); }}
+          onChange={(e) => { setStratKey(e.target.value as StratKey); setOv([]); }}
           className="cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm outline-none"
         >
           {STRATS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
         <span className="rounded-full border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-[11px] text-[var(--text-3)]">{strat.outlook}</span>
-        <label className="flex items-center gap-1 text-xs text-[var(--text-3)]">
-          {strat.strikes === 2 ? "Lower" : "Strike"}
-          <select value={kA} onChange={(e) => setAOv(Number(e.target.value))} className="cursor-pointer rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs outline-none">
-            {strikeOpts.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        {strat.strikes === 2 && (
-          <label className="flex items-center gap-1 text-xs text-[var(--text-3)]">
-            Upper
-            <select value={kB} onChange={(e) => setBOv(Number(e.target.value))} className="cursor-pointer rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs outline-none">
-              {strikeOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+        {strat.strikes.map((spec, i) => (
+          <label key={i} className="flex items-center gap-1 text-xs text-[var(--text-3)]">
+            {spec.label}
+            <select
+              value={ks[i]}
+              onChange={(e) => setOv((prev) => { const n = [...prev]; n[i] = Number(e.target.value); return n; })}
+              className="cursor-pointer rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs outline-none"
+            >
+              {strikes.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-        )}
+        ))}
         {dte != null && <span className="ml-auto text-[11px] text-[var(--text-4)]">{expiry} · {dte}d</span>}
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Metric label={netCost >= 0 ? "Net debit" : "Net credit"} value={dollars(Math.abs(netCost))} sub={netCost >= 0 ? "you pay" : "you collect"} />
         <Metric label="Max profit" value={maxProfit == null ? "Unlimited" : dollars(maxProfit)} color="#22c55e" />
-        <Metric label="Max loss" value={dollars(maxLoss)} color="#ef4444" />
+        <Metric label="Max loss" value={maxLoss == null ? "Unlimited" : dollars(maxLoss)} color="#ef4444" />
         <Metric label="Break-even" value={breakevens.length ? breakevens.map(price2).join(" / ") : "—"} />
+        <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} />
       </div>
 
       <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full" style={{ height: "auto" }}>

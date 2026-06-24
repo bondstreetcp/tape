@@ -26,7 +26,7 @@ function rankColor(v: number | null | undefined): string {
   return "var(--text-3)";
 }
 
-type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap";
+type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap" | "price";
 
 // Tenor tabs (kept in sync with PUT_TENORS in lib/putwrite; inlined to avoid pulling the fs
 // loader into the client bundle). "1M" = the standard ~16Δ CSP; "3M" = lower-delta, further OTM.
@@ -70,6 +70,7 @@ export default function PutWriteView({
       roe: (c) => c.roe ?? -1,
       pe: (c) => -(c.pe ?? 1e9), // lower P/E first
       mktcap: (c) => c.marketCap,
+      price: (c) => c.price ?? -1,
     };
     return candidates
       .filter((c) => {
@@ -169,6 +170,7 @@ export default function PutWriteView({
                   <th className="w-7 px-2 py-2"></th>
                   <th className="px-2 py-2 font-medium">Ticker</th>
                   <th className="px-2 py-2 font-medium">Company</th>
+                  <SortTh k="price" cls="text-right">Price</SortTh>
                   <SortTh k="mktcap" cls="text-right">Mkt cap</SortTh>
                   <SortTh k="roe" cls="text-right">ROE</SortTh>
                   <SortTh k="pe" cls="text-right">P/E</SortTh>
@@ -198,6 +200,7 @@ export default function PutWriteView({
                         <span className="text-[var(--text-2)]">{c.name}</span>
                         <span className="ml-1.5 text-[10px] text-[var(--text-4)]">{c.sector}</span>
                       </td>
+                      <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">{c.price != null ? `$${c.price.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{fmtMarketCap(c.marketCap)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pctFrac(c.roe)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{c.pe != null ? c.pe.toFixed(1) : "—"}</td>
