@@ -79,7 +79,8 @@ function endsSentenceStrict(l: string): boolean {
 }
 const wordsOf = (s: string) => s.split(/[^A-Za-z0-9]+/).filter(Boolean);
 function echoIndex(lines: string[], subj: string, from: number, to: number): number {
-  for (let j = from; j <= to && j < lines.length; j++) if (wordsOf(lines[j]).includes(subj)) return j;
+  const s = subj.toLowerCase(); // case-insensitive: a headline's "Chip" echoes the body's "chip"
+  for (let j = from; j <= to && j < lines.length; j++) if (wordsOf(lines[j]).some((w) => w.toLowerCase() === s)) return j;
   return -1;
 }
 
