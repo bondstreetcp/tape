@@ -169,6 +169,16 @@ jobs:
         run: npm run refresh-cef
         continue-on-error: true
 
+      # "Discount to own 10-year history" valuation screen. Rebuilds each US name's point-in-time
+      # P/E / EV-EBITDA / P/S / P/B series from SEC EDGAR quarterly companyfacts + split-adjusted
+      # prices and compares today's multiple to the name's own trailing-10yr median. Fundamentals
+      # change quarterly, so this barely moves day to day — it has a built-in SEC rate-limiter
+      # (~7 req/s + backoff). No key; iterates every US universe (deduped).
+      - name: Refresh valuation history (discount to own history)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-valuation-history
+        continue-on-error: true
+
       # Congressional (Senate STOCK Act) trades from the public Senate eFD. No key; polite
       # throttling built in. Disclosures lag ~30-45 days, so daily is plenty.
       - name: Refresh congressional trades
