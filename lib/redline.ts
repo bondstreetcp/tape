@@ -156,6 +156,35 @@ async function fetchSection(url: string, form: string): Promise<string> {
   }
 }
 
+/** Does an 8-K's items[] string include item 2.02 (an earnings release)? */
+function isEarnings8K(items: string): boolean {
+  return /(^|,)\s*2\.02/.test(items || "");
+}
+
+/**
+ * Given EDGAR `filings.recent` parallel arrays and the index of a NEW filing,
+ * find the index of the PRIOR comparable filing of the same type (walking the
+ * newest-first arrays forward from newIdx+1):
+ *   10-K  → prior 10-K
+ *   10-Q  → prior 10-Q
+ *   8-K   → prior 8-K (when earningsOnly, prior *earnings* 8-K — item 2.02)
+ * Accepts the clean form and its "/A" amendment. Returns -1 if none on file.
+ */
+export function findPriorComparable(
+  recent: any,
+  newIdx: number,
+  form: string,
+  earningsOnly = false,
+): number {
+  const forms: string[] = recent?.form || [];
+  for (let i = newIdx + 1; i < forms.length; i++) {
+    if (forms[i] !== form && forms[i] !== `${form}/A`) continue;
+    if (earningsOnly && !isEarnings8K(recent.items?.[i] || "")) continue;
+    return i;
+  }
+  return -1;
+}
+
 export async function getRedline(symbol: string, form: "10-K" | "10-Q" = "10-K"): Promise<Redline> {
   const base: Redline = {
     available: false, section: "Risk Factors", fromDate: null, toDate: null,
@@ -166,13 +195,14 @@ export async function getRedline(symbol: string, form: "10-K" | "10-Q" = "10-K")
   try {
     const sub: any = await (await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS })).json();
     const r = sub.filings?.recent;
-    const tens: { date: string; url: string }[] = [];
-    for (let i = 0; i < (r?.form?.length || 0) && tens.length < 2; i++) {
-      if (r.form[i] === form) {
-        const acc = r.accessionNumber[i].replace(/-/g, "");
-        tens.push({ date: r.filingDate[i], url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${r.primaryDocument[i]}` });
-      }
-    }
+    const mk = (i: number) => {
+      const acc = r.accessionNumber[i].replace(/-/g, "");
+      return { date: r.filingDate[i], url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${r.primaryDocument[i]}` };
+    };
+    // Newest filing of this form, then its prior comparable (same form) via the shared helper.
+    const newIdx = (r?.form || []).indexOf(form);
+    const priorIdx = newIdx >= 0 ? findPriorComparable(r, newIdx, form) : -1;
+    const tens = newIdx >= 0 && priorIdx >= 0 ? [mk(newIdx), mk(priorIdx)] : [];
     if (tens.length < 2)
       return { ...base, note: `Need two ${form === "10-Q" ? "quarterly reports (10-Q)" : "annual reports (10-K)"} on file to compare.` };
     const [newer, older] = tens;

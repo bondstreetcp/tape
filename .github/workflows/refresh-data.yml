@@ -196,6 +196,17 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         continue-on-error: true
 
+      # Overnight Filings (SuperAnalyst) — AI desk notes on new material SEC filings (8-K/10-Q/10-K)
+      # accepted in the last WINDOW_HOURS, each summarized vs the prior comparable filing. Scans the
+      # US watch-set (S&P 500 ∪ Nasdaq 100 ∪ Russell 1000) off EDGAR, then GLM via OpenRouter.
+      # Needs OPENROUTER_API_KEY (repo secret); skipped cleanly if it isn't set.
+      - name: Refresh overnight filings (SuperAnalyst)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-overnight-filings
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Cash-secured put-writing screen. Uses the refreshed snapshots (ROE / P/E / cap) + price
       # series above, then pulls option chains for the ~150 large caps that pass the quality/value
       # filter and prices the ~16-delta / ~35-DTE put. Globally rate-limited (Yahoo throttles

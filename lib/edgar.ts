@@ -10,7 +10,7 @@
  */
 import * as cheerio from "cheerio";
 
-const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
+export const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 
 export interface InsiderTx {
   date: string; // YYYY-MM-DD
@@ -49,7 +49,7 @@ async function getJson(url: string): Promise<any> {
   return res.json();
 }
 
-async function getSubmissions(cik: string): Promise<any> {
+export async function getSubmissions(cik: string): Promise<any> {
   const c = subCache.get(cik);
   if (c) return c;
   const s = await getJson(`https://data.sec.gov/submissions/CIK${cik}.json`);
@@ -151,7 +151,7 @@ async function parseForm4(cik: string, f: F4Filing): Promise<InsiderTx[]> {
   return out;
 }
 
-async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+export async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const ret = new Array<R>(items.length);
   let i = 0;
   await Promise.all(

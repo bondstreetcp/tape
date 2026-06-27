@@ -26,6 +26,7 @@
     "refresh-putwrite": "tsx scripts/refresh-putwrite.ts",
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
     "refresh-trump": "tsx scripts/refresh-trump.ts",
+    "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "patch-industries": "tsx scripts/patch-industries.ts"
   },
   "dependencies": {
