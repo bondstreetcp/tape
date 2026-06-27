@@ -105,7 +105,7 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "BMW.DE", "BAYN.DE", "VOW3.DE", "IFX.DE", "DB1.DE", "ADS.DE", "DBK.DE", "RWE.DE",
       "EOAN.DE", "HEN3.DE", "MRK.DE", "VNA.DE", "DHL.DE", "CON.DE", "BNR.DE", "SHL.DE",
       "SY1.DE", "HNR1.DE", "FRE.DE", "QIA.DE", "ZAL.DE", "P911.DE", "MTX.DE", "RHM.DE",
-      "CBK.DE", "HEI.DE", "BEI.DE", "SRT3.DE", "PAH3.DE",
+      "CBK.DE", "HEI.DE", "BEI.DE", "SRT3.DE", "PAH3.DE", "ENR.DE",
     ],
   },
   {
