@@ -104,6 +104,7 @@ function computeFund(raw: any[], meta?: { marketCap: number; divYield: number | 
   const investedCap = f(r[0], "investedCapital") ?? (equity0 != null ? equity0 + (debt0 ?? 0) - (cash0 ?? 0) : null);
   return {
     revGrowth: ratio(rev(0), rev(1)) != null ? rev(0)! / rev(1)! - 1 : null,
+    revenue: rev(0), // latest FY total revenue ($) — Rule-of-40 floor reads this
     revCagr3y: r.length >= 4 && rev(0) && rev(3) ? Math.pow(rev(0)! / rev(3)!, 1 / 3) - 1 : null,
     grossMargin: margin("grossProfit", 0),
     opMargin: margin("operatingIncome", 0),
