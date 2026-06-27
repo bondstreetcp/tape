@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import type { CatalystMap } from "@/lib/catalysts";
@@ -18,9 +19,11 @@ export default function MoversSection({
   catalysts?: CatalystMap;
 }) {
   const router = useRouter();
+  const [count, setCount] = useState(6);
   const ranked = [...stocks].filter((s) => s.returns[tf] != null).sort((a, b) => (b.returns[tf] as number) - (a.returns[tf] as number));
-  const gainers = ranked.slice(0, 6);
-  const losers = ranked.slice(-6).reverse();
+  const n = Math.min(count, Math.max(1, Math.floor(ranked.length / 2))); // don't let a name land in both lists on small universes
+  const gainers = ranked.slice(0, n);
+  const losers = ranked.slice(-n).reverse();
   const tfLabel = TIMEFRAMES.find((t) => t.key === tf)?.label ?? "";
 
   const Col = ({ title, rows }: { title: string; rows: StockRow[] }) => (
@@ -58,10 +61,23 @@ export default function MoversSection({
 
   return (
     <section className="mt-6">
-      <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Movers · {tfLabel}</h2>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-2)]">Movers · {tfLabel}</h2>
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
+          {[6, 10, 20, 50].map((c) => (
+            <button
+              key={c}
+              onClick={() => setCount(c)}
+              className={"rounded-md px-2 py-0.5 text-xs font-medium tabular-nums transition-colors " + (count === c ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Col title="▲ Top gainers" rows={gainers} />
-        <Col title="▼ Top losers" rows={losers} />
+        <Col title={`▲ Top ${n} gainers`} rows={gainers} />
+        <Col title={`▼ Top ${n} losers`} rows={losers} />
       </div>
     </section>
   );

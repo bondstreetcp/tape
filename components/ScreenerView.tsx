@@ -151,6 +151,8 @@ export default function ScreenerView({
       { key: "etf", label: "Sector", num: false, get: (s) => ETF_TO_SECTOR[s.etf]?.name ?? s.sector, fmt: (v) => v, align: "left" },
       { key: "price", label: "Price", num: true, get: (s) => s.price, fmt: (v) => (v == null ? "—" : fmtMoney(v, currency)), align: "right" },
       { key: "ret", label: TIMEFRAMES.find((t) => t.key === tf)?.label ?? "Ret", num: true, get: (s) => s.returns[tf], fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
+      { key: "ret3y", label: "3Y", num: true, get: (s) => s.returns["3y"], fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
+      { key: "ret5y", label: "5Y", num: true, get: (s) => s.returns["5y"], fmt: (v) => fmtPct(v, 1), color: (v) => trendColor(v), align: "right" },
       { key: "cap", label: "Mkt Cap", num: true, get: (s) => s.marketCap, fmt: (v) => fmtMarketCap(v, currency), align: "right" },
     ];
     const valuation: Col[] = [
