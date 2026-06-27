@@ -26,6 +26,13 @@ on:
     - cron: "11 2 * * 1-5"
     - cron: "17 4 * * 1-5"
     - cron: "23 6 * * 1-5"
+    # ~08 / 12 UTC — EUROPEAN-session ticks. London/Frankfurt/Paris/Zurich trade ~07:00–16:30 UTC. These
+    # quote ONLY the European universes (cac40/aex/ftse100/dax/smi, ~190 names) so their snapshots track
+    # the live session through the US early morning instead of sitting on yesterday's close — the 10:00
+    # INTL run is a single, historically-flaky touch, and the first US tick (14:13) is ~9am ET. The later
+    # US daytime ticks (14:13/16:19, ONLY unset) already re-quote Europe while it's still open.
+    - cron: "9 8 * * 1-5"
+    - cron: "31 12 * * 1-5"
     # ~10 UTC (~5–6am ET) — INTERNATIONAL-only refresh after the Asian close (Tokyo 06:00 / Seoul 06:30 /
     # Shanghai 07:00 / Hong Kong 08:00 UTC), so the Asian constituents aren't a day stale vs the live
     # index chart during the US day.
@@ -52,11 +59,13 @@ jobs:
     timeout-minutes: 60
     # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close
     # international-only refresh (10:00). ASIA = an overnight Asian-session quotes tick (02/04/06).
-    # Any other scheduled tick is an intraday quotes-only refresh of every universe.
+    # EUR = a European-session quotes tick (08/12). Any other scheduled tick is an intraday quotes-only
+    # refresh of every universe.
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
       INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
       ASIA: ${{ github.event.schedule == '11 2 * * 1-5' || github.event.schedule == '17 4 * * 1-5' || github.event.schedule == '23 6 * * 1-5' }}
+      EUR: ${{ github.event.schedule == '9 8 * * 1-5' || github.event.schedule == '31 12 * * 1-5' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,10 +82,10 @@ jobs:
       # left untouched for the after-close run).
       - name: Refresh quotes (intraday)
         if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
-        # Asian-session ticks quote only the Asian universes (markets live, US closed); the daytime
-        # US ticks (ONLY unset) quote every universe as before.
+        # Asian-session ticks quote only the Asian universes; European-session ticks only the European
+        # ones (markets live, US closed); the daytime US ticks (ONLY unset) quote every universe.
         env:
-          ONLY: ${{ env.ASIA == 'true' && 'kospi,nikkei,hsi' || '' }}
+          ONLY: ${{ env.ASIA == 'true' && 'kospi,nikkei,hsi' || env.EUR == 'true' && 'cac40,aex,ftse100,dax,smi' || '' }}
         run: npm run refresh-quotes
         continue-on-error: true
 
