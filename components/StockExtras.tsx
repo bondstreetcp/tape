@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { fmtMoney } from "@/lib/format";
+import { borrowTier, type BorrowInfo } from "@/lib/borrow";
 
 interface Reaction { date: string; reactionDate: string; move: number | null; surprise: number | null }
 interface RatingChange { firm: string; action: string; fromGrade: string; toGrade: string; targetTo: number | null; targetFrom: number | null; date: string }
@@ -28,6 +29,7 @@ export default function StockExtras({ symbol, currency = "USD" }: { symbol: stri
   return (
     <div className="space-y-3">
       <AnalystRatings symbol={symbol} currency={currency} />
+      <BorrowPanel symbol={symbol} />
       <EarningsReactions symbol={symbol} />
     </div>
   );
@@ -185,6 +187,70 @@ function AnalystRatings({ symbol, currency = "USD" }: { symbol: string; currency
           </p>
         </>
       )}
+    </Card>
+  );
+}
+
+const borrowShares = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : `${n}`);
+
+function Sparkline({ pts, color = "#60a5fa" }: { pts: number[]; color?: string }) {
+  if (pts.length < 2) return null;
+  const w = 132, h = 26, min = Math.min(...pts), max = Math.max(...pts), span = max - min || 1;
+  const d = pts
+    .map((v, i) => `${((i / (pts.length - 1)) * w).toFixed(1)},${(h - ((v - min) / span) * (h - 3) - 1.5).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
+      <polyline points={d} fill="none" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BorrowPanel({ symbol }: { symbol: string }) {
+  const [data, setData] = useState<BorrowInfo | null | "err">(null);
+  useEffect(() => {
+    let a = true;
+    setData(null);
+    fetch(`/api/borrow/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => a && setData(d.borrow || "err"))
+      .catch(() => a && setData("err"));
+    return () => { a = false; };
+  }, [symbol]);
+
+  // Silent until resolved — borrow data is US-only, so we don't flash an empty card on intl names.
+  if (!data || data === "err") return null;
+  const tier = borrowTier(data.fee);
+  const fees = data.series.map((p) => p.fee);
+  const loF = fees.length ? Math.min(...fees) : data.fee;
+  const hiF = fees.length ? Math.max(...fees) : data.fee;
+  return (
+    <Card title="Short borrow (IBKR)">
+      <div className="flex flex-wrap items-end gap-x-7 gap-y-3">
+        <div>
+          <div className="text-[11px] text-[var(--text-4)]">Borrow fee</div>
+          <div className="font-mono text-2xl font-bold tabular-nums" style={{ color: tier.color }}>{data.fee.toFixed(2)}%</div>
+          <div className="text-[11px] font-medium" style={{ color: tier.color }}>{tier.label}</div>
+        </div>
+        <div>
+          <div className="text-[11px] text-[var(--text-4)]">Shares available</div>
+          <div className="font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{borrowShares(data.available)}</div>
+          {data.rebate != null && <div className="text-[11px] text-[var(--text-3)]">rebate {data.rebate.toFixed(2)}%</div>}
+        </div>
+        {fees.length > 1 && (
+          <div>
+            <div className="mb-0.5 text-[11px] text-[var(--text-4)]">Fee · last {fees.length}d</div>
+            <Sparkline pts={fees} color={tier.color} />
+            <div className="text-[10px] tabular-nums text-[var(--text-4)]">{loF.toFixed(2)}–{hiF.toFixed(2)}%</div>
+          </div>
+        )}
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-4)]">
+        Interactive Brokers securities-lending availability &amp; annualized fee via{" "}
+        <a href={`https://www.iborrowdesk.com/report/${encodeURIComponent(data.symbol)}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">IBorrowDesk</a>
+        {data.updated ? <> · as of {data.updated.slice(0, 10)}</> : null}
+        {data.stale ? <span className="text-[#f59e0b]"> · availability stale</span> : null}. A high fee or thin availability means the stock is expensive or hard to short.
+      </p>
     </Card>
   );
 }
