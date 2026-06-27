@@ -176,6 +176,16 @@ jobs:
         run: npm run refresh-congress
         continue-on-error: true
 
+      # President Trump's OGE Form 278-T trades (scanned PDF → Gemini OCR-cleanup extraction).
+      # The filing changes rarely (periodic), so most runs re-extract the same data; skipped
+      # cleanly if GEMINI_API_KEY isn't set.
+      - name: Refresh President's OGE trades
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-trump
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        continue-on-error: true
+
       # Cash-secured put-writing screen. Uses the refreshed snapshots (ROE / P/E / cap) + price
       # series above, then pulls option chains for the ~150 large caps that pass the quality/value
       # filter and prices the ~16-delta / ~35-DTE put. Globally rate-limited (Yahoo throttles

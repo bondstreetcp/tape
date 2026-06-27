@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { loadSnapshot } from "@/lib/data";
-import { loadCongress } from "@/lib/congress";
+import { loadCongress, loadTrump } from "@/lib/congress";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import CongressView from "@/components/CongressView";
 
@@ -12,7 +12,7 @@ export default async function CongressPage({ params }: { params: Promise<{ unive
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
 
-  const [data, snapshot] = await Promise.all([loadCongress(), loadSnapshot(universe)]);
+  const [data, trump, snapshot] = await Promise.all([loadCongress(), loadTrump(), loadSnapshot(universe)]);
   if (!data || !data.trades.length) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 text-center">
@@ -22,5 +22,5 @@ export default async function CongressPage({ params }: { params: Promise<{ unive
     );
   }
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
-  return <CongressView universe={universe} data={data} known={known} />;
+  return <CongressView universe={universe} data={data} trump={trump} known={known} />;
 }

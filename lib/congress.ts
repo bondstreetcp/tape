@@ -16,7 +16,7 @@ export type TradeType = "buy" | "sell" | "exchange";
 
 export interface CongressTrade {
   member: string; // "John Boozman"
-  chamber: "Senate" | "House";
+  chamber: "Senate" | "House" | "Executive";
   ticker: string;
   asset: string; // issuer / fund name as disclosed
   type: TradeType;
@@ -65,4 +65,26 @@ export function loadCongress(): Promise<CongressData | null> {
       .then((s) => JSON.parse(s) as CongressData)
       .catch(() => null);
   return _cache;
+}
+
+// President Trump's OGE Form 278-T trades (chamber "Executive"), built separately by
+// scripts/refresh-trump.ts — the executive branch files with OGE, not the Congressional eFD.
+export interface TrumpData {
+  generatedAt: string;
+  filed: string; // disclosure date of the OGE filing
+  source: string;
+  since: string;
+  totals: { count: number; buys: number; sells: number; notionalLow: number; notionalHigh: number };
+  trades: CongressTrade[];
+}
+
+let _trumpCache: Promise<TrumpData | null> | null = null;
+
+export function loadTrump(): Promise<TrumpData | null> {
+  if (!_trumpCache)
+    _trumpCache = fsp
+      .readFile(path.join(process.cwd(), "data", "trump-trades.json"), "utf8")
+      .then((s) => JSON.parse(s) as TrumpData)
+      .catch(() => null);
+  return _trumpCache;
 }
