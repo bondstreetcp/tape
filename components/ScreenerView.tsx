@@ -366,7 +366,7 @@ export default function ScreenerView({
         <StrategyTip />
         {showTopN && (
           <select value={topN} onChange={(e) => setTopN(Number(e.target.value))} title="How many names the list shows" className="cursor-pointer rounded-lg border border-[#a855f7] bg-[var(--surface)] px-2 py-1.5 text-xs font-medium text-[#d8b4fe]">
-            {[20, 30, 40, 50, 75, 100].map((n) => (<option key={n} value={n}>Top {n}</option>))}
+            {[20, 30, 40, 50, 75, 100, 150, 200].map((n) => (<option key={n} value={n}>Top {n}</option>))}
           </select>
         )}
         {activeScreens.includes("piotroski") && (

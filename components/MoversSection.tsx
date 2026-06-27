@@ -64,7 +64,7 @@ export default function MoversSection({
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-[var(--text-2)]">Movers · {tfLabel}</h2>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
-          {[6, 10, 20, 50].map((c) => (
+          {[6, 10, 20, 50, 100, 200].map((c) => (
             <button
               key={c}
               onClick={() => setCount(c)}
