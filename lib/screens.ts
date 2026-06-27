@@ -205,13 +205,14 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
     // Rule of 40: revenue growth % + FCF margin % ≥ 40%. A growth-vs-profitability health check —
     // fast growers can run thin margins, mature names lean on margin; the sum should clear 40. Needs
     // both inputs; ranked by the combined score, best first. Ex financials (FCF margin ≈ meaningless
-    // for banks), ≥ $500M.
+    // for banks), ≥ $500M market cap + ≥ $100M revenue (so hyper-growth off a tiny base doesn't skew it).
     return stocks
       .filter(
         (s) =>
           s.fund?.revGrowth != null &&
           s.fund?.fcfMargin != null &&
           s.fund.revGrowth + s.fund.fcfMargin >= 0.4 &&
+          (s.fund.revenue == null || s.fund.revenue >= 100e6) && // revenue floor — don't let hyper-growth off a tiny base skew the list
           s.etf !== "XLF" && (s.marketCap || 0) >= 5e8,
       )
       .sort((a, b) => b.fund!.revGrowth! + b.fund!.fcfMargin! - (a.fund!.revGrowth! + a.fund!.fcfMargin!))

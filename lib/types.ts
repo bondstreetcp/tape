@@ -5,6 +5,7 @@ export type Returns = Record<TimeframeKey, number | null>; // percent values, e.
 /** Trend fundamentals computed from annual fundamentalsTimeSeries (fractions, except DSO in days). */
 export interface Fundamentals {
   revGrowth: number | null; // latest FY YoY
+  revenue: number | null; // latest FY total revenue ($) — used by the Rule-of-40 revenue floor
   revCagr3y: number | null;
   grossMargin: number | null;
   opMargin: number | null;

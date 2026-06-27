@@ -66,6 +66,13 @@ function stratColFor(key: ScreenKey): Col | null {
   }
 }
 
+// Rule of 40 also breaks out its two components as their own columns (you want to see the split —
+// is this name growing or earning its way to 40?) — shown next to the combined "Rule 40" score.
+const RULE40_COLS: Col[] = [
+  { key: "revgr", label: "Rev gr", num: true, get: (s) => s.fund?.revGrowth ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" },
+  { key: "fcfmgn", label: "FCF mgn", num: true, get: (s) => s.fund?.fcfMargin ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" },
+];
+
 // One-line description for a single active screen (the stacked case is handled inline).
 function screenBlurb(key: ScreenKey, n: number, pioMin: number): string {
   switch (key) {
@@ -171,6 +178,7 @@ export default function ScreenerView({
     for (const k of activeScreens) {
       const c = stratColFor(k);
       if (c && !seen.has(c.key)) { seen.add(c.key); stratCols.push(c); }
+      if (k === "rule40") for (const rc of RULE40_COLS) if (!seen.has(rc.key)) { seen.add(rc.key); stratCols.push(rc); }
     }
     return [...base, ...stratCols, ...(colSet === "fundamentals" ? fund : valuation)];
   }, [tf, colSet, currency, activeScreens]);
