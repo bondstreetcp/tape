@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { Financials, FinPeriod } from "@/lib/financials";
 import type { CompanyStats } from "@/lib/companyStats";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, fmtMarketCap } from "@/lib/format";
 
 const fld = (p: FinPeriod, ks: string[]): number | null => {
   for (const k of ks) { const v = p[k]; if (typeof v === "number") return v; }
@@ -70,6 +70,20 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
     if (!(p0 > 0)) return null;
     return (price / p0 - 1) * 100;
   })();
+  // The modeled forward income statement at the current sliders — the absolute lines behind the
+  // implied price, so you watch revenue / EBIT / net income move as you drag the assumptions.
+  const fwdRev = base.rev * (1 + g / 100);
+  const gpAbs = fwdRev * (gm / 100);
+  const oiAbs = fwdRev * (gm / 100 - base.opexPct); // EBIT — model holds opex flat as % of revenue
+  const niAbs = oiAbs * (1 - base.taxRate);
+  const epsAbs = niAbs / base.shares;
+  const pl = [
+    { label: "Revenue", val: fmtMarketCap(fwdRev, currency), note: `${g >= 0 ? "+" : ""}${g}% vs FY${base.fy}`, strong: false },
+    { label: "Gross profit", val: fmtMarketCap(gpAbs, currency), note: `${gm}% margin`, strong: false },
+    { label: "Operating income (EBIT)", val: fmtMarketCap(oiAbs, currency), note: `${((gm / 100 - base.opexPct) * 100).toFixed(0)}% margin`, strong: true },
+    { label: "Net income", val: fmtMarketCap(niAbs, currency), note: fwdRev ? `${((niAbs / fwdRev) * 100).toFixed(0)}% margin` : "", strong: false },
+    { label: "EPS", val: fmtMoney(epsAbs, currency), note: `× ${pe} P/E → ${ip == null ? "—" : fmtMoney(ip, currency)}`, strong: true },
+  ];
   const gms = [gm - 4, gm - 2, gm, gm + 2, gm + 4];
   const gs = [g - 4, g - 2, g, g + 2, g + 4];
   const cellColor = (u: number | null) => (u == null ? "var(--text-4)" : u > 0.15 ? "#22c55e" : u > -0.15 ? "var(--text-2)" : "#ef4444");
@@ -108,6 +122,22 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
         <Slider label="Revenue growth" value={g} min={-10} max={40} onChange={setG} suffix="%" />
         <Slider label="Gross margin" value={gm} min={5} max={95} onChange={setGm} suffix="%" />
         <Slider label="Forward P/E" value={pe} min={5} max={60} onChange={setPe} suffix="×" />
+      </div>
+
+      {/* Modeled forward income statement — absolute lines, live with the sliders */}
+      <div className="mb-3 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--bg)]/40 px-3 py-2">
+        <div className="mb-1 text-[11px] font-medium text-[var(--text-4)]">Forward income statement <span className="font-normal">· at the sliders above</span></div>
+        <table className="w-full min-w-[340px] text-xs tabular-nums">
+          <tbody>
+            {pl.map((r) => (
+              <tr key={r.label} className="border-t border-[var(--divider)] first:border-t-0">
+                <td className={"py-1 text-left " + (r.strong ? "font-semibold text-[var(--text)]" : "text-[var(--text-3)]")}>{r.label}</td>
+                <td className={"py-1 text-right " + (r.strong ? "font-semibold text-[var(--text)]" : "text-[var(--text-2)]")}>{r.val}</td>
+                <td className="py-1 pl-3 text-right text-[10px] text-[var(--text-4)]">{r.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="overflow-x-auto">
