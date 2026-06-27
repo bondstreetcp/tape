@@ -48,6 +48,7 @@ export default function AppHeader({
     {
       label: "Research",
       items: [
+        { href: `${base}/valuation-history`, label: "Discount to History" },
         { href: `${base}/compare-stocks`, label: "Compare Stocks" },
         { href: `${base}/compare`, label: "Sector Compare" },
         { href: `${base}/superinvestors`, label: "Super-Investors" },
