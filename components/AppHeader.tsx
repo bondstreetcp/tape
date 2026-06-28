@@ -4,8 +4,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
+import CommandPalette from "./CommandPalette";
+import { FEATURES, NAV_GROUPS } from "@/lib/nav";
 
-interface Item { href: string; label: string }
+interface Item { href: string; label: string; desc?: string }
 interface Group { label: string; items: Item[] }
 
 export default function AppHeader({
@@ -22,43 +24,12 @@ export default function AppHeader({
   const navRef = useRef<HTMLElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
 
-  const groups: Group[] = [
-    {
-      label: "Markets",
-      items: [
-        { href: `${base}/heatmap`, label: "Heatmap" },
-        { href: `${base}/market`, label: "Cross-Asset Monitor" },
-        { href: `${base}/rotation`, label: "Sector Rotation" },
-        { href: `${base}/flow`, label: "Options Flow" },
-        { href: `${base}/earnings`, label: "Earnings Calendar" },
-        { href: `${base}/macro`, label: "Macro & Rates" },
-      ],
-    },
-    {
-      label: "Strategies",
-      items: [
-        { href: `${base}/put-writing`, label: "Put-Writing" },
-        { href: `${base}/covered-call`, label: "Covered-Call" },
-        { href: `${base}/credit-spreads`, label: "Credit Spreads" },
-        { href: `${base}/earnings-move`, label: "Earnings Move" },
-        { href: `${base}/cef`, label: "CEF Screener" },
-        { href: `${base}/backtest`, label: "Backtest" },
-      ],
-    },
-    {
-      label: "Research",
-      items: [
-        { href: `${base}/overnight`, label: "Overnight Filings" },
-        { href: `${base}/valuation-history`, label: "Discount to History" },
-        { href: `${base}/compare-stocks`, label: "Compare Stocks" },
-        { href: `${base}/compare`, label: "Sector Compare" },
-        { href: `${base}/superinvestors`, label: "Super-Investors" },
-        { href: `${base}/congress`, label: "Congress Trades" },
-        { href: `${base}/research`, label: "Filings & Docs" },
-        { href: `${base}/research-desk`, label: "Research Desk" },
-      ],
-    },
-  ];
+  // Dropdown groups are derived from the shared feature registry (lib/nav.ts), so the
+  // nav, the ⌘K palette, and the Start-here map never drift apart.
+  const groups: Group[] = NAV_GROUPS.map((label) => ({
+    label,
+    items: FEATURES.filter((f) => f.group === label).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc })),
+  }));
 
   // Close the dropdown on outside-click, scroll, or navigation.
   useEffect(() => { setOpen(null); }, [pathname]);
@@ -136,6 +107,14 @@ export default function AppHeader({
           </nav>
         </div>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => window.dispatchEvent(new Event("open-cmdk"))}
+            title="Jump to any feature or company (⌘K / Ctrl-K)"
+            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-sm text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] sm:inline-flex"
+          >
+            <span aria-hidden>⌘</span>K
+            <span className="text-[var(--text-4)]">· Jump to…</span>
+          </button>
           <SearchBox universe={universe} stocks={stocks} />
           <a
             href="/guide.html"
@@ -156,7 +135,7 @@ export default function AppHeader({
           ref={dropRef}
           role="menu"
           style={{ position: "fixed", left: pos.left, top: pos.top }}
-          className="z-50 min-w-[190px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
+          className="z-50 w-[320px] max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
         >
           {active.items.map((it) => (
             <Link
@@ -165,15 +144,18 @@ export default function AppHeader({
               role="menuitem"
               onClick={() => setOpen(null)}
               className={
-                "block rounded-md px-2.5 py-1.5 text-sm transition-colors " +
-                (isActive(it.href) ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]")
+                "block rounded-md px-2.5 py-1.5 transition-colors " +
+                (isActive(it.href) ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")
               }
             >
-              {it.label}
+              <div className={"text-sm font-medium " + (isActive(it.href) ? "text-[var(--accent)]" : "text-[var(--text)]")}>{it.label}</div>
+              {it.desc && <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{it.desc}</div>}
             </Link>
           ))}
         </div>
       )}
+
+      <CommandPalette universe={universe} />
     </header>
   );
 }
