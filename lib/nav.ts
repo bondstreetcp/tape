@@ -37,7 +37,9 @@ export const FEATURES: NavItem[] = [
   { label: "Covered-Call", path: "/covered-call", desc: "Covered-call income on stocks you'd hold", group: "Strategies", job: "Income strategies", kw: "options income sell calls" },
   { label: "Credit Spreads", path: "/credit-spreads", desc: "Bull-put and iron-condor setups ranked by reward vs risk", group: "Strategies", job: "Income strategies", kw: "options spreads iron condor" },
   { label: "Earnings Move", path: "/earnings-move", desc: "Where options over- or under-price an earnings event", group: "Strategies", job: "Find ideas", kw: "earnings straddle implied move volatility" },
+  { label: "Earnings Setup Cards", path: "/earnings-setup", desc: "Glanceable cards of upcoming reporters — implied vs. historical move, rich/cheap", group: "Strategies", job: "Find ideas", kw: "earnings setup cards implied move straddle reporting this week" },
   { label: "CEF Screener", path: "/cef", desc: "Closed-end funds trading at a discount to their NAV", group: "Strategies", job: "Income strategies", kw: "closed end funds discount nav yield" },
+  { label: "CEF Discount Hunter", path: "/cef-hunter", desc: "The scored shortlist of the most stretched closed-end-fund discounts", group: "Strategies", job: "Income strategies", kw: "cef closed end fund discount hunter stretched z-score yield" },
   { label: "Backtest", path: "/backtest", desc: "Test factor screens and strategies against history", group: "Strategies", job: "Find ideas", kw: "backtest strategy momentum factor" },
   // ── Research
   { label: "Confluence Engine", path: "/confluence", desc: "Names where several independent bullish signals stack up — the flagship idea scanner", group: "Research", job: "Find ideas", kw: "confluence signals ideas opportunities value smart money setups" },
