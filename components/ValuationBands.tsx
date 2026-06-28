@@ -77,7 +77,7 @@ export default function ValuationBands({ symbol }: { symbol: string }) {
 }
 
 function BandChart({ series, field, b }: { series: Point[]; field: "pe" | "ps" | "ev"; b: MetricBand }) {
-  const W = 1000, H = 230, ML = 46, MR = 12, MT = 12, MB = 18;
+  const W = 1000, H = 230, ML = 46, MR = 12, MT = 12, MB = 24;
   const n = series.length;
   const yMin = b.min * 0.96, yMax = b.max * 1.04;
   const x = (i: number) => ML + (i / Math.max(1, n - 1)) * (W - ML - MR);
@@ -92,6 +92,9 @@ function BandChart({ series, field, b }: { series: Point[]; field: "pe" | "ps" |
   let lastI = n - 1;
   for (let i = n - 1; i >= 0; i--) if (series[i][field] != null) { lastI = i; break; }
   const ticks = [b.max, b.median, b.min];
+  // x-axis: one label per calendar-year boundary (the series is ~weekly)
+  const yrLabels: { x: number; label: string }[] = [];
+  { let last = ""; for (let i = 0; i < n; i++) { const t = series[i].t; const ms = t < 1e12 ? t * 1000 : t; const yr = String(new Date(ms).getFullYear()); if (yr !== last) { yrLabels.push({ x: x(i), label: yr }); last = yr; } } }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
       <rect x={ML} width={W - ML - MR} y={y(b.p75)} height={Math.max(0, y(b.p25) - y(b.p75))} fill="#2563eb" opacity={0.12} />
@@ -106,6 +109,9 @@ function BandChart({ series, field, b }: { series: Point[]; field: "pe" | "ps" |
           <text x={x(lastI) - 5} y={y(b.current) - 6} textAnchor="end" fontSize={11} fontWeight={600} fill="#93c5fd">{b.current.toFixed(1)}×</text>
         </>
       )}
+      {yrLabels.map((l, i) => (
+        <text key={"x" + i} x={l.x} y={H - 6} textAnchor={i === 0 ? "start" : "middle"} fontSize={11} fill="var(--text-4)">{l.label}</text>
+      ))}
     </svg>
   );
 }

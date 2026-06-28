@@ -11,7 +11,7 @@ import { ECON_OVERLAYS, econSym, prettySym, ECON_PREFIX } from "@/lib/econOverla
 import TimeframeSelector from "./TimeframeSelector";
 import NewsFeed from "./NewsFeed";
 import BriefingTickerNews from "./BriefingTickerNews";
-import StockExtras from "./StockExtras";
+import StockExtras, { BorrowPanel } from "./StockExtras";
 import AskAI from "./AskAI";
 import SeasonalityPanel from "./SeasonalityPanel";
 import ExplainMove from "./ExplainMove";
@@ -204,6 +204,7 @@ export default function StockOverview({
 
       <ExplainMove symbol={row.symbol} name={row.name} returns={row.returns} tf={tf} />
 
+      <section className="mt-5"><BorrowPanel symbol={row.symbol} /></section>
       <section className="mt-5"><SeasonalityPanel daily={daily} /></section>
       <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>
       <section className="mt-5"><StockExtras symbol={row.symbol} currency={currency} /></section>

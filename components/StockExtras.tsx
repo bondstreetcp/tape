@@ -29,7 +29,6 @@ export default function StockExtras({ symbol, currency = "USD" }: { symbol: stri
   return (
     <div className="space-y-3">
       <AnalystRatings symbol={symbol} currency={currency} />
-      <BorrowPanel symbol={symbol} />
       <EarningsReactions symbol={symbol} />
     </div>
   );
@@ -206,7 +205,7 @@ function Sparkline({ pts, color = "#60a5fa" }: { pts: number[]; color?: string }
   );
 }
 
-function BorrowPanel({ symbol }: { symbol: string }) {
+export function BorrowPanel({ symbol }: { symbol: string }) {
   const [data, setData] = useState<BorrowInfo | null | "err">(null);
   useEffect(() => {
     let a = true;

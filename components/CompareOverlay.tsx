@@ -68,12 +68,19 @@ export default function CompareOverlay({ tickers }: { tickers: { symbol: string;
   if (!loaded) return <Shell><div className="py-16 text-center text-xs text-[var(--text-3)]">Loading…</div></Shell>;
   if (allPts.length < 2) return <Shell><div className="py-16 text-center text-xs text-[var(--text-3)]">No quarterly history for these tickers.</div></Shell>;
 
-  // window to the last `years`
-  const maxT = Math.max(...allPts.map((p) => p.t));
+  // window to the last `years`. The x-axis time domain spans the full quarterly range across all
+  // tickers (independent of the selected metric), so switching to a sparse metric — e.g. gross
+  // margin, which payment networks / financials (V, MA) don't report a clean gross profit for in
+  // their deep filings — keeps the same timeline and the short line honestly shows where data
+  // exists, instead of collapsing the axis to the few available points.
+  const allQTs = Object.values(raw).flat().map((q) => Date.parse(q.date)).filter((t) => Number.isFinite(t));
+  const maxT = allQTs.length ? Math.max(...allQTs) : Math.max(...allPts.map((p) => p.t));
   const cutoff = years ? maxT - years * 365 * DAY : -Infinity;
   const win = series.map((s) => ({ ...s, pts: s.pts.filter((p) => p.t >= cutoff) }));
   const wPts = win.flatMap((s) => s.pts);
-  const minT = Math.min(...wPts.map((p) => p.t)), maxT2 = Math.max(...wPts.map((p) => p.t));
+  const wQTs = allQTs.filter((t) => t >= cutoff);
+  const minT = wQTs.length ? Math.min(...wQTs) : wPts.length ? Math.min(...wPts.map((p) => p.t)) : maxT - DAY;
+  const maxT2 = maxT;
 
   const W = 880, H = 340, ML = 46, MR = 14, MT = 16, MB = 28;
   const vals = wPts.map((p) => p.v);

@@ -54,7 +54,7 @@ export default function NewsFeed({
         <div className="p-6 text-center text-sm text-[var(--text-3)]">No recent news.</div>
       ) : (
         <ul className="divide-y divide-[var(--divider)]">
-          {news.map((n, i) => (
+          {[...news].sort((a, b) => (b.time ? Date.parse(b.time) : 0) - (a.time ? Date.parse(a.time) : 0)).map((n, i) => (
             <li key={i}>
               <a href={n.link} target="_blank" rel="noreferrer" className="block px-4 py-3 transition-colors hover:bg-[var(--surface-hover)]">
                 <div className="text-sm leading-snug text-[var(--text)]">{n.title}</div>

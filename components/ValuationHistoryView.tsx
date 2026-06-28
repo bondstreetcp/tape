@@ -98,6 +98,7 @@ export default function ValuationHistoryView({
     const ql = q.trim().toUpperCase();
     const out: Row[] = [];
     for (const [ticker, name] of Object.entries(data.names)) {
+      if (!knownSet.has(ticker)) continue; // only this universe's constituents (the data file is global)
       const stat = name.multiples[metric];
       if (!stat) continue; // ineligible for the chosen metric
       if (ql && !ticker.includes(ql)) continue;
@@ -120,7 +121,7 @@ export default function ValuationHistoryView({
       return cmp !== 0 ? cmp : a.ticker.localeCompare(b.ticker);
     });
     return out;
-  }, [data.names, metric, cheapOnly, q, sortKey, sortDir]);
+  }, [data.names, knownSet, metric, cheapOnly, q, sortKey, sortDir]);
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
