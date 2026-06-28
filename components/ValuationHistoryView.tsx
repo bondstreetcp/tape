@@ -8,6 +8,7 @@ import type {
   ValuationName,
 } from "@/lib/valuationHistory";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import InfoDot from "./InfoDot";
 import UniverseSwitcher from "./UniverseSwitcher";
 
 const ALL_MULTIPLES: MultipleKey[] = ["pe", "evEbitda", "ps", "pb"];
@@ -134,11 +135,12 @@ export default function ValuationHistoryView({
     "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
     (disabled ? "cursor-not-allowed text-[var(--text-4)] opacity-50" : a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
-  const SortTh = ({ k, children, align = "left" }: { k: SortKey; children: ReactNode; align?: "left" | "right" }) => (
+  const SortTh = ({ k, children, align = "left", info }: { k: SortKey; children: ReactNode; align?: "left" | "right"; info?: string }) => (
     <th className={"px-3 py-2 font-medium " + (align === "right" ? "text-right" : "text-left")}>
       <button onClick={() => toggleSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sortKey === k ? "text-[var(--text)]" : "")}>
         {children}{sortKey === k && <span className="text-[9px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
       </button>
+      {info && <InfoDot term={info} className="ml-1" />}
     </th>
   );
 
@@ -193,8 +195,8 @@ export default function ValuationHistoryView({
               <th className="px-3 py-2 text-left font-medium">Sector</th>
               <SortTh k="current" align="right">{label} now</SortTh>
               <SortTh k="median" align="right">10yr median</SortTh>
-              <SortTh k="discount" align="right">vs history</SortTh>
-              <SortTh k="z" align="right">z</SortTh>
+              <SortTh k="discount" align="right" info="Discount to history">vs history</SortTh>
+              <SortTh k="z" align="right" info="Z-score">z</SortTh>
               <th className="px-3 py-2 text-left font-medium">History <span className="font-normal text-[var(--text-4)]">(band = p25–p75)</span></th>
               <th className="px-3 py-2 text-right font-medium">n</th>
             </tr>

@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtMarketCap, fmtDateTime } from "@/lib/format";
 import { useWatchlist } from "@/lib/watchlist";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
 const pctFrac = (v: number | null | undefined, d = 0) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
@@ -127,11 +128,12 @@ export default function PutWriteView({
   }, [candidates, minAnn, minCushion, elevatedOnly, clearEarnings, watchOnly, q, sort, tenor, has]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
-  const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
+  const SortTh = ({ k, children, cls = "", info }: { k: SortKey; children: React.ReactNode; cls?: string; info?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
         {children}{sort === k && <span className="text-[9px]">▼</span>}
       </button>
+      {info && <InfoDot term={info} className="ml-1" />}
     </th>
   );
 
@@ -218,14 +220,14 @@ export default function PutWriteView({
                   <th className="px-2 py-2 font-medium">Company</th>
                   <SortTh k="price" cls="text-right">Price</SortTh>
                   <SortTh k="mktcap" cls="text-right">Mkt cap</SortTh>
-                  <SortTh k="roe" cls="text-right">ROE</SortTh>
-                  <SortTh k="pe" cls="text-right">P/E</SortTh>
-                  <SortTh k="vol" cls="text-right">Vol rank</SortTh>
-                  <SortTh k="iv" cls="text-right">ATM IV</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} put</th>
+                  <SortTh k="roe" cls="text-right" info="ROE">ROE</SortTh>
+                  <SortTh k="pe" cls="text-right" info="P/E">P/E</SortTh>
+                  <SortTh k="vol" cls="text-right" info="Vol rank">Vol rank</SortTh>
+                  <SortTh k="iv" cls="text-right" info="IV">ATM IV</SortTh>
+                  <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} put <InfoDot term="Delta" /></th>
                   <th className="px-2 py-2 text-right font-medium">Exp</th>
                   <SortTh k="earn" cls="text-right">Earnings</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">Premium</th>
+                  <th className="px-2 py-2 text-right font-medium">Premium <InfoDot term="Premium" /></th>
                   <SortTh k="ann" cls="text-right">Ann. yield</SortTh>
                   <SortTh k="cushion" cls="text-right">Cushion</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Breakeven</th>
