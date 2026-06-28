@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Tile } from "@/lib/market";
 import { INDEX_META } from "@/lib/indices";
+import { LoadingState } from "./Spinner";
 
 interface Bar { t: number; o: number; h: number; l: number; c: number; v: number }
 const RANGES = [["1M", 30], ["6M", 182], ["1Y", 365], ["5Y", 1830]] as const;
@@ -80,7 +81,7 @@ export default function MarketChartModal({ tile, onClose, universe }: { tile: Ti
         {err ? (
           <div className="py-16 text-center text-sm text-[var(--text-3)]">No chart data for this symbol.</div>
         ) : !daily ? (
-          <div className="py-16 text-center text-sm text-[var(--text-3)]">Loading chart…</div>
+          <LoadingState label="Loading chart…" className="py-16" />
         ) : (
           <LineChart series={series} up={up} fmtVal={fmtVal} />
         )}

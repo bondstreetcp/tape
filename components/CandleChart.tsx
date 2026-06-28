@@ -4,6 +4,7 @@ import type { SeriesPoint } from "@/lib/types";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { sliceSeries } from "@/lib/compute";
 import { sma } from "@/lib/indicators";
+import { LoadingState } from "./Spinner";
 import { fmtPrice, fmtMoney } from "@/lib/format";
 
 interface Bar { t: number; o: number; h: number; l: number; c: number; v: number }
@@ -152,7 +153,7 @@ export default function CandleChart({
   };
 
   if (loading) {
-    return <div className="flex h-[320px] items-center justify-center text-sm text-[var(--text-3)]">Loading OHLC data…</div>;
+    return <LoadingState label="Loading OHLC data…" className="h-[320px] py-0" />;
   }
   if (!view) {
     return <div className="flex h-[320px] items-center justify-center text-sm text-[var(--text-3)]">No candle data for this range.</div>;

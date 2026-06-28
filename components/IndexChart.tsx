@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { LoadingState } from "./Spinner";
 
 interface Bar { t: number; c: number }
 const RANGES = [["1M", 30], ["6M", 182], ["1Y", 365], ["5Y", 1830]] as const;
@@ -57,7 +58,7 @@ export default function IndexChart({ symbol, name }: { symbol: string; name: str
       {err ? (
         <div className="py-12 text-center text-sm text-[var(--text-3)]">No chart data for this index.</div>
       ) : !daily ? (
-        <div className="py-12 text-center text-sm text-[var(--text-3)]">Loading chart…</div>
+        <LoadingState label="Loading chart…" className="py-12" />
       ) : (
         <Line series={series} up={up} fmtVal={fmtVal} />
       )}
