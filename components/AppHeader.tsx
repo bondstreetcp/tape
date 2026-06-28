@@ -85,7 +85,9 @@ export default function AppHeader({
 
   const linkCls = (active: boolean) =>
     "shrink-0 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
-    (active ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]");
+    (active
+      ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+      : "text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]");
 
   const toggle = (label: string, e: React.MouseEvent) => {
     if (open === label) { setOpen(null); return; }
@@ -117,7 +119,11 @@ export default function AppHeader({
                 aria-expanded={open === g.label}
                 className={
                   "flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-md px-2 py-1 transition-colors " +
-                  (groupActive(g) || open === g.label ? "bg-[var(--surface-hover)] text-[var(--text)]" : "text-[var(--text-3)] hover:text-[var(--text)]")
+                  (groupActive(g)
+                    ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                    : open === g.label
+                      ? "bg-[var(--surface-hover)] text-[var(--text)]"
+                      : "text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]")
                 }
               >
                 {g.label}
