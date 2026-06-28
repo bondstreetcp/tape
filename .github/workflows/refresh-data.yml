@@ -270,6 +270,14 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Congress-trading "what's notable" summary — needs congress.json (refresh-congress above).
+      - name: Refresh Congress summary
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-congress-summary
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
       # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
       # CSV still works but caps at ~3yr.
