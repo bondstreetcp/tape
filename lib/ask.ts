@@ -9,6 +9,7 @@ import { getCompanyStats } from "./companyStats";
 import { getCompanyProfile } from "./companyProfile";
 import { getNews } from "./news";
 import { getFinancials, type FinPeriod } from "./financials";
+import { chatText } from "./llm";
 
 const KEY = process.env.GEMINI_API_KEY;
 // gemini-2.5-pro — the most capable model, with reasoning enabled (thinkingConfig
@@ -170,22 +171,12 @@ export async function askGemini(
  *  `maxChars` bounds how much of the source is sent (filings are long, so they pass a
  *  much larger cap than the ~45k default). */
 export async function summarizeText(title: string, instruction: string, text: string, maxChars = 45000): Promise<AskResult | null> {
-  if (!KEY) return null;
+  // No GEMINI_API_KEY gate — this now runs on lib/llm (OpenRouter/GLM), which
+  // resolves its own key from env or .env.local.
   const system =
     `You are a sharp equity-research analyst. Follow the instruction precisely and base everything ` +
     `STRICTLY on the provided source text — do not invent figures or quotes. Use clean, concise markdown.`;
   const prompt = `${instruction}\n\n=== SOURCE: ${title} ===\n${text.slice(0, maxChars)}`;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: -1 } },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  const j: any = await res.json();
-  const answer = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
+  const answer = await chatText(system, prompt, { maxTokens: 8192 });
   return answer ? { answer, sources: [] } : null;
 }

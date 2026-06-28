@@ -1,56 +1,47 @@
 /**
  * Extract a sell-side research PDF's text into the canonical ResearchDoc shape using
- * Gemini's structured-output mode (responseSchema), so the model reads the whole note
- * — including the run-together financial-summary grids that defeat regex — and returns
- * clean, typed fields. Needs GEMINI_API_KEY (the same key the rest of the app uses).
+ * GLM (OpenRouter) via lib/llm's JSON mode. The schema is inlined into the prompt (GLM
+ * has no responseSchema), so the model reads the whole note — including the run-together
+ * financial-summary grids that defeat regex — and returns clean, typed fields. Uses
+ * OPENROUTER_API_KEY (lib/llm resolves it from env or .env.local).
  */
 import type { ResearchDoc } from "./types";
+import { chatJSON } from "../llm";
 
 // Read env lazily (inside calls) so both the Next runtime and CLI scripts that load
-// .env.local at startup see the key.
-export const extractConfigured = () => !!process.env.GEMINI_API_KEY;
+// .env.local at startup see the key. lib/llm resolves OPENROUTER_API_KEY on its own;
+// this flag keeps the upload route's "is the feature configured" check working.
+export const extractConfigured = () =>
+  !!(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
 
-// OpenAPI-subset schema Gemini returns against. `nullable` lets the model omit a rating
-// or target for research providers (e.g. Bloomberg Intelligence) that don't issue them.
-const SCHEMA = {
-  type: "object",
-  properties: {
-    ticker: { type: "string" },
-    company: { type: "string" },
-    source: { type: "string" },
-    analysts: { type: "array", items: { type: "string" } },
-    publishDate: { type: "string", description: "ISO date YYYY-MM-DD" },
-    docType: { type: "string", enum: ["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "idea", "note", "other"] },
-    title: { type: "string" },
-    rating: { type: "string", nullable: true },
-    ratingPrior: { type: "string", nullable: true },
-    priceTarget: { type: "number", nullable: true },
-    priceTargetPrior: { type: "number", nullable: true },
-    targetBasis: { type: "string", nullable: true },
-    thesis: { type: "array", items: { type: "string" } },
-    risks: { type: "array", items: { type: "string" } },
-    catalysts: { type: "array", items: { type: "string" } },
-    managementInsights: { type: "array", items: { type: "string" } },
-    estimates: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          metric: { type: "string" },
-          period: { type: "string" },
-          value: { type: "number", nullable: true },
-          unit: { type: "string", nullable: true },
-          priorValue: { type: "number", nullable: true },
-          vsConsensus: { type: "string", nullable: true },
-        },
-        required: ["metric", "period"],
-      },
-    },
-    summary: { type: "string" },
-    entitlement: { type: "string", nullable: true },
-  },
-  required: ["ticker", "company", "source", "publishDate", "docType", "title", "thesis", "risks", "catalysts", "managementInsights", "estimates", "summary"],
-};
+// GLM (OpenRouter) has no responseSchema, so the schema is inlined into the prompt as an
+// explicit shape description. `nullable`/optional fields let the model omit a rating or
+// target for research providers (e.g. Bloomberg Intelligence) that don't issue them.
+const SCHEMA_DESC =
+  `Return JSON with this EXACT shape (a single object — no markdown, no commentary):\n` +
+  `{\n` +
+  `  "ticker": string,\n` +
+  `  "company": string,\n` +
+  `  "source": string,\n` +
+  `  "analysts": string[],\n` +
+  `  "publishDate": string,            // ISO date YYYY-MM-DD\n` +
+  `  "docType": "rating-change" | "initiation" | "preview" | "earnings-review" | "event-reaction" | "industry-research" | "idea" | "note" | "other",\n` +
+  `  "title": string,\n` +
+  `  "rating": string | null,\n` +
+  `  "ratingPrior": string | null,\n` +
+  `  "priceTarget": number | null,\n` +
+  `  "priceTargetPrior": number | null,\n` +
+  `  "targetBasis": string | null,\n` +
+  `  "thesis": string[],\n` +
+  `  "risks": string[],\n` +
+  `  "catalysts": string[],\n` +
+  `  "managementInsights": string[],\n` +
+  `  "estimates": [ { "metric": string, "period": string, "value": number | null, "unit": string | null, "priorValue": number | null, "vsConsensus": string | null } ],\n` +
+  `  "summary": string,\n` +
+  `  "entitlement": string | null\n` +
+  `}\n` +
+  `Required keys (always present): ticker, company, source, publishDate, docType, title, thesis, risks, catalysts, managementInsights, estimates, summary. ` +
+  `Each estimates row must have metric and period. Use null (not omitted, not "") for missing nullable values.`;
 
 const INSTRUCTION =
   `Extract structured data from this equity-research report into the schema. Rules:\n` +
@@ -66,32 +57,16 @@ const INSTRUCTION =
   `- summary: a tight 3–4 sentence buy-side takeaway. Base everything strictly on the report; never invent numbers.`;
 
 export async function extractResearch(text: string): Promise<ResearchDoc | null> {
-  const KEY = process.env.GEMINI_API_KEY;
-  const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
-  if (!KEY) return null;
-  const prompt = `${INSTRUCTION}\n\n=== REPORT TEXT ===\n${text.slice(0, 120_000)}`;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: SCHEMA,
-        temperature: 0.1,
-        // Bound thinking and give the JSON ample room — extraction needs little
-        // reasoning, and unbounded thinking on a long note can truncate the output.
-        maxOutputTokens: 16384,
-        thinkingConfig: { thinkingBudget: 2048 },
-      },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j: any = await res.json();
-  const raw = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join("").trim();
-  if (!raw) return null;
+  const prompt = `${INSTRUCTION}\n\n${SCHEMA_DESC}\n\n=== REPORT TEXT ===\n${text.slice(0, 120_000)}`;
+  // GLM (OpenRouter) JSON mode + lib/llm's parse/validate-retry. Generous maxTokens so
+  // GLM's thinking can't truncate the JSON on a long note.
+  const d: any = await chatJSON(
+    "You are a precise data-extraction engine. Return only the requested JSON object.",
+    prompt,
+    { maxTokens: 16384 },
+  );
+  if (!d) return null;
   try {
-    const d = JSON.parse(raw);
     // normalise to the canonical shape with safe defaults
     return {
       ticker: String(d.ticker || "").toUpperCase().replace(/\.(O|OQ|N|A|K|P|PK|Q)$/i, ""),

@@ -8,8 +8,7 @@
 import type { StoredDoc, ResearchEstimate } from "./types";
 import { searchChunks, getDoc } from "./store";
 import { embedQuery } from "./embed";
-
-const MODEL = () => process.env.GEMINI_MODEL || "gemini-2.5-pro";
+import { chatText } from "../llm";
 
 export interface MetricRow { source: string; date: string; value: number | null; priorValue: number | null; unit: string | null; vsConsensus: string | null }
 export interface Consensus {
@@ -79,8 +78,7 @@ function digest(docs: StoredDoc[]): string {
 }
 
 export async function synthesize(docs: StoredDoc[]): Promise<string | null> {
-  const KEY = process.env.GEMINI_API_KEY;
-  if (!KEY || docs.length === 0) return null;
+  if (docs.length === 0) return null;
   const ticker = docs[0].ticker;
   const system =
     `You are a buy-side analyst reading a stack of sell-side research notes on ${ticker}. Synthesize them — do NOT summarize each one. Use tight markdown sections:\n` +
@@ -89,15 +87,8 @@ export async function synthesize(docs: StoredDoc[]): Promise<string | null> {
     `**Into the catalyst** — what to watch at the next event and the specific bogey (guide vs Street vs these brokers).\n` +
     `**What you might be missing** — risks or datapoints the bulls underweight, or where consensus could be wrong; be a skeptic.\n` +
     `Be specific with numbers from the notes. Don't give a personal buy/sell recommendation.`;
-  const prompt = `${system}\n\n=== NOTES ON ${ticker} ===\n${digest(docs)}`;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: -1 } } }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const j: any = await res.json();
-  const out = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
+  const prompt = `=== NOTES ON ${ticker} ===\n${digest(docs)}`;
+  const out = await chatText(system, prompt, { temperature: 0.3, maxTokens: 8192 });
   return out || null;
 }
 
@@ -107,8 +98,7 @@ export async function synthesize(docs: StoredDoc[]): Promise<string | null> {
  *  a larger corpus would chunk + retrieve via pgvector. Falls back to a doc's digest if its
  *  full text wasn't stored. */
 export async function searchCorpus(docs: StoredDoc[], question: string): Promise<string | null> {
-  const KEY = process.env.GEMINI_API_KEY;
-  if (!KEY || docs.length === 0) return null;
+  if (docs.length === 0) return null;
   const ticker = docs[0].ticker;
   let budget = 170_000; // ~43k tokens of report text across the ticker's notes
   const blocks: string[] = [];
@@ -123,14 +113,8 @@ export async function searchCorpus(docs: StoredDoc[], question: string): Promise
     `Ground every claim in the reports and attribute it to the source firm; quote a short phrase where it sharpens the point. ` +
     `Synthesize across reports where they agree or disagree. If the reports don't address the question, say so plainly.\n\n` +
     `Question: ${question}\n\n${blocks.join("\n\n")}`;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: -1 } } }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const j: any = await res.json();
-  return (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null;
+  const out = await chatText("You are a buy-side equity-research analyst.", prompt, { temperature: 0.2, maxTokens: 4096 });
+  return out || null;
 }
 
 // ---- Idea generation: cross-corpus actionable signals -----------------------------
@@ -168,8 +152,7 @@ export function actionableSignals(docs: StoredDoc[]): DocSignal[] {
 
 /** Idea-generation pass across the WHOLE corpus: what's actionable and why. */
 export async function actionableScan(docs: StoredDoc[]): Promise<string | null> {
-  const KEY = process.env.GEMINI_API_KEY;
-  if (!KEY || docs.length === 0) return null;
+  if (docs.length === 0) return null;
   const lines = actionableSignals(docs).map((s) => "- " + [
     `${s.ticker} — ${s.source} (${s.date}) — ${s.rating ?? "research"}`,
     s.ptChangePct != null ? `PT ${s.ptChangePct >= 0 ? "+" : ""}${s.ptChangePct.toFixed(0)}% to $${s.pt}` : "",
@@ -182,13 +165,8 @@ export async function actionableScan(docs: StoredDoc[]): Promise<string | null> 
     `You are a buy-side PM scanning sell-side research for IDEA GENERATION. From the signals below, surface the most ACTIONABLE items — names where the Street is re-rating hard (large price-target or estimate revisions, rating changes), where management/expert access adds conviction, or where there's a sharp debate/outlier worth a look. Be selective and rank by actionability. For each: **Ticker** — the signal in one line — why it's actionable — and the one thing to check next. End with any cross-cutting theme.\n\n` +
     `=== SIGNALS (pre-ranked by movement) ===\n${lines.join("\n")}\n\n` +
     (color.length ? `=== MANAGEMENT / EXPERT COLOR ===\n${color.join("\n")}\n` : "");
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: -1 } } }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const j: any = await res.json();
-  return (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null;
+  const out = await chatText("You are a buy-side PM scanning sell-side research for idea generation.", prompt, { temperature: 0.3, maxTokens: 4096 });
+  return out || null;
 }
 
 // ---- Semantic search across the whole corpus (pgvector retrieval) ------------------
@@ -210,17 +188,10 @@ export async function corpusSearch(query: string, ticker?: string): Promise<{ an
     const d = byId.get(c.docId);
     return { docId: c.docId, ticker: c.ticker, source: d?.source || "?", date: d?.publishDate || "", snippet: c.text, score: c.score };
   });
-  const KEY = process.env.GEMINI_API_KEY;
-  if (!KEY) return { answer: null, hits };
   const ctx = hits.map((h, i) => `[${i + 1}] ${h.ticker} · ${h.source} (${h.date}):\n${h.snippet}`).join("\n\n");
   const prompt =
     `Answer the question using ONLY these research passages retrieved from across the corpus. Cite the ticker + source firm for each point; synthesize where multiple passages bear on it. If they don't address the question, say so.\n\n` +
     `Question: ${query}\n\n=== PASSAGES ===\n${ctx}`;
-  const res2 = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent?key=${KEY}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 3072, thinkingConfig: { thinkingBudget: -1 } } }),
-  });
-  const j2: any = res2.ok ? await res2.json() : null;
-  const answer = j2 ? (j2?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim() || null : null;
-  return { answer, hits };
+  const answer = await chatText("You are a buy-side equity-research analyst.", prompt, { temperature: 0.2, maxTokens: 3072 });
+  return { answer: answer || null, hits };
 }
