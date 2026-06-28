@@ -1,7 +1,32 @@
 import Link from "next/link";
 import type { DeskNote } from "@/lib/deskNote";
 
-// Morning Desk Note — the night's GLM-authored overnight brief on the Home dashboard.
+// Development-type tag → chip palette.
+const TAG_CLS: Record<string, string> = {
+  deal: "bg-[#f59e0b]/15 text-[#fbbf24]",
+  catalyst: "bg-[#2563eb]/15 text-[#60a5fa]",
+  positioning: "bg-[#a855f7]/15 text-[#c084fc]",
+  unexplained: "bg-[var(--surface-hover)] text-[var(--text-3)]",
+  trend: "bg-[#0891b2]/15 text-[#22d3ee]",
+  analyst: "bg-[#6366f1]/15 text-[#a5b4fc]",
+  "earnings ahead": "bg-[#ea580c]/15 text-[#fb923c]",
+  watch: "bg-[var(--surface-hover)] text-[var(--text-3)]",
+};
+const tagCls = (tag: string) => TAG_CLS[tag.toLowerCase()] || "bg-[var(--surface-hover)] text-[var(--text-3)]";
+
+function Tickers({ tickers, universe }: { tickers: string[]; universe: string }) {
+  return (
+    <>
+      {tickers.map((t) => (
+        <Link key={t} href={`/u/${universe}/stock/${encodeURIComponent(t)}`} className="ml-1.5 font-mono text-xs font-semibold text-[#60a5fa] hover:underline">
+          {t}
+        </Link>
+      ))}
+    </>
+  );
+}
+
+// Morning Desk Note — the night's GLM-authored two-layer overnight brief.
 export default function DeskNote({ note, universe }: { note: DeskNote | null; universe: string }) {
   if (!note || !note.sections.length) return null;
   return (
@@ -10,37 +35,54 @@ export default function DeskNote({ note, universe }: { note: DeskNote | null; un
         <h2 className="text-sm font-semibold">
           Morning Desk Note <span className="font-normal text-[var(--text-4)]">· {note.asOf}</span>
         </h2>
-        <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">AI brief · descriptive, not advice</span>
+        <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">AI brief · research, not advice</span>
       </div>
-      {note.tldr && <p className="mb-3 text-sm leading-snug text-[var(--text-2)]">{note.tldr}</p>}
-      <div className="space-y-3">
+      {note.tldr && <p className="mb-4 border-l-2 border-[#2563eb]/50 pl-3 text-sm leading-snug text-[var(--text)]">{note.tldr}</p>}
+
+      <div className="space-y-4">
         {note.sections.map((s, i) => (
           <div key={i}>
-            <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)]">{s.heading}</h3>
-            <ul className="space-y-1">
+            <h3 className="text-[13px] font-semibold text-[var(--text)]">{s.heading}</h3>
+            {s.synthesis && <p className="mb-2 mt-0.5 text-xs italic leading-snug text-[var(--text-3)]">{s.synthesis}</p>}
+            <ul className="space-y-2.5">
               {s.bullets.map((b, j) => (
-                <li key={j} className="flex gap-2 text-sm text-[var(--text-2)]">
-                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--text-4)]" aria-hidden />
-                  <span className="leading-snug">
-                    {b.text}
-                    {b.tickers.map((t) => (
-                      <Link
-                        key={t}
-                        href={`/u/${universe}/stock/${encodeURIComponent(t)}`}
-                        className="ml-1.5 font-mono text-xs font-semibold text-[#60a5fa] hover:underline"
-                      >
-                        {t}
-                      </Link>
-                    ))}
-                  </span>
+                <li key={j} className="flex gap-2.5">
+                  {b.tag && (
+                    <span className={"mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide " + tagCls(b.tag)}>{b.tag}</span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-snug text-[var(--text)]">
+                      {b.fact}
+                      <Tickers tickers={b.tickers} universe={universe} />
+                    </p>
+                    {b.read && <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-2)]">{b.read}</p>}
+                  </div>
                 </li>
               ))}
             </ul>
           </div>
         ))}
       </div>
+
+      {note.watchToday.length > 0 && (
+        <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+          <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)]">What to watch today</h3>
+          <ul className="space-y-1">
+            {note.watchToday.map((w, i) => (
+              <li key={i} className="flex gap-2 text-[13px] text-[var(--text-2)]">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#fbbf24]" aria-hidden />
+                <span className="leading-snug">
+                  {w.text}
+                  <Tickers tickers={w.tickers} universe={universe} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <p className="mt-3 text-[10px] leading-relaxed text-[var(--text-4)]">
-        Generated by an AI model from the night&apos;s movers, filings, options flow and analyst actions — spot-check against the linked sources. Not investment advice.
+        Generated by an AI model from the night&apos;s movers, filings, options flow and analyst actions — a research starting point, spot-check against the linked sources. Not investment advice.
       </p>
     </section>
   );
