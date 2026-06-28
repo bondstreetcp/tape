@@ -29,6 +29,7 @@
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
+    "refresh-valuation-explain": "tsx scripts/refresh-valuation-explain.ts",
     "patch-industries": "tsx scripts/patch-industries.ts"
   },
   "dependencies": {

@@ -9,6 +9,7 @@ import type {
 } from "@/lib/valuationHistory";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import InfoDot from "./InfoDot";
+import { VERDICT_META, type ValuationExplainMap } from "@/lib/valuationExplain";
 import UniverseSwitcher from "./UniverseSwitcher";
 
 const ALL_MULTIPLES: MultipleKey[] = ["pe", "evEbitda", "ps", "pb"];
@@ -66,11 +67,13 @@ export default function ValuationHistoryView({
   data,
   known,
   sectorBy,
+  explain = {},
 }: {
   universe: string;
   data: ValuationHistoryData;
   known: string[];
   sectorBy: Record<string, string>;
+  explain?: ValuationExplainMap;
 }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [metric, setMetric] = useState<MultipleKey>("pe");
@@ -208,7 +211,21 @@ export default function ValuationHistoryView({
               const otherEligible = r.name.eligible.filter((k) => k !== metric);
               return (
                 <tr key={r.ticker} className="border-b border-[var(--divider)] hover:bg-[var(--surface-hover)]">
-                  <td className="px-3 py-1.5">{tlink(r.ticker)}</td>
+                  <td className="whitespace-nowrap px-3 py-1.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      {tlink(r.ticker)}
+                      {explain[r.ticker] && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                          style={{ background: `${VERDICT_META[explain[r.ticker].verdict].color}22`, color: VERDICT_META[explain[r.ticker].verdict].color }}
+                          title={explain[r.ticker].reason}
+                        >
+                          {VERDICT_META[explain[r.ticker].verdict].short}
+                          <InfoDot text={explain[r.ticker].reason} />
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="max-w-[12rem] truncate px-3 py-1.5 text-xs text-[var(--text-3)]">
                     {sectorBy[r.ticker] ?? (r.name.sectorClass === "financial" ? "Financials" : "—")}
                     {r.name.sectorClass === "financial" && <span className="ml-1 rounded bg-[#2563eb]/15 px-1 text-[9px] text-[var(--accent)]">FIN</span>}

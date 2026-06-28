@@ -252,6 +252,15 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.
+      # Needs valuation-history.json + the snapshot (above) + OPENROUTER_API_KEY.
+      - name: Refresh valuation-discount verdicts
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-valuation-explain
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
       # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
       # CSV still works but caps at ~3yr.
