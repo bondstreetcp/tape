@@ -17,6 +17,7 @@ import { loadCatalysts } from "../lib/catalysts";
 import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
+import { getNews } from "../lib/news";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch } from "../lib/deskNote";
 
@@ -26,8 +27,8 @@ const BASE = "sp500"; // headline US universe the brief is keyed to
 const SYSTEM =
   "You are a senior markets-desk strategist writing the morning brief for a sharp portfolio manager. You are given PRE-SELECTED overnight data WITH CONTEXT (trend, 52-week position, valuation, next-earnings, options skew, implied upside). " +
   "Do NOT just relist the data — for every development write the SECOND LAYER: WHY it matters, the mechanism / read-through, whether it looks like real signal or just noise, and what it sets up or what to watch next. Tie each section together with a one-line thematic 'synthesis' (the so-what for the group). Surface CONNECTIONS the raw feeds don't show on their own — e.g. a stock that is weak AND has heavy near-dated put premium AND just got downgraded is positioning into a catalyst; an unexplained move with no catalyst on file is itself notable. Give the bull AND the bear when it's a genuine debate. " +
-  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively); if a move has no catalyst on file, say so and treat the absence as information. Each bullet gets a short 'tag' classifying the development: Deal | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
-  "DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: one name = one bullet that ties its threads together. " +
+  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event) — the headlines are recent but attribute carefully, and if they don't plausibly explain a move that large, say the link is uncertain. Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found, and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
+  "DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: one name = one bullet that ties its threads together. COVERAGE: every stock that moved ±8% or more in the data MUST appear somewhere in the brief — fold it into a theme where it fits, otherwise put it in a 'Single-name movers' section; never silently drop a double-digit move (those are exactly what the reader scans for). " +
   NO_ADVICE;
 
 const SCHEMA_HINT =
@@ -65,14 +66,24 @@ async function main() {
   const priceOf = new Map(stocks.map((s) => [s.symbol, s.price]));
   const ranked = stocks.filter((s) => s.returns["1d"] != null).sort((a, b) => (b.returns["1d"] as number) - (a.returns["1d"] as number));
   const moverRows = [...ranked.slice(0, 6), ...ranked.slice(-6).reverse()];
-  const movers = moverRows.map((s) => {
-    const why = (catalysts as Record<string, { why?: string }>)?.[s.symbol]?.why || "";
-    const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
-    return (
-      `${s.symbol} ${pct(s.returns["1d"])} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
-      `${val ? ` · ${val}` : ""} · ${pct(s.pctFromHigh)} vs 52w-high${earnSoon(s.earningsDate)} · ${why ? `catalyst: ${why}` : "NO catalyst on file"}`
-    );
-  });
+  const movers = await Promise.all(
+    moverRows.map(async (s) => {
+      const why = (catalysts as Record<string, { why?: string }>)?.[s.symbol]?.why || "";
+      // No cached catalyst → actively pull recent news so GLM can explain the move instead of
+      // shrugging "unexplained". (A 12% move almost always has a reason — go find it.)
+      let driver = why ? `catalyst: ${why}` : "";
+      if (!why) {
+        const news = await getNews(s.name || s.symbol, 6).catch(() => []);
+        const heads = news.slice(0, 3).map((n) => n.title.trim()).filter(Boolean);
+        driver = heads.length ? `recent news: ${heads.join(" | ")}` : "no catalyst or recent news found";
+      }
+      const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
+      return (
+        `${s.symbol} ${pct(s.returns["1d"])} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
+        `${val ? ` · ${val}` : ""} · ${pct(s.pctFromHigh)} vs 52w-high${earnSoon(s.earningsDate)} · ${driver}`
+      );
+    }),
+  );
 
   // --- Material filings with substance (whatChanged + takeaway), not just headlines ---
   const filings = (overnight?.items ?? [])
