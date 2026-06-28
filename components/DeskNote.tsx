@@ -44,19 +44,17 @@ export default function DeskNote({ note, universe }: { note: DeskNote | null; un
           <div key={i}>
             <h3 className="text-[13px] font-semibold text-[var(--text)]">{s.heading}</h3>
             {s.synthesis && <p className="mb-2 mt-0.5 text-xs italic leading-snug text-[var(--text-3)]">{s.synthesis}</p>}
-            <ul className="space-y-2.5">
+            <ul className="space-y-3">
               {s.bullets.map((b, j) => (
-                <li key={j} className="flex gap-2.5">
+                <li key={j}>
                   {b.tag && (
-                    <span className={"mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide " + tagCls(b.tag)}>{b.tag}</span>
+                    <span className={"mb-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide " + tagCls(b.tag)}>{b.tag}</span>
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium leading-snug text-[var(--text)]">
-                      {b.fact}
-                      <Tickers tickers={b.tickers} universe={universe} />
-                    </p>
-                    {b.read && <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-2)]">{b.read}</p>}
-                  </div>
+                  <p className="text-sm font-medium leading-snug text-[var(--text)]">
+                    {b.fact}
+                    <Tickers tickers={b.tickers} universe={universe} />
+                  </p>
+                  {b.read && <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-2)]">{b.read}</p>}
                 </li>
               ))}
             </ul>
