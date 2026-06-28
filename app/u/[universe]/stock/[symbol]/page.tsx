@@ -8,7 +8,8 @@ import { getFinancials } from "@/lib/financials";
 import { getCompanyProfile } from "@/lib/companyProfile";
 import FinancialsView from "@/components/FinancialsView";
 import SetupNotice from "@/components/SetupNotice";
-import type { StockRow } from "@/lib/types";
+import { fetchLiveStock } from "@/lib/liveStock";
+import type { StockRow, StockSeries } from "@/lib/types";
 
 // Unified ticker page (Overview + Financials/Estimates/Peers/Ownership/Filings/
 // Options/Profile tabs). The chart + snapshot come from local files; the financials/
@@ -27,8 +28,16 @@ export default async function StockPage({
   const snapshot = await loadSnapshot(universe);
   if (!snapshot || snapshot.stocks.length === 0) return <SetupNotice />;
 
-  const row = snapshot.stocks.find((s) => s.symbol === SYM);
-  if (!row) notFound();
+  // Prefer the precomputed constituent row; otherwise fetch the ticker live from Yahoo so
+  // off-index names (when-issued spinoffs like MBGL-WI, fresh IPOs, ADRs) still render.
+  let row = snapshot.stocks.find((s) => s.symbol === SYM);
+  let liveSeries: StockSeries | null = null;
+  if (!row) {
+    const live = await fetchLiveStock(SYM).catch(() => null);
+    if (!live) notFound(); // Yahoo has nothing either → genuine 404
+    row = live.row;
+    liveSeries = live.series;
+  }
   const meta = ETF_TO_SECTOR[row.etf] ?? null;
 
   // Peers from the snapshot: same sub-industry, falling back to the whole sector.
@@ -45,7 +54,7 @@ export default async function StockPage({
   peers = [...peers].sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, 30);
 
   const [xy, stats, financials, profile] = await Promise.all([
-    loadSymbolSeries(SYM),
+    liveSeries ? Promise.resolve(liveSeries) : loadSymbolSeries(SYM),
     getCompanyStats(SYM).catch(() => null),
     getFinancials(SYM).catch(() => ({ annual: [], quarterly: [] })),
     getCompanyProfile(SYM).catch(() => null),

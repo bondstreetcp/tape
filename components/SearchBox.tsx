@@ -71,6 +71,17 @@ export default function SearchBox({
     setQ("");
     setOpen(false);
   };
+  // Free-form ticker lookup — routes to an off-index symbol (when-issued spinoffs like
+  // MBGL-WI, fresh IPOs, ADRs); the stock page fetches it live from Yahoo.
+  const literal = q.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g, "");
+  const goLiteral = () => {
+    if (!literal) return;
+    router.push(`/u/${universe}/stock/${encodeURIComponent(literal)}`);
+    setQ("");
+    setOpen(false);
+  };
+  // Show the literal-lookup row unless the top match already IS that exact ticker.
+  const showLiteral = literal.length > 0 && matches[0]?.symbol !== literal;
 
   return (
     <div className="relative">
@@ -90,8 +101,9 @@ export default function SearchBox({
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setActive((a) => Math.max(a - 1, 0));
-          } else if (e.key === "Enter" && matches[active]) {
-            go(matches[active]);
+          } else if (e.key === "Enter") {
+            if (matches[active]) go(matches[active]);
+            else if (literal) goLiteral();
           } else if (e.key === "Escape") {
             setOpen(false);
           }
@@ -99,7 +111,7 @@ export default function SearchBox({
         placeholder="Search any company…"
         className="w-56 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)] sm:w-64"
       />
-      {open && matches.length > 0 && (
+      {open && (matches.length > 0 || showLiteral) && (
         <div className="absolute right-0 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-xl">
           {matches.map((m, i) => (
             <button
@@ -118,6 +130,15 @@ export default function SearchBox({
               <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-3)]">{m.name}</span>
             </button>
           ))}
+          {showLiteral && (
+            <button
+              onMouseDown={(e) => { e.preventDefault(); goLiteral(); }}
+              className={"flex w-full items-center gap-2 px-3 py-2 text-left " + (matches.length === 0 ? "" : "border-t border-[var(--divider)]")}
+            >
+              <span className="w-16 shrink-0 truncate font-mono text-sm font-semibold text-[#60a5fa]">{literal}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-4)]">Look up any ticker (incl. when-issued) →</span>
+            </button>
+          )}
         </div>
       )}
     </div>
