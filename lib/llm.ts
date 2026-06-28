@@ -20,6 +20,13 @@ import path from "path";
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "z-ai/glm-5.2";
 
+// The premium reasoning model for ANALYTICAL/judgment generation (Confluence thesis, valuation
+// verdicts, 13F story, the chatter/Congress summaries). Routed through the same OpenRouter client
+// — pass `{ model: PRO_MODEL }` to chatJSON/chatText. Gemini 3.1 Pro is the stronger synthesizer;
+// the token volume on these is tiny so the cost delta vs GLM is pennies/night. Bulk mechanical
+// work (overnight-filings scan) stays on DEFAULT_MODEL. Override with LLM_PRO_MODEL.
+export const PRO_MODEL = process.env.LLM_PRO_MODEL || "google/gemini-3.1-pro-preview";
+
 let _key: string | null = null;
 
 /** Resolve the API key from env, or (for local tsx runs) from .env.local. */

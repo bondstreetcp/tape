@@ -16,7 +16,7 @@ import { loadCongress } from "../lib/congress";
 import { loadCatalysts } from "../lib/catalysts";
 import { getAnalystActions } from "../lib/analystActions";
 import { getOptionsFlow } from "../lib/optionsFlow";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { ConfluenceData, ConfluenceName, ConfluenceSignal, ConfluenceRead, SignalKind } from "../lib/confluence";
 import { SIGNAL_ORDER } from "../lib/confluence";
 
@@ -174,7 +174,7 @@ async function main() {
       return `${c}\n   signals: ${s}`;
     });
     const user = `${SCHEMA}\n\nNAMES (each with its stacked signals + context):\n${lines.join("\n")}`;
-    const out = await chatJSON<{ reads: (ConfluenceRead & { symbol: string })[] }>(SYSTEM, user, { maxTokens: 6000 });
+    const out = await chatJSON<{ reads: (ConfluenceRead & { symbol: string })[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL });
     const bySym = new Map((out?.reads || []).filter((r) => r?.symbol).map((r) => [String(r.symbol).toUpperCase(), r] as const));
     for (const n of board) {
       const r = bySym.get(n.symbol.toUpperCase());

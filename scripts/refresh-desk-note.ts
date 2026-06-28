@@ -18,7 +18,7 @@ import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
 import { getNews } from "../lib/news";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch } from "../lib/deskNote";
 
 const DATA = path.join(process.cwd(), "data");
@@ -135,7 +135,7 @@ async function main() {
     return;
   }
 
-  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 7000 });
+  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 7000, model: PRO_MODEL });
   if (!out || !Array.isArray(out.sections)) {
     console.warn("desk-note: LLM returned no usable brief — skipping write.");
     return;

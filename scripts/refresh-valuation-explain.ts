@@ -10,7 +10,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadValuationHistory, type MultipleStat, type MultipleKey } from "../lib/valuationHistory";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { ValuationExplainMap, Verdict } from "../lib/valuationExplain";
 
 const DATA = path.join(process.cwd(), "data");
@@ -73,7 +73,7 @@ async function main() {
   const SCHEMA = 'Return ONLY JSON: {"verdicts":[{"symbol": string, "verdict": "genuine"|"trap"|"mixed", "reason": string}]}';
   const user = `${SCHEMA}\n\nDEEP DISCOUNTS (each with discount depth + price trend + earnings direction):\n${lines.join("\n")}`;
 
-  const out = await chatJSON<{ verdicts: { symbol: string; verdict: string; reason: string }[] }>(SYSTEM, user, { maxTokens: 5000 });
+  const out = await chatJSON<{ verdicts: { symbol: string; verdict: string; reason: string }[] }>(SYSTEM, user, { maxTokens: 5000, model: PRO_MODEL });
   const valid = new Set<Verdict>(["genuine", "trap", "mixed"]);
   const map: ValuationExplainMap = {};
   for (const v of out?.verdicts || []) {

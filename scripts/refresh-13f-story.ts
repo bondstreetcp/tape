@@ -7,7 +7,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { loadSuperInvestors } from "../lib/superinvestors";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { ThirteenFStory, StoryTheme } from "../lib/thirteenFStory";
 
 const DATA = path.join(process.cwd(), "data");
@@ -74,7 +74,7 @@ async function main() {
     `\n=== MOST-SOLD (sold-out + trims) ===\n${fmt(sells)}\n` +
     `\n=== MOST-OWNED ACROSS THE ROSTER ===\n${mostOwned}`;
 
-  const out = await chatJSON<{ tldr: string; themes: StoryTheme[] }>(SYSTEM, user, { maxTokens: 3500 });
+  const out = await chatJSON<{ tldr: string; themes: StoryTheme[] }>(SYSTEM, user, { maxTokens: 3500, model: PRO_MODEL });
   if (!out || !out.tldr) {
     console.warn("13f-story: LLM returned no usable story — skipping write.");
     return;
