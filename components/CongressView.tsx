@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { CongressData, CongressTrade, TrumpData } from "@/lib/congress";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UniverseSwitcher from "./UniverseSwitcher";
+import type { CongressSummary } from "@/lib/congressSummary";
 
 type SortKey = "traded" | "disclosed" | "amount";
 
@@ -16,7 +17,13 @@ const chamberBadge = (c: string) =>
   : c === "House" ? { t: "REP", cls: "bg-[#7c3aed]/15 text-[#a78bfa]" }
   : { t: "PRES", cls: "bg-[#dc2626]/15 text-[#f87171]" };
 
-export default function CongressView({ universe, data, trump, known }: { universe: string; data: CongressData; trump?: TrumpData | null; known: string[] }) {
+const tagStyle = (tag: string): React.CSSProperties => {
+  const t = tag.toLowerCase();
+  const c = t.includes("cluster") ? "#22c55e" : t.includes("large") ? "#60a5fa" : t.includes("member") ? "#a78bfa" : t.includes("sector") ? "#f59e0b" : t.includes("sell") ? "#ef4444" : "#94a3b8";
+  return { background: `${c}22`, color: c };
+};
+
+export default function CongressView({ universe, data, trump, known, summary }: { universe: string; data: CongressData; trump?: TrumpData | null; known: string[]; summary?: CongressSummary | null }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [side, setSide] = useState<"all" | "buy" | "sell">("all");
   const [chamber, setChamber] = useState<"all" | "Senate" | "House" | "Executive">("all");
@@ -92,6 +99,36 @@ export default function CongressView({ universe, data, trump, known }: { univers
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      {summary && summary.tldr && (
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-sm font-semibold text-[var(--text)]">What&apos;s notable</span>
+            <span className="text-[10px] text-[var(--text-4)]">· AI summary — the signal vs. the data dump</span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-[var(--text-2)]">{summary.tldr}</p>
+          {summary.highlights.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {summary.highlights.map((h, i) => (
+                <div key={i} className="rounded-lg border border-[var(--divider)] bg-[var(--bg)] p-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase" style={tagStyle(h.tag)}>{h.tag}</span>
+                    <span className="text-xs font-semibold text-[var(--text)]">{h.headline}</span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-3)]">{h.detail}</div>
+                  {h.tickers.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {h.tickers.map((tk) => (
+                        <Link key={tk} href={`/u/${universe}/stock/${encodeURIComponent(tk)}`} className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--accent)] hover:underline">{tk}</Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* President Trump — OGE 278-T trades (executive branch) */}
       {hasExec && (
