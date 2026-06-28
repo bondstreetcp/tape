@@ -34,6 +34,15 @@ async function apiKey(): Promise<string> {
   return _key;
 }
 
+/** True if an OpenRouter key is resolvable (env or .env.local) — gate GLM features on this, NOT GEMINI_API_KEY. */
+export async function llmConfigured(): Promise<boolean> {
+  return !!(await apiKey());
+}
+
+/** Project framing guardrail — append to any user-facing generative system prompt. */
+export const NO_ADVICE =
+  "Frame everything as research / decision-support. Do not give a personalized buy, sell, or hold recommendation, a price target, or position-sizing advice.";
+
 function baseUrl(): string {
   return (process.env.LLM_BASE_URL || DEFAULT_BASE).replace(/\/+$/, "");
 }
@@ -150,11 +159,17 @@ export async function chatJSON<T = any>(system: string, user: string, opts: Chat
   // callChat owns transport reliability (retry/backoff/timeout). Here we only re-prompt
   // when an OK reply isn't parseable JSON — a null reply means transport already gave up,
   // so don't loop pointlessly.
-  const messages = [
+  const base = [
     { role: "system" as const, content: system },
     { role: "user" as const, content: user },
   ];
   for (let attempt = 0; attempt < 2; attempt++) {
+    // On the retry, nudge the model rather than re-sending the identical prompt (which tends to
+    // re-fail the same way) — parseJson already strips fences, so a retry means it returned prose.
+    const messages =
+      attempt === 0
+        ? base
+        : [...base, { role: "user" as const, content: "Your previous reply was not valid JSON. Return ONLY the JSON object — no prose, no markdown fences." }];
     const content = await callChat(messages, opts, true);
     if (content == null) return null;
     const parsed = parseJson<T>(content);
@@ -162,6 +177,15 @@ export async function chatJSON<T = any>(system: string, user: string, opts: Chat
     await sleep(800);
   }
   return null;
+}
+
+/** Strip a leading <think>/<reasoning> block and a wrapping markdown fence that GLM-5.2 may emit. */
+function stripReasoning(s: string): string {
+  let t = s.trim();
+  t = t.replace(/^<(think|reasoning)>[\s\S]*?<\/\1>\s*/i, "");
+  const fence = t.match(/^```(?:markdown|md|text)?\s*([\s\S]*?)```$/i);
+  if (fence) t = fence[1].trim();
+  return t.trim();
 }
 
 /** Ask the model for plain text. Returns the text or null. */
@@ -174,5 +198,5 @@ export async function chatText(system: string, user: string, opts: ChatOpts = {}
     opts,
     false,
   );
-  return content ? content.trim() : null;
+  return content ? stripReasoning(content) : null;
 }

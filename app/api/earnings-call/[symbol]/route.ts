@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askConfigured, summarizeText } from "@/lib/ask";
+import { summarizeText } from "@/lib/ask";
+import { llmConfigured } from "@/lib/llm";
 import { getLatestTranscript } from "@/lib/transcripts";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const name = req.nextUrl.searchParams.get("name") || sym;
-  if (!askConfigured()) return NextResponse.json({ configured: false });
+  if (!(await llmConfigured())) return NextResponse.json({ configured: false });
   try {
     const t = await getLatestTranscript(sym, name);
     if (!t || !t.text || t.text.length < 500) {

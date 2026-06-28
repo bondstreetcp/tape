@@ -8,7 +8,7 @@
 import type { StoredDoc, ResearchEstimate } from "./types";
 import { searchChunks, getDoc } from "./store";
 import { embedQuery } from "./embed";
-import { chatText } from "../llm";
+import { chatText, NO_ADVICE } from "../llm";
 
 export interface MetricRow { source: string; date: string; value: number | null; priorValue: number | null; unit: string | null; vsConsensus: string | null }
 export interface Consensus {
@@ -113,7 +113,7 @@ export async function searchCorpus(docs: StoredDoc[], question: string): Promise
     `Ground every claim in the reports and attribute it to the source firm; quote a short phrase where it sharpens the point. ` +
     `Synthesize across reports where they agree or disagree. If the reports don't address the question, say so plainly.\n\n` +
     `Question: ${question}\n\n${blocks.join("\n\n")}`;
-  const out = await chatText("You are a buy-side equity-research analyst.", prompt, { temperature: 0.2, maxTokens: 4096 });
+  const out = await chatText("You are a buy-side equity-research analyst. " + NO_ADVICE, prompt, { temperature: 0.2, maxTokens: 4096 });
   return out || null;
 }
 
@@ -165,7 +165,7 @@ export async function actionableScan(docs: StoredDoc[]): Promise<string | null> 
     `You are a buy-side PM scanning sell-side research for IDEA GENERATION. From the signals below, surface the most ACTIONABLE items — names where the Street is re-rating hard (large price-target or estimate revisions, rating changes), where management/expert access adds conviction, or where there's a sharp debate/outlier worth a look. Be selective and rank by actionability. For each: **Ticker** — the signal in one line — why it's actionable — and the one thing to check next. End with any cross-cutting theme.\n\n` +
     `=== SIGNALS (pre-ranked by movement) ===\n${lines.join("\n")}\n\n` +
     (color.length ? `=== MANAGEMENT / EXPERT COLOR ===\n${color.join("\n")}\n` : "");
-  const out = await chatText("You are a buy-side PM scanning sell-side research for idea generation.", prompt, { temperature: 0.3, maxTokens: 4096 });
+  const out = await chatText("You are a buy-side PM scanning sell-side research for idea generation. " + NO_ADVICE, prompt, { temperature: 0.3, maxTokens: 4096 });
   return out || null;
 }
 
@@ -192,6 +192,6 @@ export async function corpusSearch(query: string, ticker?: string): Promise<{ an
   const prompt =
     `Answer the question using ONLY these research passages retrieved from across the corpus. Cite the ticker + source firm for each point; synthesize where multiple passages bear on it. If they don't address the question, say so.\n\n` +
     `Question: ${query}\n\n=== PASSAGES ===\n${ctx}`;
-  const answer = await chatText("You are a buy-side equity-research analyst.", prompt, { temperature: 0.2, maxTokens: 3072 });
+  const answer = await chatText("You are a buy-side equity-research analyst. " + NO_ADVICE, prompt, { temperature: 0.2, maxTokens: 3072 });
   return { answer: answer || null, hits };
 }

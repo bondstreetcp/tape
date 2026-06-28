@@ -12,6 +12,8 @@ import path from "path";
 
 export type Sentiment = "bullish" | "neutral" | "bearish";
 export type Surprise = "beat" | "inline" | "miss" | "na";
+/** How market-moving the model judges the filing to be (drives the red/green flag + Movers filter). */
+export type Impact = "high" | "medium" | "low";
 
 /** The model's per-filing digest (see the SYSTEM/SCHEMA in the refresh script). */
 export interface OvernightDigest {
@@ -20,6 +22,7 @@ export interface OvernightDigest {
   decisionTakeaway: string;
   sentiment: Sentiment;
   surprise: Surprise;
+  impact: Impact;
   keyMetrics: Record<string, unknown>;
 }
 

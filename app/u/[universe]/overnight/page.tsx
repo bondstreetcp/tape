@@ -23,5 +23,9 @@ export default async function OvernightPage({ params }: { params: Promise<{ univ
     );
   }
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
-  return <OvernightFilingsView universe={universe} data={data} known={known} />;
+  // ticker → GICS sector, so the feed can be filtered by sector (useful once the
+  // Russell 3000 firehose is on).
+  const sectors: Record<string, string> = {};
+  for (const s of snapshot?.stocks ?? []) if (s.sector) sectors[s.symbol] = s.sector;
+  return <OvernightFilingsView universe={universe} data={data} known={known} sectors={sectors} />;
 }

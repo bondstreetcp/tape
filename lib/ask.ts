@@ -9,7 +9,7 @@ import { getCompanyStats } from "./companyStats";
 import { getCompanyProfile } from "./companyProfile";
 import { getNews } from "./news";
 import { getFinancials, type FinPeriod } from "./financials";
-import { chatText } from "./llm";
+import { chatText, NO_ADVICE } from "./llm";
 
 const KEY = process.env.GEMINI_API_KEY;
 // gemini-2.5-pro — the most capable model, with reasoning enabled (thinkingConfig
@@ -175,8 +175,11 @@ export async function summarizeText(title: string, instruction: string, text: st
   // resolves its own key from env or .env.local.
   const system =
     `You are a sharp equity-research analyst. Follow the instruction precisely and base everything ` +
-    `STRICTLY on the provided source text — do not invent figures or quotes. Use clean, concise markdown.`;
-  const prompt = `${instruction}\n\n=== SOURCE: ${title} ===\n${text.slice(0, maxChars)}`;
+    `STRICTLY on the provided source text — do not invent figures or quotes. If the source looks truncated, ` +
+    `empty, or unrelated to the request, say so briefly rather than padding with generic commentary. ` +
+    `Use clean, concise markdown. ${NO_ADVICE}`;
+  const truncated = text.length > maxChars;
+  const prompt = `${instruction}\n\n=== SOURCE: ${title} ===\n${text.slice(0, maxChars)}${truncated ? "\n\n[SOURCE TRUNCATED — text continues beyond this point]" : ""}`;
   const answer = await chatText(system, prompt, { maxTokens: 8192 });
   return answer ? { answer, sources: [] } : null;
 }

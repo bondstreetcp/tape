@@ -5,11 +5,14 @@ import type { OvernightData, OvernightItem, Sentiment } from "@/lib/overnightFil
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UniverseSwitcher from "./UniverseSwitcher";
 
-// Form badge palette — 10-K/10-Q (periodic) vs 8-K (current report).
+// Form badge palette — periodic (10-K/10-Q) · current report (8-K) · M&A (S-4/425) ·
+// offering (424B).
 const formBadge = (form: string): string => {
   const f = form.replace("/A", "");
   if (f === "10-K") return "bg-[#7c3aed]/15 text-[#a78bfa]";
   if (f === "10-Q") return "bg-[#2563eb]/15 text-[#60a5fa]";
+  if (f === "S-4" || f === "425") return "bg-[#f59e0b]/15 text-[#fbbf24]"; // M&A — amber
+  if (/^424B/.test(f)) return "bg-[#22c55e]/15 text-[#4ade80]"; // offering — green
   return "bg-[#0891b2]/15 text-[#22d3ee]"; // 8-K
 };
 
@@ -32,26 +35,62 @@ const fmtTime = (iso: string): string => {
   return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
 
-type FormFilter = "all" | "8-K" | "10-Q" | "10-K";
+type FormFilter = "all" | "8-K" | "10-Q" | "10-K" | "deals";
 type SentFilter = "all" | Sentiment;
+const FORM_TABS: { k: FormFilter; label: string }[] = [
+  { k: "all", label: "All forms" },
+  { k: "8-K", label: "8-K" },
+  { k: "10-Q", label: "10-Q" },
+  { k: "10-K", label: "10-K" },
+  { k: "deals", label: "M&A / Offering" },
+];
+const isDeal = (form: string) => /^(S-4|425|424B)/.test(form.replace("/A", ""));
 
-export default function OvernightFilingsView({ universe, data, known }: { universe: string; data: OvernightData; known: string[] }) {
+// A high-impact (market-moving) filing gets a red/green flag from impact × sentiment.
+function impactFlag(it: OvernightItem): { cls: string; label: string; border: string } | null {
+  if (it.impact !== "high") return null;
+  if (it.sentiment === "bullish") return { cls: "bg-[#22c55e]/20 text-[#22c55e]", label: "Green flag", border: "border-l-[#22c55e]" };
+  if (it.sentiment === "bearish") return { cls: "bg-[#ef4444]/20 text-[#ef4444]", label: "Red flag", border: "border-l-[#ef4444]" };
+  return { cls: "bg-[#f59e0b]/20 text-[#fbbf24]", label: "Notable", border: "border-l-[#f59e0b]" };
+}
+
+export default function OvernightFilingsView({ universe, data, known, sectors = {} }: { universe: string; data: OvernightData; known: string[]; sectors?: Record<string, string> }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [formF, setFormF] = useState<FormFilter>("all");
   const [sentF, setSentF] = useState<SentFilter>("all");
+  const [sectorF, setSectorF] = useState<string>("all");
+  const [moversOnly, setMoversOnly] = useState(false);
+  const [q, setQ] = useState("");
 
   // Universe filter: the digest is built across all US large-caps, but only show filings
   // for names that belong to the currently-selected universe.
   const universeItems = useMemo(() => data.items.filter((it) => knownSet.has(it.ticker)), [data.items, knownSet]);
-  const rows = useMemo(
-    () =>
-      universeItems.filter((it) => {
-        if (formF !== "all" && it.form.replace("/A", "") !== formF) return false;
-        if (sentF !== "all" && it.sentiment !== sentF) return false;
-        return true;
-      }),
-    [universeItems, formF, sentF],
-  );
+  // Sectors present in this universe's filings (for the dropdown).
+  const sectorOpts = useMemo(() => {
+    const s = new Set<string>();
+    for (const it of universeItems) { const sec = sectors[it.ticker]; if (sec) s.add(sec); }
+    return [...s].sort();
+  }, [universeItems, sectors]);
+
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const out = universeItems.filter((it) => {
+      if (moversOnly && it.impact !== "high") return false;
+      if (formF !== "all") {
+        const f = it.form.replace("/A", "");
+        if (formF === "deals" ? !isDeal(f) : f !== formF) return false;
+      }
+      if (sentF !== "all" && it.sentiment !== sentF) return false;
+      if (sectorF !== "all" && (sectors[it.ticker] || "") !== sectorF) return false;
+      if (needle && !`${it.ticker} ${it.name} ${it.headline}`.toLowerCase().includes(needle)) return false;
+      return true;
+    });
+    // Surface the market-movers: high-impact first, then (stable) newest-first within a tier.
+    const rank = (i: OvernightItem) => (i.impact === "high" ? 0 : i.impact === "medium" ? 1 : 2);
+    return out.sort((a, b) => rank(a) - rank(b));
+  }, [universeItems, formF, sentF, sectorF, moversOnly, q, sectors]);
+  const filtered = rows.length !== universeItems.length;
+  const moverCount = useMemo(() => universeItems.filter((it) => it.impact === "high").length, [universeItems]);
   // Honest window label — the effective lookback reaches back to the previous trading
   // session, which is wider than a flat 36h after a weekend, so show the actual date.
   const sinceLabel = useMemo(() => {
@@ -83,9 +122,15 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
 
       {/* filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search ticker, name, headline…"
+          className="w-52 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs text-[var(--text)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
+        />
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
-          {(["all", "8-K", "10-Q", "10-K"] as FormFilter[]).map((f) => (
-            <button key={f} onClick={() => setFormF(f)} className={TB(formF === f)}>{f === "all" ? "All forms" : f}</button>
+          {FORM_TABS.map(({ k, label }) => (
+            <button key={k} onClick={() => setFormF(k)} className={TB(formF === k)}>{label}</button>
           ))}
         </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
@@ -93,7 +138,30 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
             <button key={s} onClick={() => setSentF(s)} className={TB(sentF === s)}>{s === "all" ? "All" : sentChip[s as Sentiment].label}</button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} shown</span>
+        {sectorOpts.length > 1 && (
+          <select
+            value={sectorF}
+            onChange={(e) => setSectorF(e.target.value)}
+            className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
+          >
+            <option value="all">All sectors</option>
+            {sectorOpts.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+        <button
+          onClick={() => setMoversOnly((v) => !v)}
+          disabled={moverCount === 0}
+          title="Show only filings the AI flagged as market-moving (high impact)"
+          className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 " + (moversOnly ? "border-[#f59e0b] bg-[#f59e0b]/15 text-[#fbbf24]" : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-3)] hover:text-[var(--text)]")}
+        >
+          ⚡ Movers{moverCount ? ` ${moverCount}` : ""}
+        </button>
+        <span className="ml-auto flex items-center gap-2 text-xs text-[var(--text-4)]">
+          {filtered && (
+            <button onClick={() => { setFormF("all"); setSentF("all"); setSectorF("all"); setMoversOnly(false); setQ(""); }} className="text-[#60a5fa] hover:underline">clear</button>
+          )}
+          {rows.length} shown
+        </span>
       </div>
 
       {/* feed */}
@@ -121,16 +189,18 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
 function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.ReactNode }) {
   const sent = sentChip[it.sentiment] ?? sentChip.neutral;
   const surp = surpriseChip[it.surprise];
+  const flag = impactFlag(it);
   const metrics = Object.entries(it.keyMetrics || {}).filter(([, v]) => v != null && String(v).trim());
   const isPeriodic = it.form.replace("/A", "") === "10-K" || it.form.replace("/A", "") === "10-Q";
 
   return (
-    <article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+    <article className={"overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] " + (flag ? "border-l-2 " + flag.border : "")}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-[var(--divider)] px-4 py-2.5">
         <div className="flex items-center gap-2.5">
           {tlink(it.ticker)}
           <span className="max-w-[14rem] truncate text-sm text-[var(--text-3)]">{it.name}</span>
           <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + formBadge(it.form)}>{it.form}</span>
+          {flag && <span className={"rounded px-1.5 py-0.5 text-[10px] font-bold " + flag.cls}>{flag.label}</span>}
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-4)]">
           <span title={it.filedAt}>{fmtTime(it.filedAt)}</span>

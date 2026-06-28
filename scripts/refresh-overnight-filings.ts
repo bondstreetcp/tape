@@ -49,13 +49,33 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 //   5.01 change in control · 5.02 officer/director changes · 5.07 submitted to a vote
 //   8.01 other material events
 const MATERIAL_8K_ITEMS = ["1.01", "1.02", "2.01", "2.02", "2.03", "4.01", "4.02", "5.01", "5.02", "5.07", "8.01"];
-const TRACKED_FORMS = new Set(["8-K", "10-Q", "10-K"]);
+
+// Beyond 8-K/10-Q/10-K we track company-filed deal & capital-raise docs:
+//   S-4 / 425 = M&A (merger registration / merger communications) · 424B = offering
+//   prospectus (IPO/follow-on/debt raise). These are inherently material event filings —
+//   no item gate, summarized standalone.
+//   424B is restricted to 424B1 (IPO) and 424B4 (follow-on equity) only. ⚠ Big banks
+//   (BAC/GS/MS/C/JPM…) file DOZENS of 424B2 AND 424B3 structured-note pricing supplements
+//   daily off their MTN shelves (tiny auto-callable retail notes), and 424B5 is mostly
+//   routine debt-shelf takedowns — all noise that floods the digest. Material debt/equity
+//   raises still arrive as 8-Ks (item 1.01/2.03/8.01). (SC 13D/13G are filed BY the
+//   investor, not the issuer, so they never appear in the issuer's feed — not covered.)
+type TrackedForm = "8-K" | "10-Q" | "10-K" | "S-4" | "425" | "424B";
+function trackedForm(form: string): TrackedForm | null {
+  const f = form.replace("/A", "");
+  if (f === "8-K" || f === "10-Q" || f === "10-K" || f === "S-4" || f === "425") return f;
+  if (f === "424B1" || f === "424B4") return "424B"; // IPO / follow-on equity only; B2/B3/B5 are structured-note + MTN noise
+  return null;
+}
 
 const SYSTEM =
-  "You are an equity analyst writing the overnight desk note on a new SEC filing, plus a multi-year financial snapshot. For an 8-K you are also given the prior comparable 8-K to diff against; a 10-Q/10-K instead carries its own prior-year/prior-period comparatives — use those. Identify ONLY what materially changed: revenue/margin/EPS vs the prior period, guidance, segment trends, new or dropped risk factors, buybacks/dividends, M&A, management changes, accounting/restatements. Ground every claim in the supplied text — never invent a number. Ignore boilerplate and unchanged repeated language. Set headline to exactly 'NONE' (and leave whatChanged empty) only for a genuinely immaterial filing — a routine committee appointment, an annual-meeting date, an administrative exhibit. Return ONLY JSON.";
+  "You are an equity analyst writing the overnight desk note on a new SEC filing. You get TWO inputs: (1) the FILING text — your ONLY source for whatChanged, keyMetrics and every number you cite; and (2) a BACKGROUND market-data snapshot (Yahoo stats) for context and scale ONLY — never present its figures as disclosures from this filing. For an 8-K you may also get the prior comparable 8-K to diff against; a 10-Q/10-K carries its own prior-year/prior-period comparatives — use those. When no prior comparable is provided (a one-off 8-K, or an S-4/425/424B deal/offering), do NOT diff — summarize what the filing ANNOUNCES and why it matters on its own; absence of a baseline is never a reason to return 'NONE'. " +
+  "Identify ONLY what materially changed or what the filing announces: revenue/margin/EPS vs the prior period, guidance, segment trends, new/dropped risk factors, buybacks/dividends, M&A (parties/price/structure), capital raises (size/coupon/use of proceeds), management changes, accounting/restatements. Ground every claim in the FILING text — never invent or infer a number that isn't stated there. Ignore boilerplate and unchanged repeated language. " +
+  "FIELD RUBRICS — surprise: 'beat'/'miss' ONLY vs an analyst consensus/estimate explicitly stated in the filing (e.g. an EPS-surprise line), else 'na'; never infer beat/miss from a year-over-year change. sentiment: the filing's effect on the forward outlook / intrinsic value (bullish/neutral/bearish) — judge substance, not tone. decisionTakeaway: one falsifiable sentence on what changed and why it matters; never a buy/sell/hold call. impact (how market-moving for THIS stock): 'high' requires BOTH a high-impact event type (guidance change, M&A, a surprise/forced CEO-CFO-auditor exit, a restatement that changes reported earnings, a major contract/litigation/regulatory outcome, or a buyback/raise/charge large relative to the company — use the background snapshot for scale, roughly >=5% of market cap) AND material magnitude; a high-impact type at immaterial scale (a small shelf on a mega-cap, a planned retirement, an in-line quarter) is 'medium'; routine/administrative is 'low'. Be selective — most filings are low or medium; when between tiers, choose the lower. " +
+  "NONE-GATE (distinct from low impact): return headline exactly 'NONE' with empty whatChanged ONLY for a genuinely empty/administrative filing — a routine committee appointment, an annual-meeting date/result, an administrative exhibit. A real-but-minor disclosure (a small contract, a minor officer change, an in-line quarter, a priced offering, a deal with terms) is NOT 'NONE' — keep it and rate impact 'low' or 'medium'. Return ONLY JSON.";
 
 const SCHEMA_HINT =
-  'Return ONLY a JSON object with this exact shape: {"headline": string (<=12 words, or exactly "NONE"), "whatChanged": string[] (3-5 concise items; empty if NONE), "decisionTakeaway": string (one decision-relevant sentence), "sentiment": "bullish"|"neutral"|"bearish", "surprise": "beat"|"inline"|"miss"|"na", "keyMetrics": object (a few labelled figures grounded in the filing, e.g. {"revenue":"$1.2B (+8% YoY)","EPS":"$2.10 vs $1.95 est"})}';
+  'Return ONLY a JSON object with this exact shape: {"headline": string (<=12 words, or exactly "NONE"), "whatChanged": string[] (3-5 concise items grounded in the filing; empty if NONE), "decisionTakeaway": string (one decision-relevant sentence, no buy/sell/hold), "sentiment": "bullish"|"neutral"|"bearish", "surprise": "beat"|"inline"|"miss"|"na", "impact": "high"|"medium"|"low", "keyMetrics": object — only figures EXPLICITLY stated in THIS filing, each with its unit and the filing\'s own comparison (YoY/QoQ/vs guidance/vs consensus); never pull from the background snapshot and never compute a figure; use {} when the filing states no clean figures (common for 8.01 / S-4 / 425). Examples — earnings: {"revenue":"$1.2B (+8% YoY)","EPS":"$2.10 vs $1.95 cons"}; non-earnings with no clean figure: {}}';
 
 interface Digest {
   headline: string;
@@ -63,6 +83,7 @@ interface Digest {
   decisionTakeaway: string;
   sentiment: "bullish" | "neutral" | "bearish";
   surprise: "beat" | "inline" | "miss" | "na";
+  impact: "high" | "medium" | "low";
   keyMetrics: Record<string, unknown>;
 }
 
@@ -82,7 +103,7 @@ interface NewFiling {
   name: string;
   cik: string;
   form: string;
-  formClean: "8-K" | "10-Q" | "10-K"; // form with /A stripped, for comparable matching
+  formClean: TrackedForm; // form normalized (amendments stripped, 424B* collapsed)
   newIdx: number;
   acceptance: string;
   filingDate: string;
@@ -133,21 +154,31 @@ async function detectForSymbol(symbol: string, name: string, windowStart: number
   const r = sub?.filings?.recent;
   if (!r?.form) return [];
   const out: NewFiling[] = [];
+  // One M&A deal or shelf program spawns MANY near-identical 425/S-4/424B filings (e.g. a
+  // merger files a 425 for every press release) — keep only the newest of each per issuer so
+  // a single deal is one card, not a wall of duplicates.
+  const seenDeal = new Set<string>();
   // recent arrays are newest-first; early-exit once we pass the window start.
   for (let i = 0; i < r.form.length; i++) {
     const accept = r.acceptanceDateTime?.[i] || `${r.filingDate?.[i] || ""}T00:00:00`;
     const acceptMs = Date.parse(accept);
     if (Number.isFinite(acceptMs) && acceptMs < windowStart) break; // older than the window → done
     const form = r.form[i];
-    if (!TRACKED_FORMS.has(form.replace("/A", ""))) continue;
+    const kind = trackedForm(form);
+    if (!kind) continue;
     const items = r.items?.[i] || "";
-    if (!isMaterial(form, items)) continue;
+    if (kind === "8-K") {
+      if (!isMaterial(form, items)) continue; // 8-Ks gated by item
+    } else if (kind === "S-4" || kind === "425" || kind === "424B") {
+      if (seenDeal.has(kind)) continue; // already kept the newest of this deal/offering form for this issuer
+      seenDeal.add(kind);
+    } // 10-Q/10-K are inherently material, one per window
     out.push({
       symbol,
       name,
       cik,
       form,
-      formClean: form.replace("/A", "") as "8-K" | "10-Q" | "10-K",
+      formClean: kind,
       newIdx: i,
       acceptance: accept,
       filingDate: r.filingDate[i],
@@ -178,7 +209,9 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
   // shared boilerplate, which made the model conclude "nothing changed" → NONE. The
   // risk-factor redline below still supplies the Q/Q change in risks.
   const earningsOnly = nf.formClean === "8-K" && /(^|,)\s*2\.02/.test(nf.items);
-  const priorIdx = isPeriodic ? -1 : findPriorComparable(nf.recent, nf.newIdx, nf.formClean, earningsOnly);
+  // Only 8-Ks get a prior-comparable diff. 10-Q/10-K use their own internal comparatives
+  // (above); deal/offering forms (S-4/425/424B) are one-off events with no comparable.
+  const priorIdx = nf.formClean === "8-K" ? findPriorComparable(nf.recent, nf.newIdx, nf.formClean, earningsOnly) : -1;
   const priorForm = priorIdx >= 0 ? nf.recent.form[priorIdx] : "";
   const priorAcc = priorIdx >= 0 ? nf.recent.accessionNumber[priorIdx] : "";
   const priorDate = priorIdx >= 0 ? nf.recent.filingDate[priorIdx] : "";
@@ -215,12 +248,14 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
     ? `\n\n=== PRIOR COMPARABLE ${priorForm} (filed ${priorDate}) ===\n${priorClip}`
     : isPeriodic
       ? "\n\n(Periodic report — compare against the prior-year/prior-period figures WITHIN the filing itself.)"
-      : "\n\n=== PRIOR COMPARABLE ===\n(none on file — assess the NEW filing on its own and call out anything materially new.)";
+      : nf.formClean === "S-4" || nf.formClean === "425" || nf.formClean === "424B"
+        ? "\n\n(Event filing — summarize what it announces: the deal or capital raise and its material terms (parties, price, size, structure). 'NONE' only if purely administrative.)"
+        : "\n\n=== PRIOR COMPARABLE ===\n(none on file — assess the NEW filing on its own and call out anything materially new.)";
 
   const user =
     `${SCHEMA_HINT}\n\n` +
     `Company: ${nf.name} (${nf.symbol}). NEW filing: ${nf.form}${nf.items ? ` · items ${nf.items}` : ""} · accepted ${nf.acceptance}.\n` +
-    `\n=== MULTI-YEAR FINANCIAL SNAPSHOT ===\n${snapshot || "(unavailable)"}\n` +
+    `\n=== BACKGROUND CONTEXT (market data — NOT from this filing; for scale/context only) ===\n${snapshot || "(unavailable)"}\n` +
     `\n=== NEW FILING ${nf.form} ===\n${newClip}` +
     priorBlock +
     rfLine;
@@ -240,6 +275,7 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
     decisionTakeaway: typeof digest.decisionTakeaway === "string" ? digest.decisionTakeaway.trim() : "",
     sentiment: ["bullish", "neutral", "bearish"].includes(digest.sentiment) ? digest.sentiment : "neutral",
     surprise: ["beat", "inline", "miss", "na"].includes(digest.surprise) ? digest.surprise : "na",
+    impact: ["high", "medium", "low"].includes(digest.impact) ? digest.impact : "medium",
     keyMetrics: digest.keyMetrics && typeof digest.keyMetrics === "object" ? digest.keyMetrics : {},
     riskFactorsAdded: rfAdded,
     riskFactorsRemoved: rfRemoved,

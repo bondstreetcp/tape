@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askConfigured, summarizeText, financialSnapshot } from "@/lib/ask";
+import { summarizeText, financialSnapshot } from "@/lib/ask";
+import { llmConfigured } from "@/lib/llm";
 import { getFilingDoc, type FilingForm } from "@/lib/filingDoc";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const form: FilingForm = (req.nextUrl.searchParams.get("form") || "10-K").toUpperCase() === "10-Q" ? "10-Q" : "10-K";
-  if (!askConfigured()) return NextResponse.json({ configured: false });
+  if (!(await llmConfigured())) return NextResponse.json({ configured: false });
   try {
     const [doc, snapshot] = await Promise.all([
       getFilingDoc(sym, form),
