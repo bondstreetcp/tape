@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Snapshot } from "@/lib/types";
 import type { CatalystMap } from "@/lib/catalysts";
-import type { DeskNote as DeskNoteData } from "@/lib/deskNote";
 import type { TimeframeKey } from "@/lib/timeframes";
 import { usePersistedTimeframe } from "@/lib/useTimeframe";
 import { returnColor, trendColor } from "@/lib/color";
@@ -16,7 +15,6 @@ import ThresholdSelector from "./ThresholdSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MoversSection from "./MoversSection";
 import AnalystFeed from "./AnalystFeed";
-import DeskNote from "./DeskNote";
 import { useIsLight } from "./useIsLight";
 import MarketAlert from "./MarketAlert";
 import Treemap from "./Treemap";
@@ -26,12 +24,10 @@ export default function HomeDashboard({
   snapshot,
   universe,
   catalysts = {},
-  deskNote = null,
 }: {
   snapshot: Snapshot;
   universe: string;
   catalysts?: CatalystMap;
-  deskNote?: DeskNoteData | null;
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
@@ -184,13 +180,6 @@ export default function HomeDashboard({
       )}
 
       <MoversSection universe={universe} stocks={snapshot.stocks} tf={tf} catalysts={catalysts} />
-
-      {/* US overnight brief — the data is S&P 500-keyed, so hide on international universes. */}
-      {!intl && deskNote && (
-        <div className="mt-6">
-          <DeskNote note={deskNote} universe={universe} />
-        </div>
-      )}
 
       <AnalystFeed universe={universe} />
 
