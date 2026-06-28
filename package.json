@@ -28,6 +28,7 @@
     "refresh-trump": "tsx scripts/refresh-trump.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
+    "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "patch-industries": "tsx scripts/patch-industries.ts"
   },
   "dependencies": {
