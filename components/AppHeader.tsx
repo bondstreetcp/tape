@@ -156,7 +156,7 @@ export default function AppHeader({
           ref={dropRef}
           role="menu"
           style={{ position: "fixed", left: pos.left, top: pos.top }}
-          className="z-50 min-w-[190px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-xl"
+          className="z-50 min-w-[190px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
         >
           {active.items.map((it) => (
             <Link

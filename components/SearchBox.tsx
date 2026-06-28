@@ -112,7 +112,7 @@ export default function SearchBox({
         className="w-56 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)] sm:w-64"
       />
       {open && (matches.length > 0 || showLiteral) && (
-        <div className="absolute right-0 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+        <div className="absolute right-0 z-30 mt-1 w-72 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-[var(--shadow-md)]">
           {matches.map((m, i) => (
             <button
               key={`${m.universe}:${m.symbol}`}

@@ -23,6 +23,9 @@
   --accent: #60a5fa;
   --accent-strong: #3b82f6;
   --accent-soft: rgba(96, 165, 250, 0.15);
+  /* Soft layered elevation (subtle on dark; carries the depth on light). */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px -4px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -46,6 +49,8 @@
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
   --accent-soft: rgba(37, 99, 235, 0.1);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 8px 24px -6px rgba(16, 24, 40, 0.12);
   color-scheme: light;
 }
 
@@ -83,4 +88,48 @@ a {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
+}
+
+/* ── UI polish pass (Apple / Vercel / Stripe language) ─────────────────── */
+
+/* Accessible, on-brand focus ring — keyboard navigation only (won't show on click).
+   Follows the element's own border-radius in modern browsers. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Financial-terminal precision: digits line up everywhere so values don't jitter. */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Crisp, deliberate headings. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+
+/* Smooth, restrained micro-interactions on interactive chrome. Scoped to interactive
+   elements (not body/html) so theme toggling doesn't animate the whole page; any explicit
+   Tailwind transition-* class still wins where it's set. */
+a,
+button,
+select,
+summary,
+label,
+input,
+[role="button"],
+[role="tab"] {
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease,
+    box-shadow 150ms ease, opacity 150ms ease;
+}
+
+/* Accent-tinted text selection. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
