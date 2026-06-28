@@ -43,10 +43,39 @@ let tickerMap: Map<string, string> | null = null;
 const listCache = new Map<string, F4Filing[]>();
 const subCache = new Map<string, any>();
 
-async function getJson(url: string): Promise<any> {
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-  return res.json();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// EDGAR (data.sec.gov / www.sec.gov) intermittently throttles bulk scans with 429/503.
+// Without a retry these surface as thrown errors / !res.ok that callers swallow (catch →
+// [] / null), silently dropping a symbol from a scan or a filing's text from a digest.
+// Retry transient throttling/5xx with backoff; fail fast on 4xx (404/403 are real
+// "not found"/"blocked", not worth retrying).
+export async function fetchWithRetry(url: string, retries = 5): Promise<Response> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res: Response | null = null;
+    try {
+      res = await fetch(url, { headers: HEADERS });
+    } catch (e) {
+      lastErr = e; // network/DNS blip → retry
+    }
+    if (res) {
+      if (res.ok) return res;
+      if (res.status !== 429 && res.status < 500) throw new Error(`${url} -> HTTP ${res.status}`);
+      lastErr = new Error(`${url} -> HTTP ${res.status}`); // 429/5xx → retry
+    }
+    if (attempt < retries) {
+      // Exponential backoff + jitter so concurrent workers de-sync — lockstep retries
+      // just re-trigger the throttle. Honor a server Retry-After when present.
+      const ra = res ? Number(res.headers.get("retry-after")) : NaN;
+      const base = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 500 * 2 ** attempt; // 0.5/1/2/4/8s
+      await sleep(Math.min(8000, base) + Math.floor(Math.random() * 400));
+    }
+  }
+  throw lastErr;
+}
+
+async function getJson(url: string, retries = 3): Promise<any> {
+  return (await fetchWithRetry(url, retries)).json();
 }
 
 export async function getSubmissions(cik: string): Promise<any> {
@@ -289,9 +318,7 @@ export async function getFilingText(
     const pick = htms.find((f) => /ex-?99|ex99/i.test(f.name)) || htms[0];
     if (!pick) return null;
     const url = `${base}/${pick.name}`;
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return null;
-    const text = htmlToText(await res.text());
+    const text = htmlToText(await (await fetchWithRetry(url)).text());
     return { title: pick.name, text, url };
   } catch {
     return null;

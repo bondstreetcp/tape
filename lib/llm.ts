@@ -66,7 +66,7 @@ async function callChat(
     return null;
   }
   const url = `${baseUrl()}/chat/completions`;
-  const retries = opts.retries ?? 3;
+  const retries = opts.retries ?? 4;
   const body: Record<string, unknown> = {
     model: opts.model || model(),
     temperature: opts.temperature ?? 0.1,
@@ -75,7 +75,15 @@ async function callChat(
   if (jsonMode) body.response_format = { type: "json_object" };
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
 
+  let lastInfo = "";
   for (let attempt = 0; attempt < retries; attempt++) {
+    if (attempt) {
+      // Exponential backoff + jitter so concurrent/sequential calls de-sync under a
+      // provider rate-limit instead of re-bursting in lockstep.
+      await sleep(Math.min(12_000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 500));
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 120_000); // a big 10-K/Q prompt can be slow; don't hang forever
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -85,35 +93,25 @@ async function callChat(
           "X-Title": "Tape",
         },
         body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
       if (!res.ok) {
-        const snippet = (await res.text().catch(() => "")).slice(0, 160);
-        // Rate-limit / transient server errors → back off and retry.
-        if (res.status === 429 || res.status >= 500) {
-          await sleep(1500 * (attempt + 1));
-          continue;
-        }
-        console.warn(`lib/llm: ${res.status} ${snippet}`);
-        if (attempt === retries - 1) return null;
-        await sleep(1000 * (attempt + 1));
-        continue;
+        lastInfo = `${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`;
+        if (res.status === 429 || res.status >= 500) continue; // transient → retry
+        console.warn(`lib/llm: ${lastInfo}`); // real 4xx (e.g. 400 context-too-long) — retrying won't help
+        return null;
       }
       const j: any = await res.json();
       const content: string = j?.choices?.[0]?.message?.content ?? "";
-      if (!content.trim()) {
-        if (attempt === retries - 1) return null;
-        await sleep(1000 * (attempt + 1));
-        continue;
-      }
-      return content;
+      if (content.trim()) return content;
+      lastInfo = "empty content"; // transient (truncated/blank) → retry
     } catch (e: any) {
-      if (attempt === retries - 1) {
-        console.warn(`lib/llm: ${e?.message || e}`);
-        return null;
-      }
-      await sleep(1200 * (attempt + 1));
+      lastInfo = e?.name === "AbortError" ? "timeout (120s)" : e?.message || String(e); // network/timeout → retry
+    } finally {
+      clearTimeout(timer);
     }
   }
+  console.warn(`lib/llm: gave up after ${retries} attempts — ${lastInfo}`);
   return null;
 }
 
@@ -149,21 +147,19 @@ function parseJson<T = any>(raw: string): T | null {
  * empty, or unparseable responses. Returns the parsed object or null.
  */
 export async function chatJSON<T = any>(system: string, user: string, opts: ChatOpts = {}): Promise<T | null> {
-  const retries = opts.retries ?? 3;
-  for (let attempt = 0; attempt < retries; attempt++) {
-    const content = await callChat(
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { ...opts, retries: 1 }, // each loop iteration is one transport try; we own the JSON-validate retry here
-      true,
-    );
-    if (content) {
-      const parsed = parseJson<T>(content);
-      if (parsed != null) return parsed;
-    }
-    if (attempt < retries - 1) await sleep(1000 * (attempt + 1));
+  // callChat owns transport reliability (retry/backoff/timeout). Here we only re-prompt
+  // when an OK reply isn't parseable JSON — a null reply means transport already gave up,
+  // so don't loop pointlessly.
+  const messages = [
+    { role: "system" as const, content: system },
+    { role: "user" as const, content: user },
+  ];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const content = await callChat(messages, opts, true);
+    if (content == null) return null;
+    const parsed = parseJson<T>(content);
+    if (parsed != null) return parsed;
+    await sleep(800);
   }
   return null;
 }

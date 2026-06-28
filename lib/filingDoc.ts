@@ -8,9 +8,8 @@
  * the discussion, guidance and risk sections itself. We only bound the size to keep
  * the summary call inside the route's time budget.
  */
-import { tickerToCik } from "./edgar";
+import { tickerToCik, getSubmissions, fetchWithRetry } from "./edgar";
 
-const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 const MAX_CHARS = 180_000; // ~45k tokens — the meat of a 10-K (business, risks, MD&A) fits well inside this
 
 export type FilingForm = "10-K" | "10-Q";
@@ -52,7 +51,7 @@ export async function getFilingDoc(symbol: string, form: FilingForm): Promise<Fi
   if (!cik) return null;
   let sub: any;
   try {
-    sub = await (await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS })).json();
+    sub = await getSubmissions(cik); // cached + retrying (shared with the rest of the EDGAR layer)
   } catch {
     return null;
   }
@@ -65,9 +64,7 @@ export async function getFilingDoc(symbol: string, form: FilingForm): Promise<Fi
   const accNo = r.accessionNumber[idx].replace(/-/g, "");
   const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}/${r.primaryDocument[idx]}`;
   try {
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return null;
-    const text = htmlToText(await res.text()).slice(0, MAX_CHARS);
+    const text = htmlToText(await (await fetchWithRetry(url)).text()).slice(0, MAX_CHARS);
     if (text.length < 1000) return null;
     return { form: r.form[idx], date: r.filingDate[idx], url, text };
   } catch {

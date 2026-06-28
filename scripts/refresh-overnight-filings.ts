@@ -34,16 +34,25 @@ import { chatJSON } from "../lib/llm";
 const DATA = path.join(process.cwd(), "data");
 const WINDOW_HOURS = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : 36;
 const SCAN_BROAD = process.env.SCAN_BROAD === "1";
+const scanErrors: string[] = []; // symbols whose EDGAR submissions fetch failed (after retries) → silently skipped
 const TEST_SYMBOLS = (process.env.TEST_SYMBOLS || "").trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// 8-K items we treat as material (entry into agreement, results, auditor change,
-// non-reliance/restatement, officer/director changes, other material events).
-const MATERIAL_8K_ITEMS = ["1.01", "2.02", "4.01", "4.02", "5.02", "8.01"];
+// 8-K items we treat as candidate-material. Cast a wide net here and let the LLM's
+// NONE-gate trim the noise (routine annual-meeting votes, boilerplate exhibits) — a
+// too-narrow item filter was silently dropping real events (M&A completions, control
+// changes, agreement terminations, merger votes). Excluded by design: 7.01 (Reg FD —
+// mostly investor-deck noise) and 9.01-only (exhibits with no standalone event).
+//   1.01 entry / 1.02 termination of a material agreement
+//   2.01 completed acquisition/disposition · 2.02 results · 2.03 new financial obligation
+//   4.01 auditor change · 4.02 non-reliance/restatement
+//   5.01 change in control · 5.02 officer/director changes · 5.07 submitted to a vote
+//   8.01 other material events
+const MATERIAL_8K_ITEMS = ["1.01", "1.02", "2.01", "2.02", "2.03", "4.01", "4.02", "5.01", "5.02", "5.07", "8.01"];
 const TRACKED_FORMS = new Set(["8-K", "10-Q", "10-K"]);
 
 const SYSTEM =
-  "You are an equity analyst writing the overnight desk note on a new SEC filing. You are given the NEW filing and the PRIOR comparable filing of the same type, plus a multi-year financial snapshot. Identify ONLY what materially changed vs the prior comparable: guidance, segment revenue/margin, new or dropped risk factors, buybacks/dividends, M&A, management changes, accounting/restatements. Ground every claim in the supplied text — never invent a number. Ignore boilerplate and unchanged repeated language. If nothing material changed (a routine committee appointment, an annual-meeting date, an administrative exhibit), set headline to exactly 'NONE' and leave whatChanged empty. Return ONLY JSON.";
+  "You are an equity analyst writing the overnight desk note on a new SEC filing, plus a multi-year financial snapshot. For an 8-K you are also given the prior comparable 8-K to diff against; a 10-Q/10-K instead carries its own prior-year/prior-period comparatives — use those. Identify ONLY what materially changed: revenue/margin/EPS vs the prior period, guidance, segment trends, new or dropped risk factors, buybacks/dividends, M&A, management changes, accounting/restatements. Ground every claim in the supplied text — never invent a number. Ignore boilerplate and unchanged repeated language. Set headline to exactly 'NONE' (and leave whatChanged empty) only for a genuinely immaterial filing — a routine committee appointment, an annual-meeting date, an administrative exhibit. Return ONLY JSON.";
 
 const SCHEMA_HINT =
   'Return ONLY a JSON object with this exact shape: {"headline": string (<=12 words, or exactly "NONE"), "whatChanged": string[] (3-5 concise items; empty if NONE), "decisionTakeaway": string (one decision-relevant sentence), "sentiment": "bullish"|"neutral"|"bearish", "surprise": "beat"|"inline"|"miss"|"na", "keyMetrics": object (a few labelled figures grounded in the filing, e.g. {"revenue":"$1.2B (+8% YoY)","EPS":"$2.10 vs $1.95 est"})}';
@@ -117,7 +126,8 @@ async function detectForSymbol(symbol: string, name: string, windowStart: number
   let sub: any;
   try {
     sub = await getSubmissions(cik);
-  } catch {
+  } catch (e: any) {
+    scanErrors.push(`${symbol}: ${e?.message || e}`); // surfaced after the scan — a swallowed error here drops the symbol
     return [];
   }
   const r = sub?.filings?.recent;
@@ -161,15 +171,20 @@ async function filingTextByAccession(symbol: string, f: { form: string; accessio
 }
 
 async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
-  // Find the prior comparable: 10-K→prior 10-K, 10-Q→prior 10-Q, earnings-8-K→prior earnings-8-K.
+  const isPeriodic = nf.formClean === "10-K" || nf.formClean === "10-Q";
+  // Prior comparable for 8-Ks only (earnings-8-K → prior earnings-8-K). For a 10-K/10-Q we
+  // deliberately DON'T paste a prior filing's text: the report already carries its own
+  // prior-year/prior-period comparatives, and a different-quarter 10-Q alongside is ~all
+  // shared boilerplate, which made the model conclude "nothing changed" → NONE. The
+  // risk-factor redline below still supplies the Q/Q change in risks.
   const earningsOnly = nf.formClean === "8-K" && /(^|,)\s*2\.02/.test(nf.items);
-  const priorIdx = findPriorComparable(nf.recent, nf.newIdx, nf.formClean, earningsOnly);
+  const priorIdx = isPeriodic ? -1 : findPriorComparable(nf.recent, nf.newIdx, nf.formClean, earningsOnly);
   const priorForm = priorIdx >= 0 ? nf.recent.form[priorIdx] : "";
   const priorAcc = priorIdx >= 0 ? nf.recent.accessionNumber[priorIdx] : "";
   const priorDate = priorIdx >= 0 ? nf.recent.filingDate[priorIdx] : "";
 
   // NEW text + comparable text + financial snapshot, in parallel.
-  const newCap = nf.formClean === "8-K" ? 80_000 : 180_000;
+  const newCap = nf.formClean === "8-K" ? 80_000 : 110_000;
   const [newText, priorTextRaw, snapshot] = await Promise.all([
     filingTextByAccession(nf.symbol, { form: nf.formClean, accession: nf.accession }),
     priorIdx >= 0
@@ -198,7 +213,9 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
       : "";
   const priorBlock = priorClip
     ? `\n\n=== PRIOR COMPARABLE ${priorForm} (filed ${priorDate}) ===\n${priorClip}`
-    : "\n\n=== PRIOR COMPARABLE ===\n(none on file — assess the NEW filing on its own and call out anything materially new.)";
+    : isPeriodic
+      ? "\n\n(Periodic report — compare against the prior-year/prior-period figures WITHIN the filing itself.)"
+      : "\n\n=== PRIOR COMPARABLE ===\n(none on file — assess the NEW filing on its own and call out anything materially new.)";
 
   const user =
     `${SCHEMA_HINT}\n\n` +
@@ -208,7 +225,7 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
     priorBlock +
     rfLine;
 
-  const digest = await chatJSON<Digest>(SYSTEM, user, { maxTokens: 900 });
+  const digest = await chatJSON<Digest>(SYSTEM, user, { maxTokens: 2000 });
   if (!digest || typeof digest.headline !== "string") return null;
   const headline = digest.headline.trim();
   if (!headline || /^none$/i.test(headline)) return null; // NONE-gate
@@ -268,14 +285,20 @@ async function main() {
   // --- Detection (EDGAR-bound; ~4 concurrent + a polite delay) ---
   const symbols = [...watch.entries()];
   let scanned = 0;
-  const detected: NewFiling[][] = await pool(symbols, 4, async ([sym, name]) => {
+  // 3 concurrent + a 300ms post-fetch pause ≈ 6 req/s — comfortably under EDGAR's 10/s
+  // ceiling (4×/120ms previously burst to ~15/s and got 429-throttled). fetchWithRetry
+  // backs off on any residual throttle.
+  const detected: NewFiling[][] = await pool(symbols, 3, async ([sym, name]) => {
     const r = await detectForSymbol(sym, name, windowStart);
     if (++scanned % 100 === 0) console.log(`  …scanned ${scanned}/${symbols.length}`);
-    await sleep(120); // stay well under EDGAR's 10 req/s
+    await sleep(300);
     return r;
   });
   const newFilings = detected.flat();
   console.log(`Detected ${newFilings.length} new material filings across ${watch.size} symbols.`);
+  if (scanErrors.length) {
+    console.warn(`⚠ ${scanErrors.length} symbols dropped on EDGAR fetch errors (coverage gap): ${scanErrors.slice(0, 20).join(" · ")}${scanErrors.length > 20 ? " …" : ""}`);
+  }
 
   // --- Summarize each new filing via the LLM (sequential — frugal + polite) ---
   const items: OvernightItem[] = [];
@@ -301,7 +324,7 @@ async function main() {
 
   const out = {
     generatedAt: new Date().toISOString(),
-    windowHours: WINDOW_HOURS,
+    windowHours: effHours, // effective lookback (may exceed WINDOW_HOURS when reaching back across a weekend)
     since,
     count: items.length,
     items,

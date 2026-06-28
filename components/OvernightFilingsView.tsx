@@ -40,15 +40,24 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
   const [formF, setFormF] = useState<FormFilter>("all");
   const [sentF, setSentF] = useState<SentFilter>("all");
 
+  // Universe filter: the digest is built across all US large-caps, but only show filings
+  // for names that belong to the currently-selected universe.
+  const universeItems = useMemo(() => data.items.filter((it) => knownSet.has(it.ticker)), [data.items, knownSet]);
   const rows = useMemo(
     () =>
-      data.items.filter((it) => {
+      universeItems.filter((it) => {
         if (formF !== "all" && it.form.replace("/A", "") !== formF) return false;
         if (sentF !== "all" && it.sentiment !== sentF) return false;
         return true;
       }),
-    [data.items, formF, sentF],
+    [universeItems, formF, sentF],
   );
+  // Honest window label — the effective lookback reaches back to the previous trading
+  // session, which is wider than a flat 36h after a weekend, so show the actual date.
+  const sinceLabel = useMemo(() => {
+    const ms = Date.parse(data.since);
+    return Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }) : "";
+  }, [data.since]);
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
@@ -66,7 +75,7 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Overnight Filings</h1>
           <p className="mt-1 max-w-3xl text-xs text-[var(--text-3)]">
-            AI-summarized new SEC filings vs the prior comparable — spot-check against the source. {data.count} filing{data.count !== 1 ? "s" : ""} in the last {data.windowHours}h · source <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">SEC EDGAR</a>
+            AI-summarized new SEC filings vs the prior comparable — spot-check against the source. {universeItems.length} filing{universeItems.length !== 1 ? "s" : ""}{sinceLabel ? ` since ${sinceLabel}` : ""} · source <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">SEC EDGAR</a>
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -88,9 +97,9 @@ export default function OvernightFilingsView({ universe, data, known }: { univer
       </div>
 
       {/* feed */}
-      {data.items.length === 0 ? (
+      {universeItems.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
-          No new material filings in the last {data.windowHours} hours. Check back after the next overnight run.
+          No new material filings{sinceLabel ? ` since ${sinceLabel}` : " in the last 36 hours"}{data.items.length > 0 ? " for this universe" : ""}. Check back after the next overnight run.
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-12 text-center text-sm text-[var(--text-3)]">No filings match these filters.</div>
