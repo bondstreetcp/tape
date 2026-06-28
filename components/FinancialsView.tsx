@@ -7,6 +7,7 @@ import type { CompanyProfile } from "@/lib/companyProfile";
 import type { StockRow } from "@/lib/types";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
+import EarningsPrep from "./EarningsPrep";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
@@ -326,6 +327,7 @@ export default function FinancialsView({
         )
       ) : view === "stats" ? (
         <div className="space-y-4">
+          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} />
           <CompanyStats stats={stats} currency={currency} />
           <DcfPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
           <ScenarioPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
