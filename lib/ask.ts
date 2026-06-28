@@ -12,10 +12,12 @@ import { getFinancials, type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
 
 const KEY = process.env.GEMINI_API_KEY;
-// gemini-2.5-pro — the most capable model, with reasoning enabled (thinkingConfig
-// below). Needs a billed API key (free tier returns HTTP 429 for pro); the user has
-// prepay billing set up. Override with GEMINI_MODEL=gemini-2.5-flash if ever needed.
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
+// gemini-3.1-pro-preview — sharpest model in the bake-off (more sources, segment-level
+// detail) with reasoning enabled (thinkingConfig below). Needs a billed API key; the
+// Google Search grounding is free for the first 5,000 queries/month (then $14/1K), so
+// at our volume the search — the dominant cost — is effectively free. It's a PREVIEW
+// model: roll back instantly with GEMINI_MODEL=gemini-2.5-pro if it changes/rate-limits.
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
 
 export const askConfigured = () => !!KEY;
 
