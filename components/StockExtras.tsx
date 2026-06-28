@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { fmtMoney } from "@/lib/format";
 import { borrowTier, type BorrowInfo } from "@/lib/borrow";
+import type { StockTwitsInfo } from "@/lib/stocktwits";
 
 interface Reaction { date: string; reactionDate: string; move: number | null; surprise: number | null }
 interface RatingChange { firm: string; action: string; fromGrade: string; toGrade: string; targetTo: number | null; targetFrom: number | null; date: string }
@@ -249,6 +250,96 @@ export function BorrowPanel({ symbol }: { symbol: string }) {
         <a href={`https://www.iborrowdesk.com/report/${encodeURIComponent(data.symbol)}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">IBorrowDesk</a>
         {data.updated ? <> · as of {data.updated.slice(0, 10)}</> : null}
         {data.stale ? <span className="text-[#f59e0b]"> · availability stale</span> : null}. A high fee or thin availability means the stock is expensive or hard to short.
+      </p>
+    </Card>
+  );
+}
+
+const compactNum = (n: number) =>
+  n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : `${n}`;
+const timeAgo = (iso: string) => {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+};
+
+// Retail chatter from StockTwits — sentiment + posting-rate + the top recent posts, to help
+// explain why a name is moving. Live per stock (US-only); silent when there's no chatter.
+export function StockTwitsPanel({ symbol }: { symbol: string }) {
+  const [data, setData] = useState<StockTwitsInfo | null | "err">(null);
+  useEffect(() => {
+    let a = true;
+    setData(null);
+    fetch(`/api/stocktwits/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => a && setData(d.data || "err"))
+      .catch(() => a && setData("err"));
+    return () => { a = false; };
+  }, [symbol]);
+
+  if (!data || data === "err") return null;
+  const { bullishPct, bullish, bearish, watchlistCount, perHour, messages } = data;
+  const sentColor = bullishPct == null ? "var(--text-3)" : bullishPct >= 60 ? "#22c55e" : bullishPct <= 40 ? "#ef4444" : "#eab308";
+  return (
+    <Card title="Retail chatter (StockTwits)">
+      <div className="flex flex-wrap items-end gap-x-7 gap-y-3">
+        {bullishPct != null && (
+          <div>
+            <div className="text-[11px] text-[var(--text-4)]">Sentiment</div>
+            <div className="font-mono text-2xl font-bold tabular-nums" style={{ color: sentColor }}>{bullishPct}% bull</div>
+            <div className="text-[11px] text-[var(--text-3)]">{bullish} bull · {bearish} bear tagged</div>
+          </div>
+        )}
+        {watchlistCount != null && (
+          <div>
+            <div className="text-[11px] text-[var(--text-4)]">Followers</div>
+            <div className="font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{compactNum(watchlistCount)}</div>
+            <div className="text-[11px] text-[var(--text-3)]">watching it</div>
+          </div>
+        )}
+        {perHour != null && perHour >= 0.5 && (
+          <div>
+            <div className="text-[11px] text-[var(--text-4)]">Posting rate</div>
+            <div className="font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{perHour >= 10 ? Math.round(perHour) : perHour.toFixed(1)}/hr</div>
+            {perHour >= 8 && <div className="text-[11px] font-medium text-[#f59e0b]">elevated buzz</div>}
+          </div>
+        )}
+      </div>
+
+      {messages.length > 0 && (
+        <ul className="mt-3 space-y-2 border-t border-[var(--divider)] pt-3">
+          {messages.slice(0, 4).map((m) => (
+            <li key={m.id} className="text-[12px] leading-snug">
+              <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-[var(--text-4)]">
+                {m.sentiment && (
+                  <span
+                    className="rounded px-1 font-semibold"
+                    style={m.sentiment === "Bullish"
+                      ? { background: "rgba(34,197,94,.14)", color: "#22c55e" }
+                      : { background: "rgba(239,68,68,.14)", color: "#ef4444" }}
+                  >
+                    {m.sentiment}
+                  </span>
+                )}
+                <span>@{m.user || "user"}</span>
+                {m.createdAt && <span>· {timeAgo(m.createdAt)}</span>}
+                {m.likes > 0 && <span>· ♥{m.likes}</span>}
+              </div>
+              <div className="text-[var(--text-2)]">{m.body}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-4)]">
+        Live retail sentiment via{" "}
+        <a href={`https://stocktwits.com/symbol/${encodeURIComponent(data.symbol)}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">StockTwits</a>
+        {" "}— unverified crowd chatter, useful for spotting <em>why</em> a name is moving (a sentiment shift or buzz spike), not a signal on its own.
       </p>
     </Card>
   );
