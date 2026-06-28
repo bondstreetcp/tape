@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SuperInvestorsData, InvestorPortfolio, Holding } from "@/lib/superinvestors";
+import type { ThirteenFStory } from "@/lib/thirteenFStory";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UniverseSwitcher from "./UniverseSwitcher";
 
@@ -15,7 +16,7 @@ function ChangeBadge({ h }: { h: Holding }) {
   return <span className="text-[11px] font-medium tabular-nums" style={{ color: up ? "#22c55e" : "#ef4444" }}>{up ? "+" : ""}{(h.deltaPct * 100).toFixed(0)}%</span>;
 }
 
-export default function SuperInvestorsView({ universe, data, known }: { universe: string; data: SuperInvestorsData; known: string[] }) {
+export default function SuperInvestorsView({ universe, data, known, story }: { universe: string; data: SuperInvestorsData; known: string[]; story?: ThirteenFStory | null }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [sel, setSel] = useState<string>(data.investors[0]?.slug ?? MOST);
   const [showAll, setShowAll] = useState(false);
@@ -39,6 +40,34 @@ export default function SuperInvestorsView({ universe, data, known }: { universe
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      {story && story.tldr && (
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-sm font-semibold text-[var(--text)]">This quarter's story</span>
+            {story.asOf && <span className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 text-[10px] text-[var(--text-3)]">Q ending {story.asOf}</span>}
+            <span className="text-[10px] text-[var(--text-4)]">· AI synthesis of the roster's consensus 13F moves</span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-[var(--text-2)]">{story.tldr}</p>
+          {story.themes.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {story.themes.map((t, i) => (
+                <div key={i} className="rounded-lg border border-[var(--divider)] bg-[var(--bg)] p-2.5">
+                  <div className="text-xs font-semibold text-[var(--text)]">{t.heading}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-3)]">{t.detail}</div>
+                  {t.tickers.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {t.tickers.map((tk) => (
+                        <span key={tk} className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-2)]">{tlink(tk)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
         {/* left rail */}
