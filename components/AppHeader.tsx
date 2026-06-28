@@ -106,6 +106,7 @@ export default function AppHeader({
           </Link>
           <nav ref={navRef} className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Link href={base} className={linkCls(isActive(base, true))}>Home</Link>
+            <Link href={`${base}/morning-desk`} className={linkCls(isActive(`${base}/morning-desk`))}>Morning Desk</Link>
             <Link href={`${base}/briefing`} className={linkCls(isActive(`${base}/briefing`))}>Daily Briefing</Link>
             <Link href={`${base}/screener`} className={linkCls(isActive(`${base}/screener`))}>Screener</Link>
             {groups.map((g) => (

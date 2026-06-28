@@ -229,6 +229,17 @@ jobs:
         run: npm run refresh-flow
         continue-on-error: true
 
+      # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
+      # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
+      # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
+      # Needs OPENROUTER_API_KEY; skipped cleanly if it isn't set.
+      - name: Refresh Morning Desk Note
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-desk-note
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
       # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
       # CSV still works but caps at ~3yr.
