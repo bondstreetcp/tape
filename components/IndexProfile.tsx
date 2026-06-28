@@ -44,7 +44,7 @@ export default function IndexProfile({
       {linkedUniverse && (
         <Link
           href={`/u/${meta.universe}`}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-2 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] bg-[var(--accent-soft)] px-3 py-2 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_25%,transparent)]"
         >
           ⊞ Explore the {linkedUniverse.name} constituent heatmap →
         </Link>

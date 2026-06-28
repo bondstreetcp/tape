@@ -178,7 +178,7 @@ export default function SectorView({
           </div>
           <Link
             href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/compare?tf=${tf}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] bg-[var(--accent-soft)] px-3 py-1.5 text-sm font-medium text-[#93c5fd] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_25%,transparent)]"
           >
             ⇄ Compare sub-industries
           </Link>
@@ -220,7 +220,7 @@ export default function SectorView({
                 className={
                   "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors " +
                   (active
-                    ? "border-[var(--accent)] bg-[#2563eb]/20 text-white"
+                    ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-white"
                     : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
                 }
               >

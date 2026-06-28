@@ -157,7 +157,7 @@ export default function ScenarioPanel({ financials, stats, price, currency = "US
                   const u = v != null && price ? v / price - 1 : null;
                   const here = x === g && m === gm;
                   return (
-                    <td key={x} className={"py-1 tabular-nums " + (here ? "rounded bg-[#2563eb]/15 font-semibold" : "")} style={{ color: cellColor(u) }}>
+                    <td key={x} className={"py-1 tabular-nums " + (here ? "rounded bg-[var(--accent-soft)] font-semibold" : "")} style={{ color: cellColor(u) }}>
                       {u == null ? "—" : `${u >= 0 ? "+" : ""}${(u * 100).toFixed(0)}%`}
                     </td>
                   );

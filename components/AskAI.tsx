@@ -59,7 +59,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-1 flex items-center gap-2">
         <h3 className="text-sm font-semibold text-[var(--text-2)]">Ask AI about {label}</h3>
-        <span className="inline-flex items-center gap-1 rounded bg-[#2563eb]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#93c5fd]">
+        <span className="inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[#93c5fd]">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
           Gemini · web search
         </span>
@@ -77,7 +77,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       {messages.map((m, i) => (
         <div key={i} className="mb-3">
           <div className="mb-1 flex justify-end">
-            <span className="max-w-[85%] rounded-lg rounded-br-sm bg-[#2563eb]/15 px-3 py-1.5 text-[13px] text-[var(--text)]">{m.q}</span>
+            <span className="max-w-[85%] rounded-lg rounded-br-sm bg-[var(--accent-soft)] px-3 py-1.5 text-[13px] text-[var(--text)]">{m.q}</span>
           </div>
           <div className="rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-body)]"><MarkdownLite text={m.a} /></div>
           {m.sources && m.sources.length > 0 && (
@@ -94,7 +94,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       {pending && (
         <div className="mb-3">
           <div className="mb-1 flex justify-end">
-            <span className="max-w-[85%] rounded-lg rounded-br-sm bg-[#2563eb]/15 px-3 py-1.5 text-[13px] text-[var(--text)]">{pending}</span>
+            <span className="max-w-[85%] rounded-lg rounded-br-sm bg-[var(--accent-soft)] px-3 py-1.5 text-[13px] text-[var(--text)]">{pending}</span>
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-[var(--divider)] bg-[var(--surface-2)] p-3 text-[13px] text-[var(--text-3)]">
             <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--text-4)] border-t-transparent" />

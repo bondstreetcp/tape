@@ -173,7 +173,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
 
 const COLS: Col[] = [
   { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a> },
-  { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[#2563eb]/15 text-[var(--accent)]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
+  { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
   { id: "name", label: "Name", align: "left", get: (f) => f.name, render: (f) => <span className="block max-w-[14rem] truncate text-[var(--text-2)]" title={f.name}>{f.name}</span> },
   { id: "category", label: "Category", align: "left", get: (f) => f.category, render: (f) => <span className="text-xs text-[var(--text-3)]">{f.category}</span> },
   { id: "discount", label: "Disc/Prem", align: "right", sort: "discount", get: (f) => f.discount, render: (f) => <span className="font-semibold" style={{ color: discColor(f.discount) }}>{f.discount >= 0 ? "+" : ""}{f.discount.toFixed(1)}%</span> },

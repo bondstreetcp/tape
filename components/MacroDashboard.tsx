@@ -254,7 +254,7 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
 // Consensus economist estimate for an upcoming release (ForexFactory).
 function ConsensusLine({ est }: { est: EconEstimate }) {
   return (
-    <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-[#60a5fa]/30 bg-[#60a5fa]/[0.06] px-2.5 py-1.5 text-[11px]">
+    <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] bg-[#60a5fa]/[0.06] px-2.5 py-1.5 text-[11px]">
       <span className="font-semibold text-[var(--accent)]">Consensus {est.forecast}</span>
       <span className="text-[var(--text-3)]">vs prior {est.previous || "—"}</span>
       <span className="text-[var(--text-4)]">· {est.title} · via ForexFactory</span>
@@ -374,7 +374,7 @@ export default function MacroDashboard({
                         <span className="truncate">{e.label}</span>
                         {e.approx && <span className="shrink-0 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
                         {rel?.nowcast != null && <span className="shrink-0 rounded bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]" title="Atlanta Fed GDPNow nowcast">nowcast {rel.nowcast >= 0 ? "+" : ""}{rel.nowcast.toFixed(1)}%</span>}
-                        {e.estimate && <span className="shrink-0 rounded bg-[#60a5fa]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]" title={`Consensus for "${e.estimate.title}" — via ForexFactory`}>cons {e.estimate.forecast}</span>}
+                        {e.estimate && <span className="shrink-0 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]" title={`Consensus for "${e.estimate.title}" — via ForexFactory`}>cons {e.estimate.forecast}</span>}
                       </span>
                       <span className="flex shrink-0 items-center gap-3 tabular-nums">
                         {latestStr && <span className="hidden font-mono text-xs text-[var(--text-3)] sm:inline" title="Most recent print">{latestStr}</span>}

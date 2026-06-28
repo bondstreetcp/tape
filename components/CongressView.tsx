@@ -13,7 +13,7 @@ const fmtAmt = (lo: number, hi: number) => (lo === hi ? `${k(lo)}+` : `${k(lo)}â
 const typeColor: Record<string, string> = { buy: "#22c55e", sell: "#ef4444", exchange: "#f59e0b" };
 const dt = (s: string) => (s ? new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "â€”");
 const chamberBadge = (c: string) =>
-  c === "Senate" ? { t: "SEN", cls: "bg-[#2563eb]/15 text-[var(--accent)]" }
+  c === "Senate" ? { t: "SEN", cls: "bg-[var(--accent-soft)] text-[var(--accent)]" }
   : c === "House" ? { t: "REP", cls: "bg-[#7c3aed]/15 text-[#a78bfa]" }
   : { t: "PRES", cls: "bg-[#dc2626]/15 text-[#f87171]" };
 

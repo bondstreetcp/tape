@@ -228,7 +228,7 @@ export default function ValuationHistoryView({
                   </td>
                   <td className="max-w-[12rem] truncate px-3 py-1.5 text-xs text-[var(--text-3)]">
                     {sectorBy[r.ticker] ?? (r.name.sectorClass === "financial" ? "Financials" : "—")}
-                    {r.name.sectorClass === "financial" && <span className="ml-1 rounded bg-[#2563eb]/15 px-1 text-[9px] text-[var(--accent)]">FIN</span>}
+                    {r.name.sectorClass === "financial" && <span className="ml-1 rounded bg-[var(--accent-soft)] px-1 text-[9px] text-[var(--accent)]">FIN</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-[var(--text)]">{s.current.toFixed(2)}×</td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-[var(--text-3)]">{s.median.toFixed(2)}×</td>

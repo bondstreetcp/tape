@@ -63,7 +63,7 @@ export default function MarketChartModal({ tile, onClose, universe }: { tile: Ti
             {hasIndexPage && (
               <Link
                 href={`/u/${universe}/index/${encodeURIComponent(tile.sym)}`}
-                className="rounded-lg border border-[#2563eb]/50 bg-[#2563eb]/15 px-2.5 py-1.5 text-xs font-medium text-[#93c5fd] transition-colors hover:bg-[#2563eb]/25"
+                className="rounded-lg border border-[color-mix(in_srgb,var(--accent)_50%,transparent)] bg-[var(--accent-soft)] px-2.5 py-1.5 text-xs font-medium text-[#93c5fd] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_25%,transparent)]"
               >
                 Full page ↗
               </Link>

@@ -10,7 +10,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 const formBadge = (form: string): string => {
   const f = form.replace("/A", "");
   if (f === "10-K") return "bg-[#7c3aed]/15 text-[#a78bfa]";
-  if (f === "10-Q") return "bg-[#2563eb]/15 text-[var(--accent)]";
+  if (f === "10-Q") return "bg-[var(--accent-soft)] text-[var(--accent)]";
   if (f === "S-4" || f === "425") return "bg-[#f59e0b]/15 text-[#fbbf24]"; // M&A — amber
   if (/^424B/.test(f)) return "bg-[#22c55e]/15 text-[#4ade80]"; // offering — green
   return "bg-[#0891b2]/15 text-[#22d3ee]"; // 8-K
@@ -233,7 +233,7 @@ function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.Re
         )}
 
         {it.decisionTakeaway && (
-          <p className="mt-3 border-l-2 border-[#2563eb]/50 pl-3 text-sm italic leading-snug text-[var(--text-2)]">{it.decisionTakeaway}</p>
+          <p className="mt-3 border-l-2 border-[color-mix(in_srgb,var(--accent)_50%,transparent)] pl-3 text-sm italic leading-snug text-[var(--text-2)]">{it.decisionTakeaway}</p>
         )}
 
         {metrics.length > 0 && (

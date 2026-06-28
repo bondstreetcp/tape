@@ -166,7 +166,7 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
               );
             })}
             {(spec.sectors || []).map((s) => (
-              <span key={s} className="rounded-md border border-[#2563eb]/40 bg-[#2563eb]/10 px-2 py-0.5 text-[11px] text-[#93c5fd]">{s}</span>
+              <span key={s} className="rounded-md border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-2 py-0.5 text-[11px] text-[#93c5fd]">{s}</span>
             ))}
           </div>
 

@@ -4,7 +4,7 @@ import type { DeskNote } from "@/lib/deskNote";
 // Development-type tag → chip palette.
 const TAG_CLS: Record<string, string> = {
   deal: "bg-[#f59e0b]/15 text-[#fbbf24]",
-  catalyst: "bg-[#2563eb]/15 text-[var(--accent)]",
+  catalyst: "bg-[var(--accent-soft)] text-[var(--accent)]",
   positioning: "bg-[#a855f7]/15 text-[#c084fc]",
   unexplained: "bg-[var(--surface-hover)] text-[var(--text-3)]",
   trend: "bg-[#0891b2]/15 text-[#22d3ee]",
@@ -37,7 +37,7 @@ export default function DeskNote({ note, universe }: { note: DeskNote | null; un
         </h2>
         <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">AI brief · research, not advice</span>
       </div>
-      {note.tldr && <p className="mb-4 border-l-2 border-[#2563eb]/50 pl-3 text-sm leading-snug text-[var(--text)]">{note.tldr}</p>}
+      {note.tldr && <p className="mb-4 border-l-2 border-[color-mix(in_srgb,var(--accent)_50%,transparent)] pl-3 text-sm leading-snug text-[var(--text)]">{note.tldr}</p>}
 
       <div className="space-y-4">
         {note.sections.map((s, i) => (
