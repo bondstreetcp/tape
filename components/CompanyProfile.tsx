@@ -190,7 +190,7 @@ export function ProfilePanel({ profile, currency }: { profile: CompanyProfile | 
             label="Website"
             value={
               profile.website ? (
-                <a href={profile.website} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">
+                <a href={profile.website} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">
                   {profile.website.replace(/^https?:\/\//, "")}
                 </a>
               ) : null

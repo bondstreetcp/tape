@@ -48,7 +48,7 @@ function Card({ b, subtitle, url, currency }: { b: Breakdown; subtitle: string; 
         <h3 className="text-sm font-semibold text-[var(--text-2)]">
           Revenue {subtitle} {b.periods[0] && <span className="font-normal text-[var(--text-4)]">· FY{b.periods[0]}</span>}
         </h3>
-        <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-[#60a5fa] hover:underline">10-K ↗</a>
+        <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-[var(--accent)] hover:underline">10-K ↗</a>
       </div>
       <div className="space-y-2">
         {rows.map((r, i) => {
@@ -66,7 +66,7 @@ function Card({ b, subtitle, url, currency }: { b: Breakdown; subtitle: string; 
                 </span>
               </div>
               <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded bg-[var(--bg)]">
-                <div className="h-1.5 rounded bg-[#60a5fa]" style={{ width: `${(r.latest! / max) * 100}%` }} />
+                <div className="h-1.5 rounded bg-[var(--accent)]" style={{ width: `${(r.latest! / max) * 100}%` }} />
               </div>
             </div>
           );

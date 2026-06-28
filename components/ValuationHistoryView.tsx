@@ -125,14 +125,14 @@ export default function ValuationHistoryView({
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
-      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono font-semibold text-[#60a5fa] hover:underline">{ticker}</Link>
+      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{ticker}</Link>
     ) : (
       <span className="font-mono font-semibold text-[var(--text-2)]">{ticker}</span>
     );
 
   const MB = (a: boolean, disabled = false) =>
     "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
-    (disabled ? "cursor-not-allowed text-[var(--text-4)] opacity-50" : a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+    (disabled ? "cursor-not-allowed text-[var(--text-4)] opacity-50" : a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
   const SortTh = ({ k, children, align = "left" }: { k: SortKey; children: ReactNode; align?: "left" | "right" }) => (
     <th className={"px-3 py-2 font-medium " + (align === "right" ? "text-right" : "text-left")}>
@@ -209,7 +209,7 @@ export default function ValuationHistoryView({
                   <td className="px-3 py-1.5">{tlink(r.ticker)}</td>
                   <td className="max-w-[12rem] truncate px-3 py-1.5 text-xs text-[var(--text-3)]">
                     {sectorBy[r.ticker] ?? (r.name.sectorClass === "financial" ? "Financials" : "—")}
-                    {r.name.sectorClass === "financial" && <span className="ml-1 rounded bg-[#2563eb]/15 px-1 text-[9px] text-[#60a5fa]">FIN</span>}
+                    {r.name.sectorClass === "financial" && <span className="ml-1 rounded bg-[#2563eb]/15 px-1 text-[9px] text-[var(--accent)]">FIN</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-[var(--text)]">{s.current.toFixed(2)}×</td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-[var(--text-3)]">{s.median.toFixed(2)}×</td>

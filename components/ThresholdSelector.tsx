@@ -24,7 +24,7 @@ export default function ThresholdSelector({
               className={
                 "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
                 (active
-                  ? "bg-[#2563eb] text-white"
+                  ? "bg-[var(--accent-strong)] text-white"
                   : "text-[var(--text-3)] hover:text-[var(--text)]")
               }
             >

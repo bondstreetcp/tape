@@ -142,7 +142,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
           <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">{fmtMoney(data.underlying, currency)}</span></span>
         )}
         {atmIv != null && <span className="text-[var(--text-2)]">ATM IV <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
-        <button onClick={() => setAllStrikes((v) => !v)} className="ml-auto text-xs text-[#60a5fa] hover:underline">
+        <button onClick={() => setAllStrikes((v) => !v)} className="ml-auto text-xs text-[var(--accent)] hover:underline">
           {allStrikes ? "Show near-the-money" : "Show all strikes"}
         </button>
       </div>

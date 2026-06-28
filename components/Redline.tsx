@@ -43,7 +43,7 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
             <button
               key={f}
               onClick={() => load(f)}
-              className={"rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (data !== null && form === f ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (data !== null && form === f ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {f}
             </button>
@@ -68,9 +68,9 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
                 <span><b className="text-[#ef4444]">−{data.removed}</b> <span className="text-[var(--text-3)]">removed</span></span>
                 <span className="text-[var(--text-3)]">~{data.reworded} reworded</span>
                 <span className="ml-auto text-[11px]">
-                  <a href={data.fromUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">old ↗</a>
+                  <a href={data.fromUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">old ↗</a>
                   {" · "}
-                  <a href={data.toUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">new ↗</a>
+                  <a href={data.toUrl ?? "#"} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">new ↗</a>
                 </span>
               </div>
               {data.note && <div className="mb-2 text-[11px] text-[var(--text-4)]">{data.note}</div>}
@@ -104,12 +104,12 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
               {(data.fromUrl || data.toUrl) && (
                 <div className="mt-2">
                   {data.fromUrl && (
-                    <a href={data.fromUrl} target="_blank" rel="noreferrer" className="mr-3 text-[#60a5fa] hover:underline">
+                    <a href={data.fromUrl} target="_blank" rel="noreferrer" className="mr-3 text-[var(--accent)] hover:underline">
                       Older {form}{data.fromDate ? ` (${data.fromDate})` : ""} ↗
                     </a>
                   )}
                   {data.toUrl && (
-                    <a href={data.toUrl} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">
+                    <a href={data.toUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">
                       Newer {form}{data.toDate ? ` (${data.toDate})` : ""} ↗
                     </a>
                   )}

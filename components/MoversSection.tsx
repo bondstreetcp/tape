@@ -68,7 +68,7 @@ export default function MoversSection({
             <button
               key={c}
               onClick={() => setCount(c)}
-              className={"rounded-md px-2 py-0.5 text-xs font-medium tabular-nums transition-colors " + (count === c ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2 py-0.5 text-xs font-medium tabular-nums transition-colors " + (count === c ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {c}
             </button>

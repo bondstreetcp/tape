@@ -287,7 +287,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
 
       {cmp && (
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
-          <span className="font-semibold text-[#60a5fa]">{cmp.label}</span>
+          <span className="font-semibold text-[var(--accent)]">{cmp.label}</span>
           <span className="text-[var(--text-3)]">net {cmp.net >= 0 ? "debit" : "credit"} <span className="font-mono text-[var(--text-2)]">{dollars(Math.abs(cmp.net))}</span></span>
           <span className="text-[var(--text-3)]">max profit <span className="font-mono text-[#22c55e]">{cmp.maxP == null ? "Unlimited" : dollars(cmp.maxP)}</span></span>
           <span className="text-[var(--text-3)]">max loss <span className="font-mono text-[#ef4444]">{cmp.maxL == null ? "Unlimited" : dollars(cmp.maxL)}</span></span>

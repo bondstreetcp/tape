@@ -50,7 +50,7 @@ export default function IndexChart({ symbol, name }: { symbol: string; name: str
         </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {RANGES.map(([lbl, d]) => (
-            <button key={lbl} onClick={() => setRange(d)} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (range === d ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lbl}</button>
+            <button key={lbl} onClick={() => setRange(d)} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (range === d ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lbl}</button>
           ))}
         </div>
       </div>

@@ -181,7 +181,7 @@ function Slider({ label, value, min, max, onChange, suffix }: { label: string; v
         <span className="text-[11px] text-[var(--text-3)]">{label}</span>
         <span className="font-mono text-xs font-semibold tabular-nums text-[var(--text)]">{value}{suffix}</span>
       </div>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[#2563eb]" />
+      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
     </div>
   );
 }

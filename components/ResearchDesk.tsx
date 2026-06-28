@@ -119,7 +119,7 @@ export default function ResearchDesk() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--text-2)]"><span className="text-base">🔭</span> Search all research <span className="text-[11px] font-normal text-[var(--text-4)]">— semantic search across every note, regardless of ticker</span></div>
           <div className="flex gap-2">
             <input value={sq} onChange={(e) => setSq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runSearch()} placeholder='e.g. "HBM 2027 pricing", "channel checks on demand", "China supply risk"' className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]" />
-            <button onClick={runSearch} disabled={sres === "loading" || !sq.trim()} className="rounded-lg bg-[#2563eb] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">{sres === "loading" ? "…" : "Search"}</button>
+            <button onClick={runSearch} disabled={sres === "loading" || !sq.trim()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">{sres === "loading" ? "…" : "Search"}</button>
           </div>
           {sres === "loading" && <div className="mt-3 text-[13px] text-[var(--text-3)]">Retrieving the most relevant passages…</div>}
           {sres && sres !== "loading" && (
@@ -241,7 +241,7 @@ export default function ResearchDesk() {
                     {d.priceTarget != null && <span className="text-xs tabular-nums text-[var(--text-2)]">PT {d.priceTargetPrior != null ? `$${d.priceTargetPrior} → ` : ""}<span className="font-semibold text-[var(--text)]">${d.priceTarget}</span></span>}
                   </div>
                   <span className="flex items-center gap-2 text-[11px] text-[var(--text-4)]">
-                    {d.blobKey && <a href={`/api/research/pdf?id=${d.id}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">📄 PDF</a>}
+                    {d.blobKey && <a href={`/api/research/pdf?id=${d.id}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">📄 PDF</a>}
                     {d.publishDate} · {d.analysts.slice(0, 2).join(", ")}
                   </span>
                 </div>
@@ -253,7 +253,7 @@ export default function ResearchDesk() {
                   </ul>
                 )}
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-[11px] text-[#60a5fa]">estimates &amp; risks</summary>
+                  <summary className="cursor-pointer text-[11px] text-[var(--accent)]">estimates &amp; risks</summary>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {d.estimates.map((e, i) => (
                       <span key={i} className="rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--text-3)]" title={e.vsConsensus || undefined}>{e.metric} {e.period}: <span className="text-[var(--text)]">{money(e.value, e.unit)}</span></span>

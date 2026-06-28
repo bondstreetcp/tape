@@ -58,7 +58,7 @@ export default function EarningsCallAI({ symbol, name }: { symbol: string; name?
             <MarkdownLite text={data.summary || ""} />
           </div>
           <p className="mt-1.5 text-[10px] text-[var(--text-4)]">
-            AI summary of the transcript{data.url ? <> · <a href={data.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">read the full call ↗</a></> : null} · verify before relying on it.
+            AI summary of the transcript{data.url ? <> · <a href={data.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">read the full call ↗</a></> : null} · verify before relying on it.
           </p>
         </div>
       )}

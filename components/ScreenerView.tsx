@@ -302,7 +302,7 @@ export default function ScreenerView({
             <button
               key={k}
               onClick={() => setHl(k)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (hl === k ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (hl === k ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {label}
             </button>
@@ -344,7 +344,7 @@ export default function ScreenerView({
           <option value="0.15">ROE ≥ 15%</option>
           <option value="0.25">ROE ≥ 25%</option>
         </select>
-        <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
+        <button onClick={() => setAboveMA((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (aboveMA ? "border-[var(--accent)] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Price above its 200-day moving average (uptrend)">
           Above 200-day avg
         </button>
         <span className="ml-1 text-xs font-medium text-[var(--text-3)]">Screens:</span>
@@ -393,13 +393,13 @@ export default function ScreenerView({
             <option key={o.label} value={o.v == null ? "" : String(o.v)}>{o.label}</option>
           ))}
         </select>
-        <button onClick={() => setExpanding((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (expanding ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
+        <button onClick={() => setExpanding((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (expanding ? "border-[var(--accent)] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
           Margins expanding
         </button>
         <button onClick={() => setDsoRising((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (dsoRising ? "border-[#ef4444] bg-[#ef4444]/15 text-[#fca5a5]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Days sales outstanding rising YoY — receivables outrunning revenue">
           DSO rising 🚩
         </button>
-        <button onClick={() => setProfitable((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (profitable ? "border-[#2563eb] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
+        <button onClick={() => setProfitable((v) => !v)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors " + (profitable ? "border-[var(--accent)] bg-[#2563eb]/20 text-[#93c5fd]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")}>
           Profitable
         </button>
         <div className="ml-auto inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
@@ -407,7 +407,7 @@ export default function ScreenerView({
             <button
               key={k}
               onClick={() => setColSet(k)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors " + (colSet === k ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors " + (colSet === k ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {k} cols
             </button>
@@ -452,7 +452,7 @@ export default function ScreenerView({
                   }
                 >
                   {c.label}
-                  {sortKey === c.key && <span className="ml-1 text-[#60a5fa]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                  {sortKey === c.key && <span className="ml-1 text-[var(--accent)]">{sortDir === "asc" ? "▲" : "▼"}</span>}
                 </th>
               ))}
             </tr>

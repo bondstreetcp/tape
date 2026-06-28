@@ -20,7 +20,7 @@ export default function CreditSpreads({ creditSeries, defaultDays = 365 }: { cre
         <h2 className="text-sm font-semibold text-[var(--text-2)]">Credit spreads</h2>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {TFS.map(([lab, d]) => (
-            <button key={lab} onClick={() => setDays(d)} className={"rounded-md px-2 py-1 text-xs transition-colors " + (days === d ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lab}</button>
+            <button key={lab} onClick={() => setDays(d)} className={"rounded-md px-2 py-1 text-xs transition-colors " + (days === d ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lab}</button>
           ))}
         </div>
       </div>

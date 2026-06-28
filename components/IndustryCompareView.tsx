@@ -281,7 +281,7 @@ function Row({
       </span>
       <Link
         href={href}
-        className="shrink-0 text-[var(--text-3)] hover:text-[#60a5fa]"
+        className="shrink-0 text-[var(--text-3)] hover:text-[var(--accent)]"
         title="Open constituents"
       >
         ↗

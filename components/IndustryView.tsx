@@ -309,7 +309,7 @@ function LegendRow({
       {href && (
         <Link
           href={href}
-          className="shrink-0 text-[var(--text-3)] hover:text-[#60a5fa]"
+          className="shrink-0 text-[var(--text-3)] hover:text-[var(--accent)]"
           title="Open full chart + indicators"
         >
           ↗

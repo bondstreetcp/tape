@@ -126,7 +126,7 @@ export default function PutWriteView({
       .sort((a, b) => get[sort](b) - get[sort](a));
   }, [candidates, minAnn, minCushion, elevatedOnly, clearEarnings, watchOnly, q, sort, tenor, has]);
 
-  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
@@ -154,7 +154,7 @@ export default function PutWriteView({
                   key={t.id}
                   onClick={() => setTenor(t.id)}
                   title={t.note}
-                  className={"rounded-md px-2.5 py-1 " + (tenor === t.id ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+                  className={"rounded-md px-2.5 py-1 " + (tenor === t.id ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
                 >
                   {t.id === "m1" ? "1M" : "3M"} <span className="opacity-60">{t.deltaLabel}</span>
                 </button>
@@ -241,7 +241,7 @@ export default function PutWriteView({
                         <button onClick={() => toggle(c.symbol)} title="Watch" style={{ color: has(c.symbol) ? "#fbbf24" : "var(--border-strong)" }}>★</button>
                       </td>
                       <td className="px-2 py-1.5">
-                        <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}`} className="font-mono font-semibold text-[#60a5fa] hover:underline">{c.symbol}</Link>
+                        <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{c.symbol}</Link>
                       </td>
                       <td className="max-w-[15rem] truncate px-2 py-1.5">
                         <span className="text-[var(--text-2)]">{c.name}</span>
@@ -256,7 +256,7 @@ export default function PutWriteView({
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pctFrac(c.atmIV)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
-                        {p ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} title="Open the live chain & strategy lab" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[#60a5fa]">${p.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{p.delta.toFixed(2)}</span></Link> : "—"}
+                        {p ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} title="Open the live chain & strategy lab" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[var(--accent)]">${p.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{p.delta.toFixed(2)}</span></Link> : "—"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{p ? <>{expLabel(p.expiry)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{p.dte}d</span></> : "—"}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{renderEarn(c, p?.expiry)}</td>

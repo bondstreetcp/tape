@@ -96,7 +96,7 @@ export default function FilingAI({ symbol, name }: { symbol: string; name?: stri
           </div>
           <p className="mt-1.5 text-[10px] text-[var(--text-4)]">
             AI summary of the filing
-            {data.url ? <> · <a href={data.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">read it on EDGAR ↗</a></> : null}
+            {data.url ? <> · <a href={data.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">read it on EDGAR ↗</a></> : null}
             {" "}· verify before relying on it.
           </p>
         </div>

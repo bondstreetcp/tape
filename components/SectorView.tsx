@@ -190,7 +190,7 @@ export default function SectorView({
               href={`/u/${universe}/sector/${meta.etf.toLowerCase()}/${ind.slug}?tf=${tf}`}
               className="group inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#60a5fa]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[var(--accent)]">
                 <polyline
                   points="3,17 9,11 13,15 21,6"
                   stroke="currentColor"
@@ -220,7 +220,7 @@ export default function SectorView({
                 className={
                   "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors " +
                   (active
-                    ? "border-[#2563eb] bg-[#2563eb]/20 text-white"
+                    ? "border-[var(--accent)] bg-[#2563eb]/20 text-white"
                     : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-3)] hover:text-[var(--text)]")
                 }
               >

@@ -12,7 +12,7 @@ const fmtAmt = (lo: number, hi: number) => (lo === hi ? `${k(lo)}+` : `${k(lo)}�
 const typeColor: Record<string, string> = { buy: "#22c55e", sell: "#ef4444", exchange: "#f59e0b" };
 const dt = (s: string) => (s ? new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—");
 const chamberBadge = (c: string) =>
-  c === "Senate" ? { t: "SEN", cls: "bg-[#2563eb]/15 text-[#60a5fa]" }
+  c === "Senate" ? { t: "SEN", cls: "bg-[#2563eb]/15 text-[var(--accent)]" }
   : c === "House" ? { t: "REP", cls: "bg-[#7c3aed]/15 text-[#a78bfa]" }
   : { t: "PRES", cls: "bg-[#dc2626]/15 text-[#f87171]" };
 
@@ -46,7 +46,7 @@ export default function CongressView({ universe, data, trump, known }: { univers
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
-      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono font-semibold text-[#60a5fa] hover:underline">{ticker}</Link>
+      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{ticker}</Link>
     ) : (
       <span className="font-mono font-semibold text-[var(--text-2)]">{ticker}</span>
     );
@@ -71,7 +71,7 @@ export default function CongressView({ universe, data, trump, known }: { univers
     });
   }, [allTrades, side, chamber, q, sortKey, sortDir]);
 
-  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, align = "left" }: { k: SortKey; children: ReactNode; align?: "left" | "right" }) => (
     <th className={"px-4 py-2 font-medium " + (align === "right" ? "text-right" : "text-left")}>
       <button onClick={() => toggleSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sortKey === k ? "text-[var(--text)]" : "")}>
@@ -87,7 +87,7 @@ export default function CongressView({ universe, data, trump, known }: { univers
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Congressional Trading</h1>
           <p className="mt-1 text-xs text-[var(--text-3)]">
-            U.S. Senate, House{hasExec ? " &amp; White House" : ""} stock trades disclosed under the STOCK Act{hasExec ? " / OGE" : ""} · {data.trades.length + (trump?.trades.length ?? 0)} transactions since {dt(data.since)} · amounts are disclosed brackets, filed up to ~45 days late · sources <a href="https://efdsearch.senate.gov" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Senate eFD</a>, <a href="https://disclosures-clerk.house.gov" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">House Clerk</a>{hasExec ? <> &amp; <a href="https://extapps2.oge.gov" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">OGE</a></> : null}
+            U.S. Senate, House{hasExec ? " &amp; White House" : ""} stock trades disclosed under the STOCK Act{hasExec ? " / OGE" : ""} · {data.trades.length + (trump?.trades.length ?? 0)} transactions since {dt(data.since)} · amounts are disclosed brackets, filed up to ~45 days late · sources <a href="https://efdsearch.senate.gov" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">Senate eFD</a>, <a href="https://disclosures-clerk.house.gov" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">House Clerk</a>{hasExec ? <> &amp; <a href="https://extapps2.oge.gov" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">OGE</a></> : null}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -103,7 +103,7 @@ export default function CongressView({ universe, data, trump, known }: { univers
           <div className="mt-2 flex flex-wrap gap-1.5">
             {trumpTop.map((t) => (
               <span key={t.ticker || t.asset} className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[11px] tabular-nums">
-                <span className="font-mono font-semibold text-[#60a5fa]">{t.ticker || t.asset.slice(0, 12)}</span> <span className="text-[var(--text-4)]">×{t.n}</span>
+                <span className="font-mono font-semibold text-[var(--accent)]">{t.ticker || t.asset.slice(0, 12)}</span> <span className="text-[var(--text-4)]">×{t.n}</span>
               </span>
             ))}
           </div>

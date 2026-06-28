@@ -100,7 +100,7 @@ export default function CompareOverlay({ tickers }: { tickers: { symbol: string;
   const yrs: number[] = [];
   for (let yr = new Date(minT).getUTCFullYear(); yr <= new Date(maxT2).getUTCFullYear(); yr++) yrs.push(yr);
   const yTicks = [lo, (lo + hiV) / 2, hiV];
-  const TB = (a: boolean) => "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const hT = hi != null ? unionT[hi] : null;
 
   return (

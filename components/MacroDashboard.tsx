@@ -150,7 +150,7 @@ function IndicatorDetail({ ind, onClose }: { ind: MacroInd; onClose: () => void 
         )}
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[var(--text-4)]">
           <span>Data from FRED (St. Louis Fed){ind.seriesId ? ` · ${ind.seriesId}` : ""}.</span>
-          {ind.seriesId && <a href={`https://fred.stlouisfed.org/series/${ind.seriesId}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Full series on FRED ↗</a>}
+          {ind.seriesId && <a href={`https://fred.stlouisfed.org/series/${ind.seriesId}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">Full series on FRED ↗</a>}
         </div>
       </div>
     </div>
@@ -255,7 +255,7 @@ function ReleaseDetail({ r }: { r: ReleaseData }) {
 function ConsensusLine({ est }: { est: EconEstimate }) {
   return (
     <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg border border-[#60a5fa]/30 bg-[#60a5fa]/[0.06] px-2.5 py-1.5 text-[11px]">
-      <span className="font-semibold text-[#60a5fa]">Consensus {est.forecast}</span>
+      <span className="font-semibold text-[var(--accent)]">Consensus {est.forecast}</span>
       <span className="text-[var(--text-3)]">vs prior {est.previous || "—"}</span>
       <span className="text-[var(--text-4)]">· {est.title} · via ForexFactory</span>
     </div>
@@ -323,7 +323,7 @@ export default function MacroDashboard({
         </div>
         <YieldCurve curve={curve} />
         <div className="mt-2 text-right">
-          <Link href={`/u/${universe}/rates`} className="text-xs font-medium text-[#60a5fa] hover:underline">Rates &amp; credit detail — curve spreads, inversion &amp; OAS trends →</Link>
+          <Link href={`/u/${universe}/rates`} className="text-xs font-medium text-[var(--accent)] hover:underline">Rates &amp; credit detail — curve spreads, inversion &amp; OAS trends →</Link>
         </div>
       </section>
 
@@ -355,7 +355,7 @@ export default function MacroDashboard({
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
         ) : (
           <>
-            <p className="mb-1.5 text-[11px] text-[var(--text-4)]">Click a release to see its recent prints. <span className="text-[#60a5fa]">cons</span> = consensus estimate (this week, via ForexFactory){releases?.gdp?.nowcast != null ? "; GDP also shows the Atlanta Fed nowcast" : ""}.</p>
+            <p className="mb-1.5 text-[11px] text-[var(--text-4)]">Click a release to see its recent prints. <span className="text-[var(--accent)]">cons</span> = consensus estimate (this week, via ForexFactory){releases?.gdp?.nowcast != null ? "; GDP also shows the Atlanta Fed nowcast" : ""}.</p>
             <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
               {calendar.map((e, i) => {
                 const rel = releases?.[LABEL_TO_RELEASE[e.label] ?? ""];
@@ -374,7 +374,7 @@ export default function MacroDashboard({
                         <span className="truncate">{e.label}</span>
                         {e.approx && <span className="shrink-0 text-[11px] text-[var(--text-4)]" title="Approximate — typical release date">≈</span>}
                         {rel?.nowcast != null && <span className="shrink-0 rounded bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]" title="Atlanta Fed GDPNow nowcast">nowcast {rel.nowcast >= 0 ? "+" : ""}{rel.nowcast.toFixed(1)}%</span>}
-                        {e.estimate && <span className="shrink-0 rounded bg-[#60a5fa]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#60a5fa]" title={`Consensus for "${e.estimate.title}" — via ForexFactory`}>cons {e.estimate.forecast}</span>}
+                        {e.estimate && <span className="shrink-0 rounded bg-[#60a5fa]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]" title={`Consensus for "${e.estimate.title}" — via ForexFactory`}>cons {e.estimate.forecast}</span>}
                       </span>
                       <span className="flex shrink-0 items-center gap-3 tabular-nums">
                         {latestStr && <span className="hidden font-mono text-xs text-[var(--text-3)] sm:inline" title="Most recent print">{latestStr}</span>}
@@ -394,7 +394,7 @@ export default function MacroDashboard({
             {!keyConfigured && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-4)]">
                 Jobless claims &amp; the jobs report are exact; <span className="text-[var(--text-3)]">≈</span> marks dates estimated from each release&apos;s typical schedule. Add a free{" "}
-                <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">FRED_API_KEY</a> for exact release dates.
+                <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">FRED_API_KEY</a> for exact release dates.
               </p>
             )}
           </>

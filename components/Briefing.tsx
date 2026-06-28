@@ -137,7 +137,7 @@ export default function Briefing() {
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
           />
           {err && <div className="text-xs text-[#ef4444]">{err}</div>}
-          <button type="submit" disabled={busy} className="w-full rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+          <button type="submit" disabled={busy} className="w-full rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-60">
             {busy ? "Checking…" : "Unlock"}
           </button>
         </form>
@@ -162,12 +162,12 @@ export default function Briefing() {
               <div className="text-[11px] text-[var(--text-4)]">{b.edition}{b.date ? ` · ${b.date}` : ""}</div>
               <div className="mt-1 inline-block rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-3)]">{b.cadence}</div>
             </div>
-            <a href={b.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-[#60a5fa] hover:underline">Source PDF ↗</a>
+            <a href={b.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-[var(--accent)] hover:underline">Source PDF ↗</a>
           </header>
           <div className="divide-y divide-[var(--divider)]">
             {b.sections.map((s, i) => (
               <div key={i} className="px-4 py-3">
-                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#60a5fa]">{s.heading}</h3>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--accent)]">{s.heading}</h3>
                 <SectionBody section={s} />
               </div>
             ))}

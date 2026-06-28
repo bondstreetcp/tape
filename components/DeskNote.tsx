@@ -4,7 +4,7 @@ import type { DeskNote } from "@/lib/deskNote";
 // Development-type tag → chip palette.
 const TAG_CLS: Record<string, string> = {
   deal: "bg-[#f59e0b]/15 text-[#fbbf24]",
-  catalyst: "bg-[#2563eb]/15 text-[#60a5fa]",
+  catalyst: "bg-[#2563eb]/15 text-[var(--accent)]",
   positioning: "bg-[#a855f7]/15 text-[#c084fc]",
   unexplained: "bg-[var(--surface-hover)] text-[var(--text-3)]",
   trend: "bg-[#0891b2]/15 text-[#22d3ee]",
@@ -18,7 +18,7 @@ function Tickers({ tickers, universe }: { tickers: string[]; universe: string })
   return (
     <>
       {tickers.map((t) => (
-        <Link key={t} href={`/u/${universe}/stock/${encodeURIComponent(t)}`} className="ml-1.5 font-mono text-xs font-semibold text-[#60a5fa] hover:underline">
+        <Link key={t} href={`/u/${universe}/stock/${encodeURIComponent(t)}`} className="ml-1.5 font-mono text-xs font-semibold text-[var(--accent)] hover:underline">
           {t}
         </Link>
       ))}

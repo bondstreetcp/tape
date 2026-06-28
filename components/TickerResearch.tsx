@@ -44,7 +44,7 @@ export default function TickerResearch({ symbol, name }: { symbol: string; name?
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <div className="text-sm font-semibold text-[var(--text-2)]">No research ingested for {symbol}</div>
         <p className="mt-1 max-w-prose text-xs leading-relaxed text-[var(--text-3)]">
-          Add sell-side PDFs for {name || symbol} on the <a href="research-desk" className="text-[#60a5fa] hover:underline">Research Desk</a> (or <code className="rounded bg-[var(--surface-2)] px-1">npx tsx scripts/ingest-research.ts &lt;files&gt;</code>). Once ingested, you can search the reports here with the LLM. The corpus is private and stored locally.
+          Add sell-side PDFs for {name || symbol} on the <a href="research-desk" className="text-[var(--accent)] hover:underline">Research Desk</a> (or <code className="rounded bg-[var(--surface-2)] px-1">npx tsx scripts/ingest-research.ts &lt;files&gt;</code>). Once ingested, you can search the reports here with the LLM. The corpus is private and stored locally.
         </p>
       </div>
     );
@@ -97,7 +97,7 @@ export default function TickerResearch({ symbol, name }: { symbol: string; name?
                 {d.priceTarget != null && <span className="text-xs tabular-nums text-[var(--text-2)]">PT {d.priceTargetPrior != null ? `$${d.priceTargetPrior}→` : ""}<span className="font-semibold text-[var(--text)]">${d.priceTarget}</span></span>}
               </div>
               <span className="flex items-center gap-2 text-[11px] text-[var(--text-4)]">
-                {d.blobKey && <a href={`/api/research/pdf?id=${d.id}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">📄 PDF</a>}
+                {d.blobKey && <a href={`/api/research/pdf?id=${d.id}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">📄 PDF</a>}
                 {d.publishDate}
               </span>
             </div>

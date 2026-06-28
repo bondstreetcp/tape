@@ -107,7 +107,7 @@ export default function EarningsCalendar({
         <div className="flex flex-wrap items-center gap-2">
           <UniverseSwitcher current={universe} />
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-3)]">
-            <input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[#60a5fa]" />
+            <input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[var(--accent)]" />
             ★ Watchlist only
           </label>
           <div className="inline-flex items-center gap-1">
@@ -118,7 +118,7 @@ export default function EarningsCalendar({
                   key={s.id}
                   onClick={() => setSortMode(s.id)}
                   title={s.id === "session" ? "Group before-open, then after-close" : s.id === "mktcap" ? "Largest market cap first" : "Alphabetical by ticker"}
-                  className={"rounded-md px-2.5 py-1 " + (sortMode === s.id ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+                  className={"rounded-md px-2.5 py-1 " + (sortMode === s.id ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
                 >
                   {s.label}
                 </button>
@@ -130,7 +130,7 @@ export default function EarningsCalendar({
               <button
                 key={r.days}
                 onClick={() => setDays(r.days)}
-                className={"rounded-md px-2.5 py-1 " + (days === r.days ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+                className={"rounded-md px-2.5 py-1 " + (days === r.days ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
               >
                 {r.label}
               </button>

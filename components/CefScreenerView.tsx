@@ -83,7 +83,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
         <h1 className="mt-1 text-2xl font-bold">Closed-End Fund Screener</h1>
         <p className="mt-1 text-xs text-[var(--text-3)]">
           {data.funds.length} closed-end funds &amp; investment trusts (US + UK) · hunting discounts to NAV (price below the value of the assets) ·
-          data from <a href="https://www.cefconnect.com" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">CEF Connect</a> &amp; <a href="https://www.theaic.co.uk" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Morningstar/AIC</a>
+          data from <a href="https://www.cefconnect.com" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">CEF Connect</a> &amp; <a href="https://www.theaic.co.uk" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">Morningstar/AIC</a>
         </p>
       </div>
 
@@ -98,7 +98,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {GROUPS.map((g) => (
             <button key={g} onClick={() => { setGroup(g); setCat("All"); }}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (group === g ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{g}</button>
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (group === g ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{g}</button>
           ))}
         </div>
         <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs outline-none">
@@ -125,7 +125,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
           <div className="flex gap-2 overflow-x-auto p-3">
             {catStats.slice(0, 10).map((c) => (
               <button key={c.category} onClick={() => setCat(c.category === cat ? "All" : c.category)}
-                className={"shrink-0 rounded-lg border px-3 py-2 text-left transition-colors " + (cat === c.category ? "border-[#2563eb] bg-[var(--surface-hover)]" : "border-[var(--border)] hover:bg-[var(--surface-hover)]")}>
+                className={"shrink-0 rounded-lg border px-3 py-2 text-left transition-colors " + (cat === c.category ? "border-[var(--accent)] bg-[var(--surface-hover)]" : "border-[var(--border)] hover:bg-[var(--surface-hover)]")}>
                 <div className="text-[11px] text-[var(--text-3)]">{c.category}</div>
                 <div className="mt-0.5 flex items-baseline gap-2">
                   <span className="text-base font-semibold tabular-nums" style={{ color: discColor(c.avgDisc) }}>{c.avgDisc.toFixed(1)}%</span>
@@ -145,7 +145,7 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
               {COLS.map((c) => (
                 <th key={c.id} onClick={() => c.sort && onSort(c.sort)}
                   className={"select-none whitespace-nowrap px-3 py-2 font-medium " + (c.sort ? "cursor-pointer hover:text-[var(--text)] " : "") + (c.align === "right" ? "text-right" : "text-left")}>
-                  {c.label}{c.sort && sort === c.sort && <span className="ml-0.5 text-[#60a5fa]">{dir === 1 ? "▲" : "▼"}</span>}
+                  {c.label}{c.sort && sort === c.sort && <span className="ml-0.5 text-[var(--accent)]">{dir === 1 ? "▲" : "▼"}</span>}
                 </th>
               ))}
             </tr>
@@ -172,8 +172,8 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
 }
 
 const COLS: Col[] = [
-  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[#60a5fa] hover:underline">{f.ticker}</a> },
-  { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[#2563eb]/15 text-[#60a5fa]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
+  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a> },
+  { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[#2563eb]/15 text-[var(--accent)]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
   { id: "name", label: "Name", align: "left", get: (f) => f.name, render: (f) => <span className="block max-w-[14rem] truncate text-[var(--text-2)]" title={f.name}>{f.name}</span> },
   { id: "category", label: "Category", align: "left", get: (f) => f.category, render: (f) => <span className="text-xs text-[var(--text-3)]">{f.category}</span> },
   { id: "discount", label: "Disc/Prem", align: "right", sort: "discount", get: (f) => f.discount, render: (f) => <span className="font-semibold" style={{ color: discColor(f.discount) }}>{f.discount >= 0 ? "+" : ""}{f.discount.toFixed(1)}%</span> },

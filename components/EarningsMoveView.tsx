@@ -63,7 +63,7 @@ export default function EarningsMoveView({
       .sort((a, b) => get[sort](b) - get[sort](a));
   }, [allRows, regime, histOnly, watchOnly, q, sort, has]);
 
-  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
@@ -98,7 +98,7 @@ export default function EarningsMoveView({
           <button onClick={() => setRegime("rich")} className={TB(regime === "rich")} title="Implied ≥ 1.15× historical — options pricing the move richer than it's tended to be">Rich ≥1.15×</button>
           <button onClick={() => setRegime("cheap")} className={TB(regime === "cheap")} title="Implied ≤ 0.9× historical — options pricing the move cheaper than it's tended to be">Cheap ≤0.9×</button>
         </div>
-        <button onClick={() => setHistOnly((v) => !v)} className={"rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " + (histOnly ? "border-[#2563eb] bg-[#2563eb]/15 text-[#60a5fa]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Only names with enough earnings history to compute a richness ratio">Has history</button>
+        <button onClick={() => setHistOnly((v) => !v)} className={"rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors " + (histOnly ? "border-[var(--accent)] bg-[#2563eb]/15 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]")} title="Only names with enough earnings history to compute a richness ratio">Has history</button>
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--text-3)]"><input type="checkbox" checked={watchOnly} onChange={(e) => setWatchOnly(e.target.checked)} className="accent-[#fbbf24]" /> ★ Watchlist</label>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or name…" className="w-44 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
@@ -139,7 +139,7 @@ export default function EarningsMoveView({
                   return (
                     <tr key={r.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                       <td className="px-2 py-1.5 text-center"><button onClick={() => toggle(r.symbol)} title="Watch" style={{ color: has(r.symbol) ? "#fbbf24" : "var(--border-strong)" }}>★</button></td>
-                      <td className="px-2 py-1.5"><Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=options`} className="font-mono font-semibold text-[#60a5fa] hover:underline">{r.symbol}</Link></td>
+                      <td className="px-2 py-1.5"><Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=options`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link></td>
                       <td className="max-w-[14rem] truncate px-2 py-1.5"><span className="text-[var(--text-2)]">{r.name}</span><span className="ml-1.5 text-[10px] text-[var(--text-4)]">{r.sector}</span></td>
                       <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">${r.price.toFixed(2)}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" title={r.earningsEstimate ? "Estimated date" : "Confirmed date"}>

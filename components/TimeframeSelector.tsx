@@ -19,7 +19,7 @@ export default function TimeframeSelector({
             className={
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
               (active
-                ? "bg-[#2563eb] text-white"
+                ? "bg-[var(--accent-strong)] text-white"
                 : "text-[var(--text-3)] hover:text-[var(--text)]")
             }
           >

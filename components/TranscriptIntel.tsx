@@ -43,7 +43,7 @@ export default function TranscriptIntel({ symbol, name }: { symbol: string; name
           <span className="ml-2 text-[11px] text-[var(--text-4)]">theme mentions &amp; tone across recent calls</span>
         </div>
         {data == null && (
-          <button onClick={() => load(kw)} className="shrink-0 text-xs text-[#60a5fa] hover:underline">
+          <button onClick={() => load(kw)} className="shrink-0 text-xs text-[var(--accent)] hover:underline">
             Analyze recent calls
           </button>
         )}

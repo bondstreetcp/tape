@@ -397,7 +397,7 @@ export default function FinancialsView({
                         key={p.date}
                         className={
                           "px-4 py-3 text-right font-medium tabular-nums " +
-                          (p.__est ? "text-[#60a5fa]" : "")
+                          (p.__est ? "text-[var(--accent)]" : "")
                         }
                         title={p.__derived ? "Derived from consensus growth (Yahoo provides only one forward year)" : undefined}
                       >
@@ -462,7 +462,7 @@ export default function FinancialsView({
             {estPeriods.length > 0 && (
               <>
                 {" · "}
-                <span className="text-[#60a5fa]">FY…E</span> = forward consensus
+                <span className="text-[var(--accent)]">FY…E</span> = forward consensus
                 (EPS &amp; revenue from analyst estimates; net income ≈ EPS ×
                 shares); other lines aren&apos;t estimated.
                 {anyDerived && " *later year derived from consensus growth."}
@@ -562,7 +562,7 @@ function Segmented({
           onClick={() => onChange(o.key)}
           className={
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-            (o.key === value ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
+            (o.key === value ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
           }
         >
           {o.label}
@@ -591,7 +591,7 @@ function TrendBars({
     <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex items-center gap-4 text-xs text-[var(--text-3)]">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#60a5fa]" /> Revenue
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--accent)]" /> Revenue
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#22c55e]" /> Net Income
@@ -605,7 +605,7 @@ function TrendBars({
             </div>
             <div className="flex h-28 w-full items-end justify-center gap-1">
               <div
-                className="w-1/2 rounded-t bg-[#60a5fa]"
+                className="w-1/2 rounded-t bg-[var(--accent)]"
                 style={{ height: `${d.rev ? (Math.abs(d.rev) / maxRev) * 100 : 0}%` }}
                 title={`Revenue ${fmtBig(d.rev, currency)}`}
               />

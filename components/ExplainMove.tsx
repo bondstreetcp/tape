@@ -98,7 +98,7 @@ export default function ExplainMove({ symbol, name, returns, tf = "3m" }: { symb
           {sources.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {sources.map((s, i) => (
-                <a key={i} href={s.uri} target="_blank" rel="noreferrer" title={s.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[#60a5fa] hover:border-[var(--border-strong)]">{s.title} ↗</a>
+                <a key={i} href={s.uri} target="_blank" rel="noreferrer" title={s.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[var(--accent)] hover:border-[var(--border-strong)]">{s.title} ↗</a>
               ))}
             </div>
           )}

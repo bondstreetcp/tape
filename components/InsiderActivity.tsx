@@ -173,7 +173,7 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
                 <button
                   key={r.key}
                   onClick={() => setRange(r.key)}
-                  className={"rounded px-1.5 py-0.5 font-medium " + (range === r.key ? "bg-[#2563eb] text-white" : "hover:text-[var(--text)]")}
+                  className={"rounded px-1.5 py-0.5 font-medium " + (range === r.key ? "bg-[var(--accent-strong)] text-white" : "hover:text-[var(--text)]")}
                 >
                   {r.label}
                 </button>
@@ -182,7 +182,7 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
             <span className="flex items-center gap-1"><Tri up color="#22c55e" /> Buy</span>
             <span className="flex items-center gap-1"><Tri color="#ef4444" /> Sell</span>
             <label className="flex cursor-pointer items-center gap-1 select-none">
-              <input type="checkbox" checked={showOther} onChange={(e) => setShowOther(e.target.checked)} className="accent-[#60a5fa]" />
+              <input type="checkbox" checked={showOther} onChange={(e) => setShowOther(e.target.checked)} className="accent-[var(--accent)]" />
               grants/exercises
             </label>
           </div>
@@ -228,7 +228,7 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
           {cik && (
             <a
               href={`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=4&dateb=&owner=include&count=40`}
-              target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline"
+              target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline"
             >
               SEC EDGAR ↗
             </a>

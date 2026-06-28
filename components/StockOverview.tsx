@@ -149,7 +149,7 @@ export default function StockOverview({
                 <button
                   key={m}
                   onClick={() => setChartMode(m)}
-                  className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (chartMode === m ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+                  className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (chartMode === m ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
                 >
                   {m}
                 </button>
@@ -192,7 +192,7 @@ export default function StockOverview({
           <button
             key={t.key}
             onClick={() => setTf(t.key)}
-            className={"rounded-lg border px-2 py-2 text-center transition-colors " + (t.key === tf ? "border-[#2563eb] bg-[#2563eb]/15" : "border-[var(--border)] bg-[var(--bg)] hover:border-[var(--border-strong)]")}
+            className={"rounded-lg border px-2 py-2 text-center transition-colors " + (t.key === tf ? "border-[var(--accent)] bg-[#2563eb]/15" : "border-[var(--border)] bg-[var(--bg)] hover:border-[var(--border-strong)]")}
           >
             <div className="text-[11px] text-[var(--text-3)]">{t.label}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums" style={{ color: trendColor(row.returns[t.key]) }}>

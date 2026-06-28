@@ -22,7 +22,7 @@ export default function SuperInvestorsView({ universe, data, known }: { universe
 
   const tlink = (ticker: string | null, label?: React.ReactNode) => {
     const text = label ?? ticker;
-    if (ticker && knownSet.has(ticker)) return <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="text-[#60a5fa] hover:underline">{text}</Link>;
+    if (ticker && knownSet.has(ticker)) return <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="text-[var(--accent)] hover:underline">{text}</Link>;
     return <span>{text}</span>;
   };
 

@@ -27,7 +27,7 @@ export default function BriefingTickerNews({ symbol, name }: { symbol: string; n
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
         <span className="text-sm font-semibold text-[var(--text-2)]">In today&apos;s briefing</span>
-        <a href={`/u/${universe}/briefing`} className="shrink-0 text-[11px] text-[#60a5fa] hover:underline">Open briefing →</a>
+        <a href={`/u/${universe}/briefing`} className="shrink-0 text-[11px] text-[var(--accent)] hover:underline">Open briefing →</a>
       </div>
       <ul className="divide-y divide-[var(--divider)]">
         {stories.map((s, i) => (

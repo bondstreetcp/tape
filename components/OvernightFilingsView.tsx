@@ -10,7 +10,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 const formBadge = (form: string): string => {
   const f = form.replace("/A", "");
   if (f === "10-K") return "bg-[#7c3aed]/15 text-[#a78bfa]";
-  if (f === "10-Q") return "bg-[#2563eb]/15 text-[#60a5fa]";
+  if (f === "10-Q") return "bg-[#2563eb]/15 text-[var(--accent)]";
   if (f === "S-4" || f === "425") return "bg-[#f59e0b]/15 text-[#fbbf24]"; // M&A — amber
   if (/^424B/.test(f)) return "bg-[#22c55e]/15 text-[#4ade80]"; // offering — green
   return "bg-[#0891b2]/15 text-[#22d3ee]"; // 8-K
@@ -100,12 +100,12 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
 
   const tlink = (ticker: string) =>
     knownSet.has(ticker) ? (
-      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono text-base font-bold text-[#60a5fa] hover:underline">{ticker}</Link>
+      <Link href={`/u/${universe}/stock/${encodeURIComponent(ticker)}`} className="font-mono text-base font-bold text-[var(--accent)] hover:underline">{ticker}</Link>
     ) : (
       <span className="font-mono text-base font-bold text-[var(--text-2)]">{ticker}</span>
     );
 
-  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
   return (
     <main className="mx-auto max-w-[72rem] px-4 py-6 sm:px-6">
@@ -114,7 +114,7 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Overnight Filings</h1>
           <p className="mt-1 max-w-3xl text-xs text-[var(--text-3)]">
-            AI-summarized new SEC filings vs the prior comparable — spot-check against the source. {universeItems.length} filing{universeItems.length !== 1 ? "s" : ""}{sinceLabel ? ` since ${sinceLabel}` : ""} · source <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">SEC EDGAR</a>
+            AI-summarized new SEC filings vs the prior comparable — spot-check against the source. {universeItems.length} filing{universeItems.length !== 1 ? "s" : ""}{sinceLabel ? ` since ${sinceLabel}` : ""} · source <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">SEC EDGAR</a>
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -158,7 +158,7 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
         </button>
         <span className="ml-auto flex items-center gap-2 text-xs text-[var(--text-4)]">
           {filtered && (
-            <button onClick={() => { setFormF("all"); setSentF("all"); setSectorF("all"); setMoversOnly(false); setQ(""); }} className="text-[#60a5fa] hover:underline">clear</button>
+            <button onClick={() => { setFormF("all"); setSentF("all"); setSectorF("all"); setMoversOnly(false); setQ(""); }} className="text-[var(--accent)] hover:underline">clear</button>
           )}
           {rows.length} shown
         </span>
@@ -204,7 +204,7 @@ function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.Re
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-4)]">
           <span title={it.filedAt}>{fmtTime(it.filedAt)}</span>
-          <a href={it.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">EDGAR →</a>
+          <a href={it.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">EDGAR →</a>
         </div>
       </div>
 

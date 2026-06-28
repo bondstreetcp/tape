@@ -83,7 +83,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
           {m.sources && m.sources.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {m.sources.map((src, j) => (
-                <a key={j} href={src.uri} target="_blank" rel="noreferrer" title={src.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[#60a5fa] hover:border-[var(--border-strong)]">
+                <a key={j} href={src.uri} target="_blank" rel="noreferrer" title={src.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] text-[var(--accent)] hover:border-[var(--border-strong)]">
                   {src.title} ↗
                 </a>
               ))}
@@ -110,7 +110,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
           placeholder={started ? "Ask a follow-up…" : `Ask anything about ${label}…`}
           className="min-w-[240px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
         />
-        <button type="submit" disabled={loading} className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+        <button type="submit" disabled={loading} className="rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
           {loading ? "Searching…" : started ? "Send" : "Ask"}
         </button>
       </form>
@@ -135,7 +135,7 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
       {!configured && (
         <div className="mt-2 text-xs leading-relaxed text-[var(--text-3)]">
           Add a free <span className="font-mono text-[var(--text-2)]">GEMINI_API_KEY</span> environment variable to enable AI Q&amp;A — get one at{" "}
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">aistudio.google.com/app/apikey</a>.
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">aistudio.google.com/app/apikey</a>.
         </div>
       )}
       {error && <div className="mt-2 text-xs text-[#ef4444]">{error}</div>}

@@ -124,7 +124,7 @@ export default function PeerComparison({
                   }
                 >
                   {c.label}
-                  {sortKey === c.key && <span className="ml-1 text-[#60a5fa]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                  {sortKey === c.key && <span className="ml-1 text-[var(--accent)]">{sortDir === "asc" ? "▲" : "▼"}</span>}
                 </th>
               ))}
             </tr>

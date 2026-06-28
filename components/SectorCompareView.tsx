@@ -164,7 +164,7 @@ export default function SectorCompareView({
                 </span>
                 <Link
                   href={`/u/${universe}/sector/${s.etf.toLowerCase()}`}
-                  className="shrink-0 text-[var(--text-3)] hover:text-[#60a5fa]"
+                  className="shrink-0 text-[var(--text-3)] hover:text-[var(--accent)]"
                   title="Open sector"
                 >
                   ↗

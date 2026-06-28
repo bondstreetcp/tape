@@ -62,7 +62,7 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
               key={s}
               onClick={() => { setStrategy(s); setScreens([]); }}
               title={strategyLabel(s)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (!screensOn && strategy === s ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (!screensOn && strategy === s ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {strategyLabel(s).split(" (")[0]}
             </button>

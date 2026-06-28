@@ -90,7 +90,7 @@ export default function MarginsChart({ symbol }: { symbol: string }) {
 
   const TB = (active: boolean) =>
     "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " +
-    (active ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+    (active ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
   return (
     <Shell>

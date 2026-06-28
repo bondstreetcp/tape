@@ -117,7 +117,7 @@ export default function CreditSpreadView({
       .sort((a, b) => get[sort](b) - get[sort](a));
   }, [candidates, structure, tenor, minRor, minPop, elevatedOnly, clearEarnings, watchOnly, q, sort, has]);
 
-  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
@@ -139,12 +139,12 @@ export default function CreditSpreadView({
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
             {STRUCTURES.map((s) => (
-              <button key={s.id} onClick={() => setStructure(s.id)} title={s.blurb} className={"rounded-md px-2.5 py-1 " + (structure === s.id ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{s.label}</button>
+              <button key={s.id} onClick={() => setStructure(s.id)} title={s.blurb} className={"rounded-md px-2.5 py-1 " + (structure === s.id ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{s.label}</button>
             ))}
           </div>
           <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
             {(["m1", "m3"] as TenorId[]).map((t) => (
-              <button key={t} onClick={() => setTenor(t)} className={"rounded-md px-2.5 py-1 " + (tenor === t ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{t === "m1" ? "~1M" : "~3M"}</button>
+              <button key={t} onClick={() => setTenor(t)} className={"rounded-md px-2.5 py-1 " + (tenor === t ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{t === "m1" ? "~1M" : "~3M"}</button>
             ))}
           </div>
           <UniverseSwitcher current={universe} />
@@ -209,15 +209,15 @@ export default function CreditSpreadView({
                   return (
                     <tr key={c.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                       <td className="px-2 py-1.5 text-center"><button onClick={() => toggle(c.symbol)} title="Watch" style={{ color: has(c.symbol) ? "#fbbf24" : "var(--border-strong)" }}>★</button></td>
-                      <td className="px-2 py-1.5"><Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}`} className="font-mono font-semibold text-[#60a5fa] hover:underline">{c.symbol}</Link></td>
+                      <td className="px-2 py-1.5"><Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{c.symbol}</Link></td>
                       <td className="max-w-[14rem] truncate px-2 py-1.5"><span className="text-[var(--text-2)]">{c.name}</span><span className="ml-1.5 text-[10px] text-[var(--text-4)]">{c.sector}</span></td>
                       <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">{c.price != null ? `$${c.price.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: rankColor(vr) }} title={c.ivRank != null ? "IV percentile (1y)" : "Realized-vol percentile (1y)"}>{vr != null ? vr + (c.ivRank != null ? "" : "ʳ") : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pctFrac(c.atmIV)}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-[11px] tabular-nums">
                         {structure === "bullPut"
-                          ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} className="text-[var(--text-2)] hover:text-[#60a5fa]">${s.shortStrike}<span className="text-[var(--text-4)]"> / ${s.longStrike}</span></Link>
-                          : <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} className="text-[var(--text-2)] hover:text-[#60a5fa]">${s.putLong}/${s.putShort}<span className="text-[var(--text-4)]"> · </span>${s.callShort}/${s.callLong}</Link>}
+                          ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} className="text-[var(--text-2)] hover:text-[var(--accent)]">${s.shortStrike}<span className="text-[var(--text-4)]"> / ${s.longStrike}</span></Link>
+                          : <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} className="text-[var(--text-2)] hover:text-[var(--accent)]">${s.putLong}/${s.putShort}<span className="text-[var(--text-4)]"> · </span>${s.callShort}/${s.callLong}</Link>}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{expLabel(s.expiry)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{s.dte}d</span></td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{renderEarn(c, s.expiry)}</td>

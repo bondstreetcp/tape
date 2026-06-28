@@ -51,7 +51,7 @@ export default function ValuationBands({ symbol }: { symbol: string }) {
             <button
               key={x.key}
               onClick={() => setMetric(x.key)}
-              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (metric === x.key ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (metric === x.key ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}
             >
               {x.label}
             </button>

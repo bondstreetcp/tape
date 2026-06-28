@@ -75,7 +75,7 @@ export default function SharesChart({ symbol, financials }: { symbol: string; fi
   const area = `${line}L${x(n - 1).toFixed(1)} ${(H - MB).toFixed(1)}L${x(0).toFixed(1)} ${(H - MB).toFixed(1)}Z`;
   const yTicks = [vMin, (vMin + vMax) / 2, vMax];
   const every = Math.max(1, Math.ceil(n / 9));
-  const TB = (active: boolean) => "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (active ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const TB = (active: boolean) => "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " + (active ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
   return (
     <section className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">

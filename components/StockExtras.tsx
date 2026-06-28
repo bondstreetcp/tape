@@ -246,7 +246,7 @@ export function BorrowPanel({ symbol }: { symbol: string }) {
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-4)]">
         Interactive Brokers securities-lending availability &amp; annualized fee via{" "}
-        <a href={`https://www.iborrowdesk.com/report/${encodeURIComponent(data.symbol)}`} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">IBorrowDesk</a>
+        <a href={`https://www.iborrowdesk.com/report/${encodeURIComponent(data.symbol)}`} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">IBorrowDesk</a>
         {data.updated ? <> · as of {data.updated.slice(0, 10)}</> : null}
         {data.stale ? <span className="text-[#f59e0b]"> · availability stale</span> : null}. A high fee or thin availability means the stock is expensive or hard to short.
       </p>

@@ -133,7 +133,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
             <option key={f.value} value={f.value}>{f.label}</option>
           ))}
         </select>
-        <button type="submit" className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8]">
+        <button type="submit" className="rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8]">
           Search
         </button>
       </form>
@@ -173,7 +173,7 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
             {ticker && !submitted.all && (
               <button
                 onClick={() => onSearch(undefined, true)}
-                className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[#60a5fa] hover:border-[var(--border-strong)]"
+                className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--accent)] hover:border-[var(--border-strong)]"
               >
                 Search all companies for &quot;{submitted.q}&quot; →
               </button>
@@ -248,7 +248,7 @@ function ResultRow({ hit, q, showCompany }: { hit: DocHit; q: string; showCompan
           </span>
         )}
         <span className="tabular-nums text-[var(--text-3)]">{hit.date}</span>
-        <a href={hit.url} target="_blank" rel="noreferrer" className="ml-auto text-[#60a5fa] hover:underline">
+        <a href={hit.url} target="_blank" rel="noreferrer" className="ml-auto text-[var(--accent)] hover:underline">
           Open on EDGAR ↗
         </a>
       </div>

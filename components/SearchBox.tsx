@@ -135,7 +135,7 @@ export default function SearchBox({
               onMouseDown={(e) => { e.preventDefault(); goLiteral(); }}
               className={"flex w-full items-center gap-2 px-3 py-2 text-left " + (matches.length === 0 ? "" : "border-t border-[var(--divider)]")}
             >
-              <span className="w-16 shrink-0 truncate font-mono text-sm font-semibold text-[#60a5fa]">{literal}</span>
+              <span className="w-16 shrink-0 truncate font-mono text-sm font-semibold text-[var(--accent)]">{literal}</span>
               <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-4)]">Look up any ticker (incl. when-issued) →</span>
             </button>
           )}

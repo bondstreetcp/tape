@@ -103,7 +103,7 @@ export default function AppHeader({
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <Link href={base} className="mr-1 flex shrink-0 items-center gap-1.5 font-semibold text-[var(--text)]">
-            <span className="text-[#60a5fa]">▦</span>
+            <span className="text-[var(--accent)]">▦</span>
             <span className="hidden font-bold tracking-tight sm:inline">Tape</span>
           </Link>
           <nav ref={navRef} className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

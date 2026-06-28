@@ -221,7 +221,7 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <span className="text-sm font-semibold text-[var(--text-2)]">Earnings-call transcripts</span>
-        <button onClick={loadFull} disabled={full === "loading"} className="text-xs text-[#60a5fa] hover:underline disabled:opacity-60">
+        <button onClick={loadFull} disabled={full === "loading"} className="text-xs text-[var(--accent)] hover:underline disabled:opacity-60">
           {full === "loading" ? "Loading…" : loaded ? "↻ Reload full call" : "📄 Read latest call in full"}
         </button>
       </div>
@@ -232,7 +232,7 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
           <div className="mb-2 text-[11px] text-[var(--text-4)]">
             {loaded.source}
             {loaded.date ? ` · ${loaded.date}` : ""} ·{" "}
-            <a href={loaded.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">source ↗</a>
+            <a href={loaded.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">source ↗</a>
           </div>
           <div className="max-h-[480px] overflow-y-auto pr-1 text-[13px] leading-relaxed text-[var(--text-body)]">
             <TranscriptBody text={loaded.text} />
@@ -251,7 +251,7 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
         <div className="px-4 py-4 text-xs text-[var(--text-3)]">
           No transcripts found yet. Try a{" "}
           <a
-            className="text-[#60a5fa] hover:underline"
+            className="text-[var(--accent)] hover:underline"
             target="_blank"
             rel="noreferrer"
             href={`https://news.google.com/search?q=${encodeURIComponent((name || symbol) + " earnings call transcript")}`}
@@ -319,7 +319,7 @@ function FilingRow({
         </td>
         <td className="whitespace-nowrap px-4 py-2 text-right">
           {readable && (
-            <button onClick={onToggle} className="mr-3 text-xs text-[#60a5fa] hover:underline">
+            <button onClick={onToggle} className="mr-3 text-xs text-[var(--accent)] hover:underline">
               {open ? "Hide" : f.isEarnings ? "Read release" : "Read"}
             </button>
           )}
@@ -336,7 +336,7 @@ function FilingRow({
             ) : doc === "error" ? (
               <div className="text-xs text-[var(--text-3)]">
                 Couldn&apos;t extract text.{" "}
-                <a href={f.url} target="_blank" rel="noreferrer" className="text-[#60a5fa] hover:underline">Open on EDGAR ↗</a>
+                <a href={f.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">Open on EDGAR ↗</a>
               </div>
             ) : (
               <div className="max-h-[460px] overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--text-body)]">

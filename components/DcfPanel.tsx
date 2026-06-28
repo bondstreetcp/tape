@@ -108,7 +108,7 @@ export default function DcfPanel({ financials, stats, price, currency = "USD" }:
         {impliedGrowth != null && (
           <div className="ml-auto rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5">
             <div className="text-[11px] text-[var(--text-4)]">Reverse DCF — price implies</div>
-            <div className="font-mono text-sm font-semibold tabular-nums text-[#60a5fa]">{impliedGrowth.toFixed(1)}% FCF growth / yr</div>
+            <div className="font-mono text-sm font-semibold tabular-nums text-[var(--accent)]">{impliedGrowth.toFixed(1)}% FCF growth / yr</div>
           </div>
         )}
       </div>
@@ -160,7 +160,7 @@ function Slider({ label, value, min, max, step = 1, onChange, suffix }: { label:
         <span className="text-[11px] text-[var(--text-3)]">{label}</span>
         <span className="font-mono text-xs font-semibold tabular-nums text-[var(--text)]">{value}{suffix}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[#2563eb]" />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
     </div>
   );
 }

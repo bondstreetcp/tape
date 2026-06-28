@@ -118,7 +118,7 @@ export default function WatchlistView({
           <p className="text-sm text-[var(--text-2)]">Your watchlist is empty.</p>
           <p className="mt-1 text-xs text-[var(--text-3)]">
             Add names with the ★ on the{" "}
-            <Link href={`/u/${universe}/screener`} className="text-[#60a5fa] hover:underline">
+            <Link href={`/u/${universe}/screener`} className="text-[var(--accent)] hover:underline">
               screener
             </Link>{" "}
             or any stock page.

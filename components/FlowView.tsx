@@ -65,7 +65,7 @@ export default function FlowView({ flow, universe }: { flow: OptionsFlow; univer
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
           {(["all", "call", "put"] as const).map((t) => (
-            <button key={t} onClick={() => setType(t)} className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (type === t ? "bg-[#2563eb] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>
+            <button key={t} onClick={() => setType(t)} className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (type === t ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>
               {t === "all" ? "All" : t + "s"}
             </button>
           ))}
