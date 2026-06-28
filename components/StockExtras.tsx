@@ -366,3 +366,64 @@ export function StockTwitsPanel({ symbol }: { symbol: string }) {
     </Card>
   );
 }
+
+const RF_NON_US = /\.(PA|AS|L|DE|SW|TO|MX|KS|KQ|T|HK|MI|MC|F|SS|SZ|AX|NZ|SI|TW|SA|BR|VI|ST|HE|CO|OL|NS|BO)$/i;
+interface RiskChange { title: string; note: string }
+interface RiskDiff { symbol: string; currentDate: string; priorDate: string; summary: string; added: RiskChange[]; removed: RiskChange[]; intensified: RiskChange[] }
+
+function RiskList({ title, color, items }: { title: string; color: string; items: RiskChange[] }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color }}>{title}</div>
+      <ul className="space-y-1">
+        {items.map((it, i) => (
+          <li key={i} className="text-[12px] leading-snug">
+            <span className="font-medium text-[var(--text)]">{it.title}</span>
+            {it.note && <span className="text-[var(--text-3)]"> — {it.note}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Filing Risk-Factor Watch — user-triggered (the 10-K diff is an expensive LLM call, so it doesn't
+// auto-fire on every page view). US 10-K filers only.
+export function RiskFactorPanel({ symbol }: { symbol: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "none" | RiskDiff>("idle");
+  if (RF_NON_US.test(symbol.toUpperCase())) return null;
+
+  const run = () => {
+    setState("loading");
+    fetch(`/api/risk-factors/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => setState(d.diff || "none"))
+      .catch(() => setState("none"));
+  };
+  const d = typeof state === "object" ? state : null;
+
+  return (
+    <Card title="Risk-factor changes (10-K)">
+      {state === "idle" && (
+        <div>
+          <button onClick={run} className="rounded-lg bg-[var(--accent-strong)] px-3.5 py-2 text-sm font-medium text-white transition-colors hover:opacity-90">Compare the last two annual filings →</button>
+          <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">An AI diff of the Item 1A &ldquo;Risk Factors&rdquo; section across this company&apos;s two most recent 10-Ks — what management ADDED, dropped, or intensified. A new risk factor is often the earliest written signal that something is changing.</p>
+        </div>
+      )}
+      {state === "loading" && (
+        <div className="flex items-center gap-2 py-2 text-sm text-[var(--text-3)]"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> Reading both 10-Ks &amp; diffing the risk factors…</div>
+      )}
+      {state === "none" && <p className="py-1 text-sm text-[var(--text-3)]">Couldn&apos;t compare — fewer than two US 10-Ks on file, or the Risk Factors section couldn&apos;t be located.</p>}
+      {d && (
+        <div className="space-y-3">
+          <p className="text-[13px] leading-relaxed text-[var(--text-2)]">{d.summary}</p>
+          {d.added.length > 0 && <RiskList title="Added" color="#ef4444" items={d.added} />}
+          {d.intensified.length > 0 && <RiskList title="Intensified" color="#f59e0b" items={d.intensified} />}
+          {d.removed.length > 0 && <RiskList title="Dropped / de-emphasized" color="#22c55e" items={d.removed} />}
+          {!d.added.length && !d.intensified.length && !d.removed.length && <p className="text-sm text-[var(--text-3)]">No material year-over-year changes flagged.</p>}
+          <p className="text-[10px] text-[var(--text-4)]">10-Ks filed {d.priorDate} → {d.currentDate}. AI-generated; verify against the filings. Not investment advice.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
