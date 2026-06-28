@@ -32,6 +32,47 @@ const NON_US = /\.(PA|AS|L|DE|SW|TO|MX|KS|KQ|T|HK|MI|MC|F|SS|SZ|AX|NZ|SI|TW|SA|B
 const cleanBody = (b: string) =>
   b.replace(/\$[A-Za-z.\-]+/g, "").replace(/https?:\/\/\S+/g, "").replace(/@\w+/g, "").replace(/\s+/g, " ").trim();
 
+export interface RawMsg {
+  body: string;
+  sentiment: "Bullish" | "Bearish" | null;
+  createdAt: string;
+}
+
+// Paginated fetch of a name's recent substantive posts (for the day/week AI summary). Walks the
+// `cursor.max` pages until it reaches ~maxDays old or maxPages, whichever first. Returns null on a
+// hard failure (intl / network).
+export async function fetchStockTwitsWindow(symbol: string, maxPages = 5, maxDays = 8): Promise<RawMsg[] | null> {
+  const s = decodeURIComponent(symbol).trim().toUpperCase();
+  if (!s || NON_US.test(s)) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 16000);
+  const out: RawMsg[] = [];
+  const cutoff = Date.now() - maxDays * 86_400_000;
+  try {
+    let max: number | undefined;
+    for (let p = 0; p < maxPages; p++) {
+      const url = `https://api.stocktwits.com/api/2/streams/symbol/${encodeURIComponent(s)}.json${max ? `?max=${max}` : ""}`;
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Tape research)", Accept: "application/json" }, signal: ctrl.signal });
+      if (!r.ok) break;
+      const j: any = await r.json();
+      const msgs: any[] = Array.isArray(j?.messages) ? j.messages : [];
+      if (!msgs.length) break;
+      for (const m of msgs) {
+        const body = String(m?.body || "").trim();
+        if (cleanBody(body).length > 10) out.push({ body, sentiment: (m?.entities?.sentiment?.basic ?? null) as RawMsg["sentiment"], createdAt: m?.created_at || "" });
+      }
+      max = j?.cursor?.max;
+      const oldest = Date.parse(msgs[msgs.length - 1]?.created_at);
+      if (!max || (!Number.isNaN(oldest) && oldest < cutoff)) break;
+    }
+    return out.length ? out : null;
+  } catch {
+    return out.length ? out : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function getStockTwits(symbol: string): Promise<StockTwitsInfo | null> {
   const s = decodeURIComponent(symbol).trim().toUpperCase();
   if (!s || NON_US.test(s)) return null;

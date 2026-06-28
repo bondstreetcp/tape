@@ -270,15 +270,23 @@ const timeAgo = (iso: string) => {
 
 // Retail chatter from StockTwits — sentiment + posting-rate + the top recent posts, to help
 // explain why a name is moving. Live per stock (US-only); silent when there's no chatter.
+interface ChatterSummary { day: string; week: string; dayCount: number; weekCount: number }
 export function StockTwitsPanel({ symbol }: { symbol: string }) {
   const [data, setData] = useState<StockTwitsInfo | null | "err">(null);
+  const [summary, setSummary] = useState<ChatterSummary | null | "loading">("loading");
   useEffect(() => {
     let a = true;
     setData(null);
+    setSummary("loading");
     fetch(`/api/stocktwits/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
       .then((d) => a && setData(d.data || "err"))
       .catch(() => a && setData("err"));
+    // The day/week AI read is a separate (slower, LLM-backed) call so the card paints immediately.
+    fetch(`/api/stocktwits-summary/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => a && setSummary(d.summary || null))
+      .catch(() => a && setSummary(null));
     return () => { a = false; };
   }, [symbol]);
 
@@ -310,6 +318,20 @@ export function StockTwitsPanel({ symbol }: { symbol: string }) {
           </div>
         )}
       </div>
+
+      {/* AI read — distills the day + week of chatter past the noise */}
+      {summary === "loading" ? (
+        <div className="mt-3 flex items-center gap-2 border-t border-[var(--divider)] pt-3 text-[11px] text-[var(--text-4)]">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> distilling the chatter…
+        </div>
+      ) : summary ? (
+        <div className="mt-3 space-y-1.5 rounded-lg border border-[var(--divider)] bg-[var(--bg)] p-2.5 text-[12px] leading-snug">
+          <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">AI read — signal past the noise</div>
+          {summary.day && <p><span className="font-semibold text-[var(--text)]">Today </span><span className="text-[var(--text-2)]">{summary.day}</span></p>}
+          {summary.week && <p><span className="font-semibold text-[var(--text)]">This week </span><span className="text-[var(--text-2)]">{summary.week}</span></p>}
+          <div className="text-[10px] text-[var(--text-4)]">from {summary.weekCount} posts · {summary.dayCount} in the last 24h</div>
+        </div>
+      ) : null}
 
       {messages.length > 0 && (
         <ul className="mt-3 space-y-2 border-t border-[var(--divider)] pt-3">
