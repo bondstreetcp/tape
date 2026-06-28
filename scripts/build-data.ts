@@ -18,7 +18,7 @@ import { UNIVERSES } from "../lib/universes";
 import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
-import { adjustForSplits, splitsFromYahoo, type SplitEvent } from "../lib/splits";
+import { adjustForCorporateActions, splitsFromYahoo, type SplitEvent } from "../lib/splits";
 import type {
   Returns,
   SectorAgg,
@@ -120,6 +120,15 @@ function toPoints(quotes: any[]): SeriesPoint[] {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const toXY = (pts: SeriesPoint[]): XY[] => pts.map((p) => [p.t, round2(p.c)]);
+
+/** Per-day adjusted-close as [t, adjclose] (raw, unrounded) — feeds the spinoff pass.
+ *  Yahoo names it `adjclose` (sometimes `adjClose`); only present with events requested. */
+function adjCloseXY(quotes: any[]): XY[] {
+  return (quotes || [])
+    .filter((q) => q && q.date && (q.adjclose ?? q.adjClose) != null)
+    .map((q) => [new Date(q.date).getTime(), (q.adjclose ?? q.adjClose) as number] as XY)
+    .sort((a, b) => a[0] - b[0]);
+}
 
 function emptyReturns(): Returns {
   return { "1d": null, "1w": null, "3m": null, "6m": null, ytd: null, "1y": null, "3y": null, "5y": null };
@@ -266,13 +275,18 @@ async function main() {
     // miss, fall back to the existing series file so a transient failure never wipes a
     // name's chart/returns.
     let pts: SeriesPoint[] = [];
+    let adjXY: XY[] = []; // per-day adjusted-close, aligned to pts — drives the spinoff pass
     let splitEvents: SplitEvent[] = [];
     for (let attempt = 0; attempt < 3 && pts.length === 0; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 300 + attempt * 500));
       try {
-        const ch: any = await yf.chart(sym, { period1: dailyPeriod1, interval: "1d", events: "split" }, { validateResult: false });
+        // events:"div,split" so we get splits (for the split countermeasure) AND adjclose
+        // (Yahoo only fills adjclose when dividend/split events are requested) — adjclose
+        // drives the spinoff-continuity pass below.
+        const ch: any = await yf.chart(sym, { period1: dailyPeriod1, interval: "1d", events: "div,split" }, { validateResult: false });
         meta = ch?.meta || meta;
         pts = toPoints(ch?.quotes);
+        adjXY = adjCloseXY(ch?.quotes);
         splitEvents = splitsFromYahoo(ch?.events);
       } catch {
         /* retry */
@@ -286,17 +300,25 @@ async function main() {
         /* no prior series */
       }
     }
-    // Split-continuity guard: if Yahoo served an UNADJUSTED series across a recent
-    // split (its back-adjustment lags a few days), scale the pre-split closes onto
-    // the post-split basis BEFORE deriving the series file + returns — so a split
-    // can never inject the "+198%" discontinuity. No-op when already adjusted.
+    // Corporate-action continuity guard (split + spinoff). If Yahoo served an
+    // UNADJUSTED series across a recent split (its back-adjustment lags a few days),
+    // scale the pre-split closes onto the post-split basis — so a split can never inject
+    // the "+198%" discontinuity. Then run the spinoff pass: a spinoff steps the parent's
+    // price DOWN at ex (shareholders get parent + spinco, total return ~flat). Most
+    // spinoffs Yahoo already bakes into `close` (handled implicitly — no-op) or encodes as
+    // a ratio-split (handled by the split pass above); the spinoff pass is the
+    // belt-and-suspenders detector via the adjclose/close back-adjust factor for any case
+    // where `close` is unadjusted across a spinoff. All passes no-op when already adjusted.
     dailyXY = toXY(pts);
-    if (splitEvents.length && dailyXY.length) {
-      const { daily: adj, applied } = adjustForSplits(dailyXY, splitEvents);
-      if (applied.length) {
+    if (dailyXY.length && (splitEvents.length || adjXY.length)) {
+      const { daily: adj, splitApplied, spinoffApplied } = adjustForCorporateActions(dailyXY, splitEvents, adjXY);
+      if (splitApplied.length || spinoffApplied.length) {
         dailyXY = adj;
         pts = adj.map(([t, c]) => ({ t, c }));
-        console.log(`  ${sym}: split-adjusted unadjusted series at ${applied.map((d) => new Date(d).toISOString().slice(0, 10)).join(", ")}`);
+        if (splitApplied.length)
+          console.log(`  ${sym}: split-adjusted unadjusted series at ${splitApplied.map((d) => new Date(d).toISOString().slice(0, 10)).join(", ")}`);
+        if (spinoffApplied.length)
+          console.log(`  ${sym}: spinoff-adjusted (continuity) at ${spinoffApplied.map((d) => new Date(d).toISOString().slice(0, 10)).join(", ")}`);
       }
     }
     if (pts.length) lastClose = pts[pts.length - 1].c;

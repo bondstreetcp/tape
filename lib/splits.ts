@@ -136,3 +136,147 @@ export function adjustForSplits(
   applied.sort((a, b) => a - b);
   return { daily: out, applied };
 }
+
+/* ───────────────────────────── Spinoff countermeasure ─────────────────────────────
+ *
+ * A spinoff is economically different from a split: the parent's price genuinely
+ * steps DOWN on the ex-date by the value of the spun-off business. Shareholders are
+ * made whole (they now hold parent + spinco), so the parent's *total return* is ~flat
+ * across the ex-date — but a price-only series shows a crater that craters the parent's
+ * 3m/1y returns.
+ *
+ * What Yahoo actually does (investigated empirically against GE/GEV, GE/GEHC, MMM/SOLV,
+ * JNJ/KVUE — see git history / probe):
+ *
+ *   1. MOST large spinoffs are encoded in `events.splits` as a sub-integer RATIO split
+ *      (e.g. GE→GEV "1253:1000", MMM→SOLV "1196:1000"). Yahoo bakes this into BOTH
+ *      `close` and `adjclose`, so the steady-state daily `close` is ALREADY continuous
+ *      (no crater) and `adjForSplits` is the right tool: it back-adjusts only when Yahoo
+ *      served the series UNADJUSTED (its back-adjustment lags a few days post ex-date),
+ *      exactly the split lag mode. `isSpinoffRatio` classifies these for logging.
+ *
+ *   2. A few spinoffs are encoded only as a small `events.dividends` entry of normal,
+ *      regular-dividend size (e.g. JNJ→KVUE booked $1.19, NOT Kenvue's ~$45 value). These
+ *      leave NO detectable signal — the back-adjust factor f=adjclose/close steps by
+ *      <1%, smaller than ordinary dividends — and, crucially, Yahoo's `close` for them is
+ *      already continuous, so there is nothing to repair. We deliberately do NOT chase
+ *      these: any threshold low enough to catch them fires on regular dividends.
+ *
+ * `adjustForSpinoffs` below is the belt-and-suspenders detector for the (currently not
+ * observed, but possible) case where Yahoo serves a series whose `close` is UNADJUSTED
+ * across a spinoff while `adjclose` IS adjusted — i.e. the back-adjust factor f steps by
+ * a spinoff-sized amount at a date that is NOT a split. That step is the reliable signal;
+ * the threshold is set well above the observed regular-/special-dividend ceiling (~1.7%).
+ */
+
+/** A ratio-split whose factor isn't a clean integer ratio (e.g. 1253:1000) is, in
+ *  practice, a spinoff Yahoo booked as a split rather than a true forward/reverse split.
+ *  Used only for classification/logging — adjustment is handled by adjustForSplits. */
+export function isSpinoffRatio(ev: SplitEvent): boolean {
+  const M = ev.priceMult;
+  if (!Number.isFinite(M) || M <= 0) return false;
+  // A spinoff steps the price DOWN modestly (M in roughly (0.6, 0.98)); a true forward
+  // split has M ≤ ~0.5 (2:1, 4:1…) and a reverse split has M ≥ ~1.5. Spinoffs land in the
+  // gap between "no real change" and "a genuine integer-ish split".
+  const ratio = 1 / M; // shares-per-share-ish
+  const nearInteger = Math.abs(ratio - Math.round(ratio)) < 0.05 && Math.round(ratio) >= 2;
+  if (nearInteger) return false; // clean forward split like 2:1, 3:1, 4:1
+  if (M >= 1.05) return false; // reverse split (price up)
+  return M > 0.5 && M < 0.985; // modest down-step that isn't a clean split
+}
+
+/** Minimum step in the back-adjust factor f=adjclose/close to treat as a spinoff/special
+ *  distribution rather than a dividend. Tuned from Step-1 data: the largest factor step a
+ *  regular/special DIVIDEND produced across the test names was ~1.7%; a real spinoff is
+ *  10%+. 3% sits safely between — conservative, never catches dividends. */
+const SPINOFF_FACTOR_STEP = 0.03;
+/** Days of tolerance when matching a factor-step date to a known split date. */
+const SPLIT_MATCH_DAYS = 4;
+
+/**
+ * Spinoff continuity repair via the back-adjust factor f = adjclose / close.
+ *
+ * For a series where Yahoo left `close` UNADJUSTED across a spinoff but adjusted
+ * `adjclose`, f steps DOWN (going backward in time it steps UP) at the ex-date by the
+ * spinoff factor. We detect a day-over-day step in f exceeding SPINOFF_FACTOR_STEP that is
+ *   - NOT at/near a known split date (those are handled by adjustForSplits), and
+ *   - large enough to be a spinoff, not a dividend,
+ * then back-adjust every close strictly BEFORE the ex-date by that factor so the price
+ * series is continuous across the spinoff (total-return basis), matching what `adjclose`
+ * already implies.
+ *
+ * `adjclose` must be the per-day adjusted-close aligned to `daily` (same dates). Rows
+ * missing a usable adjclose are skipped for detection. Pure: input is not mutated.
+ *
+ * No-op (and that is the common case today) when `close` is already spinoff-adjusted — f
+ * is then flat across the ex-date, so no step is seen.
+ */
+export function adjustForSpinoffs(
+  daily: [number, number][],
+  adjclose: [number, number][],
+  splitDates: number[] = [],
+): { daily: [number, number][]; applied: number[] } {
+  const applied: number[] = [];
+  const copy = (arr: [number, number][]) => (arr ? arr.map((p) => [p[0], p[1]] as [number, number]) : []);
+  if (!daily?.length || !adjclose?.length) return { daily: copy(daily), applied };
+
+  const out = copy(daily).sort((a, b) => a[0] - b[0]);
+
+  // Build f = adjclose/close keyed by date (only where both are positive).
+  const adjByDate = new Map<number, number>();
+  for (const [t, a] of adjclose) if (a > 0) adjByDate.set(t, a);
+  const f: { t: number; v: number; idx: number }[] = [];
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i][1];
+    const a = adjByDate.get(out[i][0]);
+    if (c > 0 && a != null && a > 0) f.push({ t: out[i][0], v: a / c, idx: i });
+  }
+  if (f.length < 2) return { daily: out, applied };
+
+  const nearSplit = (t: number) =>
+    splitDates.some((d) => Math.abs(t - d) <= SPLIT_MATCH_DAYS * 86_400_000);
+
+  // Scan NEWEST→OLDEST so earlier back-adjustments compound onto a corrected basis.
+  //
+  // At a spinoff ex-date the back-adjust factor f = adjclose/close is DISCONTINUOUS:
+  // because `close` is unadjusted but `adjclose` carries the spinoff, f differs on the two
+  // sides of ex. We trigger on a step in f whose MAGNITUDE (either direction) exceeds the
+  // spinoff threshold. The multiplier that brings pre-ex closes onto the ex (post-step)
+  // basis is f[before]/f[after]: corrected close_pre = close_pre · (f_before/f_after) makes
+  // close_pre·(f_before/f_after) continuous with the post-ex close, matching what adjclose
+  // implies. (When `close` is already spinoff-adjusted, f is flat → no step → no-op.)
+  for (let k = f.length - 1; k >= 1; k--) {
+    const cur = f[k]; // the ex-date row (first on/after the step)
+    const prev = f[k - 1]; // last row before ex
+    if (prev.v <= 0 || cur.v <= 0) continue;
+    const stepMag = Math.abs(Math.log(cur.v / prev.v)); // symmetric magnitude
+    if (stepMag <= Math.log(1 + SPINOFF_FACTOR_STEP)) continue; // dividend-sized → ignore
+    if (nearSplit(cur.t)) continue; // handled by adjustForSplits — don't double-adjust
+    const M = prev.v / cur.v; // factor to scale PRE-ex closes onto the ex basis
+    if (!(M > 0) || Math.abs(Math.log(M)) <= Math.log(1 + SPINOFF_FACTOR_STEP)) continue;
+    for (let i = 0; i < cur.idx; i++) out[i][1] = out[i][1] * M;
+    applied.push(cur.t);
+  }
+
+  applied.sort((a, b) => a - b);
+  return { daily: out, applied };
+}
+
+/**
+ * Convenience wrapper: apply the split countermeasure, then the spinoff countermeasure,
+ * to a daily close series. `adjclose` is optional — omit it (or pass []) to run splits
+ * only. Pure; returns the corrected series plus the dates each pass adjusted.
+ */
+export function adjustForCorporateActions(
+  daily: [number, number][],
+  splits: SplitEvent[],
+  adjclose: [number, number][] = [],
+): { daily: [number, number][]; splitApplied: number[]; spinoffApplied: number[] } {
+  const s = adjustForSplits(daily, splits);
+  const sp = adjustForSpinoffs(
+    s.daily,
+    adjclose,
+    splits.map((e) => e.date),
+  );
+  return { daily: sp.daily, splitApplied: s.applied, spinoffApplied: sp.applied };
+}
