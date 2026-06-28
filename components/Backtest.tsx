@@ -28,9 +28,18 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
     return () => { a = false; };
   }, [universe]);
 
+  // The backtest matrix only covers the names we have monthly price history for (the universe's
+  // largest). Restrict the screen universe to those, so a screen that would otherwise pick smaller
+  // names (Magic Formula, Net-Net…) holds backtestable names instead of being silently dropped to
+  // ~nothing (which made some strategies show a flat 0%).
+  const backtestable = useMemo(() => {
+    if (!matrix || matrix === "loading" || matrix === "err") return stocks;
+    const set = new Set(matrix.symbols);
+    return stocks.filter((s) => set.has(s.symbol));
+  }, [matrix, stocks]);
   // For a factor screen (or a stack of them) hold the passing names — today's fundamentals across all
   // history → look-ahead, flagged below. Stacking ANDs the screens (intersection).
-  const holdings = useMemo(() => (screens.length ? combinedScreenSymbols(screens, stocks, { topN, pioMin }) : undefined), [screens, stocks, topN, pioMin]);
+  const holdings = useMemo(() => (screens.length ? combinedScreenSymbols(screens, backtestable, { topN, pioMin }) : undefined), [screens, backtestable, topN, pioMin]);
 
   const result = useMemo<BacktestResult | null>(() => {
     if (!matrix || matrix === "loading" || matrix === "err") return null;
@@ -100,9 +109,8 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
           <EquityChart result={result} />
 
           {(screensOn || strategy !== "equal") && result.holdingsLast.length > 0 && (
-            <div className="text-xs text-[var(--text-3)]">
-              <span className="font-medium text-[var(--text-2)]">Holdings:</span> {result.holdingsLast.slice(0, 25).join(", ")}
-              {result.holdingsLast.length > 25 ? `… (+${result.holdingsLast.length - 25})` : ""}
+            <div className="text-xs leading-relaxed text-[var(--text-3)]">
+              <span className="font-medium text-[var(--text-2)]">Holdings ({result.holdingsLast.length}):</span> {result.holdingsLast.join(", ")}
             </div>
           )}
 
