@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { LoadingState } from "./Spinner";
+import Button from "./Button";
 
 interface Block { headline?: string; text: string }
 interface Section { heading: string; kind: "prose" | "list"; blocks?: Block[]; lines?: string[] }
@@ -103,7 +105,7 @@ export default function Briefing() {
   };
 
   if (state === "loading")
-    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">Loading briefing…</div>;
+    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]"><LoadingState label="Loading briefing…" className="py-12" /></div>;
 
   if (state === "unconfigured")
     return (
@@ -137,9 +139,9 @@ export default function Briefing() {
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
           />
           {err && <div className="text-xs text-[#ef4444]">{err}</div>}
-          <button type="submit" disabled={busy} className="w-full rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-60">
+          <Button type="submit" variant="primary" disabled={busy} className="w-full">
             {busy ? "Checking…" : "Unlock"}
-          </button>
+          </Button>
         </form>
       </div>
     );

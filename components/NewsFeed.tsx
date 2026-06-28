@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { LoadingState } from "./Spinner";
 
 interface NewsItem {
   title: string;
@@ -49,7 +50,7 @@ export default function NewsFeed({
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-2)]">{title}</div>
       {news === null ? (
-        <div className="p-6 text-center text-sm text-[var(--text-3)]">Loading headlines…</div>
+        <LoadingState label="Loading headlines…" className="py-12" />
       ) : news.length === 0 ? (
         <div className="p-6 text-center text-sm text-[var(--text-3)]">No recent news.</div>
       ) : (

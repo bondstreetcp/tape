@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import MarkdownLite from "./MarkdownLite";
+import Button from "./Button";
 
 const SUGGESTIONS = [
   "How does its valuation compare to its growth?",
@@ -110,9 +111,9 @@ export default function AskAI({ symbol, name }: { symbol: string; name?: string 
           placeholder={started ? "Ask a follow-up…" : `Ask anything about ${label}…`}
           className="min-w-[240px] flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
         />
-        <button type="submit" disabled={loading} className="rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+        <Button type="submit" variant="primary" disabled={loading}>
           {loading ? "Searching…" : started ? "Send" : "Ask"}
-        </button>
+        </Button>
       </form>
 
       {!started && configured && (

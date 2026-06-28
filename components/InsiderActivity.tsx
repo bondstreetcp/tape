@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoadingState } from "./Spinner";
 
 interface InsiderTx {
   date: string;
@@ -143,8 +144,8 @@ export default function InsiderActivity({ symbol }: { symbol: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
-        Loading insider filings from SEC EDGAR…
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <LoadingState label="Loading insider filings from SEC EDGAR…" className="py-12" />
       </div>
     );
   }

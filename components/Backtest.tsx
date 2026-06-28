@@ -4,6 +4,7 @@ import { runStrategy, strategyLabel, type BacktestMatrix, type BacktestResult, t
 import { combinedScreenSymbols, SCREEN_LABEL, SCREEN_SHORT, SCREEN_ORDER, type ScreenKey } from "@/lib/screens";
 import type { StockRow } from "@/lib/types";
 import StrategyTip from "./StrategyTip";
+import { LoadingState } from "./Spinner";
 
 const STRATS: StrategyKey[] = ["momentum", "trend", "lowvol", "equal"];
 const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
@@ -48,7 +49,7 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
       : runStrategy(matrix, { strategy, topN, lookback });
   }, [matrix, strategy, screensOn, holdings, topN, lookback]);
 
-  if (matrix === "loading") return <Box>Loading price history…</Box>;
+  if (matrix === "loading") return <Box><LoadingState label="Loading price history…" className="py-0" /></Box>;
   if (matrix === "err" || !matrix) return <Box>Backtest data isn’t available for this universe yet.</Box>;
   const usesParams = !screensOn && (strategy === "momentum" || strategy === "lowvol");
   const nHold = holdings?.length ?? 0;

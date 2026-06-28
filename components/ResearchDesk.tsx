@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import MarkdownLite from "./MarkdownLite";
+import Button from "./Button";
 
 interface Estimate { metric: string; period: string; value: number | null; unit?: string | null; priorValue: number | null; vsConsensus: string | null }
 interface Doc { id: string; ticker: string; company: string; source: string; analysts: string[]; publishDate: string; docType: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; targetBasis: string | null; thesis: string[]; risks: string[]; catalysts: string[]; estimates: Estimate[]; summary: string; entitlement: string | null; fileName: string; pageCount: number; blobKey: string | null }
@@ -119,7 +120,7 @@ export default function ResearchDesk() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--text-2)]"><span className="text-base">🔭</span> Search all research <span className="text-[11px] font-normal text-[var(--text-4)]">— semantic search across every note, regardless of ticker</span></div>
           <div className="flex gap-2">
             <input value={sq} onChange={(e) => setSq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runSearch()} placeholder='e.g. "HBM 2027 pricing", "channel checks on demand", "China supply risk"' className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]" />
-            <button onClick={runSearch} disabled={sres === "loading" || !sq.trim()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">{sres === "loading" ? "…" : "Search"}</button>
+            <Button onClick={runSearch} variant="primary" disabled={sres === "loading" || !sq.trim()}>{sres === "loading" ? "…" : "Search"}</Button>
           </div>
           {sres === "loading" && <div className="mt-3 text-[13px] text-[var(--text-3)]">Retrieving the most relevant passages…</div>}
           {sres && sres !== "loading" && (

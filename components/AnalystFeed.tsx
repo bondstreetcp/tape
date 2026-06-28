@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { currencyOf } from "@/lib/universes";
 import { currencyPrefix } from "@/lib/format";
+import { LoadingState } from "./Spinner";
 
 interface Action {
   symbol: string;
@@ -65,7 +66,7 @@ export default function AnalystFeed({ universe }: { universe: string }) {
       </h2>
       <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         {actions === null ? (
-          <div className="p-6 text-center text-sm text-[var(--text-3)]">Loading analyst actions…</div>
+          <LoadingState label="Loading analyst actions…" className="py-12" />
         ) : actions.length === 0 ? (
           <div className="p-6 text-center text-sm text-[var(--text-3)]">No recent rating changes.</div>
         ) : (

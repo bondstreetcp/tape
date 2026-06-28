@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import MarkdownLite from "./MarkdownLite";
+import { LoadingState } from "./Spinner";
 
 interface Estimate { metric: string; period: string; value: number | null; unit?: string | null; priorValue: number | null; vsConsensus: string | null }
 interface Doc { id: string; source: string; analysts: string[]; publishDate: string; title: string; rating: string | null; priceTarget: number | null; priceTargetPrior: number | null; thesis: string[]; risks: string[]; managementInsights: string[]; estimates: Estimate[]; summary: string; entitlement: string | null; blobKey: string | null }
@@ -37,7 +38,7 @@ export default function TickerResearch({ symbol, name }: { symbol: string; name?
       .then((r) => r.json()).then((d) => setSynth(d.synthesis || (d.error ? `_${d.error}_` : null))).catch(() => setSynth(null));
   };
 
-  if (state === "loading") return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center text-sm text-[var(--text-3)]">Loading research…</div>;
+  if (state === "loading") return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]"><LoadingState label="Loading research…" className="py-10" /></div>;
 
   if (state === "empty") {
     return (

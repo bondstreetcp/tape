@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { QuarterPoint } from "@/lib/financials";
+import { LoadingState } from "./Spinner";
 
 // Overlay 2–5 tickers' margin / revenue-growth trajectories on one time-axis chart (each
 // company's own fiscal quarters, so the x-axis is real time, not an index). Pick the metric;
@@ -65,7 +66,7 @@ export default function CompareOverlay({ tickers }: { tickers: { symbol: string;
   const loaded = tickers.every((t) => raw[t.symbol]);
   const allPts = series.flatMap((s) => s.pts);
 
-  if (!loaded) return <Shell><div className="py-16 text-center text-xs text-[var(--text-3)]">Loading…</div></Shell>;
+  if (!loaded) return <Shell><LoadingState className="py-12" /></Shell>;
   if (allPts.length < 2) return <Shell><div className="py-16 text-center text-xs text-[var(--text-3)]">No quarterly history for these tickers.</div></Shell>;
 
   // window to the last `years`. The x-axis time domain spans the full quarterly range across all

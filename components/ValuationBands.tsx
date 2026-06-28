@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { LoadingState } from "./Spinner";
 
 interface MetricBand { current: number | null; min: number; p25: number; median: number; p75: number; max: number; percentile: number | null }
 interface Point { t: number; pe: number | null; ps: number | null; ev: number | null }
@@ -35,7 +36,7 @@ export default function ValuationBands({ symbol }: { symbol: string }) {
   }, [symbol]);
 
   if (data === "loading")
-    return <Card><div className="py-6 text-center text-sm text-[var(--text-3)]">Loading valuation history…</div></Card>;
+    return <Card><LoadingState label="Loading valuation history…" className="py-6" /></Card>;
   if (data === "err" || !data) return null;
 
   const m = METRICS.find((x) => x.key === metric)!;

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { QuarterPoint } from "@/lib/financials";
+import { LoadingState } from "./Spinner";
 
 // Margins & revenue-growth trend, by quarter — two stacked single-axis charts that share
 // one fetch, the Spot/TTM + range controls, and a linked hover (point at a quarter on one
@@ -73,7 +74,7 @@ export default function MarginsChart({ symbol }: { symbol: string }) {
     return w.length >= 2 ? w : all;
   }, [all, years]);
 
-  if (raw == null) return <Shell><div className="py-10 text-center text-xs text-[var(--text-3)]">Loading…</div></Shell>;
+  if (raw == null) return <Shell><LoadingState className="py-6" /></Shell>;
 
   // Decide which margin lines have enough real history to plot. Gross margin only shows when
   // it isn't a sparse stub (issuers like Visa that barely report gross profit get a handful of

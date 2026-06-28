@@ -4,6 +4,7 @@ import RedlineSection from "./Redline";
 import TranscriptIntel from "./TranscriptIntel";
 import EarningsCallAI from "./EarningsCallAI";
 import FilingAI from "./FilingAI";
+import { LoadingState } from "./Spinner";
 
 interface Filing {
   form: string;
@@ -108,7 +109,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
       <TranscriptIntel symbol={symbol} name={name} />
       <RedlineSection symbol={symbol} name={name} />
       {loading ? (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">Loading filings from SEC EDGAR…</div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]"><LoadingState label="Loading filings from SEC EDGAR…" className="py-12" /></div>
       ) : !cik || filings.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
           No SEC filings found for {symbol}.{err && <div className="mt-1 text-[11px] text-[var(--text-4)]">{err}</div>}

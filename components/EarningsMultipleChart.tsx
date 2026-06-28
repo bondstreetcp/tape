@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { fmtMoney } from "@/lib/format";
+import { LoadingState } from "./Spinner";
 
 interface EMPoint { t: number; price: number; eps: number; fair: number; lo: number; hi: number }
 interface EM {
@@ -26,7 +27,7 @@ export default function EarningsMultipleChart({ symbol, currency = "USD" }: { sy
   }, [symbol]);
 
   if (data === "loading")
-    return <Card><div className="py-6 text-center text-sm text-[var(--text-3)]">Loading earnings multiple…</div></Card>;
+    return <Card><LoadingState label="Loading earnings multiple…" className="py-6" /></Card>;
   if (data === "err" || !data || !data.series?.length) return null;
 
   const prem = data.premiumPct;

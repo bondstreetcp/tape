@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Button from "./Button";
 
 interface DocHit {
   name: string;
@@ -133,9 +134,9 @@ export default function DocSearch({ ticker, name }: { ticker?: string; name?: st
             <option key={f.value} value={f.value}>{f.label}</option>
           ))}
         </select>
-        <button type="submit" className="rounded-lg bg-[var(--accent-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8]">
+        <Button type="submit" variant="primary">
           Search
-        </button>
+        </Button>
       </form>
       <p className="text-[11px] text-[var(--text-4)]">
         Full-text search of SEC EDGAR filings since 2001{ticker ? " + this company's recent earnings calls" : ""}. Wrap a phrase in &quot;quotes&quot; for an exact match.

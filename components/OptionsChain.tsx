@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtMoney } from "@/lib/format";
 import OptionsStrategy from "./OptionsStrategy";
+import { LoadingState } from "./Spinner";
 
 const isHot = (o: Opt | null | undefined) => !!o && o.vol != null && o.oi != null && o.vol > Math.max(o.oi, 300);
 
@@ -112,7 +113,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
   const nextIV = useMemo(() => term?.find((t) => t.date === nextExpiry)?.atmIV ?? null, [term, nextExpiry]);
 
   if (loading && !data) {
-    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">Loading options chain…</div>;
+    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]"><LoadingState label="Loading options chain…" className="py-12" /></div>;
   }
   if (!data || (data.expirations.length === 0 && data.calls.length === 0)) {
     return (
@@ -267,7 +268,7 @@ function SkewChart({ calls, puts, underlying }: { calls: Opt[]; puts: Opt[]; und
 }
 
 function TermChart({ term }: { term: { date: string; dte: number; atmIV: number | null }[] | null }) {
-  if (term === null) return <div className="py-6 text-center text-xs text-[var(--text-3)]">Loading term structure…</div>;
+  if (term === null) return <LoadingState label="Loading term structure…" className="py-6" />;
   const pts = term.filter((p) => p.atmIV != null);
   if (pts.length < 2) return <div className="py-6 text-center text-xs text-[var(--text-3)]">Not enough expiries.</div>;
   const dtes = pts.map((p) => p.dte), ivs = pts.map((p) => p.atmIV as number);
