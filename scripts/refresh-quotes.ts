@@ -25,13 +25,17 @@ import { UNIVERSES } from "../lib/universes";
 import { SECTOR_ETFS } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
+import { adjustForSplits, splitsFromYahoo } from "../lib/splits";
 import type { Returns, Snapshot, XY } from "../lib/types";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const SYMBOL_DIR = path.join(DATA_DIR, "series", "symbols");
+const DAY = 86_400_000;
 const NOW = Date.now();
 const YEAR = new Date(NOW).getFullYear();
+// Window for the per-symbol split re-fetch — matches build-data's ~5.5y daily span.
+const SPLIT_REFETCH_PERIOD1 = new Date(NOW - 2010 * DAY);
 
 const qnum = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -98,6 +102,46 @@ function returnsVsPrice(daily: XY[], price: number, day1: number | null): Return
   };
 }
 
+/**
+ * A >50% jump between intraday ticks is a corporate action (split/reverse-split),
+ * not a real price move — so `reprice` would multiply every return by the split
+ * factor (the "+198%" bug). Instead, re-fetch the symbol's split-adjusted daily
+ * series, recompute returns against the new price from the real history, and
+ * rewrite the series file (preserving the existing intraday block). Returns the
+ * fresh Returns on success, or null if the re-fetch failed.
+ */
+async function repairSplit(symbol: string, newPrice: number, day1: number | null): Promise<Returns | null> {
+  try {
+    const ch: any = await yf.chart(
+      symbol,
+      { period1: SPLIT_REFETCH_PERIOD1, interval: "1d", events: "split" },
+      { validateResult: false },
+    );
+    const raw: XY[] = (ch?.quotes || [])
+      .filter((q: any) => q && q.close != null && q.date)
+      .map((q: any) => [new Date(q.date).getTime(), Math.round((q.close as number) * 100) / 100] as XY)
+      .sort((a: XY, b: XY) => a[0] - b[0]);
+    if (!raw.length) return null;
+    const { daily: adjustedDaily } = adjustForSplits(raw, splitsFromYahoo(ch?.events));
+    const returns = returnsVsPrice(adjustedDaily, newPrice, day1);
+    // Preserve the existing intraday block (read-merge), rewrite daily.
+    let intraday: XY[] = [];
+    try {
+      const prev = JSON.parse(await fs.readFile(path.join(SYMBOL_DIR, symbolFile(symbol)), "utf8"));
+      if (Array.isArray(prev.intraday)) intraday = prev.intraday as XY[];
+    } catch {
+      /* no prior file — write daily only */
+    }
+    await fs.writeFile(
+      path.join(SYMBOL_DIR, symbolFile(symbol)),
+      JSON.stringify({ daily: adjustedDaily, intraday }),
+    );
+    return returns;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   // 1) Load existing snapshots (skip universes that haven't been built yet).
   const snaps: { id: string; snap: Snapshot }[] = [];
@@ -133,6 +177,7 @@ async function main() {
   // 3) Apply quotes to each snapshot; rewrite only those whose prices actually moved
   //    (so a closed market — e.g. intl during the US session — isn't needlessly re-committed).
   let universesWritten = 0, applied = 0;
+  const fixedSymbols: string[] = [];
   for (const { id, snap } of snaps) {
     let changed = false;
     for (const st of snap.stocks) {
@@ -142,7 +187,25 @@ async function main() {
       if (np !== st.price) changed = true;
       const high = qnum(q.fiftyTwoWeekHigh) ?? st.fiftyTwoWeekHigh;
       const low = qnum(q.fiftyTwoWeekLow) ?? st.fiftyTwoWeekLow;
-      st.returns = reprice(st.price, st.returns, np, qnum(q.regularMarketChangePercent));
+      const day1 = qnum(q.regularMarketChangePercent);
+      // Corporate-action guard: a >50% jump between ticks is a split/reverse-split,
+      // not a real move. `reprice`'s ratio≈split-factor would corrupt every return
+      // (the "+198%" bug), so instead re-fetch the split-adjusted series and
+      // recompute returns from the real history.
+      const ratio = st.price > 0 ? np / st.price : 1;
+      if (ratio > 1.5 || ratio < 0.67) {
+        const fixed = await repairSplit(st.symbol, np, day1);
+        if (fixed) {
+          st.returns = fixed;
+          fixedSymbols.push(`${st.symbol} (${ratio.toFixed(2)}×)`);
+        } else {
+          // Re-fetch failed — don't propagate the bogus ratio through reprice;
+          // keep the prior returns and only update the (reliable) 1-day from the quote.
+          st.returns = { ...st.returns, "1d": day1 };
+        }
+      } else {
+        st.returns = reprice(st.price, st.returns, np, day1);
+      }
       st.price = np;
       st.marketCap = qnum(q.marketCap) ?? st.marketCap;
       st.fiftyTwoWeekHigh = high;
@@ -177,7 +240,12 @@ async function main() {
       console.log(`  ${id}: no price change — skipped`);
     }
   }
-  console.log(`\nDone. ${universesWritten}/${snaps.length} snapshots rewritten, ${applied} quotes applied. (history series untouched)`);
+  if (fixedSymbols.length) {
+    // Dedupe — the same symbol can appear in several universes.
+    const uniq = [...new Set(fixedSymbols)];
+    console.log(`\nCorporate-action repairs (split-adjusted series rewritten): ${uniq.join(", ")}`);
+  }
+  console.log(`\nDone. ${universesWritten}/${snaps.length} snapshots rewritten, ${applied} quotes applied. (history series untouched except ${new Set(fixedSymbols.map((s) => s.split(" ")[0])).size} split-repaired)`);
 }
 
 main().catch((err) => {

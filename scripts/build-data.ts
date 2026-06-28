@@ -18,6 +18,7 @@ import { UNIVERSES } from "../lib/universes";
 import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
+import { adjustForSplits, splitsFromYahoo, type SplitEvent } from "../lib/splits";
 import type {
   Returns,
   SectorAgg,
@@ -265,12 +266,14 @@ async function main() {
     // miss, fall back to the existing series file so a transient failure never wipes a
     // name's chart/returns.
     let pts: SeriesPoint[] = [];
+    let splitEvents: SplitEvent[] = [];
     for (let attempt = 0; attempt < 3 && pts.length === 0; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 300 + attempt * 500));
       try {
-        const ch: any = await yf.chart(sym, { period1: dailyPeriod1, interval: "1d" }, { validateResult: false });
+        const ch: any = await yf.chart(sym, { period1: dailyPeriod1, interval: "1d", events: "split" }, { validateResult: false });
         meta = ch?.meta || meta;
         pts = toPoints(ch?.quotes);
+        splitEvents = splitsFromYahoo(ch?.events);
       } catch {
         /* retry */
       }
@@ -283,9 +286,21 @@ async function main() {
         /* no prior series */
       }
     }
+    // Split-continuity guard: if Yahoo served an UNADJUSTED series across a recent
+    // split (its back-adjustment lags a few days), scale the pre-split closes onto
+    // the post-split basis BEFORE deriving the series file + returns — so a split
+    // can never inject the "+198%" discontinuity. No-op when already adjusted.
+    dailyXY = toXY(pts);
+    if (splitEvents.length && dailyXY.length) {
+      const { daily: adj, applied } = adjustForSplits(dailyXY, splitEvents);
+      if (applied.length) {
+        dailyXY = adj;
+        pts = adj.map(([t, c]) => ({ t, c }));
+        console.log(`  ${sym}: split-adjusted unadjusted series at ${applied.map((d) => new Date(d).toISOString().slice(0, 10)).join(", ")}`);
+      }
+    }
     if (pts.length) lastClose = pts[pts.length - 1].c;
     returns = returnsFromPoints(pts);
-    dailyXY = toXY(pts);
     if (needIntraday.has(sym)) {
       try {
         const ch: any = await yf.chart(
