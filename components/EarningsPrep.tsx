@@ -5,7 +5,7 @@ import type { CompanyStats } from "@/lib/companyStats";
 interface PrepExtras {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
   impliedMove: number | null; // already a percent (e.g. 7.8)
-  whatMatters: { debates: string[]; bull: string; bear: string } | null;
+  preview: { overview: string; watch: string[]; guidance: string; datapoints: string[]; bull: string; bear: string } | null;
 }
 
 const pp = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`); // decimal → %
@@ -25,16 +25,17 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
 // GLM "what matters this quarter". Deterministic parts paint from the stats the page already has;
 // reaction + implied move + the AI read load lazily.
 export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null }) {
-  const [extras, setExtras] = useState<PrepExtras | null | "loading">("loading");
-  useEffect(() => {
-    let a = true;
+  // Button-triggered: the AI preview is a slow (~30s) reasoning call, so it's opt-in rather than
+  // firing on every Estimates-tab view. The deterministic bar/momentum/beat record below is instant.
+  const [extras, setExtras] = useState<PrepExtras | null | "idle" | "loading">("idle");
+  useEffect(() => { setExtras("idle"); }, [symbol]); // reset when the ticker changes
+  const run = () => {
     setExtras("loading");
     fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((d) => a && setExtras(d.prep || null))
-      .catch(() => a && setExtras(null));
-    return () => { a = false; };
-  }, [symbol]);
+      .then((d) => setExtras(d.prep || null))
+      .catch(() => setExtras(null));
+  };
 
   if (!stats) return null;
   const q0 = stats.estimates?.find((e) => e.period === "0q") || stats.estimates?.[0] || null;
@@ -46,7 +47,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
   const avgSurprise = sp.length ? sp.reduce((a, x) => a + x, 0) / sp.length : null;
 
   const ex = typeof extras === "object" ? extras : null;
-  const wm = ex?.whatMatters;
+  const pv = ex?.preview;
 
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -72,19 +73,39 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
       </div>
 
       <div className="mt-3 border-t border-[var(--divider)] pt-3">
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">What matters this quarter</div>
-        {extras === "loading" ? (
-          <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> building the prep…</div>
-        ) : wm && (wm.debates.length || wm.bull || wm.bear) ? (
-          <div className="space-y-1.5 text-[12px] leading-snug">
-            {wm.debates.length > 0 && (
-              <ul className="space-y-1">{wm.debates.map((d, i) => <li key={i} className="text-[var(--text-2)]"><span className="text-[var(--accent)]">▸</span> {d}</li>)}</ul>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Preview <span className="font-normal normal-case">· AI, StreetAccount-style</span></div>
+        {extras === "idle" ? (
+          <div>
+            <button onClick={run} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
+            <p className="mt-1.5 text-[11px] text-[var(--text-4)]">An AI desk-style preview — what the Street is watching, guidance, recent datapoints, and the bull/bear into the print (takes a few seconds).</p>
+          </div>
+        ) : extras === "loading" ? (
+          <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> building the preview…</div>
+        ) : pv && (pv.overview || pv.watch.length || pv.bull) ? (
+          <div className="space-y-2.5 text-[12px] leading-snug">
+            {pv.overview && <p className="text-[var(--text-2)]">{pv.overview}</p>}
+            {pv.watch.length > 0 && (
+              <div>
+                <div className="mb-1 text-[11px] font-semibold text-[var(--text)]">What the Street is watching</div>
+                <ul className="space-y-1">{pv.watch.map((d, i) => <li key={i} className="text-[var(--text-2)]"><span className="text-[var(--accent)]">▸</span> {d}</li>)}</ul>
+              </div>
             )}
-            {wm.bull && <p><span className="font-semibold text-[#22c55e]">Bull </span><span className="text-[var(--text-2)]">{wm.bull}</span></p>}
-            {wm.bear && <p><span className="font-semibold text-[#ef4444]">Bear </span><span className="text-[var(--text-2)]">{wm.bear}</span></p>}
+            {pv.guidance && <p><span className="font-semibold text-[var(--text)]">Guidance </span><span className="text-[var(--text-2)]">{pv.guidance}</span></p>}
+            {pv.datapoints.length > 0 && (
+              <div>
+                <div className="mb-1 text-[11px] font-semibold text-[var(--text)]">Recent datapoints</div>
+                <ul className="space-y-1">{pv.datapoints.map((d, i) => <li key={i} className="text-[var(--text-3)]"><span className="text-[var(--text-4)]">•</span> {d}</li>)}</ul>
+              </div>
+            )}
+            {(pv.bull || pv.bear) && (
+              <div className="flex flex-col gap-1.5 border-t border-[var(--divider)] pt-2">
+                {pv.bull && <p><span className="font-semibold text-[#22c55e]">Bull </span><span className="text-[var(--text-2)]">{pv.bull}</span></p>}
+                {pv.bear && <p><span className="font-semibold text-[#ef4444]">Bear </span><span className="text-[var(--text-2)]">{pv.bear}</span></p>}
+              </div>
+            )}
           </div>
         ) : (
-          <p className="text-[12px] text-[var(--text-4)]">No AI read available right now.</p>
+          <p className="text-[12px] text-[var(--text-4)]">No preview available right now.</p>
         )}
       </div>
 
