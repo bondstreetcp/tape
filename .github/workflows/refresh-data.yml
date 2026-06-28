@@ -240,6 +240,18 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Confluence Engine — fuses the night's INDEPENDENT bullish signals (valuation discount,
+      # 13F adds, Congress buys, analyst upgrades, call-heavy flow, catalysts) into one ranked
+      # opportunity board. Must run AFTER all those inputs (valuation-history.json,
+      # superinvestors.json, congress.json, options-flow.json, catalysts.json + the snapshot).
+      # GLM writes up the top names; needs OPENROUTER_API_KEY (skips write-ups cleanly if unset).
+      - name: Refresh Confluence Engine
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-confluence
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
       # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
       # CSV still works but caps at ~3yr.
