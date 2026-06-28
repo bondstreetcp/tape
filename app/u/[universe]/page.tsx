@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { loadSnapshot } from "@/lib/data";
 import { loadCatalysts } from "@/lib/catalysts";
+import { loadDeskNote } from "@/lib/deskNote";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import HomeDashboard from "@/components/HomeDashboard";
 import SetupNotice from "@/components/SetupNotice";
@@ -14,7 +15,7 @@ export default async function UniverseHome({
 }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
-  const [snapshot, catalysts] = await Promise.all([loadSnapshot(universe), loadCatalysts()]);
+  const [snapshot, catalysts, deskNote] = await Promise.all([loadSnapshot(universe), loadCatalysts(), loadDeskNote()]);
   if (!snapshot || snapshot.stocks.length === 0) return <SetupNotice />;
-  return <HomeDashboard snapshot={snapshot} universe={universe} catalysts={catalysts} />;
+  return <HomeDashboard snapshot={snapshot} universe={universe} catalysts={catalysts} deskNote={deskNote} />;
 }
