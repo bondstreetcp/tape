@@ -261,6 +261,15 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # QoQ 13F Story — GLM narrative of the roster's consensus rotation. Needs superinvestors.json
+      # (refresh-13f above) + OPENROUTER_API_KEY.
+      - name: Refresh 13F quarter story
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-13f-story
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # FRED macro snapshot (yield curve, inflation, growth, credit spreads). The keyed
       # data API needs FRED_API_KEY (repo secret) for full history; without it the keyless
       # CSV still works but caps at ~3yr.
