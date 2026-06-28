@@ -231,9 +231,28 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
   };
 }
 
+/**
+ * Start (00:00 UTC) of the most recent prior trading day, skipping weekends. A flat
+ * WINDOW_HOURS=36 lookback misses Friday's filings on a Monday (or weekend) run — the
+ * weekend gap is wider than 36h — so the effective window is always widened to reach
+ * back to the previous session. (US market holidays aren't special-cased; a holiday
+ * Monday just looks back to Friday, which is harmless — one extra quiet day.)
+ */
+function prevTradingDayStart(now: number): number {
+  const d = new Date(now);
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - 1); // at least yesterday
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1); // skip Sat/Sun
+  return d.getTime();
+}
+
 async function main() {
   const now = Date.now();
-  const windowStart = now - WINDOW_HOURS * 3600 * 1000;
+  // Reach back the configured window OR to the previous trading session, whichever is
+  // earlier — so a Monday/weekend run still catches Friday's filings (the weekend gap
+  // alone is wider than the default 36h). An explicit WINDOW_HOURS override still wins
+  // when it asks for a *wider* window (e.g. WINDOW_HOURS=336 for testing).
+  const windowStart = Math.min(now - WINDOW_HOURS * 3600 * 1000, prevTradingDayStart(now));
   const since = new Date(windowStart).toISOString();
 
   let watch = await buildWatchSet();
@@ -243,7 +262,8 @@ async function main() {
     for (const sym of want) restricted.set(sym, watch.get(sym) || sym);
     watch = restricted;
   }
-  console.log(`Watch-set: ${watch.size} symbols · window ${WINDOW_HOURS}h (since ${since})${SCAN_BROAD ? " · BROAD" : ""}${TEST_SYMBOLS ? " · TEST" : ""}`);
+  const effHours = Math.round((now - windowStart) / 3600e3);
+  console.log(`Watch-set: ${watch.size} symbols · window ${effHours}h (since ${since})${SCAN_BROAD ? " · BROAD" : ""}${TEST_SYMBOLS ? " · TEST" : ""}`);
 
   // --- Detection (EDGAR-bound; ~4 concurrent + a polite delay) ---
   const symbols = [...watch.entries()];
