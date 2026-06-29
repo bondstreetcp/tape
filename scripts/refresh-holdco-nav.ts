@@ -20,11 +20,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Q { price: number | null; currency: string; marketCap: number | null }
 const qCache = new Map<string, Q>();
+const penceSyms = new Set<string>(); // symbols quoting in GBp/pence — their chart closes need ÷100 too
 async function quote(sym: string): Promise<Q | null> {
   if (qCache.has(sym)) return qCache.get(sym)!;
   try {
     const q: any = await yf.quote(sym, {}, { validateResult: false });
-    const out: Q = { price: q?.regularMarketPrice ?? null, currency: (q?.currency || "USD").toUpperCase(), marketCap: q?.marketCap ?? null };
+    let cur = q?.currency || "USD";
+    let price = q?.regularMarketPrice ?? null;
+    let mcap = q?.marketCap ?? null;
+    // Some lines quote in a subunit (London GBp/pence, JSE ZAc/cents) — normalize to the major unit.
+    if (cur === "GBp" || cur === "GBX" || cur === "ZAc" || cur === "ZAX") { if (price != null) price /= 100; if (mcap != null) mcap /= 100; cur = cur[0] === "G" ? "GBP" : "ZAR"; penceSyms.add(sym); }
+    const out: Q = { price, currency: cur.toUpperCase(), marketCap: mcap };
     qCache.set(sym, out);
     return out;
   } catch { return null; }
@@ -46,8 +52,9 @@ async function fx(from: string, to: string): Promise<number> {
 async function dailyCloses(sym: string, days = 430): Promise<Map<string, number> | null> {
   try {
     const c: any = await yf.chart(sym, { period1: new Date(Date.now() - days * DAY), interval: "1d" }, { validateResult: false });
+    const scale = penceSyms.has(sym) ? 0.01 : 1; // GBp chart closes → GBP
     const m = new Map<string, number>();
-    for (const q of c?.quotes || []) if (q?.date && q.close != null) m.set(dayKey(new Date(q.date).getTime()), q.close);
+    for (const q of c?.quotes || []) if (q?.date && q.close != null) m.set(dayKey(new Date(q.date).getTime()), q.close * scale);
     return m.size ? m : null;
   } catch { return null; }
 }

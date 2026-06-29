@@ -58,6 +58,110 @@ export const HOLDCOS: Holdco[] = [
       { ticker: "SGSN.SW", name: "SGS", pctOwned: 0.19 },
     ],
   },
+  {
+    slug: "porsche-se", name: "Porsche SE", ticker: "PAH3.DE", currency: "EUR", sharesOutM: 306.25, netDebtM: 5100, otherNavM: 0, asOf: "2026-03",
+    note: "The classic VW discount: NAV is ~100% two listed stakes — 31.9% of Volkswagen's TOTAL capital (53.3% of the ordinaries, no prefs) + 12.5% of Porsche AG. Published NAV ≈ €46/sh, ~−33%. Stake %s are vs total share capital — the model risk is VW's dual-class market-cap convention.",
+    stakes: [
+      { ticker: "VOW.DE", name: "Volkswagen", pctOwned: 0.319 },
+      { ticker: "P911.DE", name: "Porsche AG", pctOwned: 0.125 },
+    ],
+  },
+  {
+    slug: "naspers", name: "Naspers", ticker: "NPN.JO", currency: "ZAR", sharesOutM: 754.8, netDebtM: 1646, otherNavM: 19752, asOf: "2026-06",
+    note: "Single-asset: ~98% of NAV is Prosus (which itself trades at a discount to its Tencent-dominated NAV — the famous DOUBLE-discount). The Naspers↔Prosus cross-holding makes a naive direct look-through understate; this uses Naspers' reported ~69% ECONOMIC interest so NAV ties to its own statement (≈ ZAR 1,398/sh, ~−40%). Note: the directly-monetizable Prosus shares are ~43% — the gap is the circular cross-holding.",
+    stakes: [
+      { ticker: "PRX.AS", name: "Prosus (economic)", pctOwned: 0.691 },
+    ],
+  },
+  {
+    slug: "industrivarden", name: "Industrivärden", ticker: "INDU-C.ST", currency: "SEK", sharesOutM: 431.88, netDebtM: 1880, otherNavM: 482, asOf: "2026-06",
+    note: "Swedish industrial holdco — ~99.7% listed (Volvo, Sandvik, Handelsbanken, Essity, SCA, Ericsson, Skanska, Alleima). Publishes NAV monthly; discount has compressed to ~flat/slight-premium in mid-2026 (NAV ≈ SEK 392/sh).",
+    stakes: [
+      { ticker: "VOLV-B.ST", name: "Volvo", pctOwned: 0.095 },
+      { ticker: "SAND.ST", name: "Sandvik", pctOwned: 0.149 },
+      { ticker: "SHB-A.ST", name: "Handelsbanken", pctOwned: 0.116 },
+      { ticker: "ESSITY-B.ST", name: "Essity", pctOwned: 0.109 },
+      { ticker: "SCA-B.ST", name: "SCA", pctOwned: 0.117 },
+      { ticker: "SKA-B.ST", name: "Skanska", pctOwned: 0.077 },
+      { ticker: "ALLEI.ST", name: "Alleima", pctOwned: 0.204 },
+      { ticker: "ERIC-B.ST", name: "Ericsson", pctOwned: 0.026 },
+    ],
+  },
+  {
+    slug: "lundberg", name: "L E Lundbergföretagen", ticker: "LUND-B.ST", currency: "SEK", sharesOutM: 248, netDebtM: 0, otherNavM: 33400, asOf: "2026-05",
+    note: "Lundberg family holdco — listed core (Holmen, Indutrade, Industrivärden, Hufvudstaden, Husqvarna, Sandvik, Skanska, Alleima) + a wholly-owned property arm (Lundbergs Fastigheter ≈ the otherNAV). NAV ≈ SEK 652/sh, ~−30%. Property value + deferred tax make otherNAV approximate.",
+    stakes: [
+      { ticker: "HOLM-B.ST", name: "Holmen", pctOwned: 0.36 },
+      { ticker: "INDT.ST", name: "Indutrade", pctOwned: 0.272 },
+      { ticker: "INDU-C.ST", name: "Industrivärden", pctOwned: 0.218 },
+      { ticker: "HUFV-A.ST", name: "Hufvudstaden", pctOwned: 0.491 },
+      { ticker: "HUSQ-B.ST", name: "Husqvarna", pctOwned: 0.078 },
+      { ticker: "ALLEI.ST", name: "Alleima", pctOwned: 0.105 },
+      { ticker: "SKA-B.ST", name: "Skanska", pctOwned: 0.054 },
+      { ticker: "SAND.ST", name: "Sandvik", pctOwned: 0.033 },
+      { ticker: "SHB-A.ST", name: "Handelsbanken", pctOwned: 0.033 },
+    ],
+  },
+  {
+    slug: "power-corp", name: "Power Corporation of Canada", ticker: "POW.TO", currency: "CAD", sharesOutM: 632.1, netDebtM: 4300, otherNavM: 5000, asOf: "2026-03",
+    note: "Desmarais family holdco — Great-West Lifeco (71%), IGM Financial (63%), ~19% of GBL (itself a holdco → a double-discount line) + unlisted Wealthsimple/Sagard (the otherNAV). Adjusted NAV ≈ CAD 84.5/sh; discount unusually narrow (~−18%) vs a long-run ~−35%.",
+    stakes: [
+      { ticker: "GWO.TO", name: "Great-West Lifeco", pctOwned: 0.711 },
+      { ticker: "IGM.TO", name: "IGM Financial", pctOwned: 0.629 },
+      { ticker: "GBLB.BR", name: "GBL", pctOwned: 0.19 },
+    ],
+  },
+  {
+    slug: "wendel", name: "Wendel", ticker: "MF.PA", currency: "EUR", sharesOutM: 40.39, netDebtM: 590, otherNavM: 4885, asOf: "2026-03",
+    note: "French holdco mid-transition — only ~27% listed (Bureau Veritas, being sold down; IHS, being taken out for cash); the bulk is private (Stahl, sold to Henkel; IK Partners + Monroe asset-management). NAV ≈ €158/sh, a wide ~−51% discount (private-heavy NAV draws more skepticism).",
+    stakes: [
+      { ticker: "BVI.PA", name: "Bureau Veritas", pctOwned: 0.15 },
+      { ticker: "IHS", name: "IHS Towers", pctOwned: 0.19 },
+    ],
+  },
+  {
+    slug: "investor-ab", name: "Investor AB", ticker: "INVE-B.ST", currency: "SEK", sharesOutM: 3065.6, netDebtM: 13933, otherNavM: 256407, asOf: "2026-03",
+    note: "Wallenberg holdco. Large listed core (Atlas Copco, ABB, AstraZeneca, SEB, EQT, Saab, Sobi, Epiroc, Ericsson, Electrolux, Wärtsilä, Nasdaq, Husqvarna) + wholly-owned Patricia Industries (private — Mölnlycke et al.) + EQT funds, both in otherNAV. NAV ≈ SEK 367/sh; usually a small PREMIUM (quality + the Patricia mark).",
+    stakes: [
+      { ticker: "ATCO-A.ST", name: "Atlas Copco", pctOwned: 0.171 },
+      { ticker: "ABB.ST", name: "ABB", pctOwned: 0.144 },
+      { ticker: "AZN.ST", name: "AstraZeneca", pctOwned: 0.033 },
+      { ticker: "SEB-A.ST", name: "SEB", pctOwned: 0.215 },
+      { ticker: "EQT.ST", name: "EQT", pctOwned: 0.147 },
+      { ticker: "SAAB-B.ST", name: "Saab", pctOwned: 0.302 },
+      { ticker: "SOBI.ST", name: "Sobi", pctOwned: 0.344 },
+      { ticker: "EPI-A.ST", name: "Epiroc", pctOwned: 0.171 },
+      { ticker: "ERIC-B.ST", name: "Ericsson", pctOwned: 0.099 },
+      { ticker: "ELUX-B.ST", name: "Electrolux", pctOwned: 0.179 },
+      { ticker: "WRT1V.HE", name: "Wärtsilä", pctOwned: 0.177 },
+      { ticker: "NDAQ", name: "Nasdaq", pctOwned: 0.103 },
+      { ticker: "HUSQ-B.ST", name: "Husqvarna", pctOwned: 0.168 },
+    ],
+  },
+  {
+    slug: "softbank", name: "SoftBank Group", ticker: "9984.T", currency: "JPY", sharesOutM: 5700, netDebtM: 11380000, otherNavM: 26220000, asOf: "2026-03",
+    note: "Listed core = Arm (~90%) + SoftBank Corp telecom (~40%); net debt folds in the Arm asset-backed margin financing (so the gross Arm stake reconciles). The huge otherNAV is the MOSTLY-UNLISTED Vision Funds — only ~46% of NAV is mark-to-market, so the discount is opinion-dependent. Published NAV ≈ ¥7,029/sh (Mar-2026). T-Mobile/Alibaba/DT excluded — sold or fully collared.",
+    stakes: [
+      { ticker: "ARM", name: "Arm Holdings", pctOwned: 0.87 },
+      { ticker: "9434.T", name: "SoftBank Corp (telecom)", pctOwned: 0.40 },
+    ],
+  },
+  {
+    slug: "psh", name: "Pershing Square Holdings", ticker: "PSH.L", currency: "USD", sharesOutM: 175.03, netDebtM: 3629, otherNavM: 1600, asOf: "2026-03",
+    note: "Ackman's closed-end fund — concentrated, ~118% net exposure, NAV ~88% mark-to-market. Positions = the Q1-2026 13F share counts; net debt = PSH's public bonds (the leverage); otherNAV = the off-13F GSE (Fannie/Freddie) + SPARC + cash. Universal Music was fully EXITED in June 2026 (dropped here). Published NAV ≈ $71/sh (Mar-2026), ~−27% discount. Verify against PSH's own monthly NAV report.",
+    stakes: [
+      { ticker: "BN", name: "Brookfield", sharesM: 59.70 },
+      { ticker: "AMZN", name: "Amazon", sharesM: 11.45 },
+      { ticker: "UBER", name: "Uber", sharesM: 29.96 },
+      { ticker: "MSFT", name: "Microsoft", sharesM: 5.65 },
+      { ticker: "QSR", name: "Restaurant Brands", sharesM: 22.65 },
+      { ticker: "META", name: "Meta", sharesM: 2.66 },
+      { ticker: "HHH", name: "Howard Hughes", sharesM: 18.85 },
+      { ticker: "SEG", name: "Seaport Entertainment", sharesM: 5.02 },
+      { ticker: "HTZ", name: "Hertz", sharesM: 15.24 },
+      { ticker: "GOOG", name: "Alphabet", sharesM: 0.31 },
+    ],
+  },
 ];
 
 // ── Computed output (written to data/holdco-nav.json by the refresh script) ──
