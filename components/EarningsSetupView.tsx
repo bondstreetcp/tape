@@ -58,7 +58,7 @@ export default function EarningsSetupView({ rows, universe, asOf }: { rows: Earn
           return (
             <li
               key={r.symbol}
-              onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=stats`)}
+              onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=earnings`)}
               className="cursor-pointer rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
               title={`Open ${r.symbol} earnings prep →`}
             >
