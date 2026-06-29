@@ -19,6 +19,11 @@ export interface EstSnap {
   price: number | null;
   target: number | null; // mean price target
   analysts: number | null;
+  // analyst rating + target range (for the Analyst-Upside board) — optional so older files still load
+  recKey?: string | null; // "strong_buy" | "buy" | "hold" | "sell" | "strong_sell"
+  recMean?: number | null; // 1 (strong buy) … 5 (strong sell)
+  targetHigh?: number | null;
+  targetLow?: number | null;
 }
 export interface EstimatesFile { generatedAt: string; asOf: string | null; names: Record<string, EstSnap> }
 
