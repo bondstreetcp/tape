@@ -1170,12 +1170,6 @@
   "industry": "Asset Management & Custody Banks"
  },
  {
-  "symbol": "BLKB",
-  "name": "Blackbaud",
-  "sector": "Information Technology",
-  "industry": "Application Software"
- },
- {
   "symbol": "BMI",
   "name": "Badger Meter, Inc.",
   "sector": "Information Technology",
@@ -1228,12 +1222,6 @@
   "name": "Broadridge Financial Solutions",
   "sector": "Industrials",
   "industry": "Data Processing & Outsourced Services"
- },
- {
-  "symbol": "BRBR",
-  "name": "BellRing Brands",
-  "sector": "Consumer Staples",
-  "industry": "Packaged Foods & Meats"
  },
  {
   "symbol": "BRC",
@@ -1522,6 +1510,12 @@
   "name": "Century Communities, Inc.",
   "sector": "Consumer Discretionary",
   "industry": "Homebuilding"
+ },
+ {
+  "symbol": "CDE",
+  "name": "Coeur Mining",
+  "sector": "Materials",
+  "industry": "Gold"
  },
  {
   "symbol": "CDNS",
@@ -1830,12 +1824,6 @@
   "industry": "Oil & Gas Exploration & Production"
  },
  {
-  "symbol": "CNXC",
-  "name": "Concentrix",
-  "sector": "Industrials",
-  "industry": "Data Processing & Outsourced Services"
- },
- {
   "symbol": "CNXN",
   "name": "PC Connection, Inc.",
   "sector": "Information Technology",
@@ -1932,22 +1920,10 @@
   "industry": "Consumer Staples Merchandise Retail"
  },
  {
-  "symbol": "COTY",
-  "name": "Coty",
-  "sector": "Consumer Staples",
-  "industry": "Personal Care Products"
- },
- {
   "symbol": "CPAY",
   "name": "Corpay",
   "sector": "Financials",
   "industry": "Transaction & Payment Processing Services"
- },
- {
-  "symbol": "CPB",
-  "name": "Campbell's Company (The)",
-  "sector": "Consumer Staples",
-  "industry": "Packaged Foods & Meats"
  },
  {
   "symbol": "CPF",
@@ -2646,6 +2622,12 @@
   "industry": "Construction & Engineering"
  },
  {
+  "symbol": "ECHO",
+  "name": "EchoStar",
+  "sector": "Communication Services",
+  "industry": "Wireless Telecommunication Services"
+ },
+ {
   "symbol": "ECL",
   "name": "Ecolab",
   "sector": "Materials",
@@ -3052,6 +3034,12 @@
   "name": "Ford Motor Company",
   "sector": "Consumer Discretionary",
   "industry": "Automobile Manufacturers"
+ },
+ {
+  "symbol": "FA",
+  "name": "First Advantage Corporation",
+  "sector": "Industrials",
+  "industry": "Human Resource & Employment Services"
  },
  {
   "symbol": "FAF",
@@ -4680,12 +4668,6 @@
   "industry": "Personal Care Products"
  },
  {
-  "symbol": "KW",
-  "name": "Kennedy-Wilson Holdings, Inc.",
-  "sector": "Real Estate",
-  "industry": "Real Estate Services"
- },
- {
   "symbol": "KWR",
   "name": "Quaker Chemical Corporation",
   "sector": "Materials",
@@ -5380,6 +5362,12 @@
   "name": "Marten Transport, Ltd.",
   "sector": "Industrials",
   "industry": "Cargo Ground Transportation"
+ },
+ {
+  "symbol": "MRVL",
+  "name": "Marvell Technology",
+  "sector": "Information Technology",
+  "industry": "Semiconductors"
  },
  {
   "symbol": "MS",
@@ -6468,12 +6456,6 @@
   "industry": "Health Care Equipment"
  },
  {
-  "symbol": "POOL",
-  "name": "Pool Corporation",
-  "sector": "Consumer Discretionary",
-  "industry": "Distributors"
- },
- {
   "symbol": "POR",
   "name": "Portland General Electric",
   "sector": "Utilities",
@@ -6960,6 +6942,12 @@
   "industry": "Electrical Components & Equipment"
  },
  {
+  "symbol": "ROKU",
+  "name": "Roku, Inc.",
+  "sector": "Communication Services",
+  "industry": "Movies & Entertainment"
+ },
+ {
   "symbol": "ROL",
   "name": "Rollins, Inc.",
   "sector": "Industrials",
@@ -7114,12 +7102,6 @@
   "name": "StandardAero",
   "sector": "Industrials",
   "industry": "Aerospace & Defense"
- },
- {
-  "symbol": "SATS",
-  "name": "EchoStar",
-  "sector": "Communication Services",
-  "industry": "Wireless Telecommunication Services"
  },
  {
   "symbol": "SBAC",
@@ -7399,7 +7381,7 @@
  },
  {
   "symbol": "SMTC",
-  "name": "Semtech Corporation",
+  "name": "Semtech",
   "sector": "Information Technology",
   "industry": "Semiconductors"
  },
@@ -8389,7 +8371,7 @@
  },
  {
   "symbol": "VIAV",
-  "name": "VIAVI Solutions",
+  "name": "Viavi Solutions",
   "sector": "Information Technology",
   "industry": "Communications Equipment"
  },

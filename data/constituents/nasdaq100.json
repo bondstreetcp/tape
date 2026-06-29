@@ -42,6 +42,12 @@
   "industry": "Electric Utilities"
  },
  {
+  "symbol": "ALAB",
+  "name": "Astera Labs",
+  "sector": "Information Technology",
+  "industry": "Semiconductors"
+ },
+ {
   "symbol": "ALNY",
   "name": "Alnylam Pharmaceuticals",
   "sector": "Health Care",
@@ -132,12 +138,6 @@
   "industry": "Electric Utilities"
  },
  {
-  "symbol": "CHTR",
-  "name": "Charter Communications",
-  "sector": "Communication Services",
-  "industry": "Cable & Satellite"
- },
- {
   "symbol": "CMCSA",
   "name": "Comcast",
   "sector": "Communication Services",
@@ -162,6 +162,12 @@
   "industry": "Systems Software"
  },
  {
+  "symbol": "CRWV",
+  "name": "CoreWeave",
+  "sector": "",
+  "industry": ""
+ },
+ {
   "symbol": "CSCO",
   "name": "Cisco",
   "sector": "Information Technology",
@@ -178,12 +184,6 @@
   "name": "Cintas",
   "sector": "Industrials",
   "industry": "Diversified Support Services"
- },
- {
-  "symbol": "CTSH",
-  "name": "Cognizant",
-  "sector": "Information Technology",
-  "industry": "IT Consulting & Other Services"
  },
  {
   "symbol": "DASH",
@@ -274,12 +274,6 @@
   "name": "Idexx Laboratories",
   "sector": "Health Care",
   "industry": "Health Care Equipment"
- },
- {
-  "symbol": "INSM",
-  "name": "Insmed Incorporated",
-  "sector": "Health Care",
-  "industry": "Biotechnology"
  },
  {
   "symbol": "INTC",
@@ -402,6 +396,12 @@
   "industry": "Semiconductors"
  },
  {
+  "symbol": "NBIS",
+  "name": "Nebius Group",
+  "sector": "",
+  "industry": ""
+ },
+ {
   "symbol": "NFLX",
   "name": "Netflix, Inc.",
   "sector": "Communication Services",
@@ -486,6 +486,12 @@
   "industry": "Biotechnology"
  },
  {
+  "symbol": "RKLB",
+  "name": "Rocket Lab",
+  "sector": "Industrials",
+  "industry": "Aerospace & Defense"
+ },
+ {
   "symbol": "ROP",
   "name": "Roper Technologies",
   "sector": "Information Technology",
@@ -528,6 +534,12 @@
   "industry": "Technology Hardware, Storage & Peripherals"
  },
  {
+  "symbol": "TER",
+  "name": "Teradyne",
+  "sector": "Information Technology",
+  "industry": "Semiconductor Materials & Equipment"
+ },
+ {
   "symbol": "TMUS",
   "name": "T-Mobile US",
   "sector": "Communication Services",
@@ -556,12 +568,6 @@
   "name": "Texas Instruments",
   "sector": "Information Technology",
   "industry": "Semiconductors"
- },
- {
-  "symbol": "VRSK",
-  "name": "Verisk Analytics",
-  "sector": "Industrials",
-  "industry": "Research & Consulting Services"
  },
  {
   "symbol": "VRTX",
@@ -598,11 +604,5 @@
   "name": "Xcel Energy",
   "sector": "Utilities",
   "industry": "Multi-Utilities"
- },
- {
-  "symbol": "ZS",
-  "name": "Zscaler",
-  "sector": "Information Technology",
-  "industry": "Application Software"
  }
 ]

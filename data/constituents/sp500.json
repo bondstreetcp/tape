@@ -672,12 +672,6 @@
   "industry": "Transaction & Payment Processing Services"
  },
  {
-  "symbol": "CPB",
-  "name": "Campbell's Company (The)",
-  "sector": "Consumer Staples",
-  "industry": "Packaged Foods & Meats"
- },
- {
   "symbol": "CPRT",
   "name": "Copart",
   "sector": "Industrials",
@@ -930,6 +924,12 @@
   "industry": "Broadline Retail"
  },
  {
+  "symbol": "ECHO",
+  "name": "EchoStar",
+  "sector": "Communication Services",
+  "industry": "Wireless Telecommunication Services"
+ },
+ {
   "symbol": "ECL",
   "name": "Ecolab",
   "sector": "Materials",
@@ -1162,6 +1162,12 @@
   "name": "Comfort Systems USA",
   "sector": "Industrials",
   "industry": "Construction & Engineering"
+ },
+ {
+  "symbol": "FLEX",
+  "name": "Flex Ltd.",
+  "sector": "Information Technology",
+  "industry": "Electronic Manufacturing Services"
  },
  {
   "symbol": "FOX",
@@ -1902,6 +1908,12 @@
   "industry": "Insurance Brokers"
  },
  {
+  "symbol": "MRVL",
+  "name": "Marvell Technology",
+  "sector": "Information Technology",
+  "industry": "Semiconductors"
+ },
+ {
   "symbol": "MS",
   "name": "Morgan Stanley",
   "sector": "Financials",
@@ -2238,12 +2250,6 @@
   "industry": "Health Care Equipment"
  },
  {
-  "symbol": "POOL",
-  "name": "Pool Corporation",
-  "sector": "Consumer Discretionary",
-  "industry": "Distributors"
- },
- {
   "symbol": "PPG",
   "name": "PPG Industries",
   "sector": "Materials",
@@ -2392,12 +2398,6 @@
   "name": "Revvity",
   "sector": "Health Care",
   "industry": "Health Care Equipment"
- },
- {
-  "symbol": "SATS",
-  "name": "EchoStar",
-  "sector": "Communication Services",
-  "industry": "Wireless Telecommunication Services"
  },
  {
   "symbol": "SBAC",
