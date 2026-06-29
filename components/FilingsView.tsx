@@ -118,7 +118,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
         </div>
       ) : (
       <>
-      <div className="rounded-xl border border-[var(--border)] bg-[#0f1726] p-3 text-xs leading-relaxed text-[var(--text-3)]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs leading-relaxed text-[var(--text-3)]">
         <span className="font-semibold text-[var(--text-2)]">Earnings releases &amp; material filings</span> straight from SEC EDGAR —
         open an <span className="text-[#22c55e]">earnings release</span> to read management&apos;s results commentary inline.
         The earnings-call <em>transcripts</em> above link to the full call (with Q&amp;A) on the publisher&apos;s site.
@@ -271,7 +271,7 @@ function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
                 href={l.link}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[#161b29]"
+                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-hover)]"
               >
                 <span className="flex min-w-0 items-center gap-2 text-sm text-[var(--text)]">
                   {l.time && (
