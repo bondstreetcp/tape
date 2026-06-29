@@ -24,6 +24,11 @@ export interface EstSnap {
   recMean?: number | null; // 1 (strong buy) … 5 (strong sell)
   targetHigh?: number | null;
   targetLow?: number | null;
+  // short interest (for the Short-Squeeze Radar) — optional
+  shortPctFloat?: number | null; // shortPercentOfFloat (fraction, 0.05 = 5%)
+  daysToCover?: number | null; // shortRatio
+  sharesShort?: number | null;
+  sharesShortPrior?: number | null; // sharesShortPriorMonth
 }
 export interface EstimatesFile { generatedAt: string; asOf: string | null; names: Record<string, EstSnap> }
 

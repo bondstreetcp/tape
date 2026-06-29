@@ -66,6 +66,10 @@ function extract(stats: CompanyStats): EstSnap | null {
     recMean: stats.recommendationMean ?? null,
     targetHigh: stats.targetHigh ?? null,
     targetLow: stats.targetLow ?? null,
+    shortPctFloat: stats.shortPercentOfFloat ?? null,
+    daysToCover: stats.shortRatio ?? null,
+    sharesShort: stats.sharesShort ?? null,
+    sharesShortPrior: stats.sharesShortPriorMonth ?? null,
   };
   // Drop names with no usable trend or breadth.
   if (snap.cyNow == null && snap.nyNow == null && snap.up30d == null && snap.down30d == null) return null;
