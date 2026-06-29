@@ -6,7 +6,7 @@
  */
 import type { StockRow } from "./types";
 
-export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat" | "rule40" | "mna" | "quality" | "peercheap" | "margininflect";
+export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat" | "rule40" | "mna" | "quality" | "peercheap" | "margininflect" | "divsafety";
 export interface ScreenOpts { topN?: number; pioMin?: number }
 
 export const SCREEN_LABEL: Record<ScreenKey, string> = {
@@ -22,6 +22,7 @@ export const SCREEN_LABEL: Record<ScreenKey, string> = {
   quality: "Quality Percentile",
   peercheap: "Cheap vs Sector Peers",
   margininflect: "Margin Inflection + Re-accel",
+  divsafety: "Dividend Safety",
 };
 
 /** Short labels for the toggle chips (shared by the Screener + Backtester). */
@@ -38,10 +39,11 @@ export const SCREEN_SHORT: Record<ScreenKey, string> = {
   quality: "Quality",
   peercheap: "Cheap vs Peers",
   margininflect: "Margin Turn",
+  divsafety: "Div Safety",
 };
 
 /** Display order for the screen chips and tooltips. */
-export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect"];
+export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect", "divsafety"];
 
 /** Detailed, plain-English descriptions for the strategy tooltip + the beta-tester guide. */
 export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: string; read: string }> = {
@@ -116,6 +118,12 @@ export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: s
     what: "The P&L turn that tends to precede consensus upgrades — operating margins expanding while revenue growth is re-accelerating.",
     how: "Keeps names where operating margin rose year-over-year AND the latest revenue growth is above the 3-year revenue CAGR (i.e. growth is speeding up, not slowing), ranked by the combined magnitude of the margin expansion and the acceleration. Ex financials, ≥$500M.",
     read: "Higher combined score = a stronger fundamental inflection. Catching the turn before the Street fully models it is where the re-rating lives; complements estimate-revision momentum (the fundamental turn vs. the Street's reaction to it). Pair with valuation — an inflecting name can already be richly priced.",
+  },
+  divsafety: {
+    name: "Dividend Safety",
+    what: "Solid dividend payers whose payout actually looks sustainable — a meaningful yield you're less likely to see cut.",
+    how: "Keeps names yielding ≥ 2% whose dividend is covered — payout ratio (dividend ÷ earnings, = yield × P/E) ≤ 85% OR the yield is fully covered by free-cash-flow yield — and that aren't over-levered (net debt ≤ 5× EBITDA). Survivors are ranked by a blend of yield and payout safety (higher yield + lower payout floats up).",
+    read: "Best-first = the most attractive sustainable yields. This is the yield + coverage cut, NOT a multi-year dividend-GROWTH (DPS CAGR) screen — that needs per-name dividend history. Distinct from Shareholder Yield, which bundles buybacks and debt paydown; here it's the cash dividend and whether the company can keep paying it. REIT/financial payout ratios read high by design — cross-check those against FFO.",
   },
 };
 
@@ -334,6 +342,29 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
       .sort((a, b) => b.fund!.opMarginChg! + (b.fund!.revGrowth! - b.fund!.revCagr3y!) - (a.fund!.opMarginChg! + (a.fund!.revGrowth! - a.fund!.revCagr3y!)))
       .slice(0, topN)
       .map((s) => s.symbol);
+  }
+
+  if (key === "divsafety") {
+    // Sustainable dividend payers ranked by yield + payout safety. Yield ≥ 2%, profitable, payout
+    // covered by earnings (div/EPS = yield × P/E ≤ 85%) OR by free cash flow, not over-levered. This
+    // is the yield+coverage cut — NOT multi-year DPS growth (that needs per-name dividend history).
+    const valid = stocks.filter((s) => {
+      const dy = s.dividendYield;
+      if (dy == null || dy < 0.02 || (s.trailingPE ?? 0) <= 0) return false;
+      const earnPayout = dy * s.trailingPE!; // dividend ÷ EPS
+      const fcfY = s.fund?.fcfYield;
+      const covered = earnPayout <= 0.85 || (fcfY != null && fcfY > 0 && dy <= fcfY);
+      const lev = s.fund?.netDebtEbitda;
+      return covered && (lev == null || lev <= 5) && (s.marketCap || 0) >= 5e8;
+    });
+    if (valid.length < 10) return [];
+    const rYield = rankMap(valid, (s) => s.dividendYield!); // higher yield = better
+    const rPayout = rankMap(valid, (s) => -(s.dividendYield! * s.trailingPE!)); // lower payout = better
+    return valid
+      .map((s) => ({ sym: s.symbol, score: rYield.get(s.symbol)! + rPayout.get(s.symbol)! }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, topN)
+      .map((x) => x.sym);
   }
 
   // Magic Formula (Greenblatt): earnings-yield rank + return-on-capital rank, summed,
