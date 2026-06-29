@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
-import { FEATURES, NAV_GROUPS, RESEARCH_HUBS, hubForPath } from "@/lib/nav";
+import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath } from "@/lib/nav";
 
 interface Item { href: string; label: string; desc?: string; job?: string }
 interface Group { label: string; items: Item[] }
@@ -157,16 +157,17 @@ export default function AppHeader({
           {(() => {
             // Break a long menu into sub-groups by job-to-be-done (so e.g. Research splits into
             // "Find ideas" vs "Research a name"). One group → no header.
-            // Research is consolidated into HUBS (the menu was too busy) — each opens a page whose
-            // sub-nav bar reveals the rest. Other groups split by job-to-be-done.
-            if (active.label === "Research") {
-              return RESEARCH_HUBS.map((h) => {
+            // Research & Strategies are consolidated into HUBS (those menus got busy) — each opens a
+            // page whose sub-nav bar reveals the rest. Other groups split by job-to-be-done.
+            const hubs = GROUP_HUBS[active.label as keyof typeof GROUP_HUBS];
+            if (hubs) {
+              return hubs.map((h) => {
                 const href = `${base}${h.paths[0]}`;
                 const act = h.paths.some((p) => isActive(`${base}${p}`));
                 return (
                   <Link key={h.label} href={href} role="menuitem" onClick={() => setOpen(null)}
                     className={"block rounded-md px-2.5 py-1.5 transition-colors " + (act ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")}>
-                    <div className={"text-sm font-medium " + (act ? "text-[var(--accent)]" : "text-[var(--text)]")}>{h.label} <span className="text-[10px] font-normal text-[var(--text-4)]">· {h.paths.length} tools</span></div>
+                    <div className={"text-sm font-medium " + (act ? "text-[var(--accent)]" : "text-[var(--text)]")}>{h.label}{h.paths.length > 1 && <span className="text-[10px] font-normal text-[var(--text-4)]"> · {h.paths.length} tools</span>}</div>
                     <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{h.blurb}</div>
                   </Link>
                 );
