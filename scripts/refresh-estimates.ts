@@ -62,6 +62,10 @@ function extract(stats: CompanyStats): EstSnap | null {
     price: stats.price ?? null,
     target: stats.targetMean ?? null,
     analysts: stats.numAnalysts ?? null,
+    recKey: stats.recommendationKey ?? null,
+    recMean: stats.recommendationMean ?? null,
+    targetHigh: stats.targetHigh ?? null,
+    targetLow: stats.targetLow ?? null,
   };
   // Drop names with no usable trend or breadth.
   if (snap.cyNow == null && snap.nyNow == null && snap.up30d == null && snap.down30d == null) return null;
