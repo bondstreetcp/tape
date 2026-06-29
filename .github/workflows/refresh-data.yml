@@ -10,8 +10,9 @@ on:
     # ⚠️ Minutes are deliberately staggered OFF :00. GitHub's shared cron scheduler is most congested
     # at the top of the hour (and :15/:30/:45) — jobs there get delayed 1–2h or silently dropped, which
     # is exactly what was happening (the :00 runs ran 1–2.5h late and the 10:00 INTL run kept getting
-    # skipped). Odd, off-peak minutes fire far more reliably. KEEP THESE IN SYNC with the FULL/INTL/ASIA
-    # matchers below — the env there compares github.event.schedule against the exact cron string.
+    # skipped). Odd, off-peak minutes fire far more reliably. KEEP THE FULL/INTL cron strings IN SYNC
+    # with the matchers in the job env below; the Asian/European quote ticks are now chosen by the
+    # wall-clock UTC hour at run time, so they survive GitHub mislabeling a delayed/re-fired run.
     #
     # Intraday — lightweight quotes-only refresh (snapshots only; history series untouched). ~10am /
     # noon / 2pm / 4pm ET.
@@ -58,14 +59,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90 # FULL run is long; the broad (Russell 3000) overnight-filings scan adds ~10 min
     # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close
-    # international-only refresh (10:00). ASIA = an overnight Asian-session quotes tick (02/04/06).
-    # EUR = a European-session quotes tick (08/12). Any other scheduled tick is an intraday quotes-only
-    # refresh of every universe.
+    # international-only refresh (10:00). Both gate which steps run. The intraday quotes tick instead
+    # picks WHICH universes to re-quote from the wall-clock UTC hour at run time (see the "Pick session
+    # universes" step) — NOT from github.event.schedule, which GitHub routinely mislabels when it
+    # delays a scheduled run or re-fires a backlogged one.
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
       INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
-      ASIA: ${{ github.event.schedule == '11 2 * * 1-5' || github.event.schedule == '17 4 * * 1-5' || github.event.schedule == '23 6 * * 1-5' }}
-      EUR: ${{ github.event.schedule == '9 8 * * 1-5' || github.event.schedule == '31 12 * * 1-5' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,15 +77,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Decide which regional markets to re-quote from the ACTUAL wall-clock UTC hour, not from
+      # github.event.schedule. GitHub frequently delays a scheduled run 1-2h or re-fires a backlogged
+      # one, so the cron string lies: on 2026-06-29 the 08:09 European tick ran at 09:11 carrying the
+      # Asian label, so Europe didn't refresh all morning. Picking by "which session is live right now"
+      # is delay-proof — a late tick refreshes whatever market is actually open, and the US-daytime
+      # 'all' bucket re-quotes Europe anyway. Skipped on FULL/INTL (they don't run the quotes tick).
+      - name: Pick session universes (wall-clock, delay-proof)
+        if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
+        run: |
+          H=$((10#$(date -u +%H)))
+          if   [ "$H" -lt 7 ];  then ONLY="kospi,nikkei,hsi";          MKT="Asian session";          fi
+          if   [ "$H" -ge 7 ] && [ "$H" -lt 13 ]; then ONLY="cac40,aex,ftse100,dax,smi"; MKT="European morning"; fi
+          if   [ "$H" -ge 13 ]; then ONLY="";                          MKT="US daytime (all universes)"; fi
+          echo "ONLY=$ONLY" >> "$GITHUB_ENV"
+          echo "Wall-clock ${H}:00 UTC → ${MKT} → ONLY='${ONLY}'"
+
       # ---- Intraday: quotes only. Re-prices each snapshot from fresh quotes and
       # rewrites just the ~15 snapshot files (the heavy per-symbol history series are
-      # left untouched for the after-close run).
+      # left untouched for the after-close run). ONLY is set by the step above.
       - name: Refresh quotes (intraday)
         if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
-        # Asian-session ticks quote only the Asian universes; European-session ticks only the European
-        # ones (markets live, US closed); the daytime US ticks (ONLY unset) quote every universe.
-        env:
-          ONLY: ${{ env.ASIA == 'true' && 'kospi,nikkei,hsi' || env.EUR == 'true' && 'cac40,aex,ftse100,dax,smi' || '' }}
         run: npm run refresh-quotes
         continue-on-error: true
 
