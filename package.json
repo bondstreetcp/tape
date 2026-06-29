@@ -24,6 +24,7 @@
     "refresh-cef": "tsx scripts/refresh-cef.ts",
     "refresh-holdco-nav": "tsx scripts/refresh-holdco-nav.ts",
     "refresh-valuation-history": "tsx scripts/refresh-valuation-history.ts",
+    "refresh-index-valuation": "tsx scripts/refresh-index-valuation.ts",
     "refresh-estimates": "tsx scripts/refresh-estimates.ts",
     "refresh-insiders": "tsx scripts/refresh-insiders.ts",
     "ingest-slack": "tsx scripts/ingest-slack.ts",

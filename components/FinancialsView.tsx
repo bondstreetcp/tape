@@ -15,6 +15,7 @@ import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
 import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
+import RelValuation from "./RelValuation";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
 import SegmentEconomics from "./SegmentEconomics";
@@ -345,6 +346,7 @@ export default function FinancialsView({
             <ShortInterestPanel stats={stats} />
           </div>
           <ValuationBands symbol={symbol} />
+          <RelValuation symbol={symbol} />
         </div>
       ) : view === "peers" ? (
         <PeerComparison universe={universe} symbol={symbol} name={name} peers={peers} peerGroup={peerGroup} />
