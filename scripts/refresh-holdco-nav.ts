@@ -115,7 +115,7 @@ async function computeHoldco(h: Holdco): Promise<HoldcoNav> {
   const holdcoFx = await fx(hq.currency, h.currency); // hoisted out of the per-day loop
   if (hSeries && legs.some((l) => l.series)) {
     const stakeSorted = legs.map((l) => ({ l, days: l.series ? [...l.series.keys()].sort() : [] }));
-    const hist: [string, number][] = [];
+    const hist: [string, number, number][] = [];
     for (const day of [...hSeries.keys()].sort()) {
       const hp = hSeries.get(day)! * holdcoFx; // holdco price that day, reporting ccy
       let stakeSum = 0, have = 0;
@@ -127,11 +127,11 @@ async function computeHoldco(h: Holdco): Promise<HoldcoNav> {
       if (have < legs.length) continue; // need all legs that day
       const navT = stakeSum + otherNav - h.netDebtM * 1e6;
       const npsT = navT / (h.sharesOutM * 1e6);
-      if (npsT > 0) hist.push([day, Math.round((hp / npsT - 1) * 1000) / 10]);
+      if (npsT > 0) hist.push([day, Math.round(npsT * 100) / 100, Math.round(hp * 100) / 100]);
     }
     base.history = hist.slice(-400);
-    // z-score of current discount vs the trailing 1yr discount history
-    const win = base.history.slice(-252).map((x) => x[1]);
+    // z-score of current discount vs the trailing 1yr discount history (derived from nav/price)
+    const win = base.history.slice(-252).map(([, nav, price]) => (price / nav - 1) * 100);
     if (win.length >= 30 && discount != null) {
       const mean = win.reduce((a, b) => a + b, 0) / win.length;
       const sd = Math.sqrt(win.reduce((a, b) => a + (b - mean) ** 2, 0) / win.length) || 1;

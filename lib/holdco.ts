@@ -184,7 +184,7 @@ export interface HoldcoNav {
   stretched: boolean; // z1y ≤ −1 — unusually wide vs its own recent history
   coveragePct: number | null; // listed value ÷ gross asset (how much of NAV is mark-to-market)
   stakes: StakeVal[];
-  history: [string, number][]; // [date, discount%]
+  history: [string, number, number][]; // [date, navPerShare, price] — discount derived = price/nav − 1
   note?: string;
   error?: string;
 }
