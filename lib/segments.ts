@@ -76,6 +76,42 @@ async function fetchReportTable(base: string, file: string, title: string): Prom
   }
 }
 
+// Raw text of the filing's segment-related detail tables (revenue AND operating income by segment),
+// for LLM extraction of the full segment P&L + margins — the regex parser above only pulls revenue.
+export async function getSegmentSource(symbol: string): Promise<{ form: string; date: string; url: string; text: string } | null> {
+  const cik = await tickerToCik(symbol);
+  if (!cik) return null;
+  try {
+    const { filings } = await getFilings(symbol, 0, 120);
+    const filing = filings.find((f) => f.form === "10-K") || filings.find((f) => f.form === "10-Q");
+    if (!filing) return null;
+    const accNo = filing.acc.replace(/-/g, "");
+    const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}`;
+    const fs = await (await fetch(`${base}/FilingSummary.xml`, { headers: HEADERS })).text();
+    const reports = [...fs.matchAll(/<Report[^>]*>([\s\S]*?)<\/Report>/g)].map((r) => ({
+      name: (r[1].match(/<ShortName>([^<]+)/) || [])[1] || "",
+      file: (r[1].match(/<HtmlFileName>([^<]+)/) || [])[1] || "",
+    }));
+    // Segment detail tables — names like "Reportable Segments (Details)", "Segment Information",
+    // "Schedule of Segment Reporting", "Disaggregation of Revenue".
+    const segFiles = reports.filter((r) => /segment|disaggregat/i.test(r.name) && r.file).slice(0, 5);
+    let text = "";
+    for (const r of segFiles) {
+      try {
+        const html = await (await fetch(`${base}/${r.file}`, { headers: HEADERS })).text();
+        const $ = cheerio.load(html);
+        const t = $("table").text().replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+        if (t) text += `\n\n### ${r.name}\n${t}`;
+      } catch { /* skip */ }
+    }
+    text = text.trim().slice(0, 16000);
+    if (text.length < 200) return null;
+    return { form: filing.form, date: filing.date, url: filing.url, text };
+  } catch {
+    return null;
+  }
+}
+
 export async function getSegments(symbol: string): Promise<Segments | null> {
   const cik = await tickerToCik(symbol);
   if (!cik) return null;
