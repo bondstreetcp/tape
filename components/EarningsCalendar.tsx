@@ -173,7 +173,7 @@ export default function EarningsCalendar({
                     return (
                       <tr
                         key={s.symbol}
-                        onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}`)}
+                        onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(s.symbol)}?tab=stats`)}
                         className="cursor-pointer border-b border-[var(--divider)] transition-colors last:border-0 hover:bg-[var(--surface-hover)]"
                       >
                         <td className="w-8 px-2 py-1.5 text-center">

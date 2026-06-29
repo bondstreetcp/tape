@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import type { EarningsMoveRow } from "@/lib/earningsMove";
@@ -19,6 +20,7 @@ function verdict(r: number): { label: string; tone: string; color: string } {
 type Filt = "all" | "rich" | "cheap";
 
 export default function EarningsSetupView({ rows, universe, asOf }: { rows: EarningsMoveRow[]; universe: string; asOf: string | null }) {
+  const router = useRouter();
   const [filt, setFilt] = useState<Filt>("all");
   const cards = useMemo(() => {
     const f = rows.filter((r) => {
@@ -54,11 +56,16 @@ export default function EarningsSetupView({ rows, universe, asOf }: { rows: Earn
           const v = hasHist ? verdict(r.richness as number) : null;
           const ratio = r.histAvgMovePct && r.histAvgMovePct > 0 ? Math.min(2, implied / r.histAvgMovePct) : 1;
           return (
-            <li key={r.symbol} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--border-strong)]">
+            <li
+              key={r.symbol}
+              onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=stats`)}
+              className="cursor-pointer rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]"
+              title={`Open ${r.symbol} earnings prep →`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=options`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
+                    <span className="font-mono font-semibold text-[var(--text)]">{r.symbol}</span>
                     <span className="truncate text-sm text-[var(--text-3)]">{r.name}</span>
                   </div>
                   <div className="mt-0.5 text-xs text-[var(--text-4)]">{r.sector || "—"} · {money(r.marketCap)}</div>
