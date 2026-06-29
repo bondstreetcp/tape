@@ -7,12 +7,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const INSTRUCTION =
-  `Summarize this earnings call in tight markdown sections: ` +
-  `**Headline** (the one-sentence takeaway), ` +
-  `**Results & guidance** (the key reported numbers and any forward guidance, with specifics), ` +
-  `**Management tone** (confident or cautious, and on what), ` +
-  `**Notable quotes** (2-3 short verbatim lines in quotation marks), and ` +
-  `**Q&A highlights** (what analysts pressed on and how management responded). Be concrete and balanced.`;
+  `Summarize this earnings call as clean, SCANNABLE markdown — use "## " section headers and bullet points, never dense paragraphs. Sections, in this order:\n` +
+  `## Headline\n- One sentence: the takeaway.\n` +
+  `## Results & guidance\n- 3-5 bullets: the key reported numbers and any forward guidance, with specifics.\n` +
+  `## Management tone\n- 1-2 bullets: confident or cautious, and on what.\n` +
+  `## Notable quotes\n- 2-3 bullets: a short verbatim line in quotation marks, with who said it.\n` +
+  `## Q&A highlights\n` +
+  `- Format EVERY analyst exchange as its OWN one-line bullet, exactly like: "- **Topic (Analyst / Firm)** — what they pressed on → how management answered."\n` +
+  `- Cover the 4-6 most important exchanges. Never write a paragraph here.\n` +
+  `Be concrete and balanced; ground everything in the transcript.`;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
