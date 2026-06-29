@@ -17,6 +17,7 @@ import DocSearch from "./DocSearch";
 import ValuationBands from "./ValuationBands";
 import EarningsMultipleChart from "./EarningsMultipleChart";
 import SegmentsPanel from "./Segments";
+import SegmentEconomics from "./SegmentEconomics";
 import TickerResearch from "./TickerResearch";
 import SharesChart from "./SharesChart";
 import MarginsChart from "./MarginsChart";
@@ -492,6 +493,7 @@ export default function FinancialsView({
           <MarginsChart symbol={symbol} />
           <DuPontPanel periods={financials.annual} />
           <SegmentsPanel symbol={symbol} currency={currency} />
+          <SegmentEconomics symbol={symbol} currency={currency} />
           <SharesChart symbol={symbol} financials={financials} />
         </>
       )}
