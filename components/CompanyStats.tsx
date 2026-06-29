@@ -88,6 +88,7 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
               <tr className="text-[var(--text-3)]">
                 <th className="py-1 text-left font-medium">Period</th>
                 <th className="py-1 text-right font-medium">EPS est.</th>
+                <th className="py-1 text-right font-medium" title="Analyst low–high range; % = dispersion (disagreement) relative to the mean — high = a wide bull/bear gap">Low–High (disp.)</th>
                 <th className="py-1 text-right font-medium"># </th>
                 <th className="py-1 text-right font-medium">Rev est.</th>
               </tr>
@@ -97,6 +98,16 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
                 <tr key={e.period} className="border-t border-[var(--divider)]">
                   <td className="py-1 text-left text-[var(--text-2)]">{periodName(e.period)}</td>
                   <td className="py-1 text-right tabular-nums">{price(e.epsAvg)}</td>
+                  <td className="py-1 text-right tabular-nums text-[var(--text-3)]">
+                    {e.epsLow != null && e.epsHigh != null ? (
+                      <>
+                        {price(e.epsLow)}–{price(e.epsHigh)}
+                        {e.epsAvg ? (
+                          (() => { const disp = ((e.epsHigh - e.epsLow) / Math.abs(e.epsAvg)) * 100; return <span style={{ color: disp >= 25 ? "#f59e0b" : "var(--text-4)" }}> ({disp.toFixed(0)}%)</span>; })()
+                        ) : null}
+                      </>
+                    ) : "—"}
+                  </td>
                   <td className="py-1 text-right tabular-nums text-[var(--text-3)]">{e.epsAnalysts ?? "—"}</td>
                   <td className="py-1 text-right tabular-nums">{big(e.revAvg)}</td>
                 </tr>
