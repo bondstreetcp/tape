@@ -7,7 +7,7 @@ import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
 import { FEATURES, NAV_GROUPS } from "@/lib/nav";
 
-interface Item { href: string; label: string; desc?: string }
+interface Item { href: string; label: string; desc?: string; job?: string }
 interface Group { label: string; items: Item[] }
 
 export default function AppHeader({
@@ -28,7 +28,7 @@ export default function AppHeader({
   // nav, the ⌘K palette, and the Start-here map never drift apart.
   const groups: Group[] = NAV_GROUPS.map((label) => ({
     label,
-    items: FEATURES.filter((f) => f.group === label).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc })),
+    items: FEATURES.filter((f) => f.group === label).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job })),
   }));
 
   // Close the dropdown on outside-click, scroll, or navigation.
@@ -137,21 +137,33 @@ export default function AppHeader({
           style={{ position: "fixed", left: pos.left, top: pos.top }}
           className="z-50 w-[320px] max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
         >
-          {active.items.map((it) => (
-            <Link
-              key={it.href}
-              href={it.href}
-              role="menuitem"
-              onClick={() => setOpen(null)}
-              className={
-                "block rounded-md px-2.5 py-1.5 transition-colors " +
-                (isActive(it.href) ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")
-              }
-            >
-              <div className={"text-sm font-medium " + (isActive(it.href) ? "text-[var(--accent)]" : "text-[var(--text)]")}>{it.label}</div>
-              {it.desc && <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{it.desc}</div>}
-            </Link>
-          ))}
+          {(() => {
+            // Break a long menu into sub-groups by job-to-be-done (so e.g. Research splits into
+            // "Find ideas" vs "Research a name"). One group → no header.
+            const jobs = [...new Set(active.items.map((it) => it.job))];
+            const renderItem = (it: Item) => (
+              <Link
+                key={it.href}
+                href={it.href}
+                role="menuitem"
+                onClick={() => setOpen(null)}
+                className={
+                  "block rounded-md px-2.5 py-1.5 transition-colors " +
+                  (isActive(it.href) ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")
+                }
+              >
+                <div className={"text-sm font-medium " + (isActive(it.href) ? "text-[var(--accent)]" : "text-[var(--text)]")}>{it.label}</div>
+                {it.desc && <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{it.desc}</div>}
+              </Link>
+            );
+            if (jobs.length <= 1) return active.items.map(renderItem);
+            return jobs.map((job) => (
+              <div key={job}>
+                <div className="px-2.5 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{job}</div>
+                {active.items.filter((it) => it.job === job).map(renderItem)}
+              </div>
+            ));
+          })()}
         </div>
       )}
 
