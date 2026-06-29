@@ -11,7 +11,7 @@ import { ECON_OVERLAYS, econSym, prettySym, ECON_PREFIX } from "@/lib/econOverla
 import TimeframeSelector from "./TimeframeSelector";
 import NewsFeed from "./NewsFeed";
 import BriefingTickerNews from "./BriefingTickerNews";
-import StockExtras, { BorrowPanel, StockTwitsPanel, RiskFactorPanel } from "./StockExtras";
+import { BorrowPanel, StockTwitsPanel } from "./StockExtras";
 import AskAI from "./AskAI";
 import SeasonalityPanel from "./SeasonalityPanel";
 import ExplainMove from "./ExplainMove";
@@ -204,12 +204,12 @@ export default function StockOverview({
 
       <ExplainMove symbol={row.symbol} name={row.name} returns={row.returns} tf={tf} />
 
-      <section className="mt-5"><StockTwitsPanel symbol={row.symbol} /></section>
-      <section className="mt-5"><BorrowPanel symbol={row.symbol} /></section>
+      <section className="mt-5 grid items-start gap-4 lg:grid-cols-2">
+        <StockTwitsPanel symbol={row.symbol} />
+        <BorrowPanel symbol={row.symbol} />
+      </section>
       <section className="mt-5"><SeasonalityPanel daily={daily} /></section>
       <section className="mt-5"><AskAI symbol={row.symbol} name={row.name} /></section>
-      <section className="mt-5"><StockExtras symbol={row.symbol} currency={currency} /></section>
-      <section className="mt-5"><RiskFactorPanel symbol={row.symbol} /></section>
       <section className="mt-5"><BriefingTickerNews symbol={row.symbol} name={row.name} /></section>
       <section className="mt-5"><NewsFeed query={row.symbol} title={`${row.symbol} — recent news`} count={10} /></section>
     </div>

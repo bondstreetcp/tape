@@ -8,6 +8,7 @@ import type { StockRow } from "@/lib/types";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
+import { RiskFactorPanel } from "./StockExtras";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
@@ -348,7 +349,10 @@ export default function FinancialsView({
       ) : view === "ownership" ? (
         <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
       ) : view === "filings" ? (
-        <FilingsView symbol={symbol} name={name} />
+        <div className="space-y-5">
+          <RiskFactorPanel symbol={symbol} />
+          <FilingsView symbol={symbol} name={name} />
+        </div>
       ) : view === "research" ? (
         <TickerResearch symbol={symbol} name={name} />
       ) : view === "docsearch" ? (
