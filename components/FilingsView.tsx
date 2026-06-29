@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import RedlineSection from "./Redline";
 import TranscriptIntel from "./TranscriptIntel";
+import CallAnalysis from "./CallAnalysis";
 import EarningsCallAI from "./EarningsCallAI";
 import FilingAI from "./FilingAI";
 import { LoadingState } from "./Spinner";
@@ -105,6 +106,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
     <div className="space-y-4">
       <FilingAI symbol={symbol} name={name} />
       <EarningsCallAI symbol={symbol} name={name} />
+      <CallAnalysis symbol={symbol} name={name} />
       <TranscriptLinks symbol={symbol} name={name} />
       <TranscriptIntel symbol={symbol} name={name} />
       <RedlineSection symbol={symbol} name={name} />
