@@ -39,6 +39,9 @@ async function main() {
   ]);
   const flow = getOptionsFlow(); // synchronous
   const analyst = await getAnalystActions("sp500").catch(() => [] as any[]);
+  // per-name companyStats snapshot (estimates + short interest) and the Form 4 buy scan
+  const estimates = await fs.readFile(path.join(DATA, "estimates.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const insiders = await fs.readFile(path.join(DATA, "insiders.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
   // ── accumulate signals per ticker ──────────────────────────────────────────
   const sig = new Map<string, ConfluenceSignal[]>();
@@ -128,6 +131,32 @@ async function main() {
     if (c?.why) add(sym, { kind: "catalyst", label: "Catalyst", detail: c.why.slice(0, 120), weight: 0.5 });
   }
 
+  // 7) REVISIONS — the Street quietly raising current-year EPS (90d drift ≥ +3% or strong net-up breadth)
+  for (const [sym, es] of Object.entries((estimates?.names || {}) as Record<string, any>)) {
+    const now = es?.cyNow, p90 = es?.cy90d;
+    const drift = now != null && p90 != null && Math.abs(p90) >= 0.1 ? ((now - p90) / Math.abs(p90)) * 100 : null;
+    const net = (es?.up30d ?? 0) - (es?.down30d ?? 0);
+    if ((drift != null && drift >= 3) || net >= 6) {
+      add(sym, { kind: "revisions", label: "Estimates rising", detail: `FY EPS ${drift != null ? pct(drift) : "?"} over 90d · ${es?.up30d ?? 0} up / ${es?.down30d ?? 0} down (30d)`, weight: 1.5 });
+    }
+  }
+
+  // 8) INSIDER — open-market Form 4 buys (cluster = several distinct insiders, higher conviction)
+  for (const [sym, nb] of Object.entries((insiders?.names || {}) as Record<string, any>)) {
+    const buyers = nb?.buyers ?? 0;
+    if (buyers >= 1) {
+      add(sym, { kind: "insider", label: buyers > 1 ? `${buyers} insiders buying` : "Insider buying", detail: `${nb?.totalValue != null ? money(nb.totalValue) : "shares"} bought by ${buyers} insider${buyers > 1 ? "s" : ""}, latest ${nb?.lastBuy}`, weight: 2 + (buyers >= 2 ? 0.5 : 0) });
+    }
+  }
+
+  // 9) SQUEEZE — a crowded short (≥10% of float) = fuel IF the stacked bull signals play out (contrarian amplifier)
+  for (const [sym, es] of Object.entries((estimates?.names || {}) as Record<string, any>)) {
+    const pf = es?.shortPctFloat;
+    if (pf != null && pf >= 0.1) {
+      add(sym, { kind: "squeeze", label: "Squeeze fuel", detail: `${(pf * 100).toFixed(0)}% of float short${es?.daysToCover ? `, ${es.daysToCover.toFixed(1)}d to cover` : ""}`, weight: 1 });
+    }
+  }
+
   // ── build the ranked board (require ≥2 distinct signal kinds = real confluence) ──
   const ctx = new Map((snap?.stocks || []).map((s) => [s.symbol, s] as const));
   const names: ConfluenceName[] = [];
@@ -164,7 +193,7 @@ async function main() {
   if (await llmConfigured()) {
     const toExplain = board.slice(0, TOP_EXPLAIN);
     const SYSTEM =
-      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, Congress buying, an analyst upgrade, call-heavy options flow, a catalyst). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
+      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, a catalyst). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
       "Ground every claim in the supplied signals + context — never invent a number or a reason. Two to three crisp sentences total across the three fields each. Be specific to the company, not generic. " +
       NO_ADVICE;
     const SCHEMA = 'Return ONLY JSON: {"reads":[{"symbol": string, "thesis": string, "risk": string, "watch": string}]}';
@@ -174,7 +203,10 @@ async function main() {
       return `${c}\n   signals: ${s}`;
     });
     const user = `${SCHEMA}\n\nNAMES (each with its stacked signals + context):\n${lines.join("\n")}`;
-    const out = await chatJSON<{ reads: (ConfluenceRead & { symbol: string })[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL });
+    // maxTokens must cover the model's reasoning AND the output for all ~16 names — Gemini's reasoning
+    // tokens count against the cap, so a tight 6000 returned EMPTY (the whole budget went to thinking).
+    // Cap the reasoning (effort low) and give ample output room.
+    const out = await chatJSON<{ reads: (ConfluenceRead & { symbol: string })[] }>(SYSTEM, user, { maxTokens: 16000, model: PRO_MODEL, reasoningEffort: "low" });
     const bySym = new Map((out?.reads || []).filter((r) => r?.symbol).map((r) => [String(r.symbol).toUpperCase(), r] as const));
     for (const n of board) {
       const r = bySym.get(n.symbol.toUpperCase());
