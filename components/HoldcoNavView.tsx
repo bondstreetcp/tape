@@ -9,9 +9,9 @@ const pct = (v: number | null, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : 
 const moneyM = (v: number | null, ccy: string) => (v == null ? "—" : `${v < 0 ? "−" : ""}${ccySym(ccy)}${Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + "B" : Math.abs(v).toFixed(0) + "M"}`);
 const ccySym = (c: string) => ({ EUR: "€", USD: "$", GBP: "£", SEK: "kr", JPY: "¥" } as Record<string, string>)[c] || c + " ";
 
-function Spark({ hist, color }: { hist: [string, number][]; color: string }) {
+function Spark({ hist, color }: { hist: [string, number, number][]; color: string }) {
   if (hist.length < 2) return null;
-  const vals = hist.map((h) => h[1]);
+  const vals = hist.map(([, nav, price]) => (nav ? (price / nav - 1) * 100 : 0));
   const lo = Math.min(...vals), hi = Math.max(...vals);
   const W = 200, H = 36;
   const x = (i: number) => (i / (hist.length - 1)) * W;
@@ -24,7 +24,7 @@ function Spark({ hist, color }: { hist: [string, number][]; color: string }) {
   );
 }
 
-function Card({ h }: { h: HoldcoNav }) {
+function Card({ h, universe }: { h: HoldcoNav; universe: string }) {
   const [open, setOpen] = useState(false);
   const col = discountColor(h.discount);
   return (
@@ -32,7 +32,7 @@ function Card({ h }: { h: HoldcoNav }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="font-semibold text-[var(--text)]">{h.name}</span>
+            <Link href={`/u/${universe}/holdco-nav/${h.slug}`} className="font-semibold text-[var(--text)] hover:text-[var(--accent)]">{h.name} →</Link>
             <span className="font-mono text-xs text-[var(--text-4)]">{h.ticker}</span>
             {h.stretched && <span className="rounded-full bg-[#22c55e1a] px-1.5 py-0.5 text-[10px] font-medium text-[#22c55e]">Stretched · z {h.z1y}</span>}
           </div>
@@ -85,7 +85,7 @@ export default function HoldcoNavView({ data, universe }: { data: HoldcoNavData;
         desc="Holding companies vs their look-through net asset value — Σ(listed stakes) + private assets − net debt, against the holdco's own price. The discount is the whole game; 'stretched' flags a discount unusually wide vs its own recent history (z ≤ −1). Same idea as the CEF Discount Hunter. Decision-support, not advice."
       />
       <ul className="space-y-3">
-        {data.holdcos.map((h) => <Card key={h.slug} h={h} />)}
+        {data.holdcos.map((h) => <Card key={h.slug} h={h} universe={universe} />)}
       </ul>
       <p className="mt-4 text-[11px] leading-relaxed text-[var(--text-4)]">
         Stake prices + FX fetched live; the discount history rebuilds each stake&apos;s price with current FX held constant. <strong>Net debt, private/other NAV, share counts and stake weights are SEED ESTIMATES</strong> (as of each holdco&apos;s noted date) and should be verified against the company&apos;s published NAV statement before trading — they&apos;re a clearly-editable table in <code className="rounded bg-[var(--surface-2)] px-1">lib/holdco.ts</code>. &quot;% mark-to-market&quot; = how much of NAV is live listed value vs static private/cash. As of {data.asOf}.
