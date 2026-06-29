@@ -65,6 +65,7 @@ function stratColFor(key: ScreenKey): Col | null {
     case "quality": return { key: "roic", label: "ROIC", num: true, get: (s) => s.fund?.roic ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.2 ? "#22c55e" : undefined), align: "right" };
     case "peercheap": return { key: "pe", label: "P/E", num: true, get: (s) => s.trailingPE ?? null, fmt: (v) => (v == null ? "—" : `${v.toFixed(0)}×`), align: "right" };
     case "margininflect": return { key: "ommchg", label: "OpM Δ", num: true, get: (s) => s.fund?.opMarginChg ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" };
+    case "divsafety": return { key: "divyld", label: "Div Yld", num: true, get: (s) => s.dividendYield ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.03 ? "#22c55e" : undefined), align: "right" };
     default: return null; // magic — pure rank, no signature column
   }
 }
@@ -91,11 +92,12 @@ function screenBlurb(key: ScreenKey, n: number, pioMin: number): string {
     case "quality": return `top ${n} by the quality composite — ROIC, ROE, margins, FCF yield, low leverage (best first)`;
     case "peercheap": return `top ${n} cheapest vs their sector peers — P/E, fwd P/E, P/B z-scored against the sector median`;
     case "margininflect": return `${n} with margins expanding AND revenue growth re-accelerating (best first)`;
+    case "divsafety": return `top ${n} sustainable dividend payers — yield ≥ 2%, payout covered by earnings or FCF, low leverage (best first)`;
   }
 }
 
 // Screens that produce a ranked Top-N (so the Top-N selector applies); the rest are pure filters.
-const RANKED_SCREENS: ScreenKey[] = ["magic", "erp5", "qualval", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect"];
+const RANKED_SCREENS: ScreenKey[] = ["magic", "erp5", "qualval", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect", "divsafety"];
 
 export default function ScreenerView({
   universe,
