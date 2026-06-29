@@ -87,8 +87,8 @@ export default function RedlineSection({ symbol }: { symbol: string; name?: stri
                         className={
                           "rounded border-l-2 px-2 py-1 text-[13px] leading-relaxed " +
                           (b.type === "add"
-                            ? "border-[#22c55e] bg-[#0e1f15] text-[#bbf7d0]"
-                            : "border-[#ef4444] bg-[#1f1113] text-[#fca5a5] line-through decoration-[#7f1d1d]")
+                            ? "border-[#22c55e] bg-[var(--diff-add-bg)] text-[var(--diff-add-text)]"
+                            : "border-[#ef4444] bg-[var(--diff-del-bg)] text-[var(--diff-del-text)] line-through decoration-[#ef4444]/50")
                         }
                       >
                         {b.text}
