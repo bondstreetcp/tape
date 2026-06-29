@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { loadSnapshot, loadSymbolSeries } from "@/lib/data";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
+import { peerCohort } from "@/lib/peerCohorts";
 import { xyToPoints } from "@/lib/compute";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getFinancials } from "@/lib/financials";
@@ -40,16 +41,28 @@ export default async function StockPage({
   }
   const meta = ETF_TO_SECTOR[row.etf] ?? null;
 
-  // Peers from the snapshot: same sub-industry, falling back to the whole sector.
-  const sub = snapshot.stocks.filter((s) => s.etf === row.etf && s.industry === row.industry);
+  // Peers: a curated business cohort when the name is in one (GICS sub-industry splits real
+  // competitors — e.g. DECK/ONON in "Footwear" vs LULU in "Apparel"); else same sub-industry → sector.
+  const cohort = peerCohort(row.symbol);
   let peers: StockRow[];
   let peerGroup: string | null;
-  if (sub.length >= 4) {
-    peers = sub;
-    peerGroup = row.industry;
+  if (cohort) {
+    // Draw from the broad Russell 3000 so cross-universe comps (e.g. ONON while viewing on the
+    // S&P 500) still appear; fall back to the current snapshot if it isn't built.
+    const broad = (await loadSnapshot("russell3000")) ?? snapshot;
+    const set = new Set(cohort.tickers);
+    peers = broad.stocks.filter((s) => set.has(s.symbol));
+    if (peers.length < 3) peers = snapshot.stocks.filter((s) => set.has(s.symbol)); // safety
+    peerGroup = cohort.label;
   } else {
-    peers = snapshot.stocks.filter((s) => s.etf === row.etf);
-    peerGroup = meta?.name ?? row.sector;
+    const sub = snapshot.stocks.filter((s) => s.etf === row.etf && s.industry === row.industry);
+    if (sub.length >= 4) {
+      peers = sub;
+      peerGroup = row.industry;
+    } else {
+      peers = snapshot.stocks.filter((s) => s.etf === row.etf);
+      peerGroup = meta?.name ?? row.sector;
+    }
   }
   peers = [...peers].sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, 30);
 

@@ -166,7 +166,7 @@ export default function FinancialsView({
   intraday: SeriesPoint[];
   generatedAt: string;
 }) {
-  type View = "overview" | "statements" | "earnings" | "stats" | "profile" | "peers" | "filings" | "research" | "options";
+  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options";
   const [view, setView] = useState<View>("overview");
   const [researchSub, setResearchSub] = useState<"notes" | "docs">("notes");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
@@ -177,7 +177,7 @@ export default function FinancialsView({
   // different tab (we no longer carry the last-used tab across tickers via localStorage,
   // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
-    const valid = ["overview", "statements", "earnings", "stats", "peers", "profile", "filings", "research", "options"];
+    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options"];
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
@@ -307,6 +307,7 @@ export default function FinancialsView({
             { key: "earnings", label: "Earnings" },
             { key: "stats", label: "Valuation & Stats" },
             { key: "peers", label: "Peers" },
+            { key: "ownership", label: "Ownership" },
             { key: "filings", label: "Filings & Calls" },
             { key: "research", label: "Research" },
             { key: "options", label: "Options" },
@@ -342,10 +343,11 @@ export default function FinancialsView({
             <ShortInterestPanel stats={stats} />
           </div>
           <ValuationBands symbol={symbol} />
-          <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
         </div>
       ) : view === "peers" ? (
         <PeerComparison universe={universe} symbol={symbol} name={name} peers={peers} peerGroup={peerGroup} />
+      ) : view === "ownership" ? (
+        <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
       ) : view === "filings" ? (
         <div className="space-y-5">
           <RiskFactorPanel symbol={symbol} />
