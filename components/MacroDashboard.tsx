@@ -294,6 +294,13 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
+  const [section, setSection] = useState<"rates" | "indicators" | "credit" | "calendar">("rates");
+  const SECTIONS = [
+    { key: "rates", label: "Rates & Curves" },
+    { key: "indicators", label: "Indicators" },
+    { key: "credit", label: "Credit" },
+    { key: "calendar", label: "Calendar" },
+  ] as const;
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -312,6 +319,14 @@ export default function MacroDashboard({
         </button>
       </header>
 
+      <div className="mb-5 inline-flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
+        {SECTIONS.map((s) => (
+          <button key={s.key} onClick={() => setSection(s.key)} className={"rounded-md px-3 py-1.5 transition-colors " + (section === s.key ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{s.label}</button>
+        ))}
+      </div>
+
+      {section === "rates" && (
+        <>
       <section className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-3)]">U.S. Treasury Yield Curve</h2>
@@ -337,7 +352,11 @@ export default function MacroDashboard({
           )}
         </div>
       )}
+        </>
+      )}
 
+      {section === "indicators" && (
+        <>
       {groups.map((g) => (
         <section key={g} className="mb-5">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--text-3)]">{g}</h2>
@@ -346,9 +365,12 @@ export default function MacroDashboard({
           </div>
         </section>
       ))}
+        </>
+      )}
 
-      <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>
+      {section === "credit" && <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>}
 
+      {section === "calendar" && (
       <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>
         {calendar.length === 0 ? (
@@ -400,6 +422,7 @@ export default function MacroDashboard({
           </>
         )}
       </section>
+      )}
 
       <p className="mt-2 text-[11px] text-[var(--text-4)]">
         Source: Federal Reserve Economic Data (FRED). Spreads in percentage points; OAS = option-adjusted spread.
