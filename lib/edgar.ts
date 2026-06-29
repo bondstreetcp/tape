@@ -103,7 +103,7 @@ export async function tickerToCik(symbol: string): Promise<string | null> {
   return m.get(normTicker(symbol)) ?? null;
 }
 
-interface F4Filing { acc: string; doc: string; date: string; }
+export interface F4Filing { acc: string; doc: string; date: string; }
 
 function collectForm4(r: any, out: F4Filing[]) {
   if (!r?.form) return;
@@ -115,7 +115,7 @@ function collectForm4(r: any, out: F4Filing[]) {
   }
 }
 
-async function getForm4List(cik: string): Promise<F4Filing[]> {
+export async function getForm4List(cik: string): Promise<F4Filing[]> {
   const cached = listCache.get(cik);
   if (cached) return cached;
   const s = await getSubmissions(cik);
@@ -133,7 +133,7 @@ async function getForm4List(cik: string): Promise<F4Filing[]> {
   return out;
 }
 
-async function parseForm4(cik: string, f: F4Filing): Promise<InsiderTx[]> {
+export async function parseForm4(cik: string, f: F4Filing): Promise<InsiderTx[]> {
   const accNo = f.acc.replace(/-/g, "");
   const rawDoc = (f.doc || "").split("/").pop() || ""; // strip the xslF345…/ render prefix
   const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}/${rawDoc}`;

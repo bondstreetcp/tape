@@ -191,11 +191,20 @@ jobs:
         run: npm run refresh-valuation-history
         continue-on-error: true
 
-      # Estimate-revision snapshot (consensus EPS now vs 30/90d + up/down counts) for the Revisions
-      # Momentum board. One Yahoo quoteSummary per name; iterates every US universe (deduped).
+      # Estimate-revision snapshot (consensus EPS now vs 30/90d + up/down counts + analyst rating +
+      # short interest) for the Revisions Momentum / Analyst Upside / Short-Squeeze boards. One Yahoo
+      # quoteSummary per name; iterates every US universe (deduped).
       - name: Refresh estimate revisions
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-estimates
+        continue-on-error: true
+
+      # SEC Form 4 open-market BUY scan for the Insider Cluster-Buying board. Reuses the EDGAR parser;
+      # filters each name's Form 4 list to the recent window before fetching XML, so it stays well
+      # under EDGAR's ~10 req/s. Richest on the broad universes (insider buying is rare in mega-caps).
+      - name: Refresh insider buys (Form 4)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-insiders
         continue-on-error: true
 
       # Congressional (Senate STOCK Act) trades from the public Senate eFD. No key; polite

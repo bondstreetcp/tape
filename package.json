@@ -24,6 +24,7 @@
     "refresh-cef": "tsx scripts/refresh-cef.ts",
     "refresh-valuation-history": "tsx scripts/refresh-valuation-history.ts",
     "refresh-estimates": "tsx scripts/refresh-estimates.ts",
+    "refresh-insiders": "tsx scripts/refresh-insiders.ts",
     "refresh-congress": "tsx scripts/refresh-congress.ts",
     "refresh-putwrite": "tsx scripts/refresh-putwrite.ts",
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
