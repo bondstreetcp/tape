@@ -69,19 +69,30 @@ export default function ResearchDesk() {
     fetch("/api/research/synthesize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, question: q }) })
       .then((r) => r.json()).then((d) => setAnswer(d.answer || (d.error ? `_${d.error}_` : null))).catch(() => setAnswer(null));
   };
-  const upload = (file: File) => {
-    setBusy("Ingesting " + file.name + "…");
-    const fd = new FormData(); fd.append("file", file);
-    fetch("/api/research/upload", { method: "POST", body: fd }).then((r) => r.json()).then((d) => {
-      setBusy(d.ok ? null : (d.error || "Upload failed"));
-      if (d.ok) { loadIndex(); openTicker(d.doc.ticker); if (d.error == null) setTimeout(() => setBusy(null), 0); }
-    }).catch(() => setBusy("Upload failed"));
+  // Ingest one or many PDFs — sequentially (each is a ~10-30s Gemini extraction; one request per
+  // file keeps each under the route's 90s limit), with live progress and a final tally.
+  const upload = async (files: File[]) => {
+    let ok = 0, fail = 0;
+    const total = files.length;
+    for (let i = 0; i < total; i++) {
+      const f = files[i];
+      setBusy(`Ingesting ${i + 1}/${total}: ${f.name}…` + (ok || fail ? ` · ${ok} done${fail ? `, ${fail} failed` : ""}` : ""));
+      try {
+        const fd = new FormData(); fd.append("file", f);
+        const d = await fetch("/api/research/upload", { method: "POST", body: fd }).then((r) => r.json());
+        if (d?.ok) { ok++; if (total === 1) openTicker(d.doc.ticker); } else fail++;
+      } catch { fail++; }
+      loadIndex();
+    }
+    setBusy(`Done — ${ok} ingested${fail ? `, ${fail} failed` : ""}${total > 1 ? ` of ${total}` : ""}.`);
+    loadIndex();
+    setTimeout(() => setBusy(null), fail ? 8000 : 3000);
   };
 
   const uploadBtn = (
     <>
-      <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-      <button onClick={() => fileRef.current?.click()} className="rounded-lg border border-[#a855f7]/50 bg-[#a855f7]/[0.08] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] hover:bg-[#a855f7]/[0.15]">＋ Ingest a research PDF</button>
+      <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => { const sel = Array.from(e.target.files || []); if (sel.length) upload(sel); e.target.value = ""; }} />
+      <button onClick={() => fileRef.current?.click()} className="rounded-lg border border-[#a855f7]/50 bg-[#a855f7]/[0.08] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] hover:bg-[#a855f7]/[0.15]">＋ Ingest research PDFs</button>
     </>
   );
 
@@ -90,8 +101,7 @@ export default function ResearchDesk() {
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <div className="text-sm font-semibold text-[var(--text-2)]">Research corpus is empty</div>
         <p className="mt-1 max-w-prose text-xs leading-relaxed text-[var(--text-3)]">
-          Ingest sell-side PDFs to build the desk. Locally that runs <code className="rounded bg-[var(--surface-2)] px-1">npx tsx scripts/ingest-research.ts &lt;files&gt;</code> or the button below; the corpus is stored privately
-          (gitignored) and never deployed. For the live site, wire the store to Supabase (Blob + pgvector).
+          Ingest sell-side PDFs to build the desk — the button below takes <strong>multiple at once</strong>, or run <code className="rounded bg-[var(--surface-2)] px-1">npx tsx scripts/ingest-research.ts &lt;files&gt;</code> for a bulk backfill. Notes are stored privately in your research corpus (server-side only).
         </p>
         <div className="mt-3">{uploadBtn}</div>
         {busy && <div className="mt-2 text-xs text-[var(--text-3)]">{busy}</div>}
