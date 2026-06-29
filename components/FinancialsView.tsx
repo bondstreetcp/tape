@@ -165,7 +165,7 @@ export default function FinancialsView({
   intraday: SeriesPoint[];
   generatedAt: string;
 }) {
-  type View = "overview" | "statements" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "docsearch";
+  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "docsearch";
   const [view, setView] = useState<View>("overview");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
@@ -175,7 +175,7 @@ export default function FinancialsView({
   // different tab (we no longer carry the last-used tab across tickers via localStorage,
   // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
-    const valid = ["overview", "statements", "stats", "peers", "ownership", "profile", "filings", "research", "options", "docsearch"];
+    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options", "docsearch"];
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
@@ -302,7 +302,8 @@ export default function FinancialsView({
           options={[
             { key: "overview", label: "Overview" },
             { key: "statements", label: "Statements" },
-            { key: "stats", label: "Estimates & Stats" },
+            { key: "earnings", label: "Earnings" },
+            { key: "stats", label: "Valuation & Stats" },
             { key: "peers", label: "Peers" },
             { key: "ownership", label: "Ownership" },
             { key: "filings", label: "Filings & Calls" },
@@ -325,17 +326,21 @@ export default function FinancialsView({
         ) : (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">No overview data for {symbol}.</div>
         )
-      ) : view === "stats" ? (
+      ) : view === "earnings" ? (
         <div className="space-y-4">
           <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} />
-          <CompanyStats stats={stats} currency={currency} />
+          <CompanyStats stats={stats} currency={currency} show="earnings" />
+          <EarningsMultipleChart symbol={symbol} currency={currency} />
+        </div>
+      ) : view === "stats" ? (
+        <div className="space-y-4">
+          <CompanyStats stats={stats} currency={currency} show="valuation" />
           <DcfPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
           <ScenarioPanel financials={financials} stats={stats} price={row?.price ?? stats?.price ?? null} currency={currency} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <DividendPanel financials={financials} stats={stats} currency={currency} />
             <ShortInterestPanel stats={stats} />
           </div>
-          <EarningsMultipleChart symbol={symbol} currency={currency} />
           <ValuationBands symbol={symbol} />
         </div>
       ) : view === "peers" ? (

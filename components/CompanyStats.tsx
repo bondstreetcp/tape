@@ -35,7 +35,7 @@ const RATING_LABEL: Record<string, string> = {
   outperform: "Outperform",
 };
 
-export default function CompanyStats({ stats, currency = "USD" }: { stats: CompanyStats | null; currency?: string }) {
+export default function CompanyStats({ stats, currency = "USD", show = "all" }: { stats: CompanyStats | null; currency?: string; show?: "earnings" | "valuation" | "all" }) {
   if (!stats) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
@@ -51,6 +51,8 @@ export default function CompanyStats({ stats, currency = "USD" }: { stats: Compa
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {show !== "valuation" && (
+        <>
       {/* Analyst ratings */}
       <Section title="Analyst Ratings">
         {s.ratings ? <RatingBar r={s.ratings} /> : <Empty />}
@@ -184,7 +186,10 @@ export default function CompanyStats({ stats, currency = "USD" }: { stats: Compa
           </div>
         </Section>
       )}
-
+        </>
+      )}
+      {show !== "earnings" && (
+        <>
       {/* Valuation */}
       <Section title="Valuation">
         <Grid>
@@ -236,6 +241,8 @@ export default function CompanyStats({ stats, currency = "USD" }: { stats: Compa
           <Metric label="Shares Out" value={shares(s.sharesOutstanding)} />
         </Grid>
       </Section>
+        </>
+      )}
     </div>
   );
 }
