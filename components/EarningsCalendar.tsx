@@ -15,6 +15,19 @@ const RANGES = [
   { days: 30, label: "1 month" },
 ];
 
+// Options-priced setup for a near-term reporter (from data/earnings-move.json).
+export interface Setup {
+  impliedMove: number; // % the straddle implies
+  richness: number | null; // implied ÷ historical avg move; >1 rich (sell premium), <1 cheap
+  histAvgMove: number | null;
+}
+function richTone(r: number | null): { l: string; c: string } | null {
+  if (r == null) return null;
+  if (r >= 1.15) return { l: "rich", c: "#ef4444" };
+  if (r <= 0.85) return { l: "cheap", c: "#22c55e" };
+  return { l: "fair", c: "#eab308" };
+}
+
 function timing(iso: string): { label: string; color: string } {
   const h = new Date(iso).getUTCHours();
   if (h > 0 && h < 14) return { label: "Before open", color: "#fbbf24" };
@@ -46,10 +59,12 @@ export default function EarningsCalendar({
   universe,
   stocks,
   generatedAt,
+  setups = {},
 }: {
   universe: string;
   stocks: StockRow[];
   generatedAt: string;
+  setups?: Record<string, Setup>;
 }) {
   const router = useRouter();
   const { has, toggle } = useWatchlist();
@@ -182,6 +197,17 @@ export default function EarningsCalendar({
                         <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: trendColor(s.returns.ytd) }} title="Year-to-date price return">
                           {fmtPct(s.returns.ytd, 1)}
                         </td>
+                        {(() => {
+                          const su = setups[s.symbol];
+                          if (!su) return <td className="px-2 py-1.5 text-right text-xs text-[var(--text-4)]">—</td>;
+                          const tone = richTone(su.richness);
+                          return (
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right" title={su.histAvgMove != null ? `Options imply ±${su.impliedMove.toFixed(1)}% into the print vs ±${su.histAvgMove.toFixed(1)}% avg past reaction (${tone?.l ?? "fair"})` : `Options-implied move ±${su.impliedMove.toFixed(1)}%`}>
+                              <span className="font-mono text-xs tabular-nums text-[var(--text-2)]">±{su.impliedMove.toFixed(1)}%</span>
+                              {tone && <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-semibold" style={{ background: `${tone.c}22`, color: tone.c }}>{tone.l}</span>}
+                            </td>
+                          );
+                        })()}
                       </tr>
                     );
                   })}
@@ -192,7 +218,7 @@ export default function EarningsCalendar({
         </div>
       )}
       <p className="mt-3 text-[11px] text-[var(--text-4)]">
-        Dates &amp; timing (before open / after close) from Yahoo; "est" = unconfirmed estimated date. EPS = forward annual consensus.
+        Dates &amp; timing (before open / after close) from Yahoo; "est" = unconfirmed estimated date. EPS = forward annual consensus. The ±% is the options-implied move into the print (near-term reporters with a chain) — <span className="text-[#ef4444]">rich</span> = options dearer than the stock&apos;s historical reaction, <span className="text-[#22c55e]">cheap</span> = lighter; open a name for the full prep.
       </p>
     </main>
   );
