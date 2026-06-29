@@ -68,7 +68,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         "Use specific NUMBERS only from the supplied data; name segment/guidance items without fabricating precise figures. " +
         NO_ADVICE;
       const SCHEMA = 'Return ONLY JSON: {"moneyLine": string, "overview": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string}';
-      const out = await chatJSON<any>(SYSTEM, ctx, { maxTokens: 4000, model: PRO_MODEL });
+      // Live request → cap Gemini's reasoning so it returns well within the function timeout.
+      const out = await chatJSON<any>(SYSTEM, ctx, { maxTokens: 4000, model: PRO_MODEL, reasoningEffort: "low" });
       const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 6) : []);
       const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
       const ai = out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)

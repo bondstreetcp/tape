@@ -64,6 +64,10 @@ export interface ChatOpts {
   temperature?: number;
   maxTokens?: number;
   retries?: number;
+  // For reasoning models (e.g. Gemini 3.1 Pro): cap the thinking budget. "low" is much faster —
+  // use it for LIVE, timeout-bound requests where a 40-50s deep-reasoning call risks the function
+  // limit. Nightly scripts can leave it unset (full reasoning) since they aren't timeout-bound.
+  reasoningEffort?: "low" | "medium" | "high";
 }
 
 interface ChatMessage {
@@ -90,6 +94,7 @@ async function callChat(
   };
   if (jsonMode) body.response_format = { type: "json_object" };
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+  if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
 
   let lastInfo = "";
   for (let attempt = 0; attempt < retries; attempt++) {

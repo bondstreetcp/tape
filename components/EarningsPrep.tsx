@@ -173,7 +173,10 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
             )}
           </div>
         ) : (
-          <p className="text-[12px] text-[var(--text-4)]">No preview available right now.</p>
+          <div className="text-[12px] text-[var(--text-4)]">
+            Couldn&apos;t build the preview just now.{" "}
+            <button onClick={runAi} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
+          </div>
         )}
       </div>
 
