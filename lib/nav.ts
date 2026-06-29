@@ -46,6 +46,7 @@ export const FEATURES: NavItem[] = [
   // ── Research
   { label: "Confluence Engine", path: "/confluence", desc: "Names where several independent bullish signals stack up — the flagship idea scanner", group: "Research", job: "Find ideas", kw: "confluence signals ideas opportunities value smart money setups" },
   { label: "Smart-Money Radar", path: "/smart-money", desc: "Who's quietly accumulating — super-investor 13F adds + Congress buys, dip-buys flagged", group: "Research", job: "Find ideas", kw: "smart money insiders accumulation 13f congress buying dip institutional" },
+  { label: "Revisions Momentum", path: "/revisions", desc: "Where the Street is quietly raising (or cutting) estimates — the revision-momentum factor", group: "Research", job: "Find ideas", kw: "estimate revisions momentum eps consensus upgrades pead drift analyst starmine" },
   { label: "Factor-Screen Overlap", path: "/factor-overlap", desc: "Names that top several value/quality screens at once — the best all-round profiles", group: "Research", job: "Find ideas", kw: "factor screens overlap value quality magic formula piotroski composite" },
   { label: "Overnight Filings", path: "/overnight", desc: "AI desk notes on new material SEC filings (8-K/10-Q/10-K)", group: "Research", job: "Find ideas", kw: "sec edgar filings 8-k 10-q ai superanalyst" },
   { label: "Discount to History", path: "/valuation-history", desc: "Names trading cheap vs their own 10-year valuation", group: "Research", job: "Find ideas", kw: "valuation cheap multiple discount mean reversion" },
