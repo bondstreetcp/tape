@@ -22,6 +22,7 @@
     "refresh-13f": "tsx scripts/refresh-13f.ts",
     "refresh-catalysts": "tsx scripts/refresh-catalysts.ts",
     "refresh-cef": "tsx scripts/refresh-cef.ts",
+    "refresh-holdco-nav": "tsx scripts/refresh-holdco-nav.ts",
     "refresh-valuation-history": "tsx scripts/refresh-valuation-history.ts",
     "refresh-estimates": "tsx scripts/refresh-estimates.ts",
     "refresh-insiders": "tsx scripts/refresh-insiders.ts",
