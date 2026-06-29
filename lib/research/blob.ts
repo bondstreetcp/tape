@@ -25,6 +25,17 @@ async function ensureBucket(): Promise<void> {
   bucketReady = true;
 }
 
+/** Lightweight reachability check — confirms the secret key can talk to Storage (for /health). */
+export async function storageHealth(): Promise<{ ok: boolean; error?: string }> {
+  if (!blobConfigured()) return { ok: false, error: "SUPABASE_URL / SUPABASE_SECRET_KEY not set" };
+  try {
+    const res = await fetch(`${SUPA_URL}/storage/v1/bucket`, { headers: auth() });
+    return res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status} (check SUPABASE_SECRET_KEY)` };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e).slice(0, 120) };
+  }
+}
+
 /** Upload (upsert) a PDF; returns the storage key, or null if Storage isn't configured. */
 export async function uploadPdf(id: string, buf: Buffer | Uint8Array): Promise<string | null> {
   if (!blobConfigured()) return null;
