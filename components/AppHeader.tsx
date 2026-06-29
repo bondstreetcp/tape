@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
 import CommandPalette from "./CommandPalette";
-import { FEATURES, NAV_GROUPS } from "@/lib/nav";
+import { FEATURES, NAV_GROUPS, RESEARCH_HUBS, hubForPath } from "@/lib/nav";
 
 interface Item { href: string; label: string; desc?: string; job?: string }
 interface Group { label: string; items: Item[] }
@@ -69,6 +69,10 @@ export default function AppHeader({
 
   const active = groups.find((g) => g.label === open);
 
+  // Secondary sub-nav: when on a Research hub page, show that hub's sibling tools as sub-tabs.
+  const relPath = pathname.startsWith(base) ? pathname.slice(base.length) || "/" : pathname;
+  const hub = hubForPath(relPath);
+
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--divider)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
@@ -129,6 +133,19 @@ export default function AppHeader({
         </div>
       </div>
 
+      {/* Secondary sub-nav — sub-tabs within the active Research hub. */}
+      {hub && (
+        <div className="border-t border-[var(--divider)] bg-[var(--surface)]/50">
+          <div className="mx-auto flex max-w-7xl items-center gap-0.5 overflow-x-auto px-4 py-1.5 text-[13px] sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 pr-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{hub.label}</span>
+            {hub.items.map((it) => {
+              const href = `${base}${it.path}`;
+              return <Link key={it.path} href={href} className={linkCls(isActive(href))}>{it.label}</Link>;
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Dropdown panel — fixed so it isn't clipped by the scrollable nav. */}
       {active && (
         <div
@@ -140,6 +157,21 @@ export default function AppHeader({
           {(() => {
             // Break a long menu into sub-groups by job-to-be-done (so e.g. Research splits into
             // "Find ideas" vs "Research a name"). One group → no header.
+            // Research is consolidated into HUBS (the menu was too busy) — each opens a page whose
+            // sub-nav bar reveals the rest. Other groups split by job-to-be-done.
+            if (active.label === "Research") {
+              return RESEARCH_HUBS.map((h) => {
+                const href = `${base}${h.paths[0]}`;
+                const act = h.paths.some((p) => isActive(`${base}${p}`));
+                return (
+                  <Link key={h.label} href={href} role="menuitem" onClick={() => setOpen(null)}
+                    className={"block rounded-md px-2.5 py-1.5 transition-colors " + (act ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")}>
+                    <div className={"text-sm font-medium " + (act ? "text-[var(--accent)]" : "text-[var(--text)]")}>{h.label} <span className="text-[10px] font-normal text-[var(--text-4)]">· {h.paths.length} tools</span></div>
+                    <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{h.blurb}</div>
+                  </Link>
+                );
+              });
+            }
             const jobs = [...new Set(active.items.map((it) => it.job))];
             const renderItem = (it: Item) => (
               <Link

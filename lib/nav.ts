@@ -64,6 +64,25 @@ export const FEATURES: NavItem[] = [
   { label: "Research Desk", path: "/research-desk", desc: "Upload sell-side PDFs → searchable, cross-broker synthesis", group: "Research", job: "Research a name", kw: "research pdf upload broker analyst report" },
 ];
 
+// Research sub-hubs — the Research menu grew long, so cluster it into a few hubs that act as sub-tabs
+// of each other. The dropdown shows the hubs; a secondary sub-nav bar (AppHeader) shows a hub's
+// members when you're on one of its pages. Paths must match FEATURES paths above.
+export const RESEARCH_HUBS: { label: string; blurb: string; paths: string[] }[] = [
+  { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap"] },
+  { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
+  { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
+  { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, sector compare", paths: ["/compare-stocks", "/ratio", "/compare"] },
+  { label: "Documents", blurb: "SEC filings, overnight desk notes, your research corpus", paths: ["/research-desk", "/research", "/overnight"] },
+];
+
+const _featByPath = new Map(FEATURES.map((f) => [f.path, f] as const));
+/** The hub a relative path (e.g. "/confluence") belongs to + its member NavItems — for the sub-nav bar. */
+export function hubForPath(relPath: string): { label: string; items: NavItem[] } | null {
+  const hub = RESEARCH_HUBS.find((h) => h.paths.some((p) => relPath === p || relPath.startsWith(p + "/")));
+  if (!hub) return null;
+  return { label: hub.label, items: hub.paths.map((p) => _featByPath.get(p)).filter((x): x is NavItem => !!x) };
+}
+
 export const ALL_NAV: NavItem[] = [...TOP_LINKS, ...FEATURES];
 export const NAV_GROUPS: NavGroup[] = ["Markets", "Strategies", "Research"];
 export const JOBS: Job[] = ["Track the market", "Find ideas", "Research a name", "Income strategies"];
