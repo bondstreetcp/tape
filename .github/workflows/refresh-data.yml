@@ -87,7 +87,7 @@ jobs:
         if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
         run: |
           H=$((10#$(date -u +%H)))
-          if   [ "$H" -lt 7 ];  then ONLY="kospi,nikkei,hsi";          MKT="Asian session";          fi
+          if   [ "$H" -lt 7 ];  then ONLY="kospi,nikkei,topix,hsi";    MKT="Asian session";          fi
           if   [ "$H" -ge 7 ] && [ "$H" -lt 13 ]; then ONLY="cac40,aex,ftse100,dax,smi"; MKT="European morning"; fi
           if   [ "$H" -ge 13 ]; then ONLY="";                          MKT="US daytime (all universes)"; fi
           echo "ONLY=$ONLY" >> "$GITHUB_ENV"

@@ -79,6 +79,16 @@ export const UNIVERSES: UniverseMeta[] = [
     note: "Major Nikkei 225 constituents — Tokyo Stock Exchange. Prices in JPY. International data via Yahoo (npm run refresh-intl).",
   },
   {
+    id: "topix",
+    name: "TOPIX 100 (Japan)",
+    short: "TOPIX 100",
+    intraday: false,
+    international: true,
+    indexSymbol: "^TOPX",
+    currency: "JPY",
+    note: "TOPIX 100 large-caps — the broad Tokyo index's blue chips (wider Japan coverage than the Nikkei subset). Prices in JPY. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
     id: "ftse100",
     name: "FTSE 100 (UK)",
     short: "FTSE 100",
