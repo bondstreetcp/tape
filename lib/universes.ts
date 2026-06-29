@@ -148,6 +148,26 @@ export const UNIVERSES: UniverseMeta[] = [
     currency: "MXN",
     note: "S&P/BMV IPC constituents — Mexican Stock Exchange (BMV). Prices in MXN. International data via Yahoo (npm run refresh-intl).",
   },
+  {
+    id: "gscbvivl",
+    name: "GSCBVIVL — EU Media Basket",
+    short: "GS · VIVL",
+    intraday: false,
+    international: true,
+    indexSymbol: "^STOXX50E",
+    currency: "EUR",
+    note: "A Goldman Sachs custom basket (GSCBVIVL) — the European media complex (Universal Music, Telecom Italia, Lagardère, Banijay, MFE, Prisa…). Constituents ingested from the GS position file. EUR-dominant, mixed currency. Index line shows the Euro STOXX 50 as a market backdrop.",
+  },
+  {
+    id: "gscmprxh",
+    name: "GSCMPRXH — EU Tech Basket",
+    short: "GS · PRXH",
+    intraday: false,
+    international: true,
+    indexSymbol: "^STOXX50E",
+    currency: "EUR",
+    note: "A Goldman Sachs custom basket (GSCMPRXH) — European tech + the Vivendi-complex media names (ASML, SAP, Infineon, STMicro, Nokia, Vivendi, Canal+…). Constituents ingested from the GS position file. EUR-dominant, mixed currency. Index line shows the Euro STOXX 50 as a market backdrop.",
+  },
 ];
 
 export const DEFAULT_UNIVERSE = "sp500";
