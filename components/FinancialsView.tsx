@@ -9,6 +9,7 @@ import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
 import { RiskFactorPanel } from "./StockExtras";
+import SupplyChain from "./SupplyChain";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
 import FilingsView from "./FilingsView";
@@ -365,7 +366,10 @@ export default function FinancialsView({
       ) : view === "options" ? (
         <OptionsChain symbol={symbol} currency={currency} />
       ) : view === "profile" ? (
-        <ProfilePanel profile={profile} currency={currency} />
+        <div className="space-y-4">
+          <ProfilePanel profile={profile} currency={currency} />
+          <SupplyChain symbol={symbol} name={name} universe={universe} />
+        </div>
       ) : !hasData ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-3)]">
           No financial data available for {symbol}.
