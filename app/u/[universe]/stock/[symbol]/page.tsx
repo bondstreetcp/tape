@@ -11,6 +11,21 @@ import FinancialsView from "@/components/FinancialsView";
 import SetupNotice from "@/components/SetupNotice";
 import { fetchLiveStock } from "@/lib/liveStock";
 import type { StockRow, StockSeries } from "@/lib/types";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { SssData, SssTicker } from "@/lib/sameStoreSales";
+
+// Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
+// extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
+function loadSss(sym: string): SssTicker | null {
+  try {
+    const p = join(process.cwd(), "data", "same-store-sales.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as SssData).byTicker?.[sym] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // Unified ticker page (Overview + Financials/Estimates/Peers/Ownership/Filings/
 // Options/Profile tabs). The chart + snapshot come from local files; the financials/
@@ -86,6 +101,7 @@ export default async function StockPage({
       peers={peers}
       peerGroup={peerGroup}
       row={row}
+      sss={loadSss(SYM)}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}

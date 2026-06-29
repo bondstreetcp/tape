@@ -8,6 +8,7 @@
     "start": "next start",
     "refresh-data": "tsx scripts/build-data.ts",
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
+    "refresh-sss": "tsx scripts/refresh-sss.ts",
     "fetch-constituents": "tsx scripts/fetch-constituents.ts",
     "check-iwv": "tsx scripts/check-iwv.ts",
     "patch-fundamentals": "tsx scripts/patch-fundamentals.ts",

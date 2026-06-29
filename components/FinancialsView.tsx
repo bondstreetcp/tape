@@ -5,6 +5,7 @@ import type { FinPeriod, Financials } from "@/lib/financials";
 import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import type { StockRow } from "@/lib/types";
+import { compFinder, type SssTicker } from "@/lib/sameStoreSales";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
@@ -35,7 +36,7 @@ import type { SeriesPoint } from "@/lib/types";
 import { fmtMoney, fmtPct, currencyPrefix, fmtDateTime } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 
-type Kind = "cur" | "eps" | "shares" | "pct";
+type Kind = "cur" | "eps" | "shares" | "pct" | "sss";
 interface RowSpec {
   label: string;
   field?: string | string[];
@@ -43,6 +44,7 @@ interface RowSpec {
   bold?: boolean;
   derived?: (p: FinPeriod) => number | null;
   growth?: boolean; // show YoY % change under the value
+  sssData?: SssTicker; // same-store-sales payload (for the sign-coloured comp row + source/tooltip)
 }
 
 const fld = (p: FinPeriod, f?: string | string[]): number | null => {
@@ -122,6 +124,7 @@ function fmtBig(v: number | null, cur = "USD"): string {
 }
 function fmtCell(v: number | null, kind: Kind, cur = "USD"): string {
   if (v == null || Number.isNaN(v)) return "—";
+  if (kind === "sss") return `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`; // comps: sign is the signal
   if (kind === "pct") return `${v >= 0 ? "" : "−"}${Math.abs(v).toFixed(1)}%`;
   if (kind === "eps") return fmtMoney(v, cur);
   if (kind === "shares") {
@@ -150,6 +153,7 @@ export default function FinancialsView({
   peers,
   peerGroup,
   row,
+  sss,
   daily,
   intraday,
   generatedAt,
@@ -165,6 +169,7 @@ export default function FinancialsView({
   peers: StockRow[];
   peerGroup: string | null;
   row: StockRow | null;
+  sss?: SssTicker | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -194,7 +199,20 @@ export default function FinancialsView({
 
   const chrono = financials[type]; // oldest → newest
   const periods = useMemo(() => [...chrono].reverse(), [chrono]); // newest → oldest for columns
-  const rows = STATEMENTS[stmt].rows;
+  // Restaurants/retailers: splice a sign-coloured comparable-sales row in under Total Revenue (quarterly
+  // income only — comps are quarter-anchored and don't aggregate to a fiscal year).
+  const rows = useMemo<RowSpec[]>(() => {
+    const base = STATEMENTS[stmt].rows;
+    if (stmt !== "income" || type !== "quarterly" || !sss?.periods?.length) return base;
+    const find = compFinder(sss.periods);
+    const sssRow: RowSpec = {
+      label: (sss.metricLabel || "Comparable sales").replace(/\s*%$/, "") + " %",
+      kind: "sss",
+      derived: (p) => find(p)?.comp ?? null,
+      sssData: sss,
+    };
+    return [base[0], sssRow, ...base.slice(1)];
+  }, [stmt, type, sss]);
   const hasData = financials.annual.length > 0 || financials.quarterly.length > 0;
 
   const cell = (p: FinPeriod, r: RowSpec): number | null =>
@@ -444,19 +462,24 @@ export default function FinancialsView({
                         className={
                           "sticky left-0 z-10 bg-[var(--surface)] px-4 py-2 text-left " +
                           (r.bold ? "font-semibold text-[var(--text)]" : "text-[var(--text-2)]") +
-                          (r.kind === "pct" ? " pl-7 text-xs italic" : "")
+                          (r.kind === "pct" ? " pl-7 text-xs italic" : r.kind === "sss" ? " pl-7 text-xs" : "")
                         }
                       >
                         {r.label}
+                        {r.sssData && <SssInfo data={r.sssData} />}
                       </td>
                       {displayPeriods.map((p, i) => {
                         const v = cell(p, r);
-                        const neg = v != null && v < 0 && r.kind !== "pct";
+                        const neg = v != null && v < 0 && r.kind !== "pct" && r.kind !== "sss";
+                        const sssMatch = r.kind === "sss" && r.sssData ? compFinder(r.sssData.periods)(p) : null;
+                        const sssColor = r.kind === "sss" && v != null ? (v >= 0 ? "#22c55e" : "#ef4444") : null;
                         const prior = r.growth && i + 1 < displayPeriods.length ? cell(displayPeriods[i + 1], r) : null;
                         const yoy = r.growth && v != null && prior != null && prior > 0 ? (v / prior - 1) * 100 : null;
                         return (
                           <td
                             key={p.date}
+                            title={sssMatch?.source?.quote || undefined}
+                            style={sssColor ? { color: sssColor } : undefined}
                             className={
                               "px-4 py-2 text-right tabular-nums " +
                               (r.bold ? "font-semibold " : "") +
@@ -482,6 +505,9 @@ export default function FinancialsView({
           <p className="mt-3 text-[11px] text-[var(--text-3)]">
             Source: Yahoo Finance fundamentals · {type} · most recent period on the
             left · fetched live and cached for 24h.
+            {stmt === "income" && type === "quarterly" && sss?.periods?.length ? (
+              <>{" · "}<span className="text-[var(--text-2)]">{sss.metricLabel || "Comparable sales"}</span> extracted from the earnings release (8-K Ex-99.1); company-defined, LLM-extracted, not a GAAP line.</>
+            ) : null}
             {estPeriods.length > 0 && (
               <>
                 {" · "}
@@ -500,6 +526,20 @@ export default function FinancialsView({
         </>
       )}
     </main>
+  );
+}
+
+// Source + definition affordance on the comparable-sales row label.
+function SssInfo({ data }: { data: SssTicker }) {
+  const src = data.periods.find((p) => p.source?.url)?.source;
+  const tip = `${data.metricLabel}${data.definition ? " — " + data.definition : ""}\n\nCompany-defined comparable-sales metric, extracted from the earnings release. Not a GAAP line. Hover a value for the source quote.`;
+  return (
+    <span className="ml-1 inline-flex items-center gap-1 align-middle not-italic">
+      <span className="cursor-help text-[10px] text-[var(--text-4)]" title={tip}>ⓘ</span>
+      {src?.url && (
+        <a href={src.url} target="_blank" rel="noreferrer" className="text-[10px] text-[var(--accent)] hover:underline" title={`Source: ${src.form} filed ${src.date}`}>↗</a>
+      )}
+    </span>
   );
 }
 

@@ -252,6 +252,17 @@ jobs:
           SCAN_BROAD: "1"
         continue-on-error: true
 
+      # Same-store / comparable sales for restaurants (Phase 1) — extracted from the night's earnings
+      # 8-K press releases and spliced into the income statement. Incremental: only a name that reported
+      # a NEW quarter since the last run costs an LLM call, so steady-state is a handful per night.
+      - name: Refresh same-store sales (comps)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-sss
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          INDUSTRY: Restaurants
+        continue-on-error: true
+
       # Cash-secured put-writing screen. Uses the refreshed snapshots (ROE / P/E / cap) + price
       # series above, then pulls option chains for the ~150 large caps that pass the quality/value
       # filter and prices the ~16-delta / ~35-DTE put. Globally rate-limited (Yahoo throttles
