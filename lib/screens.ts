@@ -6,7 +6,7 @@
  */
 import type { StockRow } from "./types";
 
-export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat" | "rule40" | "mna";
+export type ScreenKey = "magic" | "erp5" | "qualval" | "netnet" | "piotroski" | "shyield" | "moat" | "rule40" | "mna" | "quality" | "peercheap" | "margininflect";
 export interface ScreenOpts { topN?: number; pioMin?: number }
 
 export const SCREEN_LABEL: Record<ScreenKey, string> = {
@@ -19,6 +19,9 @@ export const SCREEN_LABEL: Record<ScreenKey, string> = {
   moat: "Buffett–Munger Moat",
   rule40: "Rule of 40 (Growth + Profit)",
   mna: "M&A Target (Takeout)",
+  quality: "Quality Percentile",
+  peercheap: "Cheap vs Sector Peers",
+  margininflect: "Margin Inflection + Re-accel",
 };
 
 /** Short labels for the toggle chips (shared by the Screener + Backtester). */
@@ -32,10 +35,13 @@ export const SCREEN_SHORT: Record<ScreenKey, string> = {
   moat: "Moat",
   rule40: "Rule of 40",
   mna: "M&A Target",
+  quality: "Quality",
+  peercheap: "Cheap vs Peers",
+  margininflect: "Margin Turn",
 };
 
 /** Display order for the screen chips and tooltips. */
-export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat", "rule40", "mna"];
+export const SCREEN_ORDER: ScreenKey[] = ["magic", "erp5", "qualval", "netnet", "piotroski", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect"];
 
 /** Detailed, plain-English descriptions for the strategy tooltip + the beta-tester guide. */
 export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: string; read: string }> = {
@@ -92,6 +98,24 @@ export const SCREEN_INFO: Record<ScreenKey, { name: string; what: string; how: s
     what: "A heuristic for acquisition attractiveness — the profile of a clean, cash-generative business an acquirer could buy and finance, not a prediction that a bid is imminent.",
     how: "Filters for a digestible size ($300M–$25B), low leverage (net debt ≤ 2× EBITDA, or net cash — room for a buyer to lever it up), real cash generation (positive FCF margin) and margins (operating margin ≥ 8%), and an undemanding multiple (P/E ≤ 25, so there's headroom for a takeout premium). Survivors are ranked by a four-factor score — cheapness, FCF margin, ROIC, and low leverage. Ex financials.",
     read: "Lower combined rank = a cleaner, cheaper, more financeable target; shown best-first. It flags who looks acquirable on the numbers — not who's actually in play. Cross-check ownership, insider stakes and sector consolidation before reading anything into it.",
+  },
+  quality: {
+    name: "Quality Percentile",
+    what: "A single business-quality rank — how good the company is at turning capital into profit and cash, regardless of price.",
+    how: "Sums six quality-factor ranks across the universe — return on invested capital, return on equity, gross margin, operating margin, free-cash-flow yield, and low net-debt/EBITDA — and takes the best names. Ex financials (the capital math doesn't translate), ≥$500M.",
+    read: "Lower combined rank = higher quality; shown best-first. Quality says nothing about valuation — it's the universal first cut and a clean sort key to overlay on a value screen (cheap AND high-quality avoids value traps).",
+  },
+  peercheap: {
+    name: "Cheap vs Sector Peers",
+    what: "Cross-sectional relative value — names trading cheap versus their OWN sector's peers right now (not versus their own history).",
+    how: "Within each sector, z-scores every name's P/E, forward P/E and price-to-book against the sector median, then ranks by the average z-score (more negative = cheaper than peers). Needs a real peer set (≥5 names per sector) and at least two valid multiples per name. Ex financials, ≥$500M.",
+    read: "Most negative composite z = cheapest relative to its peers; shown cheapest-first. The complement to the Discount-to-History screen — that one is mean-reversion on a name's own multiples, this is cheapness across the cross-section. Pair with quality so you're buying a cheap good business, not a cheap broken one.",
+  },
+  margininflect: {
+    name: "Margin Inflection + Re-acceleration",
+    what: "The P&L turn that tends to precede consensus upgrades — operating margins expanding while revenue growth is re-accelerating.",
+    how: "Keeps names where operating margin rose year-over-year AND the latest revenue growth is above the 3-year revenue CAGR (i.e. growth is speeding up, not slowing), ranked by the combined magnitude of the margin expansion and the acceleration. Ex financials, ≥$500M.",
+    read: "Higher combined score = a stronger fundamental inflection. Catching the turn before the Street fully models it is where the re-rating lives; complements estimate-revision momentum (the fundamental turn vs. the Street's reaction to it). Pair with valuation — an inflecting name can already be richly priced.",
   },
 };
 
@@ -245,6 +269,71 @@ export function screenSymbols(key: ScreenKey, stocks: StockRow[], opts: ScreenOp
       .sort((a, b) => a.score - b.score)
       .slice(0, topN)
       .map((x) => x.sym);
+  }
+
+  if (key === "quality") {
+    // Composite quality: sum six quality-factor ranks (ROIC, ROE, gross & operating margin, FCF yield,
+    // low leverage), best first. A pure quality rank — says nothing about price. Ex financials, ≥$500M.
+    const valid = stocks.filter(
+      (s) => s.fund?.roic != null && s.fund?.grossMargin != null && s.fund?.opMargin != null && s.fund?.fcfYield != null && s.etf !== "XLF" && (s.marketCap || 0) >= 5e8,
+    );
+    if (valid.length < 20) return [];
+    const rROIC = rankMap(valid, (s) => s.fund!.roic!);
+    const rROE = rankMap(valid, (s) => s.fund!.roe ?? -Infinity);
+    const rGM = rankMap(valid, (s) => s.fund!.grossMargin!);
+    const rOM = rankMap(valid, (s) => s.fund!.opMargin!);
+    const rFCF = rankMap(valid, (s) => s.fund!.fcfYield!);
+    const rLev = rankMap(valid, (s) => -(s.fund!.netDebtEbitda ?? 0)); // less leverage = better
+    return valid
+      .map((s) => ({ sym: s.symbol, score: rROIC.get(s.symbol)! + rROE.get(s.symbol)! + rGM.get(s.symbol)! + rOM.get(s.symbol)! + rFCF.get(s.symbol)! + rLev.get(s.symbol)! }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, topN)
+      .map((x) => x.sym);
+  }
+
+  if (key === "peercheap") {
+    // Cross-sectional relative value: z-score P/E, forward P/E and P/B against the SECTOR median,
+    // rank by the average z (more negative = cheaper than peers). Needs a real peer set per sector.
+    const valid = stocks.filter((s) => s.sector && (s.trailingPE ?? 0) > 0 && (s.priceToBook ?? 0) > 0 && s.etf !== "XLF" && (s.marketCap || 0) >= 5e8);
+    if (valid.length < 20) return [];
+    const bySector = new Map<string, StockRow[]>();
+    for (const s of valid) { const l = bySector.get(s.sector); if (l) l.push(s); else bySector.set(s.sector, [s]); }
+    const median = (xs: number[]) => { const a = [...xs].sort((p, q) => p - q); const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+    const std = (xs: number[], mu: number) => Math.sqrt(xs.reduce((acc, x) => acc + (x - mu) ** 2, 0) / xs.length) || 1;
+    const metrics: ((s: StockRow) => number | null | undefined)[] = [(s) => s.trailingPE, (s) => s.forwardPE, (s) => s.priceToBook];
+    const sectorStats = new Map<string, ({ med: number; sd: number } | null)[]>();
+    for (const [sec, list] of bySector) {
+      if (list.length < 5) continue; // need a real peer set
+      sectorStats.set(sec, metrics.map((m) => { const vals = list.map(m).filter((v): v is number => v != null && v > 0); if (vals.length < 5) return null; const md = median(vals); return { med: md, sd: std(vals, md) }; }));
+    }
+    return valid
+      .map((s) => {
+        const stats = sectorStats.get(s.sector);
+        if (!stats) return null;
+        const zs: number[] = [];
+        metrics.forEach((m, i) => { const st = stats[i]; const v = m(s); if (st && v != null && v > 0) zs.push((v - st.med) / st.sd); });
+        return zs.length >= 2 ? { sym: s.symbol, z: zs.reduce((a, b) => a + b, 0) / zs.length } : null;
+      })
+      .filter((x): x is { sym: string; z: number } => x != null)
+      .sort((a, b) => a.z - b.z) // cheapest vs peers first
+      .slice(0, topN)
+      .map((x) => x.sym);
+  }
+
+  if (key === "margininflect") {
+    // Margin inflection: operating margin up YoY AND revenue growth re-accelerating (latest YoY >
+    // 3yr CAGR). Ranked by the combined magnitude of expansion + acceleration. Ex financials, ≥$500M.
+    return stocks
+      .filter(
+        (s) =>
+          (s.fund?.opMarginChg ?? -1) > 0 &&
+          s.fund?.revGrowth != null && s.fund?.revCagr3y != null &&
+          s.fund.revGrowth > s.fund.revCagr3y && s.fund.revGrowth > 0 &&
+          s.etf !== "XLF" && (s.marketCap || 0) >= 5e8,
+      )
+      .sort((a, b) => b.fund!.opMarginChg! + (b.fund!.revGrowth! - b.fund!.revCagr3y!) - (a.fund!.opMarginChg! + (a.fund!.revGrowth! - a.fund!.revCagr3y!)))
+      .slice(0, topN)
+      .map((s) => s.symbol);
   }
 
   // Magic Formula (Greenblatt): earnings-yield rank + return-on-capital rank, summed,

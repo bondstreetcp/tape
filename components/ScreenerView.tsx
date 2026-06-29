@@ -62,6 +62,9 @@ function stratColFor(key: ScreenKey): Col | null {
     case "shyield": return { key: "shyield", label: "Sh. Yield", num: true, get: (s) => s.fund?.shareholderYield ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" };
     case "rule40": return { key: "rule40", label: "Rule 40", num: true, get: (s) => (s.fund?.revGrowth != null && s.fund?.fcfMargin != null ? s.fund.revGrowth + s.fund.fcfMargin : null), fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.4 ? "#22c55e" : undefined), align: "right" };
     case "mna": return { key: "ndebt", label: "Nd/EBITDA", num: true, get: (s) => s.fund?.netDebtEbitda ?? null, fmt: (v) => (v == null ? "net cash" : `${v.toFixed(1)}×`), color: (v) => (v == null || v <= 0 ? "#22c55e" : v <= 1 ? "#fbbf24" : undefined), align: "right" };
+    case "quality": return { key: "roic", label: "ROIC", num: true, get: (s) => s.fund?.roic ?? null, fmt: pctFrac, color: (v) => (v == null ? undefined : v >= 0.2 ? "#22c55e" : undefined), align: "right" };
+    case "peercheap": return { key: "pe", label: "P/E", num: true, get: (s) => s.trailingPE ?? null, fmt: (v) => (v == null ? "—" : `${v.toFixed(0)}×`), align: "right" };
+    case "margininflect": return { key: "ommchg", label: "OpM Δ", num: true, get: (s) => s.fund?.opMarginChg ?? null, fmt: pctFrac, color: (v) => trendColor(v), align: "right" };
     default: return null; // magic — pure rank, no signature column
   }
 }
@@ -85,11 +88,14 @@ function screenBlurb(key: ScreenKey, n: number, pioMin: number): string {
     case "moat": return `${n} wide-moat names — ROIC ≥ 15%, operating margin ≥ 20%, low debt (best first)`;
     case "rule40": return `${n} clearing the Rule of 40 — revenue growth + FCF margin ≥ 40% (best first)`;
     case "mna": return `top ${n} takeout candidates — clean, cash-generative mid-caps at an undemanding multiple (best first)`;
+    case "quality": return `top ${n} by the quality composite — ROIC, ROE, margins, FCF yield, low leverage (best first)`;
+    case "peercheap": return `top ${n} cheapest vs their sector peers — P/E, fwd P/E, P/B z-scored against the sector median`;
+    case "margininflect": return `${n} with margins expanding AND revenue growth re-accelerating (best first)`;
   }
 }
 
 // Screens that produce a ranked Top-N (so the Top-N selector applies); the rest are pure filters.
-const RANKED_SCREENS: ScreenKey[] = ["magic", "erp5", "qualval", "shyield", "moat", "rule40", "mna"];
+const RANKED_SCREENS: ScreenKey[] = ["magic", "erp5", "qualval", "shyield", "moat", "rule40", "mna", "quality", "peercheap", "margininflect"];
 
 export default function ScreenerView({
   universe,
