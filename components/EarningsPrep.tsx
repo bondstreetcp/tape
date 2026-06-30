@@ -305,6 +305,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         </div>
       )}
 
+      <div className="sm:columns-2 sm:gap-3">
       <Bento title="Consensus · this quarter">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
           <Big value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} label={`EPS${q0?.epsAnalysts ? ` · ${q0.epsAnalysts} est` : ""}`} />
@@ -352,7 +353,6 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         </Bento>
       )}
 
-      <div className="sm:columns-2 sm:gap-3">
         {/* Past reactions */}
         {ev.length > 0 && (
           <Bento title="Past reactions" hint="surprise → 1-day move, the directional reliability, and the post-print drift">
