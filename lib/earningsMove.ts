@@ -29,6 +29,8 @@ export interface EarningsMoveRow {
   histMaxMovePct: number | null; // largest single reaction in that window
   histN: number;
   richness: number | null; // impliedMovePct / histAvgMovePct (>1 = options pricing more than history)
+  beatUp: number | null; // of past EPS beats, fraction where the stock rose (low = sell-the-news)
+  beatN: number; // number of past beats in the sample
 }
 
 export interface EarningsMoveData {

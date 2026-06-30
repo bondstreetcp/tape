@@ -20,7 +20,7 @@ function richColor(v: number | null | undefined): string {
   return "var(--text-2)";
 }
 
-type SortKey = "soon" | "rich" | "implied" | "hist" | "iv" | "mktcap" | "price";
+type SortKey = "soon" | "rich" | "implied" | "hist" | "iv" | "mktcap" | "price" | "react";
 type Regime = "all" | "rich" | "cheap";
 
 export default function EarningsMoveView({
@@ -50,6 +50,7 @@ export default function EarningsMoveView({
       iv: (r) => r.impliedIV ?? -1,
       mktcap: (r) => r.marketCap,
       price: (r) => r.price,
+      react: (r) => (r.beatUp != null && r.beatN >= 3 ? 1 - r.beatUp : -1), // lowest beat→up (sell-the-news) first
     };
     return allRows
       .filter((r) => {
@@ -89,6 +90,7 @@ export default function EarningsMoveView({
         <span><b className="text-[var(--text-2)]">Implied move</b> = ATM straddle ÷ price (the priced ± move)</span>
         <span><b className="text-[var(--text-2)]">Hist</b> = avg of the last several 1-day post-earnings reactions</span>
         <span><b className="text-[var(--text-2)]">Richness</b> = implied ÷ historical · <span className="text-[#f59e0b]">&gt;1 rich</span> (sell premium) · <span className="text-[#2dd4bf]">&lt;1 cheap</span> (buy)</span>
+        <span><b className="text-[var(--text-2)]">Beat→up</b> = of past EPS beats, how often the stock rose · <span className="text-[#ef4444]">≤50% ⚠</span> = sell-the-news</span>
       </div>
 
       {/* filters */}
@@ -116,7 +118,7 @@ export default function EarningsMoveView({
       ) : (
         <>
           <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            <table className="w-full min-w-[1040px] text-sm">
+            <table className="w-full min-w-[1120px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-3)]">
                   <th className="w-7 px-2 py-2"></th>
@@ -130,6 +132,7 @@ export default function EarningsMoveView({
                   <SortTh k="hist" cls="text-right">Hist avg</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Hist max</th>
                   <SortTh k="rich" cls="text-right">Richness</SortTh>
+                  <SortTh k="react" cls="text-right">Beat→up</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Implied range</th>
                 </tr>
               </thead>
@@ -152,6 +155,7 @@ export default function EarningsMoveView({
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title={r.histN ? `mean of ${r.histN} reactions` : ""}>{r.histAvgMovePct != null ? `±${pct(r.histAvgMovePct)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{r.histMaxMovePct != null ? `±${pct(r.histMaxMovePct)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums" style={{ color: richColor(r.richness) }} title={r.richness != null ? (r.richness >= 1 ? "Options pricing more than the historical move — premium-selling edge" : "Options pricing less than the historical move — long-premium edge") : "Not enough history"}>{r.richness != null ? `${r.richness.toFixed(2)}×` : "—"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums" title={r.beatN >= 3 ? `Of ${r.beatN} past EPS beats, the stock rose ${Math.round((r.beatUp ?? 0) * 100)}% of the time — low = sell-the-news` : "Too few past beats"}>{r.beatUp != null && r.beatN >= 3 ? <span style={{ color: r.beatUp <= 0.5 ? "#ef4444" : r.beatUp >= 0.75 ? "#22c55e" : "var(--text-2)" }}>{Math.round(r.beatUp * 100)}%{r.beatUp <= 0.5 && r.beatN >= 4 ? " ⚠" : ""}</span> : <span className="text-[var(--text-4)]">—</span>}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">${lo.toFixed(0)}–${hi.toFixed(0)}</td>
                     </tr>
                   );

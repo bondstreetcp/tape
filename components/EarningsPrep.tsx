@@ -349,15 +349,26 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                 {avg(missMoves) != null && <div>misses avg <b style={{ color: col(avg(missMoves)) }}>{pp(avg(missMoves))}</b></div>}
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {ev.map((e, i) => (
-                <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[12px] tabular-nums" title={e.date}>
-                  <span className="text-[var(--text-4)]">{e.date.slice(2, 7)}</span>{" "}
-                  {e.surprise != null && <span style={{ color: col(e.surprise) }}>{pp(e.surprise, 0)}</span>}{" → "}
-                  {e.move != null ? <span style={{ color: col(e.move) }}>{pp(e.move)}</span> : "—"}
-                </span>
-              ))}
-            </div>
+            <table className="mt-2 w-full text-[13px] tabular-nums">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+                  <th className="py-1 pr-2 text-left font-medium">Quarter</th>
+                  <th className="py-1 px-1 text-right font-medium" title="EPS surprise vs consensus">Surprise</th>
+                  <th className="py-1 px-1 text-right font-medium" title="Close-to-close reaction the session the move landed">1-day</th>
+                  <th className="py-1 pl-1 text-right font-medium" title="Cumulative return over the 5 sessions after the reaction (post-earnings drift)">5-day</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ev.map((e, i) => (
+                  <tr key={i} className="border-t border-[var(--divider)]">
+                    <td className="py-1 pr-2 text-left text-[var(--text-3)]">{new Date(e.date).toLocaleDateString("en-US", { month: "short", year: "2-digit" })}</td>
+                    <td className="py-1 px-1 text-right" style={{ color: col(e.surprise) }}>{e.surprise != null ? pp(e.surprise, 0) : "—"}</td>
+                    <td className="py-1 px-1 text-right font-semibold" style={{ color: col(e.move) }}>{e.move != null ? pp(e.move) : "—"}</td>
+                    <td className="py-1 pl-1 text-right" style={{ color: col(e.drift5) }}>{e.drift5 != null ? pp(e.drift5) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {d?.surpriseReaction && (() => {
               const sr = d.surpriseReaction, sellNews = sr.beatUp != null && sr.beatN >= 4 && sr.beatUp <= 0.5;
               return (
