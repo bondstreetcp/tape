@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
 import type { SssTicker } from "@/lib/sameStoreSales";
+import { guideMidEps, guideMidRevM, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -17,6 +18,7 @@ interface DataPart {
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
   trade: { verdict: string; structure: string; legs: string; rationale: string } | null;
+  peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -43,7 +45,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss, guidance }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
 
@@ -135,6 +137,28 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const reactionDay = timing != null && myEarn != null ? (timing === "amc" ? nextBiz(myEarn) : myEarn) : null;
   const timingShort = timing === "amc" ? "after close" : timing === "bmo" ? "before open" : null;
 
+  // Guidance — the standing outlook + a consensus SANITY GATE: only trust an extracted number that sits
+  // within 0.5–2× of SOME consensus period (filters LLM misreads, e.g. a margin% pulled in as EPS).
+  const estimates = (stats.estimates || []) as any[];
+  const matchConsensus = (mid: number | null, field: "epsAvg" | "revAvg"): { val: number; ok: boolean } | null => {
+    if (mid == null) return null;
+    let best: { val: number; ok: boolean } | null = null, bestRatio = Infinity;
+    for (const e of estimates) { const v = e[field]; if (typeof v !== "number" || v <= 0) continue; const ratio = Math.max(mid / v, v / mid); if (ratio < bestRatio) { bestRatio = ratio; best = { val: v, ok: ratio <= 2 }; } }
+    return best;
+  };
+  const guideRows = (guidance?.guides || []).slice(0, 2).map((g) => {
+    const epsMid = guideMidEps(g), revMidM = guideMidRevM(g);
+    const epsM = matchConsensus(epsMid, "epsAvg"), revM = matchConsensus(revMidM != null ? revMidM * 1e6 : null, "revAvg");
+    const epsOk = epsMid != null && !!epsM?.ok, revOk = revMidM != null && !!revM?.ok;
+    return { g, epsOk, epsPct: epsOk && epsM!.val ? epsMid! / epsM!.val - 1 : null, revOk, revPct: revOk && revM!.val ? (revMidM! * 1e6) / revM!.val - 1 : null };
+  }).filter((r) => r.g.action !== "none" || r.epsOk || r.revOk || r.g.metricLabel);
+  const ACTION_META: Record<GuidanceAction, { label: string; color: string; arrow: string }> = {
+    raise: { label: "RAISED", color: "#22c55e", arrow: "▲" }, cut: { label: "CUT", color: "#ef4444", arrow: "▼" },
+    reaffirm: { label: "REAFFIRMED", color: "var(--text-2)", arrow: "=" }, initiate: { label: "INITIATED guide", color: "#60a5fa", arrow: "◆" },
+    mixed: { label: "MIXED", color: "#eab308", arrow: "◆" }, none: { label: "", color: "var(--text-3)", arrow: "" },
+  };
+  const shortDate = (iso: string) => { const t = Date.parse(iso); return Number.isNaN(t) ? iso : new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -168,6 +192,24 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         <Stat label="Consensus revenue" value={fmtRev(q0?.revAvg)} sub={q0?.growth != null ? `${pp(q0.growth, 0)} YoY${compEps != null ? ` · yr-ago EPS $${compEps.toFixed(2)}` : ""}` : undefined} />
         <Stat label="Estimate trend (90d)" value={revPct != null ? `${revPct >= 0 ? "+" : ""}${revPct.toFixed(1)}%` : "—"} color={revPct != null ? (revPct >= 0 ? "#22c55e" : "#ef4444") : undefined} sub={q0 ? `${q0.epsUp30d ?? 0}↑ / ${q0.epsDown30d ?? 0}↓ revisions (30d)` : undefined} />
       </div>
+
+      {/* management guidance — the standing outlook + guide-vs-consensus (numbers shown only when sane) */}
+      {guideRows.length > 0 && (
+        <div className="mt-2.5 space-y-1">
+          {guideRows.map(({ g, epsOk, epsPct, revOk, revPct: gRevPct }, i) => {
+            const a = ACTION_META[g.action];
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]" title={g.quote || undefined}>
+                <span className="text-[var(--text-4)]">Guidance · {g.period}{i === 0 && guidance?.updated ? ` (as of ${shortDate(guidance.updated)})` : ""}</span>
+                {a.label && <b style={{ color: a.color }}>{a.arrow} {a.label}</b>}
+                {epsOk && <span>EPS ${g.epsLow!.toFixed(2)}{g.epsHigh !== g.epsLow ? `–$${g.epsHigh!.toFixed(2)}` : ""}{epsPct != null && <span className="text-[var(--text-4)]"> · <span style={{ color: col(epsPct) }}>{epsPct >= 0 ? "+" : ""}{(epsPct * 100).toFixed(0)}%</span> vs Street</span>}</span>}
+                {revOk && <span>rev ${(g.revLowM! / 1000).toFixed(1)}{g.revHighM !== g.revLowM ? `–${(g.revHighM! / 1000).toFixed(1)}` : ""}B{gRevPct != null && <span className="text-[var(--text-4)]"> · <span style={{ color: col(gRevPct) }}>{gRevPct >= 0 ? "+" : ""}{(gRevPct * 100).toFixed(0)}%</span> vs Street</span>}</span>}
+                {!epsOk && !revOk && g.metricLabel && <span className="text-[var(--text-2)]">{g.metricLabel}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Expected-move bento — the options-implied move + breakevens + rich/cheap + crush + when it lands */}
       {(d?.impliedMove != null || d?.straddle) && (
@@ -308,6 +350,20 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* quantified sympathy — how this stock has co-moved on each peer's past prints */}
+      {d?.peerSympathy && d.peerSympathy.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-3)]" title="On the day each cohort peer reported in the past, how this stock moved: avg |same-day move|, the slope (β) of this stock's move on the peer's, and the same-direction rate. A peer reporting before this name is a live prior.">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Sympathy on peer prints</span>
+          {d.peerSympathy.map((s) => (
+            <span key={s.sym} className="tabular-nums">
+              <span className="text-[var(--text-2)]">{s.sym}</span> ±{(s.avgAbsMe * 100).toFixed(1)}%
+              {s.beta != null && <span className="text-[var(--text-4)]"> β{s.beta.toFixed(1)}</span>}
+              <span className="text-[var(--text-4)]"> · {Math.round(s.sameDir * 100)}% same-dir</span>
+            </span>
+          ))}
         </div>
       )}
 

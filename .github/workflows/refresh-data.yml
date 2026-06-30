@@ -271,6 +271,15 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Management guidance (forward outlook) — LLM-extract the standing guide from the night's earnings
+      # 8-Ks. Incremental: only a name that filed a NEW earnings 8-K since the last run costs an LLM call.
+      - name: Refresh guidance (forward outlook)
+        if: ${{ env.FULL == 'true' }}
+        run: LIMIT=150 npm run refresh-guidance
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Reddit buzz (ApeWisdom mention counts) — free, no key.
       - name: Refresh Reddit buzz
         if: ${{ env.FULL == 'true' }}
