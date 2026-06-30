@@ -21,6 +21,7 @@ interface DataPart {
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
+  longPremium: { verdict: "favorable" | "neutral" | "unfavorable"; beatClear: number; beatN: number; crushRatio: number | null } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -216,6 +217,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
     if (d?.options?.skew != null && Math.abs(d.options.skew) > 0.02) o.push(`options skew: ${d.options.skew > 0 ? "puts bid (downside hedging)" : "calls bid (upside chase)"}`);
     if (d?.pead) o.push(`post-print 5d drift: after beats ${pp(d.pead.avgBeatDrift5)}, after misses ${pp(d.pead.avgMissDrift5)}`);
     if (d?.surpriseReaction?.beatUp != null && d.surpriseReaction.beatN >= 3) o.push(`beats→up ${Math.round(d.surpriseReaction.beatUp * 100)}% of ${d.surpriseReaction.beatN}${d.surpriseReaction.beatUp <= 0.5 && d.surpriseReaction.beatN >= 4 ? " (sell-the-news pattern)" : ""}`);
+    if (d?.longPremium && d.longPremium.beatN >= 3) o.push(`buying premium ${d.longPremium.verdict} — on past beats the stock cleared the implied move only ${d.longPremium.beatClear}/${d.longPremium.beatN} (a right call can lose to a small move + IV crush)`);
     if (sssRead) o.push(`last comp ${sgn1(sssRead.comp)}${sssRead.seqDelta != null ? ` (${sssRead.seqDelta >= 0 ? "accelerating" : "decelerating"})` : ""}`);
     if (guideRows.length) o.push(`standing guidance ${guideRows[0].g.period} ${guideRows[0].g.action.toUpperCase()}`);
     if (bg) o.push(`beats its own guide ${bg.beats}/${bg.total}${bg.avgVsGuide != null && bg.avgVsGuide > 0.01 && bg.beats / bg.total >= 0.7 ? " — guides conservatively" : ""}`);
@@ -286,6 +288,20 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
             </div>
           )}
+
+          {d?.longPremium && (() => {
+            const lp = d.longPremium, vc = lp.verdict === "favorable" ? "#22c55e" : lp.verdict === "unfavorable" ? "#ef4444" : "var(--text-2)";
+            const msg = lp.verdict === "favorable" ? "the move has tended to EXCEED what's priced — long calls/straddle have paid"
+              : lp.verdict === "unfavorable" ? "a right directional call can still LOSE — the move is usually smaller than priced, and the IV crush bleeds it"
+              : "roughly a coin-flip vs the priced move";
+            return (
+              <div className="mt-2 rounded-lg px-3 py-2 text-[13px]" style={{ background: lp.verdict === "neutral" ? "var(--surface-2)" : `${vc}14` }} title="Whether BUYING premium (calls/puts/straddle) into the print is favorable. The trap: you're right on the beat, but the stock moves less than the priced move and the post-earnings IV crush bleeds the option.">
+                <b style={{ color: vc }}>Buying premium: {lp.verdict === "favorable" ? "FAVORABLE" : lp.verdict === "unfavorable" ? "UNFAVORABLE" : "NEUTRAL"}</b>
+                {lp.beatN >= 3 && d.impliedMove != null && <span className="text-[var(--text-3)]"> · on past beats it cleared the ±{d.impliedMove.toFixed(1)}% move <b style={{ color: lp.beatClear / lp.beatN >= 0.5 ? "#22c55e" : "#ef4444" }}>{lp.beatClear}/{lp.beatN}</b></span>}
+                <span className="text-[var(--text-4)]"> — {msg}</span>
+              </div>
+            );
+          })()}
         </div>
       )}
 

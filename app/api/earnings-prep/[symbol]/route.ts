@@ -306,12 +306,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         : null;
     const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
     const trade = tradeIdea(richness, options, straddle, chain, impliedMove);
+    // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
+    // the move comes in UNDER the priced move and the IV crushes. Synthesize: how often the realized move
+    // cleared the implied (incl. CONDITIONAL on a beat — the call-buyer's case), + rich/cheap + the crush.
+    const longPremium = (() => {
+      if (!nearTerm || impliedMove == null) return null;
+      const im = impliedMove / 100;
+      const beats = (reactions || []).filter((r) => r.surprise != null && r.surprise > 0 && r.move != null);
+      const beatClear = beats.filter((r) => (r.move as number) > im).length; // beat AND rose MORE than priced
+      const clearRate = straddleWinRate && straddleWinRate.total ? straddleWinRate.exceeded / straddleWinRate.total : null;
+      const richV = richness?.verdict;
+      let verdict: "favorable" | "neutral" | "unfavorable" = "neutral";
+      if (richV === "cheap" && (clearRate == null || clearRate >= 0.45)) verdict = "favorable";
+      else if (richV === "rich" || (clearRate != null && clearRate <= 0.4)) verdict = "unfavorable";
+      return { verdict, beatClear, beatN: beats.length, crushRatio: term?.crushRatio ?? null };
+    })();
     const peerSympathy = await peerReadThrough(sym, closes);
     // Recent price series (compact [t,c] tuples) for the expected-move cone visual.
     const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries, longPremium } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
