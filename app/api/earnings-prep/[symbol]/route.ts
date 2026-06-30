@@ -130,9 +130,23 @@ function tradeIdea(
   const near = (t: number) => strikes.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a));
   const putK = near(straddle.lowerBE), callK = near(straddle.upperBE), atmK = near(straddle.price);
   const fmt = (k: number) => (Number.isInteger(k) ? `${k}` : k.toFixed(1));
+  const prem = (type: "C" | "P", k: number): number | null => {
+    const o = (type === "C" ? chain.calls : chain.puts).find((x) => x.strike === k);
+    if (!o) return null;
+    return o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0 ? (o.bid + o.ask) / 2 : o.last != null && o.last > 0 ? o.last : null;
+  };
+  type Spec = { type: "C" | "P"; side: "long" | "short"; strike: number };
+  // structured legs WITH premiums (for the payoff diagram) — only when every leg has a usable quote.
+  const legsOf = (specs: Spec[]) => {
+    const out = specs.map((s) => ({ ...s, premium: prem(s.type, s.strike) }));
+    return out.every((l) => l.premium != null) ? (out as { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]) : undefined;
+  };
   if (richness.verdict === "rich") {
     const skewRich = optionsR?.skew != null && optionsR.skew > 0.03; // puts notably bid → prefer defined risk
     const wing = Math.max(strikes.find((s) => s > callK) ? near(callK + (callK - putK)) - callK : 0, (callK - putK) / 2) || 5;
+    const legsData = skewRich
+      ? legsOf([{ type: "P", side: "long", strike: near(putK - wing) }, { type: "P", side: "short", strike: putK }, { type: "C", side: "short", strike: callK }, { type: "C", side: "long", strike: near(callK + wing) }])
+      : legsOf([{ type: "P", side: "short", strike: putK }, { type: "C", side: "short", strike: callK }]);
     return {
       verdict: "rich",
       structure: skewRich ? "Iron condor (defined risk)" : "Short strangle",
@@ -140,6 +154,7 @@ function tradeIdea(
         ? `short ${fmt(putK)}P / long ${fmt(near(putK - wing))}P · short ${fmt(callK)}C / long ${fmt(near(callK + wing))}C`
         : `short ${fmt(putK)}P · short ${fmt(callK)}C (the ±${impliedMove.toFixed(1)}% strikes)`,
       rationale: `Implied ±${impliedMove.toFixed(1)}% is rich vs ~±${richness.avgRealized.toFixed(1)}% realized — sell the move${skewRich ? "; condor caps the tail since puts are bid" : ""}.`,
+      legsData,
     };
   }
   if (richness.verdict === "cheap") {
@@ -148,6 +163,7 @@ function tradeIdea(
       structure: "Long straddle / strangle",
       legs: `long ${fmt(atmK)}P + ${fmt(atmK)}C`,
       rationale: `Implied ±${impliedMove.toFixed(1)}% is cheap vs ~±${richness.avgRealized.toFixed(1)}% realized — own the move.`,
+      legsData: legsOf([{ type: "C", side: "long", strike: atmK }, { type: "P", side: "long", strike: atmK }]),
     };
   }
   return null; // fairly priced → no clean premium edge

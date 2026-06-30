@@ -18,7 +18,7 @@ interface DataPart {
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
-  trade: { verdict: string; structure: string; legs: string; rationale: string } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[] } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
@@ -78,6 +78,48 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: 
       <text x={xE + 4} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
       <text x={xN} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="middle">now</text>
       <text x={xE} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="end">{expiry.slice(5)}</text>
+    </svg>
+  );
+}
+
+// Options payoff diagram — P&L at expiry vs the underlying for the suggested structure, with the zero
+// line, the breakevens, the ±expected-move zone shaded, and profit (green) / loss (red) regions.
+function PayoffDiagram({ legs, spot, movePct }: { legs: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; spot: number; movePct: number }) {
+  if (!legs.length || !spot || !(movePct > 0)) return null;
+  const W = 600, H = 150, ML = 6, MR = 44, MT = 12, MB = 18;
+  const move = (movePct / 100) * spot;
+  const lo = Math.max(0.01, spot - 3.2 * move), hi = spot + 3.2 * move;
+  const sgn = (l: typeof legs[number]) => (l.side === "short" ? 1 : -1);
+  const intr = (l: typeof legs[number], S: number) => (l.type === "C" ? Math.max(0, S - l.strike) : Math.max(0, l.strike - S));
+  const pnl = (S: number) => legs.reduce((a, l) => a + sgn(l) * (l.premium - intr(l, S)), 0);
+  const N = 140;
+  const pts = Array.from({ length: N + 1 }, (_, i) => { const S = lo + ((hi - lo) * i) / N; return { S, p: pnl(S) }; });
+  const pmin = Math.min(...pts.map((q) => q.p)), pmax = Math.max(...pts.map((q) => q.p));
+  const pad = (pmax - pmin) * 0.12 || 1, yLo = pmin - pad, yHi = pmax + pad;
+  const x = (S: number) => ML + ((S - lo) / (hi - lo)) * (W - ML - MR);
+  const y = (p: number) => MT + (1 - (p - yLo) / (yHi - yLo || 1)) * (H - MT - MB);
+  const curve = pts.map((q, i) => `${i ? "L" : "M"}${x(q.S).toFixed(1)} ${y(q.p).toFixed(1)}`).join("");
+  const area = `${curve} L${x(hi).toFixed(1)} ${y(0).toFixed(1)} L${x(lo).toFixed(1)} ${y(0).toFixed(1)} Z`;
+  const y0 = y(0);
+  const bes: number[] = [];
+  for (let i = 1; i < pts.length; i++) if ((pts[i - 1].p <= 0) !== (pts[i].p <= 0)) { const t = pts[i - 1].p / (pts[i - 1].p - pts[i].p); bes.push(pts[i - 1].S + t * (pts[i].S - pts[i - 1].S)); }
+  const cid = `pf${legs.map((l) => l.strike).join("")}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+      <defs>
+        <clipPath id={`${cid}p`}><rect x={0} y={0} width={W} height={y0} /></clipPath>
+        <clipPath id={`${cid}l`}><rect x={0} y={y0} width={W} height={H - y0} /></clipPath>
+      </defs>
+      <rect x={x(spot - move)} y={MT} width={x(spot + move) - x(spot - move)} height={H - MT - MB} fill="var(--accent)" fillOpacity={0.07} />
+      <path d={area} fill="#22c55e" fillOpacity={0.14} clipPath={`url(#${cid}p)`} />
+      <path d={area} fill="#ef4444" fillOpacity={0.14} clipPath={`url(#${cid}l)`} />
+      <line x1={ML} x2={W - MR} y1={y0} y2={y0} stroke="var(--text-4)" strokeOpacity={0.6} strokeDasharray="3 3" />
+      <line x1={x(spot)} y1={MT} x2={x(spot)} y2={H - MB} stroke="var(--text-4)" strokeOpacity={0.4} />
+      <path d={curve} fill="none" stroke="var(--text)" strokeWidth={1.7} />
+      {bes.map((be, i) => <g key={i}><circle cx={x(be)} cy={y0} r={2.5} fill="var(--text-2)" /><text x={x(be)} y={H - 5} fontSize={9} fill="var(--text-4)" textAnchor="middle" className="tabular-nums">${be.toFixed(0)}</text></g>)}
+      <text x={x(spot)} y={H - 5} fontSize={9} fill="var(--text-4)" textAnchor="middle">spot</text>
+      <text x={W - MR + 3} y={y(pmax) + 3} fontSize={9} fill="#22c55e" className="tabular-nums">+${pmax.toFixed(2)}</text>
+      <text x={W - MR + 3} y={y(pmin) + 3} fontSize={9} fill="#ef4444" className="tabular-nums">{pmin >= 0 ? "+" : "−"}${Math.abs(pmin).toFixed(2)}</text>
     </svg>
   );
 }
@@ -288,6 +330,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
               <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>
               <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
+              {d.trade.legsData && d.straddle && d.impliedMove != null && (
+                <div className="mt-1.5" title="P&L at expiry vs the stock price. Green = profit, red = loss; the shaded band is the ±expected move, dots on the zero line are the breakevens.">
+                  <PayoffDiagram legs={d.trade.legsData} spot={d.straddle.price} movePct={d.impliedMove} />
+                </div>
+              )}
             </div>
           )}
 
