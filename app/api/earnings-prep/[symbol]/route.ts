@@ -4,6 +4,7 @@ import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import { getOptions, type OptionChain } from "@/lib/options";
 import { getNews } from "@/lib/news";
+import { getLatestTranscript } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // ── AI part: the StreetAccount-style preview (button-triggered) ──
     if (part === "ai") {
       if (!(await llmConfigured())) return NextResponse.json({ ai: null });
-      const [stats, news] = await Promise.all([getCompanyStats(sym).catch(() => null), getNews(sym, 8).catch(() => [])]);
+      const [stats, news, transcript] = await Promise.all([
+        getCompanyStats(sym).catch(() => null),
+        getNews(sym, 8).catch(() => []),
+        // The transcript scrape (Google News) can be slow/flaky — time-bound it so it never blows the
+        // function budget; if it doesn't return fast, the preview just skips "since last call".
+        Promise.race([
+          getLatestTranscript(sym).catch(() => null),
+          new Promise<null>((res) => setTimeout(() => res(null), 12000)),
+        ]),
+      ]);
       const q0 = stats?.estimates?.find((e) => e.period === "0q") || stats?.estimates?.[0];
       const revDir = q0 && q0.epsCurrent != null && q0.eps90dAgo != null ? (q0.epsCurrent > q0.eps90dAgo ? "rising" : q0.epsCurrent < q0.eps90dAgo ? "falling" : "flat") : "n/a";
       const dist = stats?.ratings ? `${stats.ratings.strongBuy + stats.ratings.buy} buy / ${stats.ratings.hold} hold / ${stats.ratings.sell + stats.ratings.strongSell} sell` : "n/a";
@@ -56,7 +66,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         `EPS estimates ${revDir} (revisions ${q0?.epsUp30d ?? 0} up / ${q0?.epsDown30d ?? 0} down, 30d). Sell-side: ${dist}, mean PT ${stats?.targetMean ?? "?"} vs price ${stats?.price ?? "?"}. ` +
         `Valuation fwd P/E ${stats?.forwardPE?.toFixed(0) ?? "?"}, op margin ${stats?.operatingMargins != null ? (stats.operatingMargins * 100).toFixed(0) + "%" : "?"}, short ${stats?.shortPercentOfFloat != null ? (stats.shortPercentOfFloat * 100).toFixed(1) + "% of float" : "?"}. ` +
         `Recent analyst moves: ${(stats?.ratingChanges || []).slice(0, 6).map((c) => `${c.firm} ${c.action} ${c.toGrade || ""}${c.targetTo ? " PT " + c.targetTo : ""}`).join("; ") || "none on file"}. ` +
-        `Recent headlines: ${(news || []).slice(0, 8).map((n) => n.title.trim()).filter(Boolean).join(" | ") || "none"}.`;
+        `Recent headlines: ${(news || []).slice(0, 8).map((n) => n.title.trim()).filter(Boolean).join(" | ") || "none"}.` +
+        (transcript?.text && transcript.text.length > 1000 ? `\n\nMOST RECENT EARNINGS CALL (${transcript.date || "prior quarter"} — ${transcript.title}):\n${transcript.text.slice(0, 9000)}` : "");
       const SYSTEM =
         "Write a FactSet StreetAccount-style EARNINGS PREVIEW for the stock about to report — factual, concise, sell-side-desk voice, no hedging filler, no advice. Use BOTH the supplied data and your knowledge of the company. Fields: " +
         "'moneyLine' = ONE sentence: the single metric or guidance item that will decide the reaction. " +
@@ -65,15 +76,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         "'guidance' = the company's standing guidance + expectation (raise/reaffirm/cut/first guide), or note if none. " +
         "'peerReads' = 2-3 recent reads from sector peers / suppliers / customers that already reported or pre-announced, and the implied read-through for this name (use the headlines + your knowledge; if none, return []). " +
         "'bull' = the bull case into the print; 'bear' = the bear case / what's priced in. " +
+        "'fromLastCall' = if a MOST RECENT EARNINGS CALL transcript is supplied below, 1-2 sentences on what management SAID or COMMITTED to last call (guidance given, targets, tone, promises) + the ONE thing to check for follow-through THIS print; if no transcript is supplied, return ''. " +
         "Use specific NUMBERS only from the supplied data; name segment/guidance items without fabricating precise figures. " +
         NO_ADVICE;
-      const SCHEMA = 'Return ONLY JSON: {"moneyLine": string, "overview": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string}';
+      const SCHEMA = 'Return ONLY JSON: {"moneyLine": string, "overview": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string, "fromLastCall": string}';
       // Live request → cap Gemini's reasoning so it returns well within the function timeout.
       const out = await chatJSON<any>(SYSTEM, ctx, { maxTokens: 4000, model: PRO_MODEL, reasoningEffort: "low" });
       const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 6) : []);
       const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
       const ai = out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
-        ? { moneyLine: s(out.moneyLine), overview: s(out.overview), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear) }
+        ? { moneyLine: s(out.moneyLine), overview: s(out.overview), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear), fromLastCall: s(out.fromLastCall) }
         : null;
       return NextResponse.json({ ai }, { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } });
     }
@@ -92,8 +104,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const impliedMove = (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
     const options = optionsRead(chain);
 
+    // Options rich/cheap (implied vs avg REALIZED move) + the straddle breakevens.
+    const price = chain?.underlying ?? null;
+    const avgRealized = reaction ? reaction.avgAbsMove * 100 : null; // %
+    const richness =
+      impliedMove != null && avgRealized != null && avgRealized > 0
+        ? { ratio: impliedMove / avgRealized, verdict: impliedMove / avgRealized >= 1.2 ? "rich" : impliedMove / avgRealized <= 0.85 ? "cheap" : "fair", avgRealized }
+        : null;
+    const straddle =
+      impliedMove != null && price
+        ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price }
+        : null;
+
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options } },
+      { data: { reaction, events, impliedMove, options, richness, straddle } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
