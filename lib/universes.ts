@@ -84,9 +84,9 @@ export const UNIVERSES: UniverseMeta[] = [
     short: "TOPIX 100",
     intraday: false,
     international: true,
-    indexSymbol: "^TOPX",
+    indexSymbol: "1306.T",
     currency: "JPY",
-    note: "TOPIX 100 large-caps — the broad Tokyo index's blue chips (wider Japan coverage than the Nikkei subset). Prices in JPY. International data via Yahoo (npm run refresh-intl).",
+    note: "TOPIX 100 large-caps — the broad Tokyo index's blue chips (wider Japan coverage than the Nikkei subset). Prices in JPY. Index chart tracks the TOPIX via the NEXT FUNDS TOPIX ETF (1306.T) — Yahoo doesn't serve the raw ^TOPX. International data via Yahoo (npm run refresh-intl).",
   },
   {
     id: "ftse100",
@@ -147,6 +147,26 @@ export const UNIVERSES: UniverseMeta[] = [
     indexSymbol: "^MXX",
     currency: "MXN",
     note: "S&P/BMV IPC constituents — Mexican Stock Exchange (BMV). Prices in MXN. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
+    id: "stoxx600",
+    name: "STOXX Europe 600",
+    short: "STOXX 600",
+    intraday: false,
+    international: true,
+    indexSymbol: "^STOXX",
+    currency: "EUR",
+    note: "The largest constituents of the STOXX Europe 600 — a pan-European blue-chip universe spanning the UK, France, Germany, Switzerland, the Nordics and more. Mixed currency (EUR/GBP/CHF/SEK/DKK); returns + heatmap colours are %-based so currency-agnostic. International data via Yahoo (npm run refresh-intl).",
+  },
+  {
+    id: "asx200",
+    name: "S&P/ASX 200 (Australia)",
+    short: "ASX 200",
+    intraday: false,
+    international: true,
+    indexSymbol: "^AXJO",
+    currency: "AUD",
+    note: "Major S&P/ASX 200 constituents — Australian Securities Exchange. Prices in AUD. International data via Yahoo (npm run refresh-intl).",
   },
 ];
 

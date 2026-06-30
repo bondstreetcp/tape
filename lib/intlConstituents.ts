@@ -188,4 +188,60 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "GFINBURO.MX", "GCC.MX", "BOLSAA.MX", "ALPEKA.MX",
     ],
   },
+  {
+    id: "stoxx600",
+    name: "STOXX Europe 600",
+    short: "STOXX 600",
+    currency: "EUR",
+    tickers: [
+      // UK (London, GBp)
+      "AZN.L", "SHEL.L", "HSBA.L", "ULVR.L", "BP.L", "GSK.L", "RIO.L", "DGE.L", "GLEN.L", "REL.L",
+      "BATS.L", "LSEG.L", "NG.L", "RR.L", "BARC.L", "LLOY.L", "NWG.L", "CPG.L", "AAL.L", "VOD.L",
+      "HLN.L", "PRU.L", "STAN.L", "IMB.L", "BA.L", "EXPN.L", "AHT.L", "SSE.L", "TSCO.L", "NXT.L",
+      "SGRO.L", "SMIN.L", "WTB.L", "ABF.L", "SN.L", "AV.L", "III.L",
+      // France
+      "MC.PA", "OR.PA", "RMS.PA", "TTE.PA", "SAN.PA", "SU.PA", "AIR.PA", "AI.PA", "EL.PA", "CDI.PA",
+      "BNP.PA", "DG.PA", "SAF.PA", "CS.PA", "KER.PA", "STLAP.PA", "DSY.PA", "ACA.PA", "GLE.PA",
+      "PUB.PA", "LR.PA", "ENGI.PA", "VIE.PA", "CAP.PA", "HO.PA", "RI.PA", "ML.PA", "ORA.PA", "SGO.PA", "BN.PA", "EN.PA",
+      // Germany
+      "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "MBG.DE", "MUV2.DE", "BMW.DE", "IFX.DE", "BAS.DE",
+      "VOW3.DE", "DBK.DE", "ADS.DE", "RWE.DE", "DHL.DE", "HEN3.DE", "DB1.DE", "EOAN.DE", "BAYN.DE",
+      "MRK.DE", "VNA.DE", "SHL.DE", "P911.DE", "SY1.DE", "RHM.DE", "FRE.DE", "CON.DE", "ZAL.DE",
+      // Switzerland (CHF)
+      "NESN.SW", "RO.SW", "NOVN.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW", "CFR.SW", "LONN.SW", "SIKA.SW",
+      "GIVN.SW", "SREN.SW", "ALC.SW", "HOLN.SW", "SLHN.SW", "GEBN.SW", "PGHN.SW", "SCMN.SW", "SOON.SW", "STMN.SW", "BAER.SW",
+      // Netherlands
+      "ASML.AS", "PRX.AS", "INGA.AS", "ADYEN.AS", "WKL.AS", "AD.AS", "PHIA.AS", "HEIA.AS", "ASM.AS",
+      "DSFIR.AS", "EXO.AS", "KPN.AS", "NN.AS", "ABN.AS", "AKZA.AS", "RAND.AS", "MT.AS", "BESI.AS",
+      // Spain / Italy
+      "ITX.MC", "SAN.MC", "IBE.MC", "BBVA.MC", "AENA.MC", "TEF.MC", "CABK.MC", "FER.MC", "AMS.MC", "REP.MC",
+      "ISP.MI", "UCG.MI", "ENEL.MI", "ENI.MI", "RACE.MI", "G.MI", "PRY.MI", "MONC.MI", "STMMI.MI", "LDO.MI",
+      // Nordics
+      "NOVO-B.CO", "DSV.CO", "MAERSK-B.CO", "ORSTED.CO", "CARL-B.CO", "COLO-B.CO", "GMAB.CO", "VWS.CO", "DANSKE.CO",
+      "INVE-B.ST", "ATCO-A.ST", "VOLV-B.ST", "ASSA-B.ST", "SEB-A.ST", "ERIC-B.ST", "HEXA-B.ST", "SAND.ST",
+      "EQT.ST", "EVO.ST", "TELIA.ST", "ESSITY-B.ST", "SKF-B.ST", "ALFA.ST", "NDA-SE.ST", "SWED-A.ST", "SHB-A.ST",
+      "NOKIA.HE", "KNEBV.HE", "SAMPO.HE", "UPM.HE", "NESTE.HE", "FORTUM.HE",
+      "EQNR.OL", "DNB.OL", "TEL.OL", "MOWI.OL", "AKRBP.OL", "NHY.OL",
+      // Belgium
+      "ABI.BR", "KBC.BR", "UCB.BR", "SOLB.BR", "GBLB.BR",
+    ],
+  },
+  {
+    id: "asx200",
+    name: "S&P/ASX 200 (Australia)",
+    short: "ASX 200",
+    currency: "AUD",
+    tickers: [
+      "BHP.AX", "CBA.AX", "CSL.AX", "NAB.AX", "WBC.AX", "ANZ.AX", "WES.AX", "MQG.AX", "FMG.AX", "RIO.AX",
+      "WDS.AX", "TLS.AX", "GMG.AX", "TCL.AX", "WOW.AX", "ALL.AX", "QBE.AX", "REA.AX", "COL.AX", "STO.AX",
+      "SUN.AX", "RMD.AX", "JHX.AX", "XRO.AX", "COH.AX", "ORG.AX", "SCG.AX", "S32.AX", "NST.AX", "PME.AX",
+      "CPU.AX", "AMC.AX", "BXB.AX", "SHL.AX", "MIN.AX", "IAG.AX", "ASX.AX", "TWE.AX", "QAN.AX", "WTC.AX",
+      "SEK.AX", "CAR.AX", "MPL.AX", "AGL.AX", "EVN.AX", "VCX.AX", "GPT.AX", "MGR.AX", "DXS.AX", "REH.AX",
+      "ALD.AX", "BSL.AX", "WOR.AX", "APA.AX", "NXT.AX", "SGP.AX", "CWY.AX", "JBH.AX", "HVN.AX", "EDV.AX",
+      "AMP.AX", "BEN.AX", "BOQ.AX", "FLT.AX", "ORA.AX", "ALX.AX", "LYC.AX", "PLS.AX", "IGO.AX", "WHC.AX",
+      "NHC.AX", "BPT.AX", "LTR.AX", "SFR.AX", "RRL.AX", "GMD.AX", "PDN.AX", "NEM.AX", "TLC.AX", "AZJ.AX",
+      "QUB.AX", "NWS.AX", "ILU.AX", "SGM.AX", "ANN.AX", "RHC.AX", "A2M.AX", "TAH.AX", "MFG.AX", "PNI.AX",
+      "NUF.AX", "BRG.AX", "DMP.AX", "TPG.AX", "CTD.AX", "CHC.AX", "HUB.AX", "NWL.AX", "PXA.AX", "WEB.AX", "EVT.AX",
+    ],
+  },
 ];
