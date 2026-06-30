@@ -273,6 +273,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       ? { avgBeatDrift5: avg(beatDrift), avgMissDrift5: avg(missDrift), followThrough: ftSet.filter((r) => Math.sign(r.move!) === Math.sign(r.drift5)).length / ftSet.length, n: ftSet.length }
       : null;
 
+    // Reaction reliability: does a beat actually mean UP (sell-the-news), and a miss mean DOWN? The
+    // DIRECTIONAL hit-rate is robust at small n (Yahoo keeps ~4 surprises); a fitted slope/intercept is
+    // not, so we don't report one. Complements the beats/misses AVERAGE (which shows magnitude, not consistency).
+    const srP = (reactions || []).filter((r) => r.surprise != null && r.move != null).map((r) => ({ x: r.surprise as number, y: r.move as number }));
+    const surpriseReaction = (() => {
+      const beats = srP.filter((p) => p.x > 0), misses = srP.filter((p) => p.x < 0);
+      if (beats.length < 3 && misses.length < 3) return null;
+      return {
+        n: srP.length,
+        beatUp: beats.length ? beats.filter((p) => p.y > 0).length / beats.length : null, beatN: beats.length,
+        missDown: misses.length ? misses.filter((p) => p.y < 0).length / misses.length : null, missN: misses.length,
+      };
+    })();
+
     // Options rich/cheap (implied vs avg REALIZED move) + the straddle breakevens.
     const price = chain?.underlying ?? null;
     const avgRealized = reaction ? reaction.avgAbsMove * 100 : null; // %
@@ -292,7 +306,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const peerSympathy = await peerReadThrough(sym, closes);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {

@@ -19,6 +19,7 @@ interface DataPart {
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
   trade: { verdict: string; structure: string; legs: string; rationale: string } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
+  surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -323,6 +324,17 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               </span>
             ))}
           </div>
+          {d?.surpriseReaction && (() => {
+            const sr = d.surpriseReaction, sellNews = sr.beatUp != null && sr.beatN >= 4 && sr.beatUp <= 0.5;
+            return (
+              <div className="mt-1.5 text-[12.5px] text-[var(--text-3)]" title="Does a beat actually mean the stock goes UP (and a miss DOWN)? The directional hit-rate — complements the average move (which shows magnitude, not consistency). A low beat→up rate = sell-the-news.">
+                <b className="text-[var(--text-2)]">Reaction reliability</b>
+                {sr.beatUp != null && sr.beatN >= 3 && <span> · beats→up <b style={{ color: sr.beatUp >= 0.6 ? "#22c55e" : sr.beatUp < 0.5 ? "#ef4444" : "var(--text-2)" }}>{Math.round(sr.beatUp * 100)}%</b> <span className="text-[var(--text-4)]">({sr.beatN})</span></span>}
+                {sr.missDown != null && sr.missN >= 3 && <span> · misses→down <b style={{ color: sr.missDown >= 0.6 ? "#22c55e" : "var(--text-2)" }}>{Math.round(sr.missDown * 100)}%</b> <span className="text-[var(--text-4)]">({sr.missN})</span></span>}
+                {sellNews && <span className="text-[#ef4444]"> · sell-the-news risk</span>}
+              </div>
+            );
+          })()}
         </div>
       )}
 
