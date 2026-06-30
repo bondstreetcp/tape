@@ -105,6 +105,7 @@ async function main() {
     // historical post-earnings reactions
     let histAvgMovePct: number | null = null, histMaxMovePct: number | null = null, histN = 0;
     let beatUp: number | null = null, beatN = 0;
+    let clearRate: number | null = null, clearN = 0;
     try {
       const rx = await getEarningsReactions(sym, 8);
       const moves = rx.map((r) => r.move).filter((m): m is number => m != null).map(Math.abs);
@@ -112,6 +113,9 @@ async function main() {
         histAvgMovePct = (moves.reduce((a, b) => a + b, 0) / moves.length) * 100;
         histMaxMovePct = Math.max(...moves) * 100;
         histN = moves.length;
+        // long-premium win rate: how often the realized move EXCEEDED the move options price now
+        clearN = moves.length;
+        clearRate = moves.filter((m) => m > impliedMovePct / 100).length / moves.length;
       }
       // sell-the-news: of past EPS BEATS, how often the stock actually rose
       const beats = rx.filter((r) => r.surprise != null && r.surprise > 0 && r.move != null);
@@ -130,6 +134,7 @@ async function main() {
       histN,
       richness: richness != null ? +richness.toFixed(2) : null,
       beatUp: beatUp != null ? +beatUp.toFixed(2) : null, beatN,
+      clearRate: clearRate != null ? +clearRate.toFixed(2) : null, clearN,
     };
     return row;
   });

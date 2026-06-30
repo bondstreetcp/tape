@@ -31,6 +31,8 @@ export interface EarningsMoveRow {
   richness: number | null; // impliedMovePct / histAvgMovePct (>1 = options pricing more than history)
   beatUp: number | null; // of past EPS beats, fraction where the stock rose (low = sell-the-news)
   beatN: number; // number of past beats in the sample
+  clearRate: number | null; // fraction of past prints whose |move| EXCEEDED the current implied move (long-premium win rate)
+  clearN: number; // sample size for clearRate
 }
 
 export interface EarningsMoveData {
