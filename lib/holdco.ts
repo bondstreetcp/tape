@@ -147,6 +147,29 @@ export const HOLDCOS: Holdco[] = [
     ],
   },
   {
+    slug: "bollore", name: "Bolloré SE", ticker: "BOL.PA", currency: "EUR", sharesOutM: 1400, netDebtM: -1400, otherNavM: 1400, asOf: "2026-06",
+    note: "Vincent Bolloré family holdco (via Compagnie de l'Odet, ~71%). Post-2024 simplification: a DIRECT 18.4% of Universal Music Group (the single biggest line, ~€7.5bn) + the controlling stakes that resulted from Vivendi's Dec-2024 four-way split — 29.3% of the rump Vivendi (VIV.PA) PLUS direct ~30.4% of each spinoff Canal+ (CAN.L), Havas (HAVAS.AS) and Louis Hachette (ALHG.PA), all held alongside Vivendi rather than through it. Big net-cash pile from the 2022/2024 logistics disposals (Bolloré Logistics → CMA CGM); net cash was €5.6bn at Dec-2025 but a €4.2bn EXCEPTIONAL DIVIDEND (€1.5/sh) was paid 25-Jun-2026, cutting it to ~€1.4bn — reflected here. otherNAV = Rubis 6% (€199m) + Socfin agribusiness (€306m) + the residual industrial/energy bucket (Blue Solutions LMP batteries/Bluebus, Bolloré Energy oil distribution, Plastic Films) — SEED ESTIMATE, Bolloré doesn't separately mark these. CAN.L quotes in GBp (pence) → engine ÷100. CIRCULAR CROSS-HOLDING: ~52% of Bolloré is held indirectly via the Bolloré↔Compagnie de l'Odet self-control loop, so `sharesOutM` here = the ECONOMIC FREE FLOAT (~1,400M), NOT the ~2,810M reported listed shares — this is the basis analysts use, and on it the discount lands ~−45% (vs the published ~40%, up to ~70% on a full control-loop look-through). On reported shares the direct method shows a small PREMIUM, which is misleading. Two caveats: (1) the direct method still can't see through Vivendi's own ~44% discount (the VIV.PA line is marked at Vivendi's depressed price), so the true look-through discount is wider; (2) a 1:10 share consolidation was announced for 18-Nov-2025 — if Yahoo reprices BOL.PA to ~€41, divide sharesOutM by 10. Medium-confidence — Bolloré is the hardest holdco to mark cleanly. Published portfolio of listed securities = €10.6bn (Dec-2025).",
+    stakes: [
+      { ticker: "UMG.AS", name: "Universal Music Group", pctOwned: 0.184 },
+      { ticker: "VIV.PA", name: "Vivendi", pctOwned: 0.293 },
+      { ticker: "CAN.L", name: "Canal+ Group", pctOwned: 0.304 },
+      { ticker: "HAVAS.AS", name: "Havas", pctOwned: 0.304 },
+      { ticker: "ALHG.PA", name: "Louis Hachette Group", pctOwned: 0.304 },
+    ],
+  },
+  {
+    slug: "vivendi", name: "Vivendi SE", ticker: "VIV.PA", currency: "EUR", sharesOutM: 995, netDebtM: 1768, otherNavM: 450, asOf: "2025-12",
+    note: "Post-Dec-2024 RUMP Vivendi — after the four-way split (Canal+/Havas/Louis Hachette were spun OUT to shareholders and now sit on Bolloré's balance sheet directly, NOT here). What remains is an investment vehicle whose NAV is dominated by UMG. UMG is BY FAR the largest asset (~9.9% net economic stake): capital interest was ~14.6% at YE2024 but partly hedged via a forward sale, so net economic exposure ~9.9% — modeled as pctOwned 0.0991 on UMG's full market cap (the hedge means this slightly OVERSTATES clean ownership; if the computed discount prints much wider than ~45%, trim UMG toward the post-hedge figure or move the hedge proceeds into otherNAV/netDebt). Then Banijay ~19.2%, MFE-MediaForEurope B-shares ~15.9% (B = super-voting; A = MFEA.MI), Lagardère ~13.4% (NOT the old 57% — the control block went to Louis Hachette in the spin), a residual Telecom Italia ~2.5% (NOT the old ~23% — sold 15% to Poste Italiane Apr-2025, exited telecoms), Prisa ~11.2%. otherNAV = 100%-owned Gameloft + residual Telefónica + cash — SEED ESTIMATE, the softest input. Net financial debt ~€1,768m (H1-2025). Published holdco discount ~33–50% since the spin (~40% mid-2025). Cross-held with [[holdco]] Bolloré (Bolloré owns 29.3% of Vivendi).",
+    stakes: [
+      { ticker: "UMG.AS", name: "Universal Music Group (net of hedge)", pctOwned: 0.0991 },
+      { ticker: "BNJ.AS", name: "Banijay Group", pctOwned: 0.192 },
+      { ticker: "MFEB.MI", name: "MFE-MediaForEurope (B)", pctOwned: 0.1592 },
+      { ticker: "MMB.PA", name: "Lagardère", pctOwned: 0.134 },
+      { ticker: "PRS.MC", name: "Prisa", pctOwned: 0.1119 },
+      { ticker: "TIT.MI", name: "Telecom Italia (ord)", pctOwned: 0.0251 },
+    ],
+  },
+  {
     slug: "psh", name: "Pershing Square Holdings", ticker: "PSH.L", currency: "USD", sharesOutM: 175.03, netDebtM: 3629, otherNavM: 1600, asOf: "2026-03",
     note: "Ackman's closed-end fund — concentrated, ~118% net exposure, NAV ~88% mark-to-market. Positions = the Q1-2026 13F share counts; net debt = PSH's public bonds (the leverage); otherNAV = the off-13F GSE (Fannie/Freddie) + SPARC + cash. Universal Music was fully EXITED in June 2026 (dropped here). Published NAV ≈ $71/sh (Mar-2026), ~−27% discount. Verify against PSH's own monthly NAV report.",
     stakes: [

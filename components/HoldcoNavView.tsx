@@ -46,7 +46,13 @@ function Card({ h, universe }: { h: HoldcoNav; universe: string }) {
         </div>
       </div>
 
-      <div className="mt-2"><Spark hist={h.history} color={col} /></div>
+      <Link href={`/u/${universe}/holdco-nav/${h.slug}`} className="group mt-2 block" title="Open the full NAV-vs-price + discount-over-time chart">
+        <div className="flex items-center justify-between text-[10px] text-[var(--text-4)]">
+          <span>Discount history (1yr)</span>
+          <span className="text-[var(--accent)] group-hover:underline">📈 Discount chart →</span>
+        </div>
+        <Spark hist={h.history} color={col} />
+      </Link>
 
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--text-4)]">
         <span>look-through NAV {moneyM(h.navM, h.currency)} · net {h.netDebtM <= 0 ? "cash" : "debt"} {moneyM(Math.abs(h.netDebtM), h.currency)} · other {moneyM(h.otherNavM, h.currency)}</span>
