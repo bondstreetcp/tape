@@ -14,6 +14,7 @@ export interface EarningsReaction {
   surprise: number | null; // EPS surprise % (decimal), where available
   drift3: number | null; // return from the reaction close → +3 sessions (post-earnings drift)
   drift5: number | null; // return from the reaction close → +5 sessions
+  timing: "bmo" | "amc"; // reported before the open (reaction = same session) vs after the close (next session)
 }
 
 /** The last `n` earnings dates (SEC 8-K item 2.02) with the stock's one-day
@@ -108,6 +109,7 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
       surprise,
       drift3: j + 3 < closes.length ? closes[j + 3].c / closes[j].c - 1 : null,
       drift5: j + 5 < closes.length ? closes[j + 5].c / closes[j].c - 1 : null,
+      timing: j === idx ? "bmo" : "amc", // same session = before-open; next session = after-close
     });
     if (out.length >= n) break;
   }

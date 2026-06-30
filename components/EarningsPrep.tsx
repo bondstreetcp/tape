@@ -6,7 +6,7 @@ import type { SssTicker } from "@/lib/sameStoreSales";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
-  events: { date: string; surprise: number | null; move: number | null; drift5: number | null }[];
+  events: { date: string; surprise: number | null; move: number | null; drift5: number | null; timing: "bmo" | "amc" }[];
   impliedMove: number | null; // percent (e.g. 7.8)
   options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null; callWall: { strike: number; oi: number } | null; putWall: { strike: number; oi: number } | null } | null;
   richness: { ratio: number; verdict: "rich" | "cheap" | "fair"; avgRealized: number } | null;
@@ -14,6 +14,7 @@ interface DataPart {
   straddleWinRate: { exceeded: number; total: number } | null;
   pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
+  nextTiming: "bmo" | "amc" | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -125,11 +126,18 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const mDay = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const sgn1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
+  // Reporting timing → when the post-earnings move lands: before-open reporters move THAT session (day-of),
+  // after-close reporters move the NEXT session. nextTiming = the company's own historical pattern.
+  const timing = d?.nextTiming ?? null;
+  const nextBiz = (t: number) => { const x = new Date(t); do { x.setUTCDate(x.getUTCDate() + 1); } while (x.getUTCDay() === 0 || x.getUTCDay() === 6); return x.getTime(); };
+  const reactionDay = timing != null && myEarn != null ? (timing === "amc" ? nextBiz(myEarn) : myEarn) : null;
+  const timingShort = timing === "amc" ? "after close" : timing === "bmo" ? "before open" : null;
+
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-[var(--text)]">Earnings prep</h3>
-        {dateLabel && <span className="text-xs text-[var(--text-3)]">{days != null && days >= 0 ? `reports ${dateLabel} · in ${days}d` : `next/last report ${dateLabel}`}</span>}
+        {dateLabel && <span className="text-xs text-[var(--text-3)]">{days != null && days >= 0 ? `reports ${dateLabel}${timingShort ? ` ${timingShort}` : ""} · in ${days}d` : `next/last report ${dateLabel}`}</span>}
       </div>
 
       {/* #2 pre-earnings setup — how it's positioned going in */}
@@ -153,25 +161,54 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Consensus EPS (this Q)" value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} sub={q0?.epsAnalysts && q0.epsLow != null && q0.epsHigh != null ? `${q0.epsAnalysts} est · $${q0.epsLow.toFixed(2)}–$${q0.epsHigh.toFixed(2)}` : undefined} />
         <Stat label="Consensus revenue" value={fmtRev(q0?.revAvg)} sub={q0?.growth != null ? `${pp(q0.growth, 0)} YoY${compEps != null ? ` · yr-ago EPS $${compEps.toFixed(2)}` : ""}` : undefined} />
         <Stat label="Estimate trend (90d)" value={revPct != null ? `${revPct >= 0 ? "+" : ""}${revPct.toFixed(1)}%` : "—"} color={revPct != null ? (revPct >= 0 ? "#22c55e" : "#ef4444") : undefined} sub={q0 ? `${q0.epsUp30d ?? 0}↑ / ${q0.epsDown30d ?? 0}↓ revisions (30d)` : undefined} />
-        <Stat label="Options-implied move" value={d?.impliedMove != null ? `±${d.impliedMove.toFixed(1)}%` : data === "loading" ? "…" : "—"} sub={d?.reaction ? `avg past ±${(d.reaction.avgAbsMove * 100).toFixed(1)}% (${d.reaction.n})` : undefined} />
       </div>
 
-      {/* #1 options rich/cheap + straddle breakevens + win-rate + vol-crush */}
-      {(d?.richness || d?.straddle || d?.straddleWinRate || (d?.term && d.term.crushRatio >= 1.04)) && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
-          {d.richness && (() => {
-            const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
-            return <span><b style={{ color: vc }}>Options {v === "rich" ? "RICH" : v === "cheap" ? "CHEAP" : "fairly priced"}</b> — pricing ±{d!.impliedMove!.toFixed(1)}% vs ~±{d.richness.avgRealized.toFixed(1)}% realized <span className="text-[var(--text-4)]">({d.richness.ratio.toFixed(2)}×{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""})</span></span>;
-          })()}
-          {d.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="How often the realized move EXCEEDED the current implied move, over the last N prints — low = options rich (the straddle's been a sell)"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
-          {d.straddle && <span title="Straddle breakevens = price ± the implied move; the stock must close beyond these for a long straddle to pay"><b className="text-[var(--text-2)]">Breakevens</b> ${d.straddle.lowerBE.toFixed(2)} / ${d.straddle.upperBE.toFixed(2)} <span className="text-[var(--text-4)]">· straddle ~${d.straddle.cost.toFixed(2)}</span></span>}
-          {d.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the elevated event vol that collapses after the print. A front-rich (backwardated) curve is the crush a premium-seller harvests."><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}% ({d.term.frontDte}d) → {(d.term.backIV * 100).toFixed(0)}% ({d.term.backDte}d) <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×{d.term.crushRatio >= 1.15 ? " · rich front" : ""}</span></span>}
+      {/* Expected-move bento — the options-implied move + breakevens + rich/cheap + crush + when it lands */}
+      {(d?.impliedMove != null || d?.straddle) && (
+        <div className="mt-3 rounded-xl border bg-[var(--accent-soft)] p-3" style={{ borderColor: "color-mix(in oklab, var(--accent) 35%, transparent)" }}>
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1.5">
+            <div className="flex items-end gap-2.5">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Expected move · options-implied</div>
+                <div className="font-mono text-3xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-xl">%</span></div>
+              </div>
+              {d?.straddle && <div className="pb-0.5 text-[11px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)}<br />straddle</div>}
+              {d?.reaction && <div className="pb-0.5 text-[11px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
+            </div>
+            {d?.richness && (() => {
+              const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
+              return <div className="rounded-lg px-2.5 py-1 text-right" style={{ background: v === "fair" ? "var(--surface-2)" : `${vc}1a` }} title="Implied move vs the average realized move on past prints">
+                <div className="text-sm font-bold" style={{ color: vc }}>{v === "rich" ? "Options RICH" : v === "cheap" ? "Options CHEAP" : "Fairly priced"}</div>
+                <div className="text-[10px] text-[var(--text-4)]">{d.richness.ratio.toFixed(2)}× realized{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""}</div>
+              </div>;
+            })()}
+          </div>
+
+          {d?.straddle && (
+            <div className="mt-2.5">
+              <div className="relative h-1.5 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
+                <div className="absolute top-1/2 h-3 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text)]" style={{ left: "50%" }} title={`Spot $${d.straddle.price.toFixed(2)}`} />
+              </div>
+              <div className="mt-1 flex justify-between text-[11px] tabular-nums">
+                <span className="text-[#ef4444]">${d.straddle.lowerBE.toFixed(2)}</span>
+                <span className="text-[var(--text-4)]">breakevens · spot ${d.straddle.price.toFixed(2)}</span>
+                <span className="text-[#22c55e]">${d.straddle.upperBE.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border)] pt-2 text-[11px] text-[var(--text-3)]">
+            {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
+            {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
+            {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
+          </div>
         </div>
       )}
+
 
       {/* positioning + track record */}
       <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--text-3)]">
