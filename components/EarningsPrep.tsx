@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
+import type { StockRow } from "@/lib/types";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
-  events: { date: string; surprise: number | null; move: number | null }[];
+  events: { date: string; surprise: number | null; move: number | null; drift5: number | null }[];
   impliedMove: number | null; // percent (e.g. 7.8)
-  options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null } | null;
+  options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null; callWall: { strike: number; oi: number } | null; putWall: { strike: number; oi: number } | null } | null;
   richness: { ratio: number; verdict: "rich" | "cheap" | "fair"; avgRealized: number } | null;
   straddle: { cost: number; upperBE: number; lowerBE: number; price: number } | null;
+  straddleWinRate: { exceeded: number; total: number } | null;
+  pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -35,7 +38,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, row }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
 
@@ -84,6 +87,10 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
   const missMoves = ev.filter((e) => e.surprise != null && e.surprise <= 0 && e.move != null).map((e) => e.move as number);
   const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
   const a = typeof ai === "object" ? ai : null;
+  // pre-earnings setup (run-up into the print + distance from 52wk high) — returns are in % units
+  const r1w = row?.returns?.["1w"] ?? null;
+  const r3m = row?.returns?.["3m"] ?? null;
+  const fromHigh = row?.pctFromHigh ?? null;
 
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -92,6 +99,16 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
         {dateLabel && <span className="text-xs text-[var(--text-3)]">{days != null && days >= 0 ? `reports ${dateLabel} · in ${days}d` : `next/last report ${dateLabel}`}</span>}
       </div>
 
+      {/* #2 pre-earnings setup — how it's positioned going in */}
+      {row && (r1w != null || r3m != null || fromHigh != null) && (
+        <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[11px] text-[var(--text-3)]">
+          <span className="text-[var(--text-4)]">Setup into the print:</span>
+          {r1w != null && <span>1wk <b style={{ color: col(r1w) }}>{r1w >= 0 ? "+" : ""}{r1w.toFixed(1)}%</b></span>}
+          {r3m != null && <span>3mo <b style={{ color: col(r3m) }}>{r3m >= 0 ? "+" : ""}{r3m.toFixed(1)}%</b></span>}
+          {fromHigh != null && <span><b className="text-[var(--text-2)]">{fromHigh >= -1.5 ? "at" : `${Math.abs(fromHigh).toFixed(0)}% below`}</b> 52wk high</span>}
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Consensus EPS (this Q)" value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} sub={q0?.epsAnalysts && q0.epsLow != null && q0.epsHigh != null ? `${q0.epsAnalysts} est · $${q0.epsLow.toFixed(2)}–$${q0.epsHigh.toFixed(2)}` : undefined} />
         <Stat label="Consensus revenue" value={fmtRev(q0?.revAvg)} sub={q0?.growth != null ? `${pp(q0.growth, 0)} YoY${compEps != null ? ` · yr-ago EPS $${compEps.toFixed(2)}` : ""}` : undefined} />
@@ -99,13 +116,14 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
         <Stat label="Options-implied move" value={d?.impliedMove != null ? `±${d.impliedMove.toFixed(1)}%` : data === "loading" ? "…" : "—"} sub={d?.reaction ? `avg past ±${(d.reaction.avgAbsMove * 100).toFixed(1)}% (${d.reaction.n})` : undefined} />
       </div>
 
-      {/* #1 options rich/cheap + straddle breakevens */}
-      {(d?.richness || d?.straddle) && (
+      {/* #1 options rich/cheap + straddle breakevens + win-rate */}
+      {(d?.richness || d?.straddle || d?.straddleWinRate) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
           {d.richness && (() => {
             const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
             return <span><b style={{ color: vc }}>Options {v === "rich" ? "RICH" : v === "cheap" ? "CHEAP" : "fairly priced"}</b> — pricing ±{d!.impliedMove!.toFixed(1)}% vs ~±{d.richness.avgRealized.toFixed(1)}% realized <span className="text-[var(--text-4)]">({d.richness.ratio.toFixed(2)}×{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""})</span></span>;
           })()}
+          {d.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="How often the realized move EXCEEDED the current implied move, over the last N prints — low = options rich (the straddle's been a sell)"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
           {d.straddle && <span title="Straddle breakevens = price ± the implied move; the stock must close beyond these for a long straddle to pay"><b className="text-[var(--text-2)]">Breakevens</b> ${d.straddle.lowerBE.toFixed(2)} / ${d.straddle.upperBE.toFixed(2)} <span className="text-[var(--text-4)]">· straddle ~${d.straddle.cost.toFixed(2)}</span></span>}
         </div>
       )}
@@ -142,12 +160,24 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
         </div>
       )}
 
+      {/* #3 post-earnings drift (PEAD) */}
+      {d?.pead && (
+        <div className="mt-2 text-[11px] text-[var(--text-3)]" title="Post-earnings drift: the stock's return over the 5 sessions AFTER the initial reaction — does the move continue or fade?">
+          <b className="text-[var(--text-2)]">Post-print drift (5d)</b>{" "}
+          {d.pead.avgBeatDrift5 != null && <>after beats <b style={{ color: col(d.pead.avgBeatDrift5) }}>{pp(d.pead.avgBeatDrift5)}</b></>}
+          {d.pead.avgMissDrift5 != null && <> · after misses <b style={{ color: col(d.pead.avgMissDrift5) }}>{pp(d.pead.avgMissDrift5)}</b></>}
+          <span className="text-[var(--text-4)]"> · move follows through {Math.round(d.pead.followThrough * 100)}% of {d.pead.n}</span>
+        </div>
+      )}
+
       {/* #5 options positioning */}
-      {d?.options && (d.options.skew != null || d.options.maxPain != null) && (
+      {d?.options && (d.options.skew != null || d.options.maxPain != null || d.options.callWall != null) && (
         <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--text-3)]">
           {d.options.atmIV != null && <span><b className="text-[var(--text-2)]">ATM IV</b> {(d.options.atmIV * 100).toFixed(0)}%</span>}
           {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
           {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)} vs spot)` : ""}</span>}
+          {d.options.callWall && <span title="Heaviest call open interest above spot — a level where dealer gamma can cap / pin the stock"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
+          {d.options.putWall && <span title="Heaviest put open interest below spot — support / downside magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
           {d.options.expiry && <span className="text-[var(--text-4)]">exp {d.options.expiry.slice(5)}</span>}
         </div>
       )}

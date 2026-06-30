@@ -30,12 +30,20 @@ function optionsRead(chain: OptionChain | null) {
     for (const p of chain.puts) if (p.oi && p.strike > S) pay += p.oi * (p.strike - S);
     if (pay < bestPay) { bestPay = pay; maxPain = S; }
   }
+  // OI walls — the heaviest open-interest strikes around spot. A big call wall above caps/pins
+  // upside; a big put wall below acts as a magnet/support. Dealers hedge around them.
+  let callWall: { strike: number; oi: number } | null = null;
+  let putWall: { strike: number; oi: number } | null = null;
+  for (const c of chain.calls) if (c.oi && c.strike >= u && (!callWall || c.oi > callWall.oi)) callWall = { strike: c.strike, oi: c.oi };
+  for (const p of chain.puts) if (p.oi && p.strike <= u && (!putWall || p.oi > putWall.oi)) putWall = { strike: p.strike, oi: p.oi };
   return {
     expiry: chain.selected,
     atmIV: atmVals.length ? atmVals.reduce((a, b) => a + b, 0) / atmVals.length : null,
     skew: cIV != null && pIV != null ? pIV - cIV : null, // >0 = puts bid over calls (downside hedging)
     maxPain,
     maxPainVsSpot: maxPain ? maxPain / u - 1 : null,
+    callWall,
+    putWall,
   };
 }
 
@@ -100,9 +108,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const reaction = moves.length
       ? { avgAbsMove: moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length, maxAbsMove: Math.max(...moves.map(Math.abs)), upRate: moves.filter((m) => m > 0).length / moves.length, n: moves.length }
       : null;
-    const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move }));
+    const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move, drift5: r.drift5 }));
     const impliedMove = (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
     const options = optionsRead(chain);
+
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+    // Straddle "win-rate": of past prints, how often the realized move EXCEEDED what options price now.
+    const straddleWinRate = impliedMove != null && moves.length ? { exceeded: moves.filter((m) => Math.abs(m) > impliedMove / 100).length, total: moves.length } : null;
+    // PEAD: post-earnings 5-day drift after beats vs misses + follow-through rate (drift same sign as the day-1 move).
+    const withDrift = (reactions || []).filter((r) => r.drift5 != null) as { move: number | null; surprise: number | null; drift5: number }[];
+    const beatDrift = withDrift.filter((r) => r.surprise != null && r.surprise > 0).map((r) => r.drift5);
+    const missDrift = withDrift.filter((r) => r.surprise != null && r.surprise <= 0).map((r) => r.drift5);
+    const ftSet = withDrift.filter((r) => r.move != null);
+    const pead = ftSet.length >= 3
+      ? { avgBeatDrift5: avg(beatDrift), avgMissDrift5: avg(missDrift), followThrough: ftSet.filter((r) => Math.sign(r.move!) === Math.sign(r.drift5)).length / ftSet.length, n: ftSet.length }
+      : null;
 
     // Options rich/cheap (implied vs avg REALIZED move) + the straddle breakevens.
     const price = chain?.underlying ?? null;
@@ -117,7 +137,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         : null;
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {

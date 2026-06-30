@@ -357,7 +357,7 @@ export default function FinancialsView({
         )
       ) : view === "earnings" ? (
         <div className="space-y-4">
-          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} />
+          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} row={row} />
           <CompanyStats stats={stats} currency={currency} show="earnings" />
           <EarningsMultipleChart symbol={symbol} currency={currency} />
         </div>

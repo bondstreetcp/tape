@@ -12,6 +12,8 @@ export interface EarningsReaction {
   reactionDate: string; // trading day the move is measured on
   move: number | null; // close-to-close % reaction (decimal)
   surprise: number | null; // EPS surprise % (decimal), where available
+  drift3: number | null; // return from the reaction close → +3 sessions (post-earnings drift)
+  drift5: number | null; // return from the reaction close → +5 sessions
 }
 
 /** The last `n` earnings dates (SEC 8-K item 2.02) with the stock's one-day
@@ -104,6 +106,8 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
       reactionDate: new Date(closes[j].t).toISOString().slice(0, 10),
       move,
       surprise,
+      drift3: j + 3 < closes.length ? closes[j + 3].c / closes[j].c - 1 : null,
+      drift5: j + 5 < closes.length ? closes[j + 5].c / closes[j].c - 1 : null,
     });
     if (out.length >= n) break;
   }
