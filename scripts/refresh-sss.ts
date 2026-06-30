@@ -74,7 +74,11 @@ const SCHEMA =
   'Return ONLY JSON (a single object): {"comp": number|null, "basis": string, "metricLabel": string|null, "definition": string|null, "periodEnd": string|null, "fiscalLabel": string|null, "traffic": number|null, "ticket": number|null, "segments": [{"name": string, "comp": number}], "twoYrStack": number|null, "quote": string|null, "confidence": string}';
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const isCompMetric = (label?: string | null) => !!label && /compar|same.?store|identical|like.?for.?like/i.test(label);
+// Restaurants/retail use many phrasings: comparable, same-store/-restaurant/-shop/-location, identical
+// sales (grocery), like-for-like (intl), SSS/LFL. (Earlier this only matched "same store" → nulled
+// valid comps for CAVA/WEN/DRI/BROS.) Still rejects "system-wide" / "net sales" / "total revenue".
+const isCompMetric = (label?: string | null) =>
+  !!label && /compar|same.?(store|restaurant|shop|location|site|cafe|salon)|identical|like.?for.?like|\bsss\b|\blfl\b/i.test(label);
 
 interface Extracted extends Omit<SssPeriod, "fpEnd" | "source"> { periodEnd?: string | null; quote?: string | null }
 
