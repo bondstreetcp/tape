@@ -15,6 +15,8 @@ interface DataPart {
   pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
+  volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -206,6 +208,16 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
             {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
             {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
           </div>
+
+          {/* earnings-day trade idea — the read turned into a structure at expected-move strikes */}
+          {d?.trade && (
+            <div className="mt-2 rounded-lg bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
+              <span className="font-semibold text-[var(--text)]">Play </span>
+              <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>
+              <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -273,7 +285,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
       {/* #5 options positioning */}
       {d?.options && (d.options.skew != null || d.options.maxPain != null || d.options.callWall != null) && (
         <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--text-3)]">
-          {d.options.atmIV != null && <span><b className="text-[var(--text-2)]">ATM IV</b> {(d.options.atmIV * 100).toFixed(0)}%</span>}
+          {d?.volRegime ? <span title="ATM implied vol vs 20-day realized (historical) vol = the variance risk premium; + where current realized vol sits in its own 1yr range. >1.3× = vol rich in absolute terms."><b className="text-[var(--text-2)]">IV vs HV</b> {(d.volRegime.atmIV * 100).toFixed(0)}%/{(d.volRegime.hv20 * 100).toFixed(0)}% <span style={{ color: d.volRegime.ivHvRatio >= 1.3 ? "#ef4444" : d.volRegime.ivHvRatio <= 1 ? "#22c55e" : "var(--text-4)" }}>{d.volRegime.ivHvRatio.toFixed(1)}×</span>{d.volRegime.hvPctile != null ? <span className="text-[var(--text-4)]"> · HV {d.volRegime.hvPctile.toFixed(0)}ᵗʰ %ile</span> : null}</span>
+            : d.options.atmIV != null && <span><b className="text-[var(--text-2)]">ATM IV</b> {(d.options.atmIV * 100).toFixed(0)}%</span>}
           {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
           {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)} vs spot)` : ""}</span>}
           {d.options.callWall && <span title="Heaviest call open interest above spot — a level where dealer gamma can cap / pin the stock"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}

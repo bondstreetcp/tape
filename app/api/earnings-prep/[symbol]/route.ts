@@ -3,6 +3,7 @@ import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
+import YahooFinance from "yahoo-finance2";
 import { getNews } from "@/lib/news";
 import { getLatestTranscript } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
@@ -60,6 +61,72 @@ function termRead(ts: { points: { date: string; dte: number; atmIV: number | nul
   return { frontIV: front.atmIV, backIV: back.atmIV, frontDte: front.dte, backDte: back.dte, crushRatio: front.atmIV / back.atmIV };
 }
 
+const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+
+// 1yr of daily closes for the realized-vol regime read.
+async function dailyCloses(sym: string): Promise<number[]> {
+  try {
+    const chart: any = await yf.chart(sym, { period1: new Date(Date.now() - 372 * 86_400_000), interval: "1d" } as any, { validateResult: false });
+    return (chart.quotes || []).filter((q: any) => q?.close != null).map((q: any) => q.close as number);
+  } catch {
+    return [];
+  }
+}
+
+// Vol regime: is the event IV rich in ABSOLUTE terms? ATM IV vs trailing realized (historical) vol +
+// where current 20d HV sits in its own 1yr range. (Options rich/cheap compares IV to the realized MOVE;
+// this compares IV to day-to-day realized vol — the variance-risk-premium view.)
+function volRegimeFrom(closes: number[], atmIV: number | null) {
+  if (atmIV == null || closes.length < 40) return null;
+  const rets: number[] = [];
+  for (let i = 1; i < closes.length; i++) rets.push(Math.log(closes[i] / closes[i - 1]));
+  const ann = (r: number[]) => { if (r.length < 5) return null; const m = r.reduce((a, b) => a + b, 0) / r.length; const sd = Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / r.length); return sd * Math.sqrt(252); };
+  const hv20 = ann(rets.slice(-20));
+  if (hv20 == null || hv20 <= 0) return null;
+  const roll: number[] = [];
+  for (let i = 20; i <= rets.length; i++) { const v = ann(rets.slice(i - 20, i)); if (v != null) roll.push(v); }
+  const hvPctile = roll.length ? (roll.filter((v) => v <= hv20).length / roll.length) * 100 : null;
+  return { atmIV, hv20, ivHvRatio: atmIV / hv20, hvPctile };
+}
+
+// Earnings-day trade idea — turn the rich/cheap + skew read into a concrete structure at expected-move
+// strikes pulled from the live chain. Decision-support, not advice (NO_ADVICE is on the AI side).
+function tradeIdea(
+  richness: { verdict: string; avgRealized: number } | null,
+  optionsR: { skew: number | null } | null,
+  straddle: { lowerBE: number; upperBE: number; price: number } | null,
+  chain: OptionChain | null,
+  impliedMove: number | null,
+) {
+  if (!richness || !straddle || !chain || impliedMove == null) return null;
+  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))].sort((a, b) => a - b);
+  if (strikes.length < 4) return null;
+  const near = (t: number) => strikes.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a));
+  const putK = near(straddle.lowerBE), callK = near(straddle.upperBE), atmK = near(straddle.price);
+  const fmt = (k: number) => (Number.isInteger(k) ? `${k}` : k.toFixed(1));
+  if (richness.verdict === "rich") {
+    const skewRich = optionsR?.skew != null && optionsR.skew > 0.03; // puts notably bid → prefer defined risk
+    const wing = Math.max(strikes.find((s) => s > callK) ? near(callK + (callK - putK)) - callK : 0, (callK - putK) / 2) || 5;
+    return {
+      verdict: "rich",
+      structure: skewRich ? "Iron condor (defined risk)" : "Short strangle",
+      legs: skewRich
+        ? `short ${fmt(putK)}P / long ${fmt(near(putK - wing))}P · short ${fmt(callK)}C / long ${fmt(near(callK + wing))}C`
+        : `short ${fmt(putK)}P · short ${fmt(callK)}C (the ±${impliedMove.toFixed(1)}% strikes)`,
+      rationale: `Implied ±${impliedMove.toFixed(1)}% is rich vs ~±${richness.avgRealized.toFixed(1)}% realized — sell the move${skewRich ? "; condor caps the tail since puts are bid" : ""}.`,
+    };
+  }
+  if (richness.verdict === "cheap") {
+    return {
+      verdict: "cheap",
+      structure: "Long straddle / strangle",
+      legs: `long ${fmt(atmK)}P + ${fmt(atmK)}C`,
+      rationale: `Implied ±${impliedMove.toFixed(1)}% is cheap vs ~±${richness.avgRealized.toFixed(1)}% realized — own the move.`,
+    };
+  }
+  return null; // fairly priced → no clean premium edge
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
@@ -112,11 +179,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     }
 
     // ── Data part: reaction history + implied move + options skew/max-pain (fast, auto-loaded) ──
-    const [reactions, emove, chain, ts] = await Promise.all([
+    const [reactions, emove, chain, ts, closes] = await Promise.all([
       getEarningsReactions(sym, 8).catch(() => []),
       loadEarningsMove().catch(() => null),
       getOptions(sym).catch(() => null),
       getTermStructure(sym, 6).catch(() => null),
+      dailyCloses(sym),
     ]);
     const term = termRead(ts);
     const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
@@ -154,9 +222,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       impliedMove != null && price
         ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price }
         : null;
+    const volRegime = volRegimeFrom(closes, options?.atmIV ?? null);
+    const trade = tradeIdea(richness, options, straddle, chain, impliedMove);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
