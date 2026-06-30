@@ -262,6 +262,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Reddit buzz (ApeWisdom mention counts) — free, no key.
+      - name: Refresh Reddit buzz
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-apewisdom
+        continue-on-error: true
+
       # Cash-secured put-writing screen. Uses the refreshed snapshots (ROE / P/E / cap) + price
       # series above, then pulls option chains for the ~150 large caps that pass the quality/value
       # filter and prices the ~16-delta / ~35-DTE put. Globally rate-limited (Yahoo throttles

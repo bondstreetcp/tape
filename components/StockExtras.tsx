@@ -274,10 +274,13 @@ interface ChatterSummary { day: string; week: string; dayCount: number; weekCoun
 export function StockTwitsPanel({ symbol }: { symbol: string }) {
   const [data, setData] = useState<StockTwitsInfo | null | "err">(null);
   const [summary, setSummary] = useState<ChatterSummary | null | "loading">("loading");
+  const [buzz, setBuzz] = useState<import("@/lib/apewisdom").ApeWisdomEntry | null>(null);
   useEffect(() => {
     let a = true;
     setData(null);
     setSummary("loading");
+    setBuzz(null);
+    fetch(`/api/reddit-buzz/${encodeURIComponent(symbol)}`).then((r) => r.json()).then((d) => a && setBuzz(d.buzz || null)).catch(() => {});
     fetch(`/api/stocktwits/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
       .then((d) => a && setData(d.data || "err"))
@@ -315,6 +318,13 @@ export function StockTwitsPanel({ symbol }: { symbol: string }) {
             <div className="text-[11px] text-[var(--text-4)]">Posting rate</div>
             <div className="font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{perHour >= 10 ? Math.round(perHour) : perHour.toFixed(1)}/hr</div>
             {perHour >= 8 && <div className="text-[11px] font-medium text-[#f59e0b]">elevated buzz</div>}
+          </div>
+        )}
+        {buzz && (
+          <div title="Reddit mentions (r/wallstreetbets &c., trailing 24h) via ApeWisdom — attention, not sentiment">
+            <div className="text-[11px] text-[var(--text-4)]">Reddit buzz <span className="text-[var(--text-3)]">#{buzz.rank}</span></div>
+            <div className="font-mono text-lg font-semibold tabular-nums text-[var(--text)]">{buzz.mentions.toLocaleString()}<span className="ml-1 text-[11px] font-normal text-[var(--text-4)]">mentions</span></div>
+            <div className="text-[11px]" style={{ color: buzz.mentionChangePct == null ? "var(--text-3)" : buzz.mentionChangePct >= 0 ? "#22c55e" : "#ef4444" }}>{buzz.mentionChangePct == null ? "24h" : `${buzz.mentionChangePct >= 0 ? "+" : ""}${buzz.mentionChangePct}% · 24h`}</div>
           </div>
         )}
       </div>
