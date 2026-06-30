@@ -185,6 +185,26 @@ export const HOLDCOS: Holdco[] = [
       { ticker: "GOOG", name: "Alphabet", sharesM: 0.31 },
     ],
   },
+  {
+    slug: "liberty-broadband", name: "Liberty Broadband", ticker: "LBRDK", currency: "USD", sharesOutM: 144, netDebtM: 1540, otherNavM: 1100, asOf: "2026-03",
+    note: "Single-asset Charter (CHTR) holdco — ~45.6M CHTR shares (~32% economic) is the whole story. Charter agreed Nov-2024 to acquire LBRD all-stock at 0.236 CHTR/LBRD, expected close ~mid-2027 after a GCI spin-off, so LBRD trades as a near-arb on the 0.236 take-out value rather than its old ~15-25% standalone discount. otherNAV = ~$1.0-1.2bn GCI Holdings (Alaska telecom, being SPUN OFF to LBRD holders before close; SEED ESTIMATE, unlisted today). netDebt $1,540M = $2,565M debt − $1,024M cash at 3/31/2026 (excludes GCI debt, which leaves with the spin). sharesOutM ~144M derived from the deal math (MEDIUM confidence; a raw class screen-scrape sums to ~162M but double-counts stale splits). Verify against LBRD's NAV disclosures.",
+    stakes: [{ ticker: "CHTR", name: "Charter Communications", sharesM: 45.6 }],
+  },
+  {
+    slug: "icahn-enterprises", name: "Icahn Enterprises", ticker: "IEP", currency: "USD", sharesOutM: 637.21, netDebtM: 3801, otherNavM: 4763, asOf: "2026-03",
+    note: "PREMIUM, not discount — IEP is the rare holdco that trades ABOVE look-through NAV, so the computed 'discount' prints POSITIVE (~+70% premium). Sustained by the ~$2.00/yr distribution yielding ~20%+ on the unit price + ~87% Icahn insider control; was the 2023 Hindenburg short thesis (IEP later halved the distribution $1.00→$0.50). Built from IEP's own Q1-2026 disclosed indicative NAV (~$3,367M). The ONLY listed line is CVI (pctOwned 0.708); otherNAV = all NON-CVI segments (Investment Funds/hedge-fund ~2,221 + Real Estate ~1,394 + Icahn Automotive ~704 + Viskase/WestPoint/Vivus/CVR Partners) — mostly PRIVATE/fund marks, so coverage is LOW and the NAV is management-stated + volatile. netDebt = HoldCo-level only ($4,425M − $624M cash). sharesOutM 637.21M ties to the 31-Mar-2026 indicative NAV; ~672M units appear in later feeds (IEP pays an optional STOCK distribution so the count drifts up) — reconcile to the NAV date if the per-unit math looks off.",
+    stakes: [{ ticker: "CVI", name: "CVR Energy", pctOwned: 0.708 }],
+  },
+  {
+    slug: "daily-journal", name: "Daily Journal", ticker: "DJCO", currency: "USD", sharesOutM: 1.378, netDebtM: 92.5, otherNavM: 260, asOf: "2026-03",
+    note: "Charlie Munger's former company (d. 2023). Tiny — 1.378M shares. Trades at a large PREMIUM to this model NAV (computed discount prints POSITIVE) because book value carries Journal Technologies — the wholly-owned, growing court/justice software business — at COST, not a software multiple. Marketable securities ~$430M at Mar-2026; the 13F US/ADR slice (~$241M) is the 4 stakes below (WFC/BAC/BABA/USB by share count), so ~$189M of non-13F holdings is folded into otherNAV. otherNAV ~$260M = that residual + a rough Journal Technologies mark (~$60-80M, SOFT — could be worth far more on a software multiple) + real estate. netDebt $92.5M = $20M margin loan + $72.5M deferred-tax on unrealized gains (CEF-style embedded-gains haircut). The 4 securities stakes are HIGH confidence; otherNAV is the soft leg, so the premium magnitude is overstated.",
+    stakes: [
+      { ticker: "WFC", name: "Wells Fargo", sharesM: 1.413 },
+      { ticker: "BAC", name: "Bank of America", sharesM: 2.0 },
+      { ticker: "BABA", name: "Alibaba (ADR)", sharesM: 0.195 },
+      { ticker: "USB", name: "U.S. Bancorp", sharesM: 0.14 },
+    ],
+  },
 ];
 
 // ── Computed output (written to data/holdco-nav.json by the refresh script) ──

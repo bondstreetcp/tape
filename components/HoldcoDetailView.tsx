@@ -14,6 +14,7 @@ const DAY = 86_400_000;
 export default function HoldcoDetailView({ h, universe }: { h: HoldcoNav; universe: string }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [years, setYears] = useState(0);
+  const [hov, setHov] = useState<number | null>(null); // shared hover index across both charts
   const cur = h.currency;
 
   const pts = useMemo(() => {
@@ -63,12 +64,12 @@ export default function HoldcoDetailView({ h, universe }: { h: HoldcoNav; univer
               <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-[var(--text-2)]" /> Share price</span>
               <span className="ml-auto text-[var(--text-4)]">{ccySym(cur)} per share</span>
             </div>
-            <BasketChart pts={pts} cur={cur} discountUp={(h.discount ?? 0) < 0} />
+            <BasketChart pts={pts} cur={cur} discountUp={(h.discount ?? 0) < 0} hov={hov} setHov={setHov} />
           </section>
 
           <section className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="mb-1 text-sm font-semibold text-[var(--text-2)]">Discount / premium to NAV over time</div>
-            <DiscountChart pts={pts} />
+            <DiscountChart pts={pts} cur={cur} hov={hov} setHov={setHov} />
           </section>
         </>
       )}
@@ -103,9 +104,27 @@ export default function HoldcoDetailView({ h, universe }: { h: HoldcoNav; univer
 }
 
 interface Pt { t: number; nav: number; price: number; disc: number }
+type HoverProps = { hov: number | null; setHov: (i: number | null) => void };
 
-function BasketChart({ pts, cur, discountUp }: { pts: Pt[]; cur: string; discountUp: boolean }) {
-  const W = 880, H = 320, ML = 52, MR = 14, MT = 14, MB = 24;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function xTicks(minT: number, maxT: number, n = 5): { t: number; label: string }[] {
+  if (maxT === minT) return [{ t: minT, label: "" }];
+  const out: { t: number; label: string }[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = minT + (maxT - minT) * (i / (n - 1));
+    const d = new Date(t);
+    out.push({ t, label: `${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}` });
+  }
+  return out;
+}
+// Transparent per-point hit-targets that drive the shared hover index.
+function HoverLayer({ pts, x, ML, MR, MT, MB, W, H, setHov }: { pts: Pt[]; x: (t: number) => number; ML: number; MR: number; MT: number; MB: number; W: number; H: number; setHov: (i: number | null) => void }) {
+  const half = (W - ML - MR) / Math.max(1, pts.length - 1) / 2;
+  return <>{pts.map((p, i) => <rect key={i} x={x(p.t) - half} y={MT} width={Math.max(1, half * 2)} height={H - MT - MB} fill="transparent" onMouseEnter={() => setHov(i)} />)}</>;
+}
+
+function BasketChart({ pts, cur, discountUp, hov, setHov }: { pts: Pt[]; cur: string; discountUp: boolean } & HoverProps) {
+  const W = 880, H = 320, ML = 52, MR = 14, MT = 14, MB = 26;
   const minT = pts[0].t, maxT = pts[pts.length - 1].t;
   const vals = pts.flatMap((p) => [p.nav, p.price]);
   let lo = Math.min(...vals), hi = Math.max(...vals);
@@ -114,30 +133,50 @@ function BasketChart({ pts, cur, discountUp }: { pts: Pt[]; cur: string; discoun
   const y = (v: number) => MT + (1 - (v - lo) / (hi - lo || 1)) * (H - MT - MB);
   const navPath = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.nav).toFixed(1)}`).join("");
   const pricePath = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.price).toFixed(1)}`).join("");
-  // shaded gap between nav (top) and price = the discount
   const area = navPath + " " + pts.slice().reverse().map((p) => `L${x(p.t).toFixed(1)} ${y(p.price).toFixed(1)}`).join(" ") + " Z";
   const yTicks = [hi, (lo + hi) / 2, lo];
-  const yrs: number[] = [];
-  for (let yr = new Date(minT).getUTCFullYear(); yr <= new Date(maxT).getUTCFullYear(); yr++) yrs.push(yr);
   const gapColor = discountUp ? "#22c55e" : "#ef4444";
+  const hp = hov != null && hov < pts.length ? pts[hov] : null;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }} onMouseLeave={() => setHov(null)}>
       {yTicks.map((v, i) => (
         <g key={i}>
           <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--surface-hover)" />
           <text x={ML - 5} y={y(v) + 3} textAnchor="end" fontSize={10} fill="var(--text-4)">{ccySym(cur)}{v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(v < 20 ? 1 : 0)}</text>
         </g>
       ))}
-      {yrs.map((yr) => { const tx = x(Date.parse(`${yr}-01-01`)); return tx >= ML && tx <= W - MR ? <text key={yr} x={tx} y={H - 6} textAnchor="middle" fontSize={9} fill="var(--text-4)">{yr}</text> : null; })}
+      {/* x-axis */}
+      <line x1={ML} x2={W - MR} y1={H - MB} y2={H - MB} stroke="var(--border)" />
+      {xTicks(minT, maxT).map((t, i) => <text key={i} x={x(t.t)} y={H - 8} textAnchor={i === 0 ? "start" : i === 4 ? "end" : "middle"} fontSize={9} fill="var(--text-4)">{t.label}</text>)}
       <path d={area} fill={gapColor} fillOpacity={0.1} stroke="none" />
       <path d={navPath} fill="none" stroke="var(--accent)" strokeWidth={1.8} />
       <path d={pricePath} fill="none" stroke="var(--text-2)" strokeWidth={1.8} />
+      {hp && (
+        <>
+          <line x1={x(hp.t)} x2={x(hp.t)} y1={MT} y2={H - MB} stroke="var(--text-4)" strokeOpacity={0.5} />
+          <circle cx={x(hp.t)} cy={y(hp.nav)} r={3.5} fill="var(--accent)" />
+          <circle cx={x(hp.t)} cy={y(hp.price)} r={3.5} fill="var(--text-2)" />
+          {(() => {
+            const boxW = 172, boxH = 76, left = x(hp.t) > W - MR - boxW - 6;
+            return (
+              <g transform={`translate(${left ? x(hp.t) - boxW - 8 : x(hp.t) + 8},${MT})`}>
+                <rect width={boxW} height={boxH} rx={6} fill="var(--bg)" stroke="var(--border)" />
+                <text x={9} y={16} fontSize={11} fontWeight={600} fill="var(--text-2)">{new Date(hp.t).toISOString().slice(0, 10)}</text>
+                <text x={9} y={33} fontSize={11} fill="var(--text-3)"><tspan fill="var(--accent)" fontSize={13}>●</tspan> NAV/sh {ccySym(cur)}{hp.nav.toFixed(2)}</text>
+                <text x={9} y={49} fontSize={11} fill="var(--text-3)"><tspan fill="var(--text-2)" fontSize={13}>●</tspan> Price {ccySym(cur)}{hp.price.toFixed(2)}</text>
+                <text x={9} y={67} fontSize={11} fontWeight={600} fill={hp.disc < 0 ? "#22c55e" : "#ef4444"}>{hp.disc >= 0 ? "+" : ""}{hp.disc.toFixed(1)}% {hp.disc < 0 ? "discount" : "premium"}</text>
+              </g>
+            );
+          })()}
+        </>
+      )}
+      <HoverLayer pts={pts} x={x} ML={ML} MR={MR} MT={MT} MB={MB} W={W} H={H} setHov={setHov} />
     </svg>
   );
 }
 
-function DiscountChart({ pts }: { pts: Pt[] }) {
-  const W = 880, H = 150, ML = 52, MR = 14, MT = 12, MB = 22;
+function DiscountChart({ pts, cur, hov, setHov }: { pts: Pt[]; cur: string } & HoverProps) {
+  const W = 880, H = 160, ML = 52, MR = 14, MT = 12, MB = 24;
   const minT = pts[0].t, maxT = pts[pts.length - 1].t;
   const vals = pts.map((p) => p.disc);
   let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
@@ -146,19 +185,28 @@ function DiscountChart({ pts }: { pts: Pt[] }) {
   const y = (v: number) => MT + (1 - (v - lo) / (hi - lo || 1)) * (H - MT - MB);
   const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.disc).toFixed(1)}`).join("");
   const area = path + ` L${x(maxT).toFixed(1)} ${y(0).toFixed(1)} L${x(minT).toFixed(1)} ${y(0).toFixed(1)} Z`;
-  const cur = pts[pts.length - 1].disc;
-  const color = cur < 0 ? "#22c55e" : "#ef4444";
+  const color = pts[pts.length - 1].disc < 0 ? "#22c55e" : "#ef4444";
   const yTicks = [hi, 0, lo].filter((v, i, a) => a.indexOf(v) === i);
+  const hp = hov != null && hov < pts.length ? pts[hov] : null;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }} onMouseLeave={() => setHov(null)}>
       {yTicks.map((v, i) => (
         <g key={i}>
           <line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke={v === 0 ? "var(--text-4)" : "var(--surface-hover)"} strokeOpacity={v === 0 ? 0.5 : 1} strokeDasharray={v === 0 ? "4 3" : undefined} />
           <text x={ML - 5} y={y(v) + 3} textAnchor="end" fontSize={10} fill="var(--text-4)">{v >= 0 ? "+" : ""}{v.toFixed(0)}%</text>
         </g>
       ))}
+      {xTicks(minT, maxT).map((t, i) => <text key={i} x={x(t.t)} y={H - 7} textAnchor={i === 0 ? "start" : i === 4 ? "end" : "middle"} fontSize={9} fill="var(--text-4)">{t.label}</text>)}
       <path d={area} fill={color} fillOpacity={0.12} stroke="none" />
       <path d={path} fill="none" stroke={color} strokeWidth={1.6} />
+      {hp && (
+        <>
+          <line x1={x(hp.t)} x2={x(hp.t)} y1={MT} y2={H - MB} stroke="var(--text-4)" strokeOpacity={0.5} />
+          <circle cx={x(hp.t)} cy={y(hp.disc)} r={3} fill={hp.disc < 0 ? "#22c55e" : "#ef4444"} />
+          <text x={x(hp.t) > W - 70 ? x(hp.t) - 6 : x(hp.t) + 6} y={y(hp.disc) - 6} textAnchor={x(hp.t) > W - 70 ? "end" : "start"} fontSize={11} fontWeight={600} fill={hp.disc < 0 ? "#22c55e" : "#ef4444"}>{hp.disc >= 0 ? "+" : ""}{hp.disc.toFixed(1)}%</text>
+        </>
+      )}
+      <HoverLayer pts={pts} x={x} ML={ML} MR={MR} MT={MT} MB={MB} W={W} H={H} setHov={setHov} />
     </svg>
   );
 }
