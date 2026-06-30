@@ -22,9 +22,6 @@ type Tok =
   | { t: "lp" }
   | { t: "rp" };
 
-const NUM_RE = /^\d*\.?\d+(?:[eE][-+]?\d+)?/;
-const TICK_RE = /^[A-Za-z][A-Za-z0-9.^]*/;
-
 function tokenize(expr: string): Tok[] {
   const raw: Tok[] = [];
   let s = expr;
@@ -35,10 +32,18 @@ function tokenize(expr: string): Tok[] {
     if (c === "(") { raw.push({ t: "lp" }); s = s.slice(1); continue; }
     if (c === ")") { raw.push({ t: "rp" }); s = s.slice(1); continue; }
     if ("+-*/".includes(c)) { raw.push({ t: "op", v: c }); s = s.slice(1); continue; }
-    let m = s.match(NUM_RE);
-    if (m) { raw.push({ t: "num", v: parseFloat(m[0]) }); s = s.slice(m[0].length); continue; }
-    m = s.match(TICK_RE);
-    if (m) { raw.push({ t: "tick", v: m[0].toUpperCase() }); s = s.slice(m[0].length); continue; }
+    // An operand run — a ticker (which MAY start with a digit, e.g. 0700.HK / 9988.HK / 1306.T) or a
+    // plain number. We grab the maximal alphanumeric/dot/caret run, then classify it.
+    const run = s.match(/^\^?[A-Za-z0-9][A-Za-z0-9.^]*/);
+    if (run) {
+      const r = run[0];
+      if (!/[A-Za-z^]/.test(r)) { raw.push({ t: "num", v: parseFloat(r) }); s = s.slice(r.length); continue; } // pure number → coefficient
+      // A coefficient stuck to a ticker with no space ("0.19MMED" / "2AAPL") — split the number off.
+      // (A digit run followed by ".LETTERS" like 0700.HK is a TICKER, not a coefficient, so it won't split here.)
+      const coef = r.match(/^(?:\d+\.\d+|\d+)(?=[A-Za-z^])/);
+      if (coef) { raw.push({ t: "num", v: parseFloat(coef[0]) }); s = s.slice(coef[0].length); continue; }
+      raw.push({ t: "tick", v: r.toUpperCase() }); s = s.slice(r.length); continue; // ticker (AAPL, 0700.HK, BOL.PA, ^GSPC)
+    }
     throw new Error(`Unexpected character '${c}'`);
   }
   // Insert implicit multiplication: an operand (num/ticker/`)`) immediately followed by the start of
