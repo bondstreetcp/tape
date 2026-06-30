@@ -7,6 +7,8 @@ interface DataPart {
   events: { date: string; surprise: number | null; move: number | null }[];
   impliedMove: number | null; // percent (e.g. 7.8)
   options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null } | null;
+  richness: { ratio: number; verdict: "rich" | "cheap" | "fair"; avgRealized: number } | null;
+  straddle: { cost: number; upperBE: number; lowerBE: number; price: number } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -16,6 +18,7 @@ interface AiPart {
   peerReads: string[];
   bull: string;
   bear: string;
+  fromLastCall: string;
 }
 
 const pp = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`); // decimal → %
@@ -96,6 +99,17 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
         <Stat label="Options-implied move" value={d?.impliedMove != null ? `±${d.impliedMove.toFixed(1)}%` : data === "loading" ? "…" : "—"} sub={d?.reaction ? `avg past ±${(d.reaction.avgAbsMove * 100).toFixed(1)}% (${d.reaction.n})` : undefined} />
       </div>
 
+      {/* #1 options rich/cheap + straddle breakevens */}
+      {(d?.richness || d?.straddle) && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
+          {d.richness && (() => {
+            const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
+            return <span><b style={{ color: vc }}>Options {v === "rich" ? "RICH" : v === "cheap" ? "CHEAP" : "fairly priced"}</b> — pricing ±{d!.impliedMove!.toFixed(1)}% vs ~±{d.richness.avgRealized.toFixed(1)}% realized <span className="text-[var(--text-4)]">({d.richness.ratio.toFixed(2)}×{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""})</span></span>;
+          })()}
+          {d.straddle && <span title="Straddle breakevens = price ± the implied move; the stock must close beyond these for a long straddle to pay"><b className="text-[var(--text-2)]">Breakevens</b> ${d.straddle.lowerBE.toFixed(2)} / ${d.straddle.upperBE.toFixed(2)} <span className="text-[var(--text-4)]">· straddle ~${d.straddle.cost.toFixed(2)}</span></span>}
+        </div>
+      )}
+
       {/* positioning + track record */}
       <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[var(--text-3)]">
         {beatRate != null && <span><b className="text-[var(--text-2)]">Beat rate</b> {(beatRate * 100).toFixed(0)}% of {sp.length}q{avgSurprise != null ? ` · avg surprise ${pp(avgSurprise, 1)}` : ""}</span>}
@@ -144,7 +158,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
         {ai === "idle" ? (
           <div>
             <button onClick={runAi} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
-            <p className="mt-1.5 text-[11px] text-[var(--text-4)]">An AI desk-style preview — the money line, what the Street is watching, guidance, peer read-throughs, and the bull/bear into the print (takes a few seconds).</p>
+            <p className="mt-1.5 text-[11px] text-[var(--text-4)]">An AI desk-style preview — the money line, what changed since last call, what the Street is watching, guidance, peer read-throughs, and the bull/bear into the print (takes a few seconds).</p>
           </div>
         ) : ai === "loading" ? (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> building the preview…</div>
@@ -152,6 +166,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate }: { symbol: 
           <div className="space-y-2.5 text-[12px] leading-snug">
             {a.moneyLine && <p className="rounded-md bg-[var(--accent-soft)] px-2.5 py-1.5 text-[var(--text)]"><span className="font-semibold">The money line: </span>{a.moneyLine}</p>}
             {a.overview && <p className="text-[var(--text-2)]">{a.overview}</p>}
+            {a.fromLastCall && <p className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5"><span className="font-semibold text-[var(--text)]">Since last call: </span><span className="text-[var(--text-2)]">{a.fromLastCall}</span></p>}
             {a.watch.length > 0 && (
               <div>
                 <div className="mb-1 text-[11px] font-semibold text-[var(--text)]">What the Street is watching</div>
