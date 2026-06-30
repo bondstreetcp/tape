@@ -307,9 +307,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
     const trade = tradeIdea(richness, options, straddle, chain, impliedMove);
     const peerSympathy = await peerReadThrough(sym, closes);
+    // Recent price series (compact [t,c] tuples) for the expected-move cone visual.
+    const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {

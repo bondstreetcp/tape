@@ -20,6 +20,7 @@ interface DataPart {
   trade: { verdict: string; structure: string; legs: string; rationale: string } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
+  priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
 }
 interface AiPart {
   moneyLine: string;
@@ -43,6 +44,39 @@ function Bento({ title, hint, children, className = "" }: { title: string; hint?
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={hint}>{title}</div>
       {children}
     </section>
+  );
+}
+
+// Expected-move CONE — recent price line + the ±straddle range fanned out to the event expiry (1σ band
+// in accent, a lighter 2σ band behind), so "where could it be after the print" is visual, not just a %.
+function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: [number, number][]; lowerBE: number; upperBE: number; spot: number; expiry: string }) {
+  const expT = Date.parse(expiry + "T00:00:00Z");
+  if (series.length < 5 || Number.isNaN(expT)) return null;
+  const W = 600, H = 130, ML = 2, MR = 52, MT = 10, MB = 16;
+  const now = Date.now();
+  const t0 = series[0][0], tMax = Math.max(expT, series[series.length - 1][0] + 86_400_000);
+  const up2 = spot + 2 * (upperBE - spot), lo2 = spot - 2 * (spot - lowerBE);
+  const prices = series.map((s) => s[1]);
+  let yMin = Math.min(...prices, lo2), yMax = Math.max(...prices, up2);
+  const pad = (yMax - yMin) * 0.06 || 1; yMin -= pad; yMax += pad;
+  const x = (t: number) => ML + ((t - t0) / (tMax - t0)) * (W - ML - MR);
+  const y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
+  const path = series.map((s, i) => `${i ? "L" : "M"}${x(s[0]).toFixed(1)} ${y(s[1]).toFixed(1)}`).join("");
+  const xN = x(now), xE = x(expT);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+      <path d={`M${xN} ${y(spot)} L${xE} ${y(up2)} L${xE} ${y(lo2)} Z`} fill="var(--text-4)" fillOpacity={0.1} />
+      <path d={`M${xN} ${y(spot)} L${xE} ${y(upperBE)} L${xE} ${y(lowerBE)} Z`} fill="var(--accent)" fillOpacity={0.16} />
+      <line x1={xN} y1={MT} x2={xN} y2={H - MB} stroke="var(--text-4)" strokeOpacity={0.45} strokeDasharray="2 3" />
+      <line x1={xE} y1={y(up2)} x2={xE} y2={y(lo2)} stroke="var(--text-4)" strokeOpacity={0.3} />
+      <path d={path} fill="none" stroke="var(--text-2)" strokeWidth={1.5} />
+      <circle cx={xN} cy={y(spot)} r={2.5} fill="var(--text)" />
+      <text x={xE + 4} y={y(upperBE) + 3} fontSize={10} fill="#22c55e" className="tabular-nums">${upperBE.toFixed(0)}</text>
+      <text x={xE + 4} y={y(spot) + 3} fontSize={10} fill="var(--text-4)" className="tabular-nums">${spot.toFixed(0)}</text>
+      <text x={xE + 4} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
+      <text x={xN} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="middle">now</text>
+      <text x={xE} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="end">{expiry.slice(5)}</text>
+    </svg>
   );
 }
 
@@ -266,14 +300,22 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
 
           {d?.straddle && (
             <div className="mt-2.5">
-              <div className="relative h-1.5 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
-                <div className="absolute top-1/2 h-3 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text)]" style={{ left: "50%" }} title={`Spot $${d.straddle.price.toFixed(2)}`} />
-              </div>
-              <div className="mt-1 flex justify-between text-[12.5px] tabular-nums">
-                <span className="text-[#ef4444]">${d.straddle.lowerBE.toFixed(2)}</span>
-                <span className="text-[var(--text-4)]">breakevens · spot ${d.straddle.price.toFixed(2)}</span>
-                <span className="text-[#22c55e]">${d.straddle.upperBE.toFixed(2)}</span>
-              </div>
+              {d.priceSeries && d.priceSeries.length >= 5 && d.straddle.expiry ? (
+                <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
+                  <ExpectedMoveCone series={d.priceSeries} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
+                </div>
+              ) : (
+                <>
+                  <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
+                    <div className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text)]" style={{ left: "50%" }} title={`Spot $${d.straddle.price.toFixed(2)}`} />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[13px] tabular-nums">
+                    <span className="text-[#ef4444]">${d.straddle.lowerBE.toFixed(2)}</span>
+                    <span className="text-[var(--text-4)]">breakevens · spot ${d.straddle.price.toFixed(2)}</span>
+                    <span className="text-[#22c55e]">${d.straddle.upperBE.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
