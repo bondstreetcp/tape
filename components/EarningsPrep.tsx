@@ -36,12 +36,22 @@ const pp = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >=
 const fmtRev = (v: number | null | undefined) => (v == null ? "—" : v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v}`);
 const col = (v: number | null) => (v == null ? "var(--text-2)" : v >= 0 ? "#22c55e" : "#ef4444");
 
-function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+// A bordered "bento" card with an uppercase header — the building block of the redesigned grid.
+function Bento({ title, hint, children, className = "" }: { title: string; hint?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={"mb-3 break-inside-avoid rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 " + className}>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={hint}>{title}</div>
+      {children}
+    </section>
+  );
+}
+
+// A big lead metric (value + small label) for the top of a bento.
+function Big({ value, label, color }: { value: string; label: string; color?: string }) {
   return (
     <div>
-      <div className="text-[11px] text-[var(--text-4)]">{label}</div>
-      <div className="font-mono text-lg font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</div>
-      {sub && <div className="text-[11px] leading-tight text-[var(--text-3)]">{sub}</div>}
+      <div className="font-mono text-2xl font-bold leading-none tabular-nums" style={color ? { color } : undefined}>{value}</div>
+      <div className="mt-1 text-[12px] text-[var(--text-4)]">{label}</div>
     </div>
   );
 }
@@ -180,65 +190,57 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   })();
 
   return (
-    <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="mb-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[var(--text)]">Earnings prep</h3>
-        {dateLabel && <span className="text-xs text-[var(--text-3)]">{days != null && days >= 0 ? `reports ${dateLabel}${timingShort ? ` ${timingShort}` : ""} · in ${days}d` : `next/last report ${dateLabel}`}</span>}
+        <h3 className="text-base font-semibold text-[var(--text)]">Earnings prep</h3>
+        {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d</> : `next/last report ${dateLabel}`}</span>}
       </div>
 
-      {/* #2 pre-earnings setup — how it's positioned going in */}
-      {row && (r1w != null || r3m != null || fromHigh != null) && (
-        <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[12.5px] text-[var(--text-3)]">
-          <span className="text-[var(--text-4)]">Setup into the print:</span>
-          {r1w != null && <span>1wk <b style={{ color: col(r1w) }}>{r1w >= 0 ? "+" : ""}{r1w.toFixed(1)}%</b></span>}
-          {r3m != null && <span>3mo <b style={{ color: col(r3m) }}>{r3m >= 0 ? "+" : ""}{r3m.toFixed(1)}%</b></span>}
-          {fromHigh != null && <span><b className="text-[var(--text-2)]">{fromHigh >= -1.5 ? "at" : `${Math.abs(fromHigh).toFixed(0)}% below`}</b> 52wk high</span>}
+      <Bento title="Consensus · this quarter">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <Big value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} label={`EPS${q0?.epsAnalysts ? ` · ${q0.epsAnalysts} est` : ""}`} />
+          <Big value={fmtRev(q0?.revAvg)} label={`revenue${q0?.growth != null ? ` · ${pp(q0.growth, 0)} YoY` : ""}`} />
+          {revPct != null && <Big value={`${revPct >= 0 ? "+" : ""}${revPct.toFixed(1)}%`} label="est. trend 90d" color={revPct >= 0 ? "#22c55e" : "#ef4444"} />}
         </div>
-      )}
-
-      {/* SSS comp-to-beat — for restaurant/retail names the comparable-sales line IS the print */}
-      {sssRead && (
-        <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[12.5px] text-[var(--text-3)]" title="Last reported comparable-sales / like-for-like — the number the desk watches for this name. The historical bar (not a forward Street consensus, which no feed carries).">
-          <span className="text-[var(--text-4)]">{sssRead.label} — last:</span>
-          <span><b style={{ color: col(sssRead.comp) }}>{sgn1(sssRead.comp)}</b>{sssRead.fiscalLabel ? <span className="text-[var(--text-4)]"> {sssRead.fiscalLabel}</span> : null}</span>
-          {sssRead.seqDelta != null && <span>{sssRead.seqDelta >= 0 ? "accelerating" : "decelerating"} <b style={{ color: col(sssRead.seqDelta) }}>{sssRead.seqDelta >= 0 ? "+" : ""}{sssRead.seqDelta.toFixed(1)}pt</b>{sssRead.prior != null ? <span className="text-[var(--text-4)]"> vs prior {sgn1(sssRead.prior)}</span> : null}</span>}
-          {sssRead.twoYrStack != null && <span><b className="text-[var(--text-2)]">2yr stack</b> {sgn1(sssRead.twoYrStack)}</span>}
-          {(sssRead.traffic != null || sssRead.ticket != null) && <span className="text-[var(--text-4)]">{sssRead.traffic != null ? `traffic ${sgn1(sssRead.traffic)}` : ""}{sssRead.traffic != null && sssRead.ticket != null ? " · " : ""}{sssRead.ticket != null ? `ticket ${sgn1(sssRead.ticket)}` : ""}</span>}
+        <div className="mt-2.5 text-[13px] text-[var(--text-3)]">
+          {q0?.epsLow != null && q0?.epsHigh != null && <span>EPS range ${q0.epsLow.toFixed(2)}–${q0.epsHigh.toFixed(2)}</span>}
+          {q0 && <span className="text-[var(--text-4)]"> · {q0.epsUp30d ?? 0}↑/{q0.epsDown30d ?? 0}↓ revisions (30d)</span>}
+          {(r1w != null || fromHigh != null) && <span className="text-[var(--text-4)]"> · into the print {r1w != null ? `${r1w >= 0 ? "+" : ""}${r1w.toFixed(1)}% 1wk` : ""}{fromHigh != null ? `${r1w != null ? ", " : ""}${fromHigh >= -1.5 ? "at" : `${Math.abs(fromHigh).toFixed(0)}% below`} 52wk high` : ""}</span>}
         </div>
-      )}
+        {sssRead && (
+          <div className="mt-2 border-t border-[var(--divider)] pt-2 text-[13px] text-[var(--text-3)]" title="Last reported comparable-sales / like-for-like — the bar for restaurant/retail names (historical, not a forward Street consensus).">
+            <b className="text-[var(--text-2)]">{sssRead.label}</b> <b style={{ color: col(sssRead.comp) }}>{sgn1(sssRead.comp)}</b>{sssRead.fiscalLabel ? <span className="text-[var(--text-4)]"> {sssRead.fiscalLabel}</span> : null}{sssRead.seqDelta != null ? <span className="text-[var(--text-4)]"> · {sssRead.seqDelta >= 0 ? "accel." : "decel."} {sssRead.seqDelta >= 0 ? "+" : ""}{sssRead.seqDelta.toFixed(1)}pt</span> : null}{sssRead.twoYrStack != null ? <span className="text-[var(--text-4)]"> · 2yr stack {sgn1(sssRead.twoYrStack)}</span> : null}{sssRead.traffic != null ? <span className="text-[var(--text-4)]"> · traffic {sgn1(sssRead.traffic)}{sssRead.ticket != null ? ` / ticket ${sgn1(sssRead.ticket)}` : ""}</span> : null}
+          </div>
+        )}
+      </Bento>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Consensus EPS (this Q)" value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} sub={q0?.epsAnalysts && q0.epsLow != null && q0.epsHigh != null ? `${q0.epsAnalysts} est · $${q0.epsLow.toFixed(2)}–$${q0.epsHigh.toFixed(2)}` : undefined} />
-        <Stat label="Consensus revenue" value={fmtRev(q0?.revAvg)} sub={q0?.growth != null ? `${pp(q0.growth, 0)} YoY${compEps != null ? ` · yr-ago EPS $${compEps.toFixed(2)}` : ""}` : undefined} />
-        <Stat label="Estimate trend (90d)" value={revPct != null ? `${revPct >= 0 ? "+" : ""}${revPct.toFixed(1)}%` : "—"} color={revPct != null ? (revPct >= 0 ? "#22c55e" : "#ef4444") : undefined} sub={q0 ? `${q0.epsUp30d ?? 0}↑ / ${q0.epsDown30d ?? 0}↓ revisions (30d)` : undefined} />
-      </div>
-
-      {/* management guidance — the standing outlook + guide-vs-consensus (numbers shown only when sane) */}
       {(guideRows.length > 0 || bg) && (
-        <div className="mt-2.5 space-y-1">
+        <Bento title="Guidance" hint="Management's standing forward outlook + how often they beat their own guide.">
           {guideRows.map(({ g, epsOk, epsPct, revOk, revPct: gRevPct }, i) => {
-            const a = ACTION_META[g.action];
+            const am = ACTION_META[g.action];
             return (
-              <div key={i} className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[12.5px] text-[var(--text-3)]" title={g.quote || undefined}>
-                <span className="text-[var(--text-4)]">Guidance · {g.period}{i === 0 && guidance?.updated ? ` (as of ${shortDate(guidance.updated)})` : ""}</span>
-                {a.label && <b style={{ color: a.color }}>{a.arrow} {a.label}</b>}
-                {epsOk && <span>EPS ${g.epsLow!.toFixed(2)}{g.epsHigh !== g.epsLow ? `–$${g.epsHigh!.toFixed(2)}` : ""}{epsPct != null && <span className="text-[var(--text-4)]"> · <span style={{ color: col(epsPct) }}>{epsPct >= 0 ? "+" : ""}{(epsPct * 100).toFixed(0)}%</span> vs Street</span>}</span>}
-                {revOk && <span>rev ${(g.revLowM! / 1000).toFixed(1)}{g.revHighM !== g.revLowM ? `–${(g.revHighM! / 1000).toFixed(1)}` : ""}B{gRevPct != null && <span className="text-[var(--text-4)]"> · <span style={{ color: col(gRevPct) }}>{gRevPct >= 0 ? "+" : ""}{(gRevPct * 100).toFixed(0)}%</span> vs Street</span>}</span>}
-                {!epsOk && !revOk && g.metricLabel && <span className="text-[var(--text-2)]">{g.metricLabel}</span>}
+              <div key={i} className={i ? "mt-1.5" : ""} title={g.quote || undefined}>
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  {am.label && <span className="text-base font-bold" style={{ color: am.color }}>{am.arrow} {am.label}</span>}
+                  <span className="text-[12px] text-[var(--text-4)]">{g.period}{i === 0 && guidance?.updated ? ` · as of ${shortDate(guidance.updated)}` : ""}</span>
+                </div>
+                <div className="text-[13px] text-[var(--text-3)]">
+                  {epsOk && <span>EPS ${g.epsLow!.toFixed(2)}{g.epsHigh !== g.epsLow ? `–$${g.epsHigh!.toFixed(2)}` : ""}{epsPct != null && <> (<span style={{ color: col(epsPct) }}>{epsPct >= 0 ? "+" : ""}{(epsPct * 100).toFixed(0)}%</span> vs St)</>}</span>}
+                  {revOk && <span>{epsOk ? " · " : ""}rev ${(g.revLowM! / 1000).toFixed(1)}{g.revHighM !== g.revLowM ? `–${(g.revHighM! / 1000).toFixed(1)}` : ""}B</span>}
+                  {!epsOk && !revOk && g.metricLabel && <span className="text-[var(--text-2)]">{g.metricLabel}</span>}
+                </div>
               </div>
             );
           })}
           {bg && (() => {
-            const rate = bg.beats / bg.total, sandbags = rate >= 0.7 && (bg.avgVsGuide ?? 0) > 0.01;
+            const rate = bg.beats / bg.total;
             return (
-              <div className="text-[12.5px] text-[var(--text-3)]" title="How often ACTUAL EPS beat the company's OWN next-quarter guide given the prior quarter — a sandbagger guides low then beats. Distinct from the beat-CONSENSUS rate.">
-                <b className="text-[var(--text-2)]">Beats its own guide</b> <span style={{ color: rate >= 0.6 ? "#22c55e" : rate <= 0.4 ? "#ef4444" : "var(--text-2)" }}>{bg.beats}/{bg.total}</span>
-                {bg.avgVsGuide != null && <span className="text-[var(--text-4)]"> · actual avg {bg.avgVsGuide >= 0 ? "+" : ""}{(bg.avgVsGuide * 100).toFixed(1)}% vs guide</span>}
-                {sandbags && <span className="text-[var(--text-4)]"> · guides conservatively</span>}
+              <div className={"text-[13px] text-[var(--text-3)] " + (guideRows.length ? "mt-2 border-t border-[var(--divider)] pt-2" : "")} title="How often ACTUAL EPS beat the company's OWN next-quarter guide — a sandbagger guides low then beats.">
+                Beats its own guide <b style={{ color: rate >= 0.6 ? "#22c55e" : rate <= 0.4 ? "#ef4444" : "var(--text-2)" }}>{bg.beats}/{bg.total}</b>{bg.avgVsGuide != null ? <span className="text-[var(--text-4)]"> · avg {bg.avgVsGuide >= 0 ? "+" : ""}{(bg.avgVsGuide * 100).toFixed(1)}% vs guide</span> : null}{rate >= 0.7 && (bg.avgVsGuide ?? 0) > 0.01 ? <span className="text-[var(--text-4)]"> · sandbags</span> : null}
               </div>
             );
           })()}
-        </div>
+        </Bento>
       )}
 
       {/* Expected-move bento — the options-implied move + breakevens + rich/cheap + crush + when it lands */}
@@ -294,123 +296,127 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
       )}
 
 
-      {/* positioning + track record */}
-      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[var(--text-3)]">
-        {beatRate != null && <span><b className="text-[var(--text-2)]">Beat rate</b> {(beatRate * 100).toFixed(0)}% of {sp.length}q{avgSurprise != null ? ` · avg surprise ${pp(avgSurprise, 1)}` : ""}</span>}
-        {buys != null && sells != null && <span><b className="text-[var(--text-2)]">Sell-side</b> {buys} buy / {r!.hold} hold / {sells} sell{upside != null ? ` · PT ${pp(upside, 0)}` : ""}</span>}
-        {stats.shortPercentOfFloat != null && <span><b className="text-[var(--text-2)]">Short</b> {(stats.shortPercentOfFloat * 100).toFixed(1)}% float{shortMoM != null ? ` (${shortMoM >= 0 ? "↑" : "↓"}${Math.abs(shortMoM * 100).toFixed(0)}% MoM)` : ""}{stats.shortRatio != null ? ` · ${stats.shortRatio.toFixed(1)}d cover` : ""}</span>}
-        {stats.forwardPE != null && <span><b className="text-[var(--text-2)]">Fwd P/E</b> {stats.forwardPE.toFixed(0)}</span>}
+      <div className="sm:columns-2 sm:gap-3">
+        {/* Past reactions */}
+        {ev.length > 0 && (
+          <Bento title="Past reactions" hint="surprise → 1-day move, the directional reliability, and the post-print drift">
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              {d?.reaction && <Big value={`±${(d.reaction.avgAbsMove * 100).toFixed(1)}%`} label={`typical move (${d.reaction.n}q)`} />}
+              <div className="text-[13px] text-[var(--text-3)]">
+                {avg(beatMoves) != null && <div>beats avg <b style={{ color: col(avg(beatMoves)) }}>{pp(avg(beatMoves))}</b></div>}
+                {avg(missMoves) != null && <div>misses avg <b style={{ color: col(avg(missMoves)) }}>{pp(avg(missMoves))}</b></div>}
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {ev.map((e, i) => (
+                <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[12px] tabular-nums" title={e.date}>
+                  <span className="text-[var(--text-4)]">{e.date.slice(2, 7)}</span>{" "}
+                  {e.surprise != null && <span style={{ color: col(e.surprise) }}>{pp(e.surprise, 0)}</span>}{" → "}
+                  {e.move != null ? <span style={{ color: col(e.move) }}>{pp(e.move)}</span> : "—"}
+                </span>
+              ))}
+            </div>
+            {d?.surpriseReaction && (() => {
+              const sr = d.surpriseReaction, sellNews = sr.beatUp != null && sr.beatN >= 4 && sr.beatUp <= 0.5;
+              return (
+                <div className="mt-2 text-[13px] text-[var(--text-3)]" title="Does a beat actually mean the stock goes UP? The directional hit-rate; a low beat→up rate = sell-the-news.">
+                  <b className="text-[var(--text-2)]">Reliability</b>
+                  {sr.beatUp != null && sr.beatN >= 3 && <span> · beats→up <b style={{ color: sr.beatUp >= 0.6 ? "#22c55e" : sr.beatUp < 0.5 ? "#ef4444" : "var(--text-2)" }}>{Math.round(sr.beatUp * 100)}%</b> ({sr.beatN})</span>}
+                  {sr.missDown != null && sr.missN >= 3 && <span> · misses→down <b style={{ color: sr.missDown >= 0.6 ? "#22c55e" : "var(--text-2)" }}>{Math.round(sr.missDown * 100)}%</b> ({sr.missN})</span>}
+                  {sellNews && <span className="text-[#ef4444]"> · sell-the-news</span>}
+                </div>
+              );
+            })()}
+            {d?.pead && (
+              <div className="mt-1 text-[13px] text-[var(--text-3)]" title="Post-earnings drift over the 5 sessions AFTER the initial reaction — does the move continue or fade?">
+                <b className="text-[var(--text-2)]">Drift 5d</b>{" "}
+                {d.pead.avgBeatDrift5 != null && <>beats <b style={{ color: col(d.pead.avgBeatDrift5) }}>{pp(d.pead.avgBeatDrift5)}</b></>}
+                {d.pead.avgMissDrift5 != null && <> · misses <b style={{ color: col(d.pead.avgMissDrift5) }}>{pp(d.pead.avgMissDrift5)}</b></>}
+                <span className="text-[var(--text-4)]"> · follows {Math.round(d.pead.followThrough * 100)}%</span>
+              </div>
+            )}
+          </Bento>
+        )}
+
+        {/* Options & volatility */}
+        {d?.options && (d.options.skew != null || d.options.maxPain != null || d.options.callWall != null || d.volRegime) && (
+          <Bento title="Options & volatility">
+            {d.volRegime ? (
+              <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                <Big value={`${(d.volRegime.atmIV * 100).toFixed(0)}%`} label="implied vol" />
+                <Big value={`${(d.volRegime.hv20 * 100).toFixed(0)}%`} label="realized HV20" />
+                <div><div className="font-mono text-2xl font-bold leading-none tabular-nums" style={{ color: d.volRegime.ivHvRatio >= 1.3 ? "#ef4444" : d.volRegime.ivHvRatio <= 1 ? "#22c55e" : "var(--text-2)" }}>{d.volRegime.ivHvRatio.toFixed(1)}×</div><div className="mt-1 text-[12px] text-[var(--text-4)]">HV {d.volRegime.hvPctile?.toFixed(0) ?? "?"}ᵗʰ %ile</div></div>
+              </div>
+            ) : d.options.atmIV != null ? <Big value={`${(d.options.atmIV * 100).toFixed(0)}%`} label="ATM IV" /> : null}
+            <div className={"flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-3)] " + ((d.volRegime || d.options.atmIV != null) ? "mt-2.5" : "")}>
+              {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
+              {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)})` : ""}</span>}
+              {d.options.callWall && <span title="Heaviest call open interest above spot — a level dealer gamma can cap / pin"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
+              {d.options.putWall && <span title="Heaviest put open interest below spot — support / magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
+            </div>
+          </Bento>
+        )}
+
+        {/* Street positioning */}
+        <Bento title="Street positioning">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            {beatRate != null && <Big value={`${(beatRate * 100).toFixed(0)}%`} label={`beat rate (${sp.length}q)`} />}
+            {upside != null && <Big value={pp(upside, 0)} label="to mean PT" color={col(upside)} />}
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-3)]">
+            {buys != null && sells != null && <span><b className="text-[var(--text-2)]">Ratings</b> {buys}B / {r!.hold}H / {sells}S</span>}
+            {stats.shortPercentOfFloat != null && <span><b className="text-[var(--text-2)]">Short</b> {(stats.shortPercentOfFloat * 100).toFixed(1)}%{shortMoM != null ? ` ${shortMoM >= 0 ? "↑" : "↓"}${Math.abs(shortMoM * 100).toFixed(0)}%` : ""}{stats.shortRatio != null ? ` · ${stats.shortRatio.toFixed(1)}d cover` : ""}</span>}
+            {stats.forwardPE != null && <span><b className="text-[var(--text-2)]">Fwd P/E</b> {stats.forwardPE.toFixed(0)}</span>}
+            {avgSurprise != null && <span><b className="text-[var(--text-2)]">Avg surprise</b> {pp(avgSurprise, 1)}</span>}
+          </div>
+          {moves.length > 0 && (
+            <div className="mt-2 border-t border-[var(--divider)] pt-2">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Analyst moves into the print</div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {moves.map((c, i) => {
+                  const up = c.action === "up", down = c.action === "down", init = c.action === "init";
+                  const ac = up ? "#22c55e" : down ? "#ef4444" : "var(--text-3)";
+                  const arrow = up ? "↑" : down ? "↓" : init ? "◆" : "•";
+                  return (
+                    <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[12px] tabular-nums text-[var(--text-3)]" title={`${c.firm}: ${c.fromGrade ? c.fromGrade + " → " : ""}${c.toGrade}${c.targetTo != null ? ` · PT $${c.targetTo}` : ""}`}>
+                      <span className="text-[var(--text-4)]">{new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span> <span style={{ color: ac }}>{arrow}</span> {c.firm}{c.targetTo != null ? <span className="text-[var(--text-4)]"> ${c.targetTo}</span> : null}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Bento>
+
+        {/* Peers & read-through */}
+        {(peerCal.length > 0 || (d?.peerSympathy && d.peerSympathy.length > 0)) && (
+          <Bento title="Peers & read-through" hint="Cohort peers reporting near this print, and how this stock has co-moved on their prints.">
+            {peerCal.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {peerCal.map((p) => {
+                  const dd = Math.round((p.t - Date.now()) / 86_400_000);
+                  const before = myEarn != null && p.t < myEarn && dd >= 0;
+                  return (
+                    <span key={p.sym} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[12px] tabular-nums" title={`${p.sym} reports ${mDay(p.t)}${myEarn != null ? (p.t < myEarn ? " — before this print (read-through)" : " — after this print") : ""}`}>
+                      <span className="text-[var(--text-2)]">{p.sym}</span> <span className="text-[var(--text-4)]">{dd < 0 ? "reported" : mDay(p.t)}</span>{before ? <span className="text-[var(--accent)]"> ⮞</span> : null}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {d?.peerSympathy && d.peerSympathy.length > 0 && (
+              <div className={"text-[13px] text-[var(--text-3)] " + (peerCal.length ? "mt-2" : "")} title="On each peer's past prints, how this stock moved: avg |same-day move|, β, same-direction rate.">
+                <span className="text-[var(--text-4)]">Sympathy on their prints:</span>{" "}
+                {d.peerSympathy.map((s, i) => <span key={s.sym} className="tabular-nums">{i ? " · " : ""}<span className="text-[var(--text-2)]">{s.sym}</span> ±{(s.avgAbsMe * 100).toFixed(1)}%{s.beta != null ? ` β${s.beta.toFixed(1)}` : ""}</span>)}
+              </div>
+            )}
+          </Bento>
+        )}
       </div>
 
-      {/* pre-print analyst moves — how the bar moved into the print */}
-      {moves.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]" title="Rating / price-target changes in the ~45 days into the print — how positioning and the bar shifted vs stale consensus">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Moves in</span>
-          {moves.map((c, i) => {
-            const up = c.action === "up", down = c.action === "down", init = c.action === "init";
-            const ac = up ? "#22c55e" : down ? "#ef4444" : "var(--text-3)";
-            const arrow = up ? "↑" : down ? "↓" : init ? "◆" : "•";
-            return (
-              <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--text-3)]" title={`${c.firm}: ${c.fromGrade ? c.fromGrade + " → " : ""}${c.toGrade}${c.targetTo != null ? ` · PT $${c.targetTo}${c.targetFrom != null && c.targetFrom !== c.targetTo ? ` (was $${c.targetFrom})` : ""}` : ""}`}>
-                <span className="text-[var(--text-4)]">{new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{" "}
-                <span style={{ color: ac }}>{arrow}</span> {c.firm}{c.targetTo != null ? <span className="text-[var(--text-4)]"> ${c.targetTo}</span> : null}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* #1 reaction history + #4 conditional moves */}
-      {ev.length > 0 && (
-        <div className="mt-3 border-t border-[var(--divider)] pt-3">
-          <div className="mb-1 flex flex-wrap items-baseline gap-x-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Past prints — surprise → 1-day move</span>
-            {(avg(beatMoves) != null || avg(missMoves) != null) && (
-              <span className="text-[11px] text-[var(--text-3)]">
-                {avg(beatMoves) != null && <>beats avg <b style={{ color: col(avg(beatMoves)) }}>{pp(avg(beatMoves))}</b></>}
-                {avg(missMoves) != null && <> · misses avg <b style={{ color: col(avg(missMoves)) }}>{pp(avg(missMoves))}</b></>}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {ev.map((e, i) => (
-              <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[11px] tabular-nums" title={e.date}>
-                <span className="text-[var(--text-4)]">{e.date.slice(2, 7)}</span>{" "}
-                {e.surprise != null && <span style={{ color: col(e.surprise) }}>{pp(e.surprise, 0)}</span>}{" → "}
-                {e.move != null ? <span style={{ color: col(e.move) }}>{pp(e.move)}</span> : "—"}
-              </span>
-            ))}
-          </div>
-          {d?.surpriseReaction && (() => {
-            const sr = d.surpriseReaction, sellNews = sr.beatUp != null && sr.beatN >= 4 && sr.beatUp <= 0.5;
-            return (
-              <div className="mt-1.5 text-[12.5px] text-[var(--text-3)]" title="Does a beat actually mean the stock goes UP (and a miss DOWN)? The directional hit-rate — complements the average move (which shows magnitude, not consistency). A low beat→up rate = sell-the-news.">
-                <b className="text-[var(--text-2)]">Reaction reliability</b>
-                {sr.beatUp != null && sr.beatN >= 3 && <span> · beats→up <b style={{ color: sr.beatUp >= 0.6 ? "#22c55e" : sr.beatUp < 0.5 ? "#ef4444" : "var(--text-2)" }}>{Math.round(sr.beatUp * 100)}%</b> <span className="text-[var(--text-4)]">({sr.beatN})</span></span>}
-                {sr.missDown != null && sr.missN >= 3 && <span> · misses→down <b style={{ color: sr.missDown >= 0.6 ? "#22c55e" : "var(--text-2)" }}>{Math.round(sr.missDown * 100)}%</b> <span className="text-[var(--text-4)]">({sr.missN})</span></span>}
-                {sellNews && <span className="text-[#ef4444]"> · sell-the-news risk</span>}
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* #3 post-earnings drift (PEAD) */}
-      {d?.pead && (
-        <div className="mt-2 text-[12.5px] text-[var(--text-3)]" title="Post-earnings drift: the stock's return over the 5 sessions AFTER the initial reaction — does the move continue or fade?">
-          <b className="text-[var(--text-2)]">Post-print drift (5d)</b>{" "}
-          {d.pead.avgBeatDrift5 != null && <>after beats <b style={{ color: col(d.pead.avgBeatDrift5) }}>{pp(d.pead.avgBeatDrift5)}</b></>}
-          {d.pead.avgMissDrift5 != null && <> · after misses <b style={{ color: col(d.pead.avgMissDrift5) }}>{pp(d.pead.avgMissDrift5)}</b></>}
-          <span className="text-[var(--text-4)]"> · move follows through {Math.round(d.pead.followThrough * 100)}% of {d.pead.n}</span>
-        </div>
-      )}
-
-      {/* #5 options positioning */}
-      {d?.options && (d.options.skew != null || d.options.maxPain != null || d.options.callWall != null) && (
-        <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[var(--text-3)]">
-          {d?.volRegime ? <span title="ATM implied vol vs 20-day realized (historical) vol = the variance risk premium; + where current realized vol sits in its own 1yr range. >1.3× = vol rich in absolute terms."><b className="text-[var(--text-2)]">IV vs HV</b> {(d.volRegime.atmIV * 100).toFixed(0)}%/{(d.volRegime.hv20 * 100).toFixed(0)}% <span style={{ color: d.volRegime.ivHvRatio >= 1.3 ? "#ef4444" : d.volRegime.ivHvRatio <= 1 ? "#22c55e" : "var(--text-4)" }}>{d.volRegime.ivHvRatio.toFixed(1)}×</span>{d.volRegime.hvPctile != null ? <span className="text-[var(--text-4)]"> · HV {d.volRegime.hvPctile.toFixed(0)}ᵗʰ %ile</span> : null}</span>
-            : d.options.atmIV != null && <span><b className="text-[var(--text-2)]">ATM IV</b> {(d.options.atmIV * 100).toFixed(0)}%</span>}
-          {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
-          {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)} vs spot)` : ""}</span>}
-          {d.options.callWall && <span title="Heaviest call open interest above spot — a level where dealer gamma can cap / pin the stock"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
-          {d.options.putWall && <span title="Heaviest put open interest below spot — support / downside magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
-          {d.options.expiry && <span className="text-[var(--text-4)]">exp {d.options.expiry.slice(5)}</span>}
-        </div>
-      )}
-
-      {/* peer / sympathy earnings calendar — cohort names reporting near this print */}
-      {peerCal.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-[var(--text-3)]" title="Cohort peers reporting near this print — a peer's beat/miss + reaction is the best real-time read-through for this name. ⮞ = reports before this print.">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Peers reporting</span>
-          {peerCal.map((p) => {
-            const dd = Math.round((p.t - Date.now()) / 86_400_000);
-            const before = myEarn != null && p.t < myEarn && dd >= 0;
-            return (
-              <span key={p.sym} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[11px] tabular-nums" title={`${p.sym} reports ${mDay(p.t)}${myEarn != null ? (p.t < myEarn ? " — before this print (read-through)" : " — after this print") : ""}`}>
-                <span className="text-[var(--text-2)]">{p.sym}</span> <span className="text-[var(--text-4)]">{dd < 0 ? "reported" : mDay(p.t)}</span>{before ? <span className="text-[var(--accent)]"> ⮞</span> : null}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* quantified sympathy — how this stock has co-moved on each peer's past prints */}
-      {d?.peerSympathy && d.peerSympathy.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-[var(--text-3)]" title="On the day each cohort peer reported in the past, how this stock moved: avg |same-day move|, the slope (β) of this stock's move on the peer's, and the same-direction rate. A peer reporting before this name is a live prior.">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Sympathy on peer prints</span>
-          {d.peerSympathy.map((s) => (
-            <span key={s.sym} className="tabular-nums">
-              <span className="text-[var(--text-2)]">{s.sym}</span> ±{(s.avgAbsMe * 100).toFixed(1)}%
-              {s.beta != null && <span className="text-[var(--text-4)]"> β{s.beta.toFixed(1)}</span>}
-              <span className="text-[var(--text-4)]"> · {Math.round(s.sameDir * 100)}% same-dir</span>
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* AI StreetAccount-style preview (button-triggered) */}
-      <div className="mt-3 border-t border-[var(--divider)] pt-3">
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Preview <span className="font-normal normal-case">· AI, StreetAccount-style</span></div>
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">AI preview <span className="font-normal normal-case">· StreetAccount-style, grounded in the signals above</span></div>
         {ai === "idle" ? (
           <div>
             <button onClick={() => runAi(aiSignals)} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
