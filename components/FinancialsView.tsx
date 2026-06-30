@@ -179,6 +179,8 @@ export default function FinancialsView({
   const [researchSub, setResearchSub] = useState<"notes" | "docs">("notes");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
   const [stmt, setStmt] = useState<StmtKey>("income");
+  const [expandSss, setExpandSss] = useState(false);
+  const sssHasBreakdown = !!sss?.periods?.some((p) => p.traffic != null || p.ticket != null);
   const currency = currencyOf(universe);
 
   // A ticker opens on Overview by default. Only an explicit ?tab= deep-link selects a
@@ -205,14 +207,18 @@ export default function FinancialsView({
     const base = STATEMENTS[stmt].rows;
     if (stmt !== "income" || type !== "quarterly" || !sss?.periods?.length) return base;
     const find = compFinder(sss.periods);
-    const sssRow: RowSpec = {
+    const out: RowSpec[] = [{
       label: (sss.metricLabel || "Comparable sales").replace(/\s*%$/, "") + " %",
       kind: "sss",
       derived: (p) => find(p)?.comp ?? null,
       sssData: sss,
-    };
-    return [base[0], sssRow, ...base.slice(1)];
-  }, [stmt, type, sss]);
+    }];
+    if (expandSss) {
+      if (sss.periods.some((p) => p.traffic != null)) out.push({ label: "↳ Transactions / traffic %", kind: "sss", derived: (p) => find(p)?.traffic ?? null });
+      if (sss.periods.some((p) => p.ticket != null)) out.push({ label: "↳ Avg ticket / check %", kind: "sss", derived: (p) => find(p)?.ticket ?? null });
+    }
+    return [base[0], ...out, ...base.slice(1)];
+  }, [stmt, type, sss, expandSss]);
   const hasData = financials.annual.length > 0 || financials.quarterly.length > 0;
 
   const cell = (p: FinPeriod, r: RowSpec): number | null =>
@@ -465,7 +471,11 @@ export default function FinancialsView({
                           (r.kind === "pct" ? " pl-7 text-xs italic" : r.kind === "sss" ? " pl-7 text-xs" : "")
                         }
                       >
-                        {r.label}
+                        {r.sssData && sssHasBreakdown ? (
+                          <button onClick={() => setExpandSss((v) => !v)} className="inline-flex items-center gap-1 not-italic hover:text-[var(--accent)]" title="Show transactions vs. ticket">
+                            <span className="text-[8px] text-[var(--text-4)]">{expandSss ? "▾" : "▸"}</span>{r.label}
+                          </button>
+                        ) : r.label}
                         {r.sssData && <SssInfo data={r.sssData} />}
                       </td>
                       {displayPeriods.map((p, i) => {

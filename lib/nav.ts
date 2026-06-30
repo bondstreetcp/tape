@@ -52,6 +52,7 @@ export const FEATURES: NavItem[] = [
   { label: "Analyst Upside", path: "/analyst-upside", desc: "Where the Street sees the most room — names ranked by price-target upside and rating", group: "Research", job: "Find ideas", kw: "analyst price target upside rating buy hold sell consensus most upgraded anr" },
   { label: "Short-Squeeze Radar", path: "/squeeze", desc: "Crowded shorts ranked by % of float, days to cover, and rising short interest", group: "Research", job: "Find ideas", kw: "short squeeze interest float days to cover crowded borrow gamma ortex s3 si" },
   { label: "Factor-Screen Overlap", path: "/factor-overlap", desc: "Names that top several value/quality screens at once — the best all-round profiles", group: "Research", job: "Find ideas", kw: "factor screens overlap value quality magic formula piotroski composite" },
+  { label: "Comps Board", path: "/comps", desc: "Restaurants & retailers ranked by same-store sales — sequential acceleration + 2-yr stack", group: "Research", job: "Find ideas", kw: "same store sales comps comparable sales restaurants retail traffic ticket acceleration stack like for like identical sales sss lfl" },
   { label: "Overnight Filings", path: "/overnight", desc: "AI desk notes on new material SEC filings (8-K/10-Q/10-K)", group: "Research", job: "Find ideas", kw: "sec edgar filings 8-k 10-q ai superanalyst" },
   { label: "Discount to History", path: "/valuation-history", desc: "Names trading cheap vs their own 10-year valuation", group: "Research", job: "Find ideas", kw: "valuation cheap multiple discount mean reversion" },
   { label: "Expectations (Reverse-DCF)", path: "/expectations", desc: "What growth the price implies vs what the business delivers — cheap vs priced-for-perfection", group: "Research", job: "Find ideas", kw: "reverse dcf implied growth expectations investing fcf mauboussin priced for perfection" },
@@ -77,7 +78,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     { label: "Backtest", blurb: "Test factor screens and strategies against history", paths: ["/backtest"] },
   ],
   Research: [
-    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap"] },
+    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
     { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
     { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, sector compare", paths: ["/compare-stocks", "/ratio", "/compare"] },

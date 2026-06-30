@@ -73,6 +73,57 @@ const DAY = 86_400_000;
  * period-END within ±25 days — tolerant of 52/53-week and 4-4-5 retail calendars and the usual
  * Yahoo/EDGAR date drift. Returns a closure so FinancialsView can map it over its columns.
  */
+// ── Comps Board (cross-universe ranking) ─────────────────────────────────────────────────────────
+export interface CompRow {
+  ticker: string;
+  name: string;
+  industry: string;
+  comp: number; // latest 1-yr comp %
+  fpEnd: string;
+  fiscalLabel?: string;
+  priorComp: number | null; // the immediately prior quarter's comp
+  seqDelta: number | null; // latest − prior → accelerating / decelerating
+  twoYrStack: number | null; // latest + the comp ~1yr earlier (the "stacked" comp)
+  traffic: number | null;
+  ticket: number | null;
+  metricLabel: string;
+  sourceUrl: string;
+}
+
+const YR = 86_400_000;
+/** Rank the comps universe by the latest quarterly comp. `nameOf`/`indOf` resolve display fields from
+ *  a snapshot (kept out of this client-safe lib). */
+export function buildCompsRows(data: SssData, nameOf: (t: string) => string | undefined): CompRow[] {
+  const rows: CompRow[] = [];
+  for (const [ticker, tk] of Object.entries(data.byTicker)) {
+    const withComp = tk.periods.filter((p) => p.comp != null);
+    if (!withComp.length) continue;
+    const latest = withComp[0];
+    const prior = withComp[1] ?? null;
+    // 2-yr stack: the comp from ~1 year (≈4 quarters) before the latest period-end.
+    const yrAgo = withComp.find((p) => {
+      const d = (Date.parse(latest.fpEnd) - Date.parse(p.fpEnd)) / YR;
+      return d > 300 && d < 430;
+    });
+    rows.push({
+      ticker,
+      name: nameOf(ticker) || ticker,
+      industry: tk.industry || "",
+      comp: latest.comp as number,
+      fpEnd: latest.fpEnd,
+      fiscalLabel: latest.fiscalLabel,
+      priorComp: prior?.comp ?? null,
+      seqDelta: prior?.comp != null ? (latest.comp as number) - prior.comp : null,
+      twoYrStack: yrAgo?.comp != null ? (latest.comp as number) + yrAgo.comp : null,
+      traffic: latest.traffic ?? null,
+      ticket: latest.ticket ?? null,
+      metricLabel: tk.metricLabel,
+      sourceUrl: latest.source.url,
+    });
+  }
+  return rows.sort((a, b) => b.comp - a.comp);
+}
+
 export function compFinder(periods: SssPeriod[]): (p: FinPeriod) => SssPeriod | null {
   return (p: FinPeriod) => {
     const t = Date.parse(p.date);
