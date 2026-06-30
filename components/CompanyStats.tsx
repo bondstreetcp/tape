@@ -48,6 +48,21 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
   const big = (v: number | null) => bigCur(v, currency);
   const upside =
     s.targetMean != null && s.price ? (s.targetMean / s.price - 1) * 100 : null;
+  // Yahoo sometimes returns recommendationKey "none" / a null mean even when the buy/hold/sell counts
+  // exist — derive the consensus from the counts so the card isn't blank.
+  const ratingsMean = (() => {
+    if (s.recommendationMean != null) return s.recommendationMean;
+    const r = s.ratings;
+    if (!r) return null;
+    const tot = r.strongBuy + r.buy + r.hold + r.sell + r.strongSell;
+    return tot ? (r.strongBuy + r.buy * 2 + r.hold * 3 + r.sell * 4 + r.strongSell * 5) / tot : null;
+  })();
+  const consensusLabel = (() => {
+    const k = s.recommendationKey;
+    if (k && k !== "none" && RATING_LABEL[k]) return RATING_LABEL[k];
+    if (ratingsMean == null) return "—";
+    return ratingsMean <= 1.5 ? "Strong Buy" : ratingsMean <= 2.5 ? "Buy" : ratingsMean <= 3.5 ? "Hold" : ratingsMean <= 4.5 ? "Sell" : "Strong Sell";
+  })();
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -57,8 +72,8 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
       <Section title="Analyst Ratings">
         {s.ratings ? <RatingBar r={s.ratings} /> : <Empty />}
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Stat label="Consensus" value={RATING_LABEL[s.recommendationKey ?? ""] ?? (s.recommendationKey ?? "—")} />
-          <Stat label="Mean (1=SB,5=SS)" value={r2(s.recommendationMean)} />
+          <Stat label="Consensus" value={consensusLabel} />
+          <Stat label="Mean (1=SB,5=SS)" value={r2(ratingsMean)} />
           <Stat label="Analysts" value={s.numAnalysts != null ? `${s.numAnalysts}` : "—"} />
         </div>
       </Section>
@@ -117,9 +132,6 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
         )}
       </Section>
 
-      {/* Estimate revisions */}
-      <EstimateRevisions estimates={s.estimates} currency={currency} />
-
       {/* Earnings surprises */}
       <Section title="Earnings Surprises (EPS)">
         {s.surprises.length === 0 ? (
@@ -152,6 +164,9 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
           </>
         )}
       </Section>
+
+      {/* Estimate revisions */}
+      <EstimateRevisions estimates={s.estimates} currency={currency} />
 
       {/* Recent analyst actions */}
       {s.ratingChanges.length > 0 && (
