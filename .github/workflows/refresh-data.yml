@@ -280,6 +280,13 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # IV / pre-earnings-straddle history — a DAILY snapshot around each earnings window, so over time we
+      # can compute the realized IV crush, IV-rank, and a long-premium backtest. Pure forward accumulation.
+      - name: Refresh IV history
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-iv-history
+        continue-on-error: true
+
       # Reddit buzz (ApeWisdom mention counts) — free, no key.
       - name: Refresh Reddit buzz
         if: ${{ env.FULL == 'true' }}

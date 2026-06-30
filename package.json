@@ -11,6 +11,7 @@
     "refresh-sss": "tsx scripts/refresh-sss.ts",
     "refresh-sss-intl": "tsx scripts/refresh-sss-intl.ts",
     "refresh-guidance": "tsx scripts/refresh-guidance.ts",
+    "refresh-iv-history": "tsx scripts/refresh-iv-history.ts",
     "refresh-apewisdom": "tsx scripts/refresh-apewisdom.ts",
     "fetch-constituents": "tsx scripts/fetch-constituents.ts",
     "check-iwv": "tsx scripts/check-iwv.ts",
