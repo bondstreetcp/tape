@@ -62,9 +62,9 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
     return () => { a = false; };
   }, [symbol, earningsDate]);
 
-  const runAi = () => {
+  const runAi = (sig?: string) => {
     setAi("loading");
-    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=ai`)
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=ai${sig ? `&sig=${encodeURIComponent(sig.slice(0, 1400))}` : ""}`)
       .then((r) => r.json())
       .then((d) => setAi(d.ai || null))
       .catch(() => setAi(null));
@@ -161,6 +161,23 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   };
   const shortDate = (iso: string) => { const t = Date.parse(iso); return Number.isNaN(t) ? iso : new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
   const bg = beatGuide(guidance?.history); // beats-its-own-guide track record (sandbagger detection)
+
+  // A compact summary of the card's QUANT signals, fed to the AI preview so it synthesizes them (not generic).
+  const aiSignals = (() => {
+    const o: string[] = [];
+    if (d?.richness && d.impliedMove != null) o.push(`options ${d.richness.verdict.toUpperCase()} — pricing ±${d.impliedMove.toFixed(1)}% vs ±${d.richness.avgRealized.toFixed(1)}% avg realized move (${d.richness.ratio.toFixed(1)}x)`);
+    else if (d?.impliedMove != null && d.straddle?.dte != null) o.push(`options imply ±${d.impliedMove.toFixed(1)}% by expiry (${d.straddle.dte}d out)`);
+    if (d?.term && d.term.crushRatio >= 1.04) o.push(`IV term backwardated ${d.term.crushRatio.toFixed(2)}x (vol crush into the print)`);
+    if (d?.volRegime) o.push(`IV ${(d.volRegime.atmIV * 100).toFixed(0)}% vs realized HV ${(d.volRegime.hv20 * 100).toFixed(0)}% (${d.volRegime.ivHvRatio.toFixed(1)}x; HV ${d.volRegime.hvPctile?.toFixed(0) ?? "?"}th pctile)`);
+    if (d?.options?.skew != null && Math.abs(d.options.skew) > 0.02) o.push(`options skew: ${d.options.skew > 0 ? "puts bid (downside hedging)" : "calls bid (upside chase)"}`);
+    if (d?.pead) o.push(`post-print 5d drift: after beats ${pp(d.pead.avgBeatDrift5)}, after misses ${pp(d.pead.avgMissDrift5)}`);
+    if (d?.surpriseReaction?.beatUp != null && d.surpriseReaction.beatN >= 3) o.push(`beats→up ${Math.round(d.surpriseReaction.beatUp * 100)}% of ${d.surpriseReaction.beatN}${d.surpriseReaction.beatUp <= 0.5 && d.surpriseReaction.beatN >= 4 ? " (sell-the-news pattern)" : ""}`);
+    if (sssRead) o.push(`last comp ${sgn1(sssRead.comp)}${sssRead.seqDelta != null ? ` (${sssRead.seqDelta >= 0 ? "accelerating" : "decelerating"})` : ""}`);
+    if (guideRows.length) o.push(`standing guidance ${guideRows[0].g.period} ${guideRows[0].g.action.toUpperCase()}`);
+    if (bg) o.push(`beats its own guide ${bg.beats}/${bg.total}${bg.avgVsGuide != null && bg.avgVsGuide > 0.01 && bg.beats / bg.total >= 0.7 ? " — guides conservatively" : ""}`);
+    if (r1w != null) o.push(`into the print ${r1w >= 0 ? "+" : ""}${r1w.toFixed(1)}% 1wk${fromHigh != null ? `, ${fromHigh >= -1.5 ? "at" : `${Math.abs(fromHigh).toFixed(0)}% below`} 52wk high` : ""}`);
+    return o.join(" · ");
+  })();
 
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -396,7 +413,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Preview <span className="font-normal normal-case">· AI, StreetAccount-style</span></div>
         {ai === "idle" ? (
           <div>
-            <button onClick={runAi} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
+            <button onClick={() => runAi(aiSignals)} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
             <p className="mt-1.5 text-[12.5px] text-[var(--text-4)]">An AI desk-style preview — the money line, what changed since last call, what the Street is watching, guidance, peer read-throughs, and the bull/bear into the print (takes a few seconds).</p>
           </div>
         ) : ai === "loading" ? (
@@ -429,7 +446,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         ) : (
           <div className="text-[12px] text-[var(--text-4)]">
             Couldn&apos;t build the preview just now.{" "}
-            <button onClick={runAi} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
+            <button onClick={() => runAi(aiSignals)} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
           </div>
         )}
       </div>
