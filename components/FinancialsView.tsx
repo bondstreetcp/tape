@@ -6,6 +6,7 @@ import type { CompanyStats as CompanyStatsData } from "@/lib/companyStats";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import type { StockRow } from "@/lib/types";
 import { compFinder, type SssTicker } from "@/lib/sameStoreSales";
+import type { GuidanceTicker } from "@/lib/guidance";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
@@ -154,6 +155,7 @@ export default function FinancialsView({
   peerGroup,
   row,
   sss,
+  guidance,
   daily,
   intraday,
   generatedAt,
@@ -170,6 +172,7 @@ export default function FinancialsView({
   peerGroup: string | null;
   row: StockRow | null;
   sss?: SssTicker | null;
+  guidance?: GuidanceTicker | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -357,7 +360,7 @@ export default function FinancialsView({
         )
       ) : view === "earnings" ? (
         <div className="space-y-4">
-          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} row={row} peers={peers} sss={sss} />
+          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} row={row} peers={peers} sss={sss} guidance={guidance} />
           <CompanyStats stats={stats} currency={currency} show="earnings" />
           <EarningsMultipleChart symbol={symbol} currency={currency} />
         </div>

@@ -3,6 +3,7 @@ import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
+import { peerCohort } from "@/lib/peerCohorts";
 import YahooFinance from "yahoo-finance2";
 import { getNews } from "@/lib/news";
 import { getLatestTranscript } from "@/lib/transcripts";
@@ -63,14 +64,39 @@ function termRead(ts: { points: { date: string; dte: number; atmIV: number | nul
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
-// 1yr of daily closes for the realized-vol regime read.
-async function dailyCloses(sym: string): Promise<number[]> {
+// ~2yr of daily closes (dated) — for the realized-vol regime + the peer-sympathy day lookups.
+async function dailyCloses(sym: string): Promise<{ t: number; c: number }[]> {
   try {
-    const chart: any = await yf.chart(sym, { period1: new Date(Date.now() - 372 * 86_400_000), interval: "1d" } as any, { validateResult: false });
-    return (chart.quotes || []).filter((q: any) => q?.close != null).map((q: any) => q.close as number);
+    const chart: any = await yf.chart(sym, { period1: new Date(Date.now() - 760 * 86_400_000), interval: "1d" } as any, { validateResult: false });
+    return (chart.quotes || []).filter((q: any) => q?.date && q.close != null).map((q: any) => ({ t: new Date(q.date).getTime(), c: q.close as number })).sort((a: any, b: any) => a.t - b.t);
   } catch {
     return [];
   }
+}
+
+// Quantified peer read-through (sympathy): when a cohort peer reported in the past, how did THIS stock
+// move that day? Returns, per peer: avg |this stock's same-day move|, the slope (beta) of this stock's
+// move on the peer's move, and the same-direction rate. A peer printing before this name is a live prior.
+async function peerReadThrough(sym: string, myCloses: { t: number; c: number }[]) {
+  const cohort = peerCohort(sym);
+  if (!cohort || myCloses.length < 60) return null;
+  const dayMove = new Map<string, number>(); // YYYY-MM-DD → this stock's close-to-close move that session
+  for (let i = 1; i < myCloses.length; i++) dayMove.set(new Date(myCloses[i].t).toISOString().slice(0, 10), myCloses[i].c / myCloses[i - 1].c - 1);
+  const peers = cohort.tickers.filter((t) => t !== sym).slice(0, 4);
+  const out = await Promise.all(peers.map(async (p) => {
+    const pr = await getEarningsReactions(p, 8).catch(() => []);
+    const pairs: { peer: number; me: number }[] = [];
+    for (const e of pr) { if (e.move == null) continue; const me = dayMove.get(e.reactionDate); if (me != null) pairs.push({ peer: e.move, me }); }
+    if (pairs.length < 3) return null;
+    const avgAbsMe = pairs.reduce((a, x) => a + Math.abs(x.me), 0) / pairs.length;
+    const mp = pairs.reduce((a, x) => a + x.peer, 0) / pairs.length, mm = pairs.reduce((a, x) => a + x.me, 0) / pairs.length;
+    let cov = 0, vp = 0; for (const x of pairs) { cov += (x.peer - mp) * (x.me - mm); vp += (x.peer - mp) ** 2; }
+    const beta = vp > 0 ? cov / vp : null;
+    const sameDir = pairs.filter((x) => Math.sign(x.peer) === Math.sign(x.me) && x.peer !== 0).length / pairs.length;
+    return { sym: p, n: pairs.length, avgAbsMe, beta, sameDir };
+  }));
+  const list = out.filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => b.avgAbsMe - a.avgAbsMe);
+  return list.length ? list : null;
 }
 
 // Vol regime: is the event IV rich in ABSOLUTE terms? ATM IV vs trailing realized (historical) vol +
@@ -222,11 +248,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       impliedMove != null && price
         ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price }
         : null;
-    const volRegime = volRegimeFrom(closes, options?.atmIV ?? null);
+    const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
     const trade = tradeIdea(richness, options, straddle, chain, impliedMove);
+    const peerSympathy = await peerReadThrough(sym, closes);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {

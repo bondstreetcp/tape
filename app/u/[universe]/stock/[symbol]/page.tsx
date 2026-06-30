@@ -14,6 +14,7 @@ import type { StockRow, StockSeries } from "@/lib/types";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SssData, SssTicker } from "@/lib/sameStoreSales";
+import type { GuidanceData, GuidanceTicker } from "@/lib/guidance";
 
 // Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
 // extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
@@ -22,6 +23,17 @@ function loadSss(sym: string): SssTicker | null {
     const p = join(process.cwd(), "data", "same-store-sales.json");
     if (!existsSync(p)) return null;
     return (JSON.parse(readFileSync(p, "utf8")) as SssData).byTicker?.[sym] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Management guidance (forward outlook) extracted from earnings releases (scripts/refresh-guidance.ts).
+function loadGuidance(sym: string): GuidanceTicker | null {
+  try {
+    const p = join(process.cwd(), "data", "guidance.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as GuidanceData).byTicker?.[sym] ?? null;
   } catch {
     return null;
   }
@@ -102,6 +114,7 @@ export default async function StockPage({
       peerGroup={peerGroup}
       row={row}
       sss={loadSss(SYM)}
+      guidance={loadGuidance(SYM)}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}
