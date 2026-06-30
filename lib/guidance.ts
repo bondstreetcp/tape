@@ -20,11 +20,42 @@ export interface GuidancePeriod {
   confidence?: "high" | "medium" | "low";
 }
 
+// One past earnings filing's data point, for the "beats its own guide" track record. Each filing reports
+// the just-completed quarter's ACTUAL EPS and (often) a guide for the NEXT quarter's EPS — so the quarter
+// reported in filing[i] was guided in filing[i+1] (the prior filing). Consecutive filings = consecutive
+// quarters, so the alignment needs no fuzzy period-matching.
+export interface GuidanceHistoryPoint {
+  date: string; // the 8-K date
+  reportedEps: number | null; // ACTUAL EPS the company just reported for the completed quarter
+  nextQEpsLow: number | null; // the guide given IN THIS filing for the NEXT quarter's EPS
+  nextQEpsHigh: number | null;
+}
+
 export interface GuidanceTicker {
   lastAccession?: string; // newest earnings 8-K seen → the incremental gate
   updated: string; // the 8-K date the guide is from
   source: { form: string; url: string; date: string };
   guides: GuidancePeriod[]; // newest first — usually the FY guide (+ a next-quarter guide)
+  history?: GuidanceHistoryPoint[]; // newest first — actual-vs-next-quarter-guide chain
+}
+
+/** "Beats its own guide" rate: align each quarter's actual EPS to the next-quarter guide given one filing
+ *  earlier (consecutive ~quarterly filings). Returns beats/total + avg actual-vs-guide. null if < 2 pairs. */
+export function beatGuide(history: GuidanceHistoryPoint[] | undefined): { beats: number; total: number; avgVsGuide: number | null } | null {
+  if (!history || history.length < 2) return null;
+  let beats = 0, total = 0, sumPct = 0;
+  for (let i = 0; i < history.length - 1; i++) {
+    const gap = (Date.parse(history[i].date) - Date.parse(history[i + 1].date)) / 86_400_000;
+    if (!(gap >= 60 && gap <= 130)) continue; // require consecutive quarters (~3 months apart)
+    const actual = history[i].reportedEps;
+    const lo = history[i + 1].nextQEpsLow, hi = history[i + 1].nextQEpsHigh;
+    const gMid = lo != null && hi != null ? (lo + hi) / 2 : lo ?? hi;
+    if (actual == null || gMid == null || gMid === 0) continue;
+    total++;
+    if (actual >= gMid) beats++;
+    sumPct += actual / gMid - 1;
+  }
+  return total >= 2 ? { beats, total, avgVsGuide: sumPct / total } : null;
 }
 
 export interface GuidanceData {

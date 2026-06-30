@@ -29,6 +29,7 @@ const UNIVERSES = ["sp500", "nasdaq100"]; // ~600 large caps — the names a gui
 const MAXTOK = Number(process.env.MAXTOK || 16000);
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const LIMIT = Number(process.env.LIMIT || 0); // cap names processed this run (for a bounded seed)
+const BACKFILL = Number(process.env.BACKFILL || 0); // 0 = incremental (latest 8-K only); N = walk last N 8-Ks to seed the beat-the-guide history
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const KW = /guidance|outlook|expect|guide|forecast|full[- ]year|fiscal 20\d\d|for the (year|quarter)|anticipat|reaffirm|raott|raise|updat\w+ (its|our|full)|continues? to expect|now expects?/i;
@@ -48,7 +49,10 @@ function grepWindows(text: string, pad = 1100, cap = 14000): string {
 }
 
 const SYSTEM =
-  "You extract management's FORWARD FINANCIAL GUIDANCE (the 'outlook'/'guidance' section) from a company's quarterly earnings press release. Return an ARRAY of guided periods (usually 1-2: the full year, and sometimes the next quarter). For EACH period: " +
+  "You extract management's FORWARD FINANCIAL GUIDANCE plus two specific datapoints from a company's quarterly earnings press release. Return a JSON OBJECT: {reportedEps, nextQuarterEpsLow, nextQuarterEpsHigh, guides}. " +
+  "'reportedEps' = the ACTUAL diluted EPS the company JUST REPORTED for the completed quarter, $/share (use the ADJUSTED/non-GAAP figure if that's the headline the company leads with). null if not clearly stated. " +
+  "'nextQuarterEpsLow'/'nextQuarterEpsHigh' = the company's guide specifically for the NEXT/upcoming single QUARTER's EPS, $/share (NOT the full-year). null if they only guide the full year or give no quarterly EPS. " +
+  "'guides' = an ARRAY of guided periods (usually 1-2: the full year, and sometimes the next quarter). For EACH period: " +
   "'period' = what it covers, short (e.g. 'FY2026', 'Q3 FY26'). " +
   "'revLowM'/'revHighM' = the REVENUE guide range in MILLIONS of USD (e.g. '$40.1 to $40.9 billion' → 40100 / 40900; a single point → put it in BOTH). null if no revenue guide. " +
   "'epsLow'/'epsHigh' = the EPS (earnings PER SHARE) guide range in DOLLARS — typically between $0.05 and $50. Do NOT return a margin %, a revenue/sales figure, a growth rate, or any non-per-share number as EPS. '$6.20–$6.40' → 6.20 / 6.40; adjusted/non-GAAP is fine, note it in metricLabel. null if no EPS guide. " +
@@ -56,17 +60,20 @@ const SYSTEM =
   "'metricLabel' = brief note if the guide is non-standard (e.g. 'adjusted EPS', 'organic revenue growth %', 'comparable sales'); else null. " +
   "'quote' = the VERBATIM guidance sentence. 'confidence' = high|medium|low. " +
   "If the company gives guidance only as a GROWTH RATE or a non-dollar metric (e.g. 'mid-single-digit revenue growth', 'comparable sales up 3-5%') and NO dollar/EPS range, still return the period with revLowM/revHighM/epsLow/epsHigh=null and put the metric + range in metricLabel + quote. " +
-  "If the release gives NO forward guidance at all, return an empty array []. NEVER invent numbers — only what's stated. " + NO_ADVICE;
+  "If the release gives NO forward guidance at all, return guides: []. NEVER invent numbers — only what's stated. " + NO_ADVICE;
 
 const SCHEMA =
-  'Return ONLY JSON: an ARRAY of {"period": string, "metricLabel": string|null, "revLowM": number|null, "revHighM": number|null, "epsLow": number|null, "epsHigh": number|null, "action": "raise"|"reaffirm"|"cut"|"initiate"|"mixed"|"none", "quote": string|null, "confidence": "high"|"medium"|"low"}';
+  'Return ONLY JSON object: {"reportedEps": number|null, "nextQuarterEpsLow": number|null, "nextQuarterEpsHigh": number|null, "guides": [{"period": string, "metricLabel": string|null, "revLowM": number|null, "revHighM": number|null, "epsLow": number|null, "epsHigh": number|null, "action": "raise"|"reaffirm"|"cut"|"initiate"|"mixed"|"none", "quote": string|null, "confidence": "high"|"medium"|"low"}]}';
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const ACTIONS = new Set<GuidanceAction>(["raise", "reaffirm", "cut", "initiate", "mixed", "none"]);
 
-async function extract(sym: string, text: string): Promise<GuidancePeriod[]> {
+interface Extracted { reportedEps: number | null; nextQEpsLow: number | null; nextQEpsHigh: number | null; guides: GuidancePeriod[] }
+
+async function extract(sym: string, text: string): Promise<Extracted> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: PRO_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
-  const arr = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : [];
+  const root = Array.isArray(raw) ? raw[0] : raw;
+  const arr: any[] = Array.isArray(root?.guides) ? root.guides : Array.isArray(raw) ? raw : root && typeof root === "object" && root.period ? [root] : [];
   const out: GuidancePeriod[] = [];
   for (const o of arr) {
     if (!o || typeof o !== "object" || typeof o.period !== "string") continue;
@@ -86,7 +93,14 @@ async function extract(sym: string, text: string): Promise<GuidancePeriod[]> {
   // Dedup repeated periods (the model sometimes emits FY27 three times) — keep the first per period.
   const byPeriod = new Map<string, GuidancePeriod>();
   for (const g of out) { const k = g.period.toLowerCase().replace(/\s/g, ""); if (!byPeriod.has(k)) byPeriod.set(k, g); }
-  return [...byPeriod.values()].slice(0, 3);
+  // EPS sanity: drop an obviously-bad per-share figure (> $200/sh is a misread, not EPS).
+  const epsOk = (v: number | null) => v == null || Math.abs(v) <= 200;
+  return {
+    reportedEps: epsOk(num(root?.reportedEps)) ? num(root?.reportedEps) : null,
+    nextQEpsLow: epsOk(num(root?.nextQuarterEpsLow)) ? num(root?.nextQuarterEpsLow) : null,
+    nextQEpsHigh: epsOk(num(root?.nextQuarterEpsHigh)) ? num(root?.nextQuarterEpsHigh) : null,
+    guides: [...byPeriod.values()].slice(0, 3),
+  };
 }
 
 async function buildWatchSet(): Promise<string[]> {
@@ -111,16 +125,27 @@ async function buildWatchSet(): Promise<string[]> {
       const earnings = filings.filter((f) => f.isEarnings);
       if (!earnings.length) continue;
       const e0 = earnings[0];
-      if (data.byTicker[sym]?.lastAccession === e0.acc) { continue; } // up to date
+      const prior = data.byTicker[sym];
+      // Incremental processes only the latest 8-K (skip if seen); BACKFILL walks the last N for history.
+      if (!BACKFILL && prior?.lastAccession === e0.acc) continue;
       processed++;
-      const ft = await getFilingText(sym, e0.acc);
-      if (!ft || ft.text.length < 400) { console.log(`  ${sym}: no text`); continue; }
-      const guides = await extract(sym, ft.text); calls++;
-      // Even when no guidance is found we record lastAccession so we don't re-LLM the same 8-K nightly.
-      data.byTicker[sym] = { lastAccession: e0.acc, updated: e0.date, source: { form: e0.form, url: ft.url, date: e0.date }, guides } as GuidanceTicker;
-      if (guides.length) { touched++; console.log(`  ${sym} ${e0.date}: ${guides.map((g) => `${g.period} ${g.action}${g.revLowM != null ? ` rev ${g.revLowM}-${g.revHighM}` : ""}${g.epsLow != null ? ` eps ${g.epsLow}-${g.epsHigh}` : ""}`).join(" · ")}`); }
-      else console.log(`  ${sym} ${e0.date}: no guidance`);
-      await sleep(150);
+      const targets = BACKFILL ? earnings.slice(0, BACKFILL) : [e0];
+      const history = BACKFILL ? [] : [...(prior?.history ?? [])];
+      let latestGuides = prior?.guides ?? [], latestSrc = prior?.source, latestUpd = prior?.updated;
+      for (const f of targets) {
+        const ft = await getFilingText(sym, f.acc);
+        if (!ft || ft.text.length < 400) { console.log(`  ${sym} ${f.date}: no text`); continue; }
+        const ex = await extract(sym, ft.text); calls++;
+        const hp = { date: f.date, reportedEps: ex.reportedEps, nextQEpsLow: ex.nextQEpsLow, nextQEpsHigh: ex.nextQEpsHigh };
+        const hi = history.findIndex((h) => h.date === f.date);
+        if (hi >= 0) history[hi] = hp; else history.push(hp);
+        if (f.acc === e0.acc) { latestGuides = ex.guides; latestSrc = { form: f.form, url: ft.url, date: f.date }; latestUpd = f.date; }
+        console.log(`  ${sym} ${f.date}: ${ex.guides.length ? ex.guides.map((g) => `${g.period} ${g.action}`).join(",") : "no guide"}${ex.reportedEps != null ? ` · act EPS ${ex.reportedEps}` : ""}${ex.nextQEpsLow != null ? ` · nextQ ${ex.nextQEpsLow}-${ex.nextQEpsHigh}` : ""}`);
+        await sleep(150);
+      }
+      history.sort((a, b) => b.date.localeCompare(a.date));
+      data.byTicker[sym] = { lastAccession: e0.acc, updated: latestUpd || e0.date, source: latestSrc || { form: e0.form, url: "", date: e0.date }, guides: latestGuides, history: history.slice(0, 10) } as GuidanceTicker;
+      if (latestGuides.length) touched++;
     } catch (e: any) {
       console.log(`  ${sym}: ERROR ${String(e?.message || e).slice(0, 100)}`);
     }
