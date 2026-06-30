@@ -23,6 +23,15 @@ const RANGES: [string, number][] = [["6M", 0.5], ["1Y", 1], ["2Y", 2], ["3Y", 3]
 const DAY = 86_400_000;
 const dayKey = (t: number) => new Date(t).toISOString().slice(0, 10);
 const clean = (s: string) => s.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g, "").slice(0, 12);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function xTicks(minT: number, maxT: number, n = 5): { t: number; label: string }[] {
+  if (maxT === minT) return [{ t: minT, label: "" }];
+  return Array.from({ length: n }, (_, i) => {
+    const t = minT + (maxT - minT) * (i / (n - 1));
+    const d = new Date(t);
+    return { t, label: `${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}` };
+  });
+}
 
 interface Bar { t: number; c: number }
 interface Pt { t: number; v: number; ca?: number; cb?: number }
@@ -199,8 +208,6 @@ function Chart({ pts, mode, fmt, a, b, hi, setHi }: { pts: Pt[]; mode: Mode; fmt
   const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join("");
   const area = `${path} L ${x(maxT).toFixed(1)} ${y(lo).toFixed(1)} L ${x(minT).toFixed(1)} ${y(lo).toFixed(1)} Z`;
   const yTicks = [hiV, (lo + hiV) / 2, lo];
-  const yrs: number[] = [];
-  for (let yr = new Date(minT).getUTCFullYear(); yr <= new Date(maxT).getUTCFullYear(); yr++) yrs.push(yr);
   const hp = hi != null ? pts[hi] : null;
   const refLine = mode === "rebased" ? 100 : mode === "spread" || mode === "formula" ? 0 : null;
 
@@ -219,7 +226,8 @@ function Chart({ pts, mode, fmt, a, b, hi, setHi }: { pts: Pt[]; mode: Mode; fmt
         </g>
       ))}
       {refLine != null && lo < refLine && hiV > refLine && <line x1={ML} x2={W - MR} y1={y(refLine)} y2={y(refLine)} stroke="var(--text-4)" strokeOpacity={0.5} strokeDasharray="4 3" />}
-      {yrs.map((yr) => { const tx = x(Date.parse(`${yr}-01-01`)); return tx >= ML && tx <= W - MR ? <text key={yr} x={tx} y={H - 7} textAnchor="middle" fontSize={9} fill="var(--text-4)">{yr}</text> : null; })}
+      <line x1={ML} x2={W - MR} y1={H - MB} y2={H - MB} stroke="var(--border)" />
+      {xTicks(minT, maxT).map((t, i) => <text key={i} x={x(t.t)} y={H - 8} textAnchor={i === 0 ? "start" : i === 4 ? "end" : "middle"} fontSize={9} fill="var(--text-4)">{t.label}</text>)}
       <path d={area} fill="url(#ratiofill)" stroke="none" />
       <path d={path} fill="none" stroke="var(--accent)" strokeWidth={1.8} />
       {hp && (
