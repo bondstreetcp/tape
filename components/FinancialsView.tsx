@@ -9,7 +9,7 @@ import { compFinder, type SssTicker } from "@/lib/sameStoreSales";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
-import { RiskFactorPanel } from "./StockExtras";
+import { RiskFactorPanel, StockTwitsPanel } from "./StockExtras";
 import SupplyChain from "./SupplyChain";
 import { OwnershipPanel, ProfilePanel } from "./CompanyProfile";
 import PeerComparison from "./PeerComparison";
@@ -174,7 +174,7 @@ export default function FinancialsView({
   intraday: SeriesPoint[];
   generatedAt: string;
 }) {
-  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options";
+  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "social";
   const [view, setView] = useState<View>("overview");
   const [researchSub, setResearchSub] = useState<"notes" | "docs">("notes");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
@@ -187,7 +187,7 @@ export default function FinancialsView({
   // different tab (we no longer carry the last-used tab across tickers via localStorage,
   // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
-    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options"];
+    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options", "social"];
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
@@ -338,6 +338,7 @@ export default function FinancialsView({
             { key: "filings", label: "Filings & Calls" },
             { key: "research", label: "Research" },
             { key: "options", label: "Options" },
+            { key: "social", label: "Social" },
             { key: "profile", label: "Profile" },
           ]}
           value={view}
@@ -392,6 +393,11 @@ export default function FinancialsView({
         </div>
       ) : view === "options" ? (
         <OptionsChain symbol={symbol} currency={currency} />
+      ) : view === "social" ? (
+        <div className="space-y-4">
+          <StockTwitsPanel symbol={symbol} />
+          <p className="text-[11px] leading-relaxed text-[var(--text-4)]">Retail chatter from StockTwits + Reddit (ApeWisdom) — a crowding / attention read, NOT sentiment or a recommendation. Treat a spike as a volatility flag. See the cross-universe <Link href={`/u/${universe}/reddit-buzz`} className="text-[var(--accent)] hover:underline">Reddit Buzz</Link> board for the wider picture.</p>
+        </div>
       ) : view === "profile" ? (
         <div className="space-y-4">
           <ProfilePanel profile={profile} currency={currency} />
