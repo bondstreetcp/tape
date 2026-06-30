@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
-import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
+import { getOptions, getTermStructure, type OptionChain, type Opt } from "@/lib/options";
 import { peerCohort } from "@/lib/peerCohorts";
 import YahooFinance from "yahoo-finance2";
 import { getNews } from "@/lib/news";
@@ -153,10 +153,39 @@ function tradeIdea(
   return null; // fairly priced → no clean premium edge
 }
 
+// Live implied move from what the ATM STRADDLE actually costs: pick the expiry that brackets the next
+// earnings date (or the nearest expiry), take the ATM call+put mid, and read move = straddle / spot.
+// This is the market's own pricing — works for ANY optionable name, vs the precomputed earnings-move file
+// (which only covers names reporting ≤16d). `dte` makes the horizon explicit (it's the move BY that expiry).
+async function straddleMove(sym: string, baseChain: OptionChain | null, earningsISO: string | null) {
+  if (!baseChain?.underlying || !baseChain.expirations?.length) return null;
+  let expiry = baseChain.selected, isEvent = false;
+  if (earningsISO) { const ev = baseChain.expirations.find((d) => d >= earningsISO); if (ev) { expiry = ev; isEvent = true; } } // first expiry on/after earnings
+  const chain = expiry && expiry !== baseChain.selected ? await getOptions(sym, expiry).catch(() => baseChain) : baseChain;
+  const U = chain.underlying;
+  if (!U || (!chain.calls.length && !chain.puts.length)) return null;
+  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))];
+  if (!strikes.length) return null;
+  const atm = strikes.reduce((a, b) => (Math.abs(b - U) < Math.abs(a - U) ? b : a));
+  const mid = (o: Opt | undefined): number | null => {
+    if (!o) return null;
+    if (o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0) return (o.bid + o.ask) / 2; // prefer the quote midpoint
+    return o.last != null && o.last > 0 ? o.last : null; // fall back to last trade
+  };
+  const c = mid(chain.calls.find((o) => o.strike === atm)), p = mid(chain.puts.find((o) => o.strike === atm));
+  if (c == null || p == null) return null;
+  const cost = c + p;
+  if (cost <= 0 || cost / U > 0.6) return null; // sanity (>60%-of-spot straddle = junk quotes)
+  const dte = chain.selected ? Math.round((Date.parse(chain.selected + "T00:00:00Z") - Date.now()) / 86_400_000) : null;
+  return { movePct: (cost / U) * 100, cost, atmStrike: atm, upperBE: U + cost, lowerBE: U - cost, price: U, expiry: chain.selected, dte, isEvent };
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
-  const part = new URL(req.url).searchParams.get("part") || "data";
+  const sp = new URL(req.url).searchParams;
+  const part = sp.get("part") || "data";
+  const earningsISO = (() => { const e = sp.get("e"); return e && /^\d{4}-\d{2}-\d{2}/.test(e) ? e.slice(0, 10) : null; })();
 
   try {
     // ── AI part: the StreetAccount-style preview (button-triggered) ──
@@ -222,12 +251,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // reporters move that session, after-close reporters move the next session.
     const tg = (reactions || []).map((r) => r.timing);
     const nextTiming: "bmo" | "amc" | null = tg.length ? (tg.filter((t) => t === "amc").length >= tg.length / 2 ? "amc" : "bmo") : null;
-    const impliedMove = (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
+    // Implied move: PREFER the live ATM-straddle cost from the chain (works for any name, always fresh);
+    // fall back to the precomputed earnings-move file when there's no usable chain.
+    const sm = await straddleMove(sym, chain, earningsISO);
+    const impliedMove = sm?.movePct ?? (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
+    // The straddle ≈ the EARNINGS move only when we picked the expiry bracketing earnings AND it's near
+    // (a far-out straddle is mostly time value, not the event) — so the rich/cheap-vs-1-day-reaction
+    // comparison is gated on that. The precomputed-file fallback (sm==null) is already an ≤16d event move.
+    const nearTerm = !sm ? true : sm.isEvent && (sm.dte == null || sm.dte <= 21);
     const options = optionsRead(chain);
 
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
     // Straddle "win-rate": of past prints, how often the realized move EXCEEDED what options price now.
-    const straddleWinRate = impliedMove != null && moves.length ? { exceeded: moves.filter((m) => Math.abs(m) > impliedMove / 100).length, total: moves.length } : null;
+    const straddleWinRate = nearTerm && impliedMove != null && moves.length ? { exceeded: moves.filter((m) => Math.abs(m) > impliedMove / 100).length, total: moves.length } : null;
     // PEAD: post-earnings 5-day drift after beats vs misses + follow-through rate (drift same sign as the day-1 move).
     const withDrift = (reactions || []).filter((r) => r.drift5 != null) as { move: number | null; surprise: number | null; drift5: number }[];
     const beatDrift = withDrift.filter((r) => r.surprise != null && r.surprise > 0).map((r) => r.drift5);
@@ -241,12 +277,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const price = chain?.underlying ?? null;
     const avgRealized = reaction ? reaction.avgAbsMove * 100 : null; // %
     const richness =
-      impliedMove != null && avgRealized != null && avgRealized > 0
+      nearTerm && impliedMove != null && avgRealized != null && avgRealized > 0
         ? { ratio: impliedMove / avgRealized, verdict: impliedMove / avgRealized >= 1.2 ? "rich" : impliedMove / avgRealized <= 0.85 ? "cheap" : "fair", avgRealized }
         : null;
-    const straddle =
-      impliedMove != null && price
-        ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price }
+    // Straddle breakevens + cost: the REAL straddle when we have the live chain (with its expiry/DTE),
+    // else derived from the implied-move % and spot.
+    const straddle = sm
+      ? { cost: sm.cost, upperBE: sm.upperBE, lowerBE: sm.lowerBE, price: sm.price, expiry: sm.expiry, dte: sm.dte, live: true }
+      : impliedMove != null && price
+        ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false }
         : null;
     const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
     const trade = tradeIdea(richness, options, straddle, chain, impliedMove);

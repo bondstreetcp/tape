@@ -11,7 +11,7 @@ interface DataPart {
   impliedMove: number | null; // percent (e.g. 7.8)
   options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null; callWall: { strike: number; oi: number } | null; putWall: { strike: number; oi: number } | null } | null;
   richness: { ratio: number; verdict: "rich" | "cheap" | "fair"; avgRealized: number } | null;
-  straddle: { cost: number; upperBE: number; lowerBE: number; price: number } | null;
+  straddle: { cost: number; upperBE: number; lowerBE: number; price: number; expiry?: string | null; dte?: number | null; live?: boolean } | null;
   straddleWinRate: { exceeded: number; total: number } | null;
   pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
@@ -53,12 +53,13 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
     let a = true;
     setData("loading");
     setAi("idle");
-    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=data`)
+    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate.slice(0, 10))}` : "";
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=data${eParam}`)
       .then((r) => r.json())
       .then((d) => a && setData(d.data || null))
       .catch(() => a && setData(null));
     return () => { a = false; };
-  }, [symbol]);
+  }, [symbol, earningsDate]);
 
   const runAi = () => {
     setAi("loading");
@@ -228,10 +229,10 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1.5">
             <div className="flex items-end gap-2.5">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Expected move · options-implied</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
                 <div className="font-mono text-3xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-xl">%</span></div>
               </div>
-              {d?.straddle && <div className="pb-0.5 text-[12.5px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)}<br />straddle</div>}
+              {d?.straddle && <div className="pb-0.5 text-[12.5px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}</div>}
               {d?.reaction && <div className="pb-0.5 text-[12.5px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
             </div>
             {d?.richness && (() => {
