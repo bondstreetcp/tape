@@ -39,7 +39,7 @@ const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase
 const INDUSTRY = (process.env.INDUSTRY || "").trim(); // e.g. "Restaurants" for Phase 1
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const KW = /comparable|same[- ]store|identical sales|like[- ]for[- ]like|comp(s|arable)?\s+(restaurant|store|sales)|system[- ]wide/i;
+const KW = /comparable|same[- ]?(store|restaurant|shop|location|cafe|salon)|identical sales|like[- ]for[- ]like|comp(s|arable)?\s+(restaurant|store|sales)|system[- ]wide/i;
 function grepWindows(text: string, pad = 900, cap = 15000): string {
   const hits: [number, number][] = [];
   const re = new RegExp(KW.source, "gi");
@@ -60,7 +60,8 @@ function grepWindows(text: string, pad = 900, cap = 15000): string {
 
 const SYSTEM =
   "You extract the COMPARABLE SALES metric (a.k.a. same-store sales / SSS / identical sales / like-for-like) from a retailer's or restaurant's quarterly earnings press release. Return the headline TOTAL-COMPANY comparable-sales figure for the MOST RECENT FISCAL QUARTER, on a ONE-YEAR basis. Rules: " +
-  "Use the MOST RECENT FISCAL QUARTER (a ~3-month / 13-week period), NOT a full-year, annual, or year-to-date/52-week figure — if the release shows BOTH a quarter and a full-year comp, pick the QUARTER. " +
+  "Use the MOST RECENT FISCAL QUARTER (a ~3-month / 12-13-week period — note some chains run a 16-week Q1), NOT a full-year, annual, or year-to-date/52-week figure — if the release shows BOTH a quarter and a full-year comp, pick the QUARTER. " +
+  "IMPORTANT — a FOURTH-QUARTER / fiscal-year-END release reports BOTH a full-year comp AND a separate fourth-quarter comp; extract the FOURTH-QUARTER one (it IS a quarter — often labeled 'fourth quarter', 'Q4', 'fourth-quarter same-restaurant/comparable sales'), NEVER the full-year/fiscal-year figure. " +
   "'comp' = total-company 1-year comparable-sales % change, SIGNED (e.g. 5.3 or -2.1). If a TOTAL/CONSOLIDATED/company-wide comparable-sales figure is given (even alongside per-brand or per-segment figures), put that TOTAL in 'comp' and the breakdown in 'segments'. Only if there is genuinely NO single company-wide comp (some multi-brand operators), set comp=null and fill 'segments'. " +
   "Do NOT return system-wide sales growth, net-sales growth, or total-revenue growth — ONLY the comparable/same-store/identical/like-for-like metric. " +
   "'basis': '1yr' for a normal YoY quarterly comp; '2yr-stack'|'ex-fx'|'reported' otherwise. " +

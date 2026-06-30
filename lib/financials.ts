@@ -103,17 +103,23 @@ async function fetchType(
 }
 
 /**
- * Merge EDGAR's deep quarterly history with Yahoo's recent quarters. Keyed by
- * the period-end month (the two sources occasionally differ by a couple of days),
- * Yahoo wins where they overlap (richer field set + freshest), EDGAR fills the
- * years Yahoo doesn't serve. Keeps the most recent ~20 quarters (≈5 years).
+ * Merge EDGAR's deep quarterly history with Yahoo's recent quarters. Matched by
+ * period-end PROXIMITY (±45 days), NOT exact month — companies on a 52/53-week fiscal
+ * calendar (e.g. CAVA, whose Q1 is 16 weeks and ends ~Apr 19) are dated at the true
+ * fiscal end by one source and at the nearest calendar quarter-end by the other, so a
+ * YYYY-MM key produced DUPLICATE columns (Apr+Mar, Jul+Jun…). Yahoo's fields win on
+ * overlap (richer + freshest); the EDGAR/anchor date is kept (fiscal-accurate label) so
+ * the same-store-sales row aligns to one column. Keeps the most recent ~20 quarters.
  */
 function mergeQuarterly(edgar: FinPeriod[], yahoo: FinPeriod[]): FinPeriod[] {
-  const key = (d: string) => d.slice(0, 7); // YYYY-MM
-  const byKey = new Map<string, FinPeriod>();
-  for (const p of edgar) byKey.set(key(p.date), p);
-  for (const p of yahoo) byKey.set(key(p.date), { ...(byKey.get(key(p.date)) || {}), ...p });
-  return [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-20);
+  const near = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) < 45 * 86_400_000;
+  const out: FinPeriod[] = edgar.map((p) => ({ ...p }));
+  for (const y of yahoo) {
+    const i = out.findIndex((p) => near(p.date, y.date));
+    if (i >= 0) out[i] = { ...out[i], ...y, date: out[i].date }; // same fiscal quarter — Yahoo fields win, keep the anchor date
+    else out.push({ ...y });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date)).slice(-20);
 }
 
 export async function getFinancials(symbol: string): Promise<Financials> {

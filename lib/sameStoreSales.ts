@@ -130,9 +130,12 @@ export function compFinder(periods: SssPeriod[]): (p: FinPeriod) => SssPeriod | 
     if (Number.isNaN(t)) return null;
     let best: SssPeriod | null = null;
     let bestDiff = Infinity;
+    // ±35 days: tolerant of 52/53-week fiscal calendars where the income-statement column may be
+    // dated at a nearby calendar quarter-end while the comp's fpEnd is the true fiscal end. Real
+    // quarters are ≥~84 days apart, so this can't reach an adjacent quarter.
     for (const sp of periods) {
       const d = Math.abs(Date.parse(sp.fpEnd) - t);
-      if (d <= 25 * DAY && d < bestDiff) {
+      if (d <= 35 * DAY && d < bestDiff) {
         best = sp;
         bestDiff = d;
       }
