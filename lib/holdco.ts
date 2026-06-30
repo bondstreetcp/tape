@@ -235,3 +235,47 @@ export interface HoldcoNavData { generatedAt: string; asOf: string | null; holdc
 
 /** Discount color: deep discount = green (cheap), premium = red. */
 export const discountColor = (d: number | null) => (d == null ? "var(--text-3)" : d <= -25 ? "#22c55e" : d <= -10 ? "#4ade80" : d < 0 ? "#a3e635" : "#ef4444");
+
+// ── Depth: cheap-vs-own-history stats, derived CLIENT-SIDE from the shipped history series ──────────
+export interface DiscountStats {
+  pctile: number | null; // % of trailing history at/below the current discount (low = cheap vs its own range)
+  z6m: number | null;
+  z1y: number | null;
+  z3y: number | null;
+  mean1y: number | null; // for the ±1σ band on the discount chart
+  sd1y: number | null;
+}
+/** Multi-window z-scores + percentile of the CURRENT discount vs the holdco's own reconstructed history
+ *  ([date, navPerShare, price][]). Trailing-count windows (≈126/252/756 trading days). Pure — no fs. */
+export function discountStats(history: [string, number, number][]): DiscountStats {
+  const empty: DiscountStats = { pctile: null, z6m: null, z1y: null, z3y: null, mean1y: null, sd1y: null };
+  const disc = history.filter(([, nav]) => nav).map(([, nav, price]) => (price / nav - 1) * 100);
+  const n = disc.length;
+  if (n < 30) return empty;
+  const cur = disc[n - 1];
+  const win = (k: number) => {
+    const w = disc.slice(Math.max(0, n - k));
+    if (w.length < 20) return { z: null as number | null, mean: null as number | null, sd: null as number | null };
+    const mean = w.reduce((a, b) => a + b, 0) / w.length;
+    const sd = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / w.length);
+    return { z: sd > 0 ? (cur - mean) / sd : null, mean, sd };
+  };
+  const w1 = win(252);
+  const pctWin = disc.slice(Math.max(0, n - 756)); // percentile over up to ~3yr
+  return {
+    pctile: (pctWin.filter((d) => d <= cur).length / pctWin.length) * 100,
+    z6m: win(126).z,
+    z1y: w1.z,
+    z3y: win(756).z,
+    mean1y: w1.mean,
+    sd1y: w1.sd,
+  };
+}
+
+/** A stake whose ticker matches another tracked holdco's own listing → a DOUBLE discount (the stake is
+ *  marked at its own discounted price, so the look-through understates the true cheapness). */
+export function holdcoByTicker(holdcos: HoldcoNav[]): Record<string, { slug: string; name: string; discount: number | null }> {
+  const m: Record<string, { slug: string; name: string; discount: number | null }> = {};
+  for (const h of holdcos) m[h.ticker] = { slug: h.slug, name: h.name, discount: h.discount };
+  return m;
+}

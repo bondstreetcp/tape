@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import type { HoldcoNavData } from "@/lib/holdco";
+import { holdcoByTicker, type HoldcoNavData } from "@/lib/holdco";
 import HoldcoDetailView from "@/components/HoldcoDetailView";
 
 export const dynamic = "force-dynamic";
@@ -28,5 +28,5 @@ export default async function HoldcoDetailPage({ params }: { params: Promise<{ u
       </main>
     );
   }
-  return <HoldcoDetailView h={h} universe={universe} />;
+  return <HoldcoDetailView h={h} universe={universe} xref={holdcoByTicker(data!.holdcos)} />;
 }
