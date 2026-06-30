@@ -49,7 +49,7 @@ async function fx(from: string, to: string): Promise<number> {
   return q.price;
 }
 
-async function dailyCloses(sym: string, days = 430): Promise<Map<string, number> | null> {
+async function dailyCloses(sym: string, days = 1900): Promise<Map<string, number> | null> {
   try {
     const c: any = await yf.chart(sym, { period1: new Date(Date.now() - days * DAY), interval: "1d" }, { validateResult: false });
     const scale = penceSyms.has(sym) ? 0.01 : 1; // GBp chart closes → GBP
@@ -129,7 +129,7 @@ async function computeHoldco(h: Holdco): Promise<HoldcoNav> {
       const npsT = navT / (h.sharesOutM * 1e6);
       if (npsT > 0) hist.push([day, Math.round(npsT * 100) / 100, Math.round(hp * 100) / 100]);
     }
-    base.history = hist.slice(-400);
+    base.history = hist.slice(-1300); // ~5yr of daily points so the 1Y/2Y/3Y/Max toggle is meaningful
     // z-score of current discount vs the trailing 1yr discount history (derived from nav/price)
     const win = base.history.slice(-252).map(([, nav, price]) => (price / nav - 1) * 100);
     if (win.length >= 30 && discount != null) {
