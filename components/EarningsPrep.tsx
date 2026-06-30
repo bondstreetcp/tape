@@ -230,6 +230,65 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
         {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d</> : `next/last report ${dateLabel}`}</span>}
       </div>
 
+      {/* Expected-move HERO — the headline options read (full-width, top of the card) */}
+      {(d?.impliedMove != null || d?.straddle) && (
+        <div className="mb-3 rounded-xl border bg-[var(--accent-soft)] p-3.5" style={{ borderColor: "color-mix(in oklab, var(--accent) 35%, transparent)" }}>
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1.5">
+            <div className="flex items-end gap-2.5">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
+                <div className="font-mono text-4xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-2xl">%</span></div>
+              </div>
+              {d?.straddle && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}</div>}
+              {d?.reaction && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
+            </div>
+            {d?.richness && (() => {
+              const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
+              return <div className="rounded-lg px-3 py-1.5 text-right" style={{ background: v === "fair" ? "var(--surface-2)" : `${vc}1a` }} title="Implied move vs the average realized move on past prints">
+                <div className="text-base font-bold" style={{ color: vc }}>{v === "rich" ? "Options RICH" : v === "cheap" ? "Options CHEAP" : "Fairly priced"}</div>
+                <div className="text-[12px] text-[var(--text-4)]">{d.richness.ratio.toFixed(2)}× realized{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""}</div>
+              </div>;
+            })()}
+          </div>
+
+          {d?.straddle && (
+            <div className="mt-2.5">
+              {d.priceSeries && d.priceSeries.length >= 5 && d.straddle.expiry ? (
+                <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
+                  <ExpectedMoveCone series={d.priceSeries} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
+                </div>
+              ) : (
+                <>
+                  <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
+                    <div className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text)]" style={{ left: "50%" }} title={`Spot $${d.straddle.price.toFixed(2)}`} />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[13px] tabular-nums">
+                    <span className="text-[#ef4444]">${d.straddle.lowerBE.toFixed(2)}</span>
+                    <span className="text-[var(--text-4)]">breakevens · spot ${d.straddle.price.toFixed(2)}</span>
+                    <span className="text-[#22c55e]">${d.straddle.upperBE.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border)] pt-2.5 text-[13px] text-[var(--text-3)]">
+            {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
+            {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
+            {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
+          </div>
+
+          {d?.trade && (
+            <div className="mt-2.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
+              <span className="font-semibold text-[var(--text)]">Play </span>
+              <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>
+              <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <Bento title="Consensus · this quarter">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
           <Big value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} label={`EPS${q0?.epsAnalysts ? ` · ${q0.epsAnalysts} est` : ""}`} />
@@ -276,67 +335,6 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
           })()}
         </Bento>
       )}
-
-      {/* Expected-move bento — the options-implied move + breakevens + rich/cheap + crush + when it lands */}
-      {(d?.impliedMove != null || d?.straddle) && (
-        <div className="mt-3 rounded-xl border bg-[var(--accent-soft)] p-3" style={{ borderColor: "color-mix(in oklab, var(--accent) 35%, transparent)" }}>
-          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1.5">
-            <div className="flex items-end gap-2.5">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
-                <div className="font-mono text-3xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-xl">%</span></div>
-              </div>
-              {d?.straddle && <div className="pb-0.5 text-[12.5px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}</div>}
-              {d?.reaction && <div className="pb-0.5 text-[12.5px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
-            </div>
-            {d?.richness && (() => {
-              const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
-              return <div className="rounded-lg px-2.5 py-1 text-right" style={{ background: v === "fair" ? "var(--surface-2)" : `${vc}1a` }} title="Implied move vs the average realized move on past prints">
-                <div className="text-sm font-bold" style={{ color: vc }}>{v === "rich" ? "Options RICH" : v === "cheap" ? "Options CHEAP" : "Fairly priced"}</div>
-                <div className="text-[11px] text-[var(--text-4)]">{d.richness.ratio.toFixed(2)}× realized{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""}</div>
-              </div>;
-            })()}
-          </div>
-
-          {d?.straddle && (
-            <div className="mt-2.5">
-              {d.priceSeries && d.priceSeries.length >= 5 && d.straddle.expiry ? (
-                <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
-                  <ExpectedMoveCone series={d.priceSeries} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
-                </div>
-              ) : (
-                <>
-                  <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
-                    <div className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text)]" style={{ left: "50%" }} title={`Spot $${d.straddle.price.toFixed(2)}`} />
-                  </div>
-                  <div className="mt-1 flex justify-between text-[13px] tabular-nums">
-                    <span className="text-[#ef4444]">${d.straddle.lowerBE.toFixed(2)}</span>
-                    <span className="text-[var(--text-4)]">breakevens · spot ${d.straddle.price.toFixed(2)}</span>
-                    <span className="text-[#22c55e]">${d.straddle.upperBE.toFixed(2)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border)] pt-2 text-[12.5px] text-[var(--text-3)]">
-            {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
-            {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
-            {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
-          </div>
-
-          {/* earnings-day trade idea — the read turned into a structure at expected-move strikes */}
-          {d?.trade && (
-            <div className="mt-2 rounded-lg bg-[var(--surface-2)] px-2.5 py-1.5 text-[12.5px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
-              <span className="font-semibold text-[var(--text)]">Play </span>
-              <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
-              <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>
-              <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
-            </div>
-          )}
-        </div>
-      )}
-
 
       <div className="sm:columns-2 sm:gap-3">
         {/* Past reactions */}
