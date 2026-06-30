@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
-import { getOptions, type OptionChain } from "@/lib/options";
+import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
 import { getNews } from "@/lib/news";
 import { getLatestTranscript } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
@@ -45,6 +45,19 @@ function optionsRead(chain: OptionChain | null) {
     callWall,
     putWall,
   };
+}
+
+// IV term structure → expected vol-crush: the front (event) cycle's ATM IV vs a later cycle's. Event
+// IV sits elevated into the print and collapses the morning after, so a front-rich (backwardated) term
+// structure is the crush a premium-seller harvests. crushRatio = frontIV / backIV (>~1.1 = meaningful).
+function termRead(ts: { points: { date: string; dte: number; atmIV: number | null }[] } | null) {
+  if (!ts) return null;
+  const pts = ts.points.filter((p) => p.atmIV != null && p.atmIV > 0 && p.dte >= 0).sort((a, b) => a.dte - b.dte);
+  if (pts.length < 2) return null;
+  const front = pts[0];
+  const back = pts.find((p) => p.dte >= front.dte + 15) || pts[pts.length - 1]; // a genuinely later cycle
+  if (back === front || back.atmIV == null || back.atmIV <= 0 || front.atmIV == null) return null;
+  return { frontIV: front.atmIV, backIV: back.atmIV, frontDte: front.dte, backDte: back.dte, crushRatio: front.atmIV / back.atmIV };
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
@@ -99,11 +112,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     }
 
     // ── Data part: reaction history + implied move + options skew/max-pain (fast, auto-loaded) ──
-    const [reactions, emove, chain] = await Promise.all([
+    const [reactions, emove, chain, ts] = await Promise.all([
       getEarningsReactions(sym, 8).catch(() => []),
       loadEarningsMove().catch(() => null),
       getOptions(sym).catch(() => null),
+      getTermStructure(sym, 6).catch(() => null),
     ]);
+    const term = termRead(ts);
     const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
     const reaction = moves.length
       ? { avgAbsMove: moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length, maxAbsMove: Math.max(...moves.map(Math.abs)), upRate: moves.filter((m) => m > 0).length / moves.length, n: moves.length }
@@ -137,7 +152,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         : null;
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {

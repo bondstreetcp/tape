@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
+import type { SssTicker } from "@/lib/sameStoreSales";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -12,6 +13,7 @@ interface DataPart {
   straddle: { cost: number; upperBE: number; lowerBE: number; price: number } | null;
   straddleWinRate: { exceeded: number; total: number } | null;
   pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
+  term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -38,7 +40,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, row }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
 
@@ -92,6 +94,37 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
   const r3m = row?.returns?.["3m"] ?? null;
   const fromHigh = row?.pctFromHigh ?? null;
 
+  // Peer / sympathy earnings calendar — cohort names reporting near this print (from the peers prop)
+  const myEarn = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? Date.parse(earningsDate) : null;
+  const peerCal = (peers || [])
+    .filter((p) => p.symbol !== symbol && p.earningsDate && !Number.isNaN(Date.parse(p.earningsDate)))
+    .map((p) => ({ sym: p.symbol, t: Date.parse(p.earningsDate as string) }))
+    .filter((p) => { const dd = (p.t - Date.now()) / 86_400_000; return dd >= -4 && dd <= 30; }) // just-reported → upcoming month
+    .sort((a, b) => a.t - b.t)
+    .slice(0, 7);
+
+  // Pre-print analyst moves — rating/PT changes dated into the print (last ~45d), newest first
+  const moves = (stats.ratingChanges || [])
+    .filter((c) => c.date && !Number.isNaN(Date.parse(c.date)) && (Date.now() - Date.parse(c.date)) / 86_400_000 <= 45)
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, 5);
+
+  // SSS "comp to beat" — last reported comparable-sales (the bar) for restaurant/retail names
+  const sssRead = (() => {
+    const ps = (sss?.periods || []).filter((p) => p.comp != null);
+    if (!ps.length) return null;
+    const latest = ps[0], prior = ps[1] ?? null;
+    const yrAgo = ps.find((p) => { const yr = (Date.parse(latest.fpEnd) - Date.parse(p.fpEnd)) / (365.25 * 86_400_000); return yr >= 0.8 && yr <= 1.2; });
+    return {
+      comp: latest.comp as number, label: sss?.metricLabel || latest.metricLabel || "Comparable sales", fiscalLabel: latest.fiscalLabel,
+      prior: prior?.comp ?? null, seqDelta: prior?.comp != null ? (latest.comp as number) - prior.comp : null,
+      twoYrStack: yrAgo?.comp != null ? (latest.comp as number) + yrAgo.comp : null,
+      traffic: latest.traffic ?? null, ticket: latest.ticket ?? null,
+    };
+  })();
+  const mDay = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const sgn1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+
   return (
     <div className="mb-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -109,6 +142,17 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
         </div>
       )}
 
+      {/* SSS comp-to-beat — for restaurant/retail names the comparable-sales line IS the print */}
+      {sssRead && (
+        <div className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]" title="Last reported comparable-sales / like-for-like — the number the desk watches for this name. The historical bar (not a forward Street consensus, which no feed carries).">
+          <span className="text-[var(--text-4)]">{sssRead.label} — last:</span>
+          <span><b style={{ color: col(sssRead.comp) }}>{sgn1(sssRead.comp)}</b>{sssRead.fiscalLabel ? <span className="text-[var(--text-4)]"> {sssRead.fiscalLabel}</span> : null}</span>
+          {sssRead.seqDelta != null && <span>{sssRead.seqDelta >= 0 ? "accelerating" : "decelerating"} <b style={{ color: col(sssRead.seqDelta) }}>{sssRead.seqDelta >= 0 ? "+" : ""}{sssRead.seqDelta.toFixed(1)}pt</b>{sssRead.prior != null ? <span className="text-[var(--text-4)]"> vs prior {sgn1(sssRead.prior)}</span> : null}</span>}
+          {sssRead.twoYrStack != null && <span><b className="text-[var(--text-2)]">2yr stack</b> {sgn1(sssRead.twoYrStack)}</span>}
+          {(sssRead.traffic != null || sssRead.ticket != null) && <span className="text-[var(--text-4)]">{sssRead.traffic != null ? `traffic ${sgn1(sssRead.traffic)}` : ""}{sssRead.traffic != null && sssRead.ticket != null ? " · " : ""}{sssRead.ticket != null ? `ticket ${sgn1(sssRead.ticket)}` : ""}</span>}
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Consensus EPS (this Q)" value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} sub={q0?.epsAnalysts && q0.epsLow != null && q0.epsHigh != null ? `${q0.epsAnalysts} est · $${q0.epsLow.toFixed(2)}–$${q0.epsHigh.toFixed(2)}` : undefined} />
         <Stat label="Consensus revenue" value={fmtRev(q0?.revAvg)} sub={q0?.growth != null ? `${pp(q0.growth, 0)} YoY${compEps != null ? ` · yr-ago EPS $${compEps.toFixed(2)}` : ""}` : undefined} />
@@ -116,8 +160,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
         <Stat label="Options-implied move" value={d?.impliedMove != null ? `±${d.impliedMove.toFixed(1)}%` : data === "loading" ? "…" : "—"} sub={d?.reaction ? `avg past ±${(d.reaction.avgAbsMove * 100).toFixed(1)}% (${d.reaction.n})` : undefined} />
       </div>
 
-      {/* #1 options rich/cheap + straddle breakevens + win-rate */}
-      {(d?.richness || d?.straddle || d?.straddleWinRate) && (
+      {/* #1 options rich/cheap + straddle breakevens + win-rate + vol-crush */}
+      {(d?.richness || d?.straddle || d?.straddleWinRate || (d?.term && d.term.crushRatio >= 1.04)) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[11px] text-[var(--text-3)]">
           {d.richness && (() => {
             const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
@@ -125,6 +169,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
           })()}
           {d.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="How often the realized move EXCEEDED the current implied move, over the last N prints — low = options rich (the straddle's been a sell)"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
           {d.straddle && <span title="Straddle breakevens = price ± the implied move; the stock must close beyond these for a long straddle to pay"><b className="text-[var(--text-2)]">Breakevens</b> ${d.straddle.lowerBE.toFixed(2)} / ${d.straddle.upperBE.toFixed(2)} <span className="text-[var(--text-4)]">· straddle ~${d.straddle.cost.toFixed(2)}</span></span>}
+          {d.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the elevated event vol that collapses after the print. A front-rich (backwardated) curve is the crush a premium-seller harvests."><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}% ({d.term.frontDte}d) → {(d.term.backIV * 100).toFixed(0)}% ({d.term.backDte}d) <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×{d.term.crushRatio >= 1.15 ? " · rich front" : ""}</span></span>}
         </div>
       )}
 
@@ -135,6 +180,24 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
         {stats.shortPercentOfFloat != null && <span><b className="text-[var(--text-2)]">Short</b> {(stats.shortPercentOfFloat * 100).toFixed(1)}% float{shortMoM != null ? ` (${shortMoM >= 0 ? "↑" : "↓"}${Math.abs(shortMoM * 100).toFixed(0)}% MoM)` : ""}{stats.shortRatio != null ? ` · ${stats.shortRatio.toFixed(1)}d cover` : ""}</span>}
         {stats.forwardPE != null && <span><b className="text-[var(--text-2)]">Fwd P/E</b> {stats.forwardPE.toFixed(0)}</span>}
       </div>
+
+      {/* pre-print analyst moves — how the bar moved into the print */}
+      {moves.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]" title="Rating / price-target changes in the ~45 days into the print — how positioning and the bar shifted vs stale consensus">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Moves in</span>
+          {moves.map((c, i) => {
+            const up = c.action === "up", down = c.action === "down", init = c.action === "init";
+            const ac = up ? "#22c55e" : down ? "#ef4444" : "var(--text-3)";
+            const arrow = up ? "↑" : down ? "↓" : init ? "◆" : "•";
+            return (
+              <span key={i} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--text-3)]" title={`${c.firm}: ${c.fromGrade ? c.fromGrade + " → " : ""}${c.toGrade}${c.targetTo != null ? ` · PT $${c.targetTo}${c.targetFrom != null && c.targetFrom !== c.targetTo ? ` (was $${c.targetFrom})` : ""}` : ""}`}>
+                <span className="text-[var(--text-4)]">{new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{" "}
+                <span style={{ color: ac }}>{arrow}</span> {c.firm}{c.targetTo != null ? <span className="text-[var(--text-4)]"> ${c.targetTo}</span> : null}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* #1 reaction history + #4 conditional moves */}
       {ev.length > 0 && (
@@ -179,6 +242,22 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row }: { sym
           {d.options.callWall && <span title="Heaviest call open interest above spot — a level where dealer gamma can cap / pin the stock"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
           {d.options.putWall && <span title="Heaviest put open interest below spot — support / downside magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
           {d.options.expiry && <span className="text-[var(--text-4)]">exp {d.options.expiry.slice(5)}</span>}
+        </div>
+      )}
+
+      {/* peer / sympathy earnings calendar — cohort names reporting near this print */}
+      {peerCal.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-3)]" title="Cohort peers reporting near this print — a peer's beat/miss + reaction is the best real-time read-through for this name. ⮞ = reports before this print.">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Peers reporting</span>
+          {peerCal.map((p) => {
+            const dd = Math.round((p.t - Date.now()) / 86_400_000);
+            const before = myEarn != null && p.t < myEarn && dd >= 0;
+            return (
+              <span key={p.sym} className="rounded border border-[var(--divider)] px-1.5 py-0.5 text-[10px] tabular-nums" title={`${p.sym} reports ${mDay(p.t)}${myEarn != null ? (p.t < myEarn ? " — before this print (read-through)" : " — after this print") : ""}`}>
+                <span className="text-[var(--text-2)]">{p.sym}</span> <span className="text-[var(--text-4)]">{dd < 0 ? "reported" : mDay(p.t)}</span>{before ? <span className="text-[var(--accent)]"> ⮞</span> : null}
+              </span>
+            );
+          })}
         </div>
       )}
 
