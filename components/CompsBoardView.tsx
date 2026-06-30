@@ -18,16 +18,21 @@ export default function CompsBoardView({ rows, universe, asOf }: { rows: CompRow
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [sort, setSort] = useState<Sort>("comp");
   const [q, setQ] = useState("");
+  const [region, setRegion] = useState<string>("all");
+
+  // Region chips — only shown once the dataset spans more than one (US + UK/EU intl).
+  const regions = useMemo(() => [...new Set(rows.map((r) => r.region || "US"))].sort(), [rows]);
 
   const view = useMemo(() => {
     const f = q.trim().toUpperCase();
-    let r = f ? rows.filter((x) => x.ticker.includes(f) || x.name.toUpperCase().includes(f) || x.industry.toUpperCase().includes(f)) : rows;
+    let r = region === "all" ? rows : rows.filter((x) => (x.region || "US") === region);
+    if (f) r = r.filter((x) => x.ticker.includes(f) || x.name.toUpperCase().includes(f) || x.industry.toUpperCase().includes(f));
     r = [...r].sort((a, b) =>
       sort === "accel" ? (b.seqDelta ?? -99) - (a.seqDelta ?? -99)
         : sort === "stack" ? (b.twoYrStack ?? -99) - (a.twoYrStack ?? -99)
           : b.comp - a.comp);
     return r;
-  }, [rows, sort, q]);
+  }, [rows, sort, q, region]);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -36,8 +41,15 @@ export default function CompsBoardView({ rows, universe, asOf }: { rows: CompRow
       <PageHeader title="Same-Store Sales (Comps) Board" desc="Every restaurant & retailer ranked by its latest comparable-/same-store-sales %. Watch sequential acceleration (vs the prior quarter) and the 2-year stack (this comp + last year's) for durable vs flattering strength. Comps are company-defined and not perfectly comparable across names — decision-support, not advice." />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
-          {SORTS.map((s) => <button key={s.key} title={s.hint} onClick={() => setSort(s.key)} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (sort === s.key ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{s.label}</button>)}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+            {SORTS.map((s) => <button key={s.key} title={s.hint} onClick={() => setSort(s.key)} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (sort === s.key ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{s.label}</button>)}
+          </div>
+          {regions.length > 1 && (
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+              {["all", ...regions].map((rg) => <button key={rg} onClick={() => setRegion(rg)} title={rg === "all" ? "All regions" : rg === "US" ? "US filers (SEC 8-K)" : `${rg} filers (RNS / trading statements)`} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (region === rg ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{rg === "all" ? "All" : rg}</button>)}
+            </div>
+          )}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter name / ticker / industry…" className="w-56 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--border-strong)]" />
       </div>
@@ -59,7 +71,7 @@ export default function CompsBoardView({ rows, universe, asOf }: { rows: CompRow
               <tr key={r.ticker} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                 <td className="px-3 py-2">
                   <Link href={`/u/${universe}/stock/${r.ticker}?tab=statements`} className="font-medium text-[var(--text)] hover:text-[var(--accent)]">{r.name}</Link>
-                  <div className="text-[10px] text-[var(--text-4)]"><span className="font-mono">{r.ticker}</span> · {r.industry}</div>
+                  <div className="text-[10px] text-[var(--text-4)]"><span className="font-mono">{r.ticker}</span> · {r.industry}{r.region && r.region !== "US" ? <span className="ml-1 rounded bg-[var(--surface-2)] px-1 py-px text-[9px] font-medium text-[var(--text-3)]">{r.region}</span> : null}</div>
                 </td>
                 <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: col(r.comp) }}>{pct(r.comp)}</td>
                 <td className="px-3 py-2 text-right tabular-nums" style={{ color: col(r.seqDelta) }}>

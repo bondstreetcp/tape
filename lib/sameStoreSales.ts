@@ -35,8 +35,9 @@ export interface SssPeriod {
 export interface SssTicker {
   metricLabel: string;
   definition?: string | null;
-  lastAccession?: string; // newest earnings filing seen → the new-quarter gate
+  lastAccession?: string; // newest earnings filing (or RNS announcement) seen → the new-quarter gate
   industry?: string;
+  region?: string; // "US" (default, US 8-K extractor) | "UK"/"Europe" (intl RNS extractor)
   periods: SssPeriod[]; // newest → oldest
 }
 
@@ -78,6 +79,7 @@ export interface CompRow {
   ticker: string;
   name: string;
   industry: string;
+  region: string; // "US" | "UK" | "Europe" — for the board's region filter
   comp: number; // latest 1-yr comp %
   fpEnd: string;
   fiscalLabel?: string;
@@ -109,6 +111,7 @@ export function buildCompsRows(data: SssData, nameOf: (t: string) => string | un
       ticker,
       name: nameOf(ticker) || ticker,
       industry: tk.industry || "",
+      region: tk.region || "US",
       comp: latest.comp as number,
       fpEnd: latest.fpEnd,
       fiscalLabel: latest.fiscalLabel,

@@ -262,6 +262,15 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # International (UK/EU) like-for-like — extracted from the night's RNS trading statements
+      # (Investegate), written into the SAME comps file so the Comps Board + income splice pick them up.
+      - name: Refresh intl same-store sales (UK/EU comps)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-sss-intl
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Reddit buzz (ApeWisdom mention counts) — free, no key.
       - name: Refresh Reddit buzz
         if: ${{ env.FULL == 'true' }}

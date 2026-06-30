@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildCompsRows, type SssData } from "@/lib/sameStoreSales";
+import { INTL_COMPS } from "@/lib/intlComps";
 import CompsBoardView from "@/components/CompsBoardView";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,13 @@ export default async function CompsPage({ params }: { params: Promise<{ universe
     /* not built */
   }
 
-  // Names from the broadest snapshot we have (comps names span S&P500∪Nasdaq100∪Russell1000).
+  // Names from the broadest snapshot we have (US comps names span S&P500∪Nasdaq100∪Russell1000); the
+  // intl (UK/EU) names aren't in any US snapshot, so resolve those from the curated roster.
   const snap = (await loadSnapshot("russell3000")) ?? (await loadSnapshot("sp500")) ?? (await loadSnapshot(universe));
-  const nameOf = new Map((snap?.stocks ?? []).map((s) => [s.symbol, s.name] as const));
+  const nameOf = new Map<string, string>([
+    ...(snap?.stocks ?? []).map((s) => [s.symbol, s.name] as const),
+    ...INTL_COMPS.map((c) => [c.yahoo, c.name] as const),
+  ]);
   const rows = data ? buildCompsRows(data, (t) => nameOf.get(t)) : [];
 
   return <CompsBoardView rows={rows} universe={universe} asOf={data?.generatedAt?.slice(0, 10) ?? "—"} />;
