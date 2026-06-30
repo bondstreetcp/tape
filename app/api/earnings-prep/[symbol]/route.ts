@@ -123,7 +123,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const reaction = moves.length
       ? { avgAbsMove: moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length, maxAbsMove: Math.max(...moves.map(Math.abs)), upRate: moves.filter((m) => m > 0).length / moves.length, n: moves.length }
       : null;
-    const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move, drift5: r.drift5 }));
+    const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move, drift5: r.drift5, timing: r.timing }));
+    // Typical reporting timing (the company's own pattern) → when the NEXT print's move lands: before-open
+    // reporters move that session, after-close reporters move the next session.
+    const tg = (reactions || []).map((r) => r.timing);
+    const nextTiming: "bmo" | "amc" | null = tg.length ? (tg.filter((t) => t === "amc").length >= tg.length / 2 ? "amc" : "bmo") : null;
     const impliedMove = (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
     const options = optionsRead(chain);
 
@@ -152,7 +156,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         : null;
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
