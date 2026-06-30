@@ -146,14 +146,23 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
         <div className="mt-3">
           <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="text-[var(--text-3)]">{spec.interpretation}</span>
-            {ranQuery && (
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              {ranQuery && (
+                <button
+                  onClick={() => { save(ranQuery, ranQuery, spec); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1600); }}
+                  className="rounded border border-[#a855f7]/40 px-2 py-0.5 text-[11px] text-[#c4b5fd] transition-colors hover:bg-[#a855f7]/15"
+                >
+                  {savedFlash ? "✓ Saved" : "💾 Save screen"}
+                </button>
+              )}
               <button
-                onClick={() => { save(ranQuery, ranQuery, spec); setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1600); }}
-                className="ml-auto shrink-0 rounded border border-[#a855f7]/40 px-2 py-0.5 text-[11px] text-[#c4b5fd] transition-colors hover:bg-[#a855f7]/15"
+                onClick={() => { setSpec(null); setQ(""); setRanQuery(""); }}
+                title="Clear the screen and start over"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
               >
-                {savedFlash ? "✓ Saved" : "💾 Save screen"}
+                ✕ Clear
               </button>
-            )}
+            </span>
           </div>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {(spec.filters || []).map((f, i) => {
