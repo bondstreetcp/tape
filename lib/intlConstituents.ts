@@ -188,27 +188,4 @@ export const INTL_UNIVERSES: IntlUniverse[] = [
       "GFINBURO.MX", "GCC.MX", "BOLSAA.MX", "ALPEKA.MX",
     ],
   },
-  // Goldman Sachs custom baskets, ingested from the GS position files (constituents mapped
-  // Bloomberg ID → Yahoo symbol). EUR-dominant but mixed-currency (a few London/SEK/CHF lines);
-  // returns/heatmap colours are %-based so currency-agnostic.
-  {
-    id: "gscbvivl",
-    name: "GSCBVIVL — EU Media Basket",
-    short: "GS · VIVL",
-    currency: "EUR",
-    tickers: [
-      "UMG.AS", "TIT.MI", "MMB.PA", "BNJ.AS", "TEF.MC", "MFEB.MI", "MFEA.MI", "PRS.MC", "VPLAY-B.ST",
-    ],
-  },
-  {
-    id: "gscmprxh",
-    name: "GSCMPRXH — EU Tech Basket",
-    short: "GS · PRXH",
-    currency: "EUR",
-    tickers: [
-      "ASML.AS", "SAP.DE", "IFX.DE", "STMMI.MI", "NOKIA.HE", "IDR.MC", "DHER.DE", "AMS.MC",
-      "UMG.AS", "SOP.PA", "ZAL.DE", "SGE.L", "ATE.PA", "AUTO.L", "RMV.L", "CAN.L", "VIV.PA",
-      "ALHG.PA", "HAVAS.AS", "WAF.DE", "DSY.PA", "WLN.PA", "LOGN.SW",
-    ],
-  },
 ];
