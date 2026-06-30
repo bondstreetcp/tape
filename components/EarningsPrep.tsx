@@ -4,6 +4,7 @@ import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
 import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
+import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -91,7 +92,7 @@ function Big({ value, label, color }: { value: string; label: string; color?: st
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss, guidance }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
 
@@ -141,6 +142,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const missMoves = ev.filter((e) => e.surprise != null && e.surprise <= 0 && e.move != null).map((e) => e.move as number);
   const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
   const a = typeof ai === "object" ? ai : null;
+  const ivs = ivStats(ivHistory ?? undefined); // IV-rank + realized crush — null until the history accrues
   // pre-earnings setup (run-up into the print + distance from 52wk high) — returns are in % units
   const r1w = row?.returns?.["1w"] ?? null;
   const r3m = row?.returns?.["3m"] ?? null;
@@ -421,6 +423,12 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               {d.options.callWall && <span title="Heaviest call open interest above spot — a level dealer gamma can cap / pin"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
               {d.options.putWall && <span title="Heaviest put open interest below spot — support / magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
             </div>
+            {ivs && (
+              <div className="mt-2 border-t border-[var(--divider)] pt-2 text-[13px] text-[var(--text-3)]" title="From this name's own IV history (accrues over earnings cycles). IV-rank = where the current event IV sits vs its past. Realized crush = avg drop in ATM IV the session AFTER past prints — the vol decay a long-premium buyer pays.">
+                {ivs.ivRank != null && <span><b className="text-[var(--text-2)]">IV-rank</b> {ivs.ivRank.toFixed(0)}<span className="text-[var(--text-4)]">ᵗʰ %ile</span></span>}
+                {ivs.avgCrushPct != null && <span> · <b className="text-[var(--text-2)]">realized crush</b> <b style={{ color: ivs.avgCrushPct >= 15 ? "#ef4444" : "var(--text-2)" }}>−{ivs.avgCrushPct.toFixed(0)}%</b> <span className="text-[var(--text-4)]">avg after prints ({ivs.crushN})</span></span>}
+              </div>
+            )}
           </Bento>
         )}
 

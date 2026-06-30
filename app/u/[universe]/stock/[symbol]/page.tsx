@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SssData, SssTicker } from "@/lib/sameStoreSales";
 import type { GuidanceData, GuidanceTicker } from "@/lib/guidance";
+import type { IvHistoryData, IvSnapshot } from "@/lib/ivHistory";
 
 // Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
 // extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
@@ -34,6 +35,17 @@ function loadGuidance(sym: string): GuidanceTicker | null {
     const p = join(process.cwd(), "data", "guidance.json");
     if (!existsSync(p)) return null;
     return (JSON.parse(readFileSync(p, "utf8")) as GuidanceData).byTicker?.[sym] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// IV / pre-earnings-straddle snapshot history (scripts/refresh-iv-history.ts) — for IV-rank + realized crush.
+function loadIvHistory(sym: string): IvSnapshot[] | null {
+  try {
+    const p = join(process.cwd(), "data", "iv-history.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as IvHistoryData).byTicker?.[sym] ?? null;
   } catch {
     return null;
   }
@@ -115,6 +127,7 @@ export default async function StockPage({
       row={row}
       sss={loadSss(SYM)}
       guidance={loadGuidance(SYM)}
+      ivHistory={loadIvHistory(SYM)}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}
