@@ -57,7 +57,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90 # FULL run is long; the broad (Russell 3000) overnight-filings scan adds ~10 min
+    timeout-minutes: 150 # FULL run is long (~2h): overnight-filings broad scan alone ~30m + insider/OGE/valuation-history ~15m each + the LLM write-up tail. 90m was cutting off the Morning Desk Note + the final commit.
     # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close
     # international-only refresh (10:00). Both gate which steps run. The intraday quotes tick instead
     # picks WHICH universes to re-quote from the wall-clock UTC hour at run time (see the "Pick session
@@ -290,6 +290,30 @@ jobs:
         run: npm run refresh-desk-note
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
+      # SAFETY COMMIT — push the Morning Desk Note + all data refreshed so far BEFORE the slow LLM
+      # write-up tail (Confluence / valuation verdicts / 13F story / Congress summary). Previously the
+      # single commit lived only at the very end, so when the job ran long the desk-note (and the whole
+      # night's data) was generated but never committed. This guarantees the brief lands every run.
+      - name: Commit Morning Desk Note + data so far (safety)
+        if: ${{ env.FULL == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data
+          if git diff --cached --quiet; then
+            echo "No data changes yet — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: morning desk + overnight data ($(date -u +%Y-%m-%dT%H:%MZ))"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "Pushed."; exit 0; fi
+            echo "Push rejected — syncing with origin/main and retrying ($i/5)…"
+            git fetch origin main || true
+            if ! git rebase -X theirs origin/main; then git rebase --abort || true; fi
+            sleep 5
+          done
         continue-on-error: true
 
       # Confluence Engine — fuses the night's INDEPENDENT bullish signals (valuation discount,
