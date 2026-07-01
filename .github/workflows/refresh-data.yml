@@ -370,6 +370,12 @@ jobs:
         run: npm run refresh-corp-events
         continue-on-error: true
 
+      # IPOs & Lockups — SEC 424B4 (recent IPOs + ~180d lockup calendar) → GLM extract. Free EDGAR.
+      - name: Refresh IPO & lockup monitor
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-ipo
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).

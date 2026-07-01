@@ -45,6 +45,7 @@
     "refresh-policy": "tsx scripts/refresh-policy.ts",
     "refresh-catalyst-vol": "tsx scripts/refresh-catalyst-vol.ts",
     "refresh-corp-events": "tsx scripts/refresh-corp-events.ts",
+    "refresh-ipo": "tsx scripts/refresh-ipo.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
