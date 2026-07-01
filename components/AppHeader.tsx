@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
+import InstallPWA from "./InstallPWA";
 import CommandPalette from "./CommandPalette";
 import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath } from "@/lib/nav";
 
@@ -129,6 +130,7 @@ export default function AppHeader({
           >
             <span aria-hidden className="text-[13px] text-[var(--text-4)]">📖</span> Guide
           </a>
+          <InstallPWA />
           <ThemeToggle />
         </div>
       </div>
