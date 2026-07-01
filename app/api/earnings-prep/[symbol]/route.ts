@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
-import { getOptions, getTermStructure, type OptionChain, type Opt } from "@/lib/options";
+import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
+import { straddleMove, tradeIdea } from "@/lib/earningsTrade";
 import { peerCohort } from "@/lib/peerCohorts";
 import YahooFinance from "yahoo-finance2";
 import { getNews } from "@/lib/news";
@@ -115,86 +116,9 @@ function volRegimeFrom(closes: number[], atmIV: number | null) {
   return { atmIV, hv20, ivHvRatio: atmIV / hv20, hvPctile };
 }
 
-// Earnings-day trade idea — turn the rich/cheap + skew read into a concrete structure at expected-move
-// strikes pulled from the live chain. Decision-support, not advice (NO_ADVICE is on the AI side).
-function tradeIdea(
-  richness: { verdict: string; avgRealized: number } | null,
-  optionsR: { skew: number | null } | null,
-  straddle: { lowerBE: number; upperBE: number; price: number } | null,
-  chain: OptionChain | null,
-  impliedMove: number | null,
-) {
-  if (!richness || !straddle || !chain || impliedMove == null) return null;
-  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))].sort((a, b) => a - b);
-  if (strikes.length < 4) return null;
-  const near = (t: number) => strikes.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a));
-  const putK = near(straddle.lowerBE), callK = near(straddle.upperBE), atmK = near(straddle.price);
-  const fmt = (k: number) => (Number.isInteger(k) ? `${k}` : k.toFixed(1));
-  const prem = (type: "C" | "P", k: number): number | null => {
-    const o = (type === "C" ? chain.calls : chain.puts).find((x) => x.strike === k);
-    if (!o) return null;
-    return o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0 ? (o.bid + o.ask) / 2 : o.last != null && o.last > 0 ? o.last : null;
-  };
-  type Spec = { type: "C" | "P"; side: "long" | "short"; strike: number };
-  // structured legs WITH premiums (for the payoff diagram) — only when every leg has a usable quote.
-  const legsOf = (specs: Spec[]) => {
-    const out = specs.map((s) => ({ ...s, premium: prem(s.type, s.strike) }));
-    return out.every((l) => l.premium != null) ? (out as { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]) : undefined;
-  };
-  if (richness.verdict === "rich") {
-    const skewRich = optionsR?.skew != null && optionsR.skew > 0.03; // puts notably bid → prefer defined risk
-    const wing = Math.max(strikes.find((s) => s > callK) ? near(callK + (callK - putK)) - callK : 0, (callK - putK) / 2) || 5;
-    const legsData = skewRich
-      ? legsOf([{ type: "P", side: "long", strike: near(putK - wing) }, { type: "P", side: "short", strike: putK }, { type: "C", side: "short", strike: callK }, { type: "C", side: "long", strike: near(callK + wing) }])
-      : legsOf([{ type: "P", side: "short", strike: putK }, { type: "C", side: "short", strike: callK }]);
-    return {
-      verdict: "rich",
-      structure: skewRich ? "Iron condor (defined risk)" : "Short strangle",
-      legs: skewRich
-        ? `short ${fmt(putK)}P / long ${fmt(near(putK - wing))}P · short ${fmt(callK)}C / long ${fmt(near(callK + wing))}C`
-        : `short ${fmt(putK)}P · short ${fmt(callK)}C (the ±${impliedMove.toFixed(1)}% strikes)`,
-      rationale: `Implied ±${impliedMove.toFixed(1)}% is rich vs ~±${richness.avgRealized.toFixed(1)}% realized — sell the move${skewRich ? "; condor caps the tail since puts are bid" : ""}.`,
-      legsData,
-    };
-  }
-  if (richness.verdict === "cheap") {
-    return {
-      verdict: "cheap",
-      structure: "Long straddle / strangle",
-      legs: `long ${fmt(atmK)}P + ${fmt(atmK)}C`,
-      rationale: `Implied ±${impliedMove.toFixed(1)}% is cheap vs ~±${richness.avgRealized.toFixed(1)}% realized — own the move.`,
-      legsData: legsOf([{ type: "C", side: "long", strike: atmK }, { type: "P", side: "long", strike: atmK }]),
-    };
-  }
-  return null; // fairly priced → no clean premium edge
-}
-
-// Live implied move from what the ATM STRADDLE actually costs: pick the expiry that brackets the next
-// earnings date (or the nearest expiry), take the ATM call+put mid, and read move = straddle / spot.
-// This is the market's own pricing — works for ANY optionable name, vs the precomputed earnings-move file
-// (which only covers names reporting ≤16d). `dte` makes the horizon explicit (it's the move BY that expiry).
-async function straddleMove(sym: string, baseChain: OptionChain | null, earningsISO: string | null) {
-  if (!baseChain?.underlying || !baseChain.expirations?.length) return null;
-  let expiry = baseChain.selected, isEvent = false;
-  if (earningsISO) { const ev = baseChain.expirations.find((d) => d >= earningsISO); if (ev) { expiry = ev; isEvent = true; } } // first expiry on/after earnings
-  const chain = expiry && expiry !== baseChain.selected ? await getOptions(sym, expiry).catch(() => baseChain) : baseChain;
-  const U = chain.underlying;
-  if (!U || (!chain.calls.length && !chain.puts.length)) return null;
-  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))];
-  if (!strikes.length) return null;
-  const atm = strikes.reduce((a, b) => (Math.abs(b - U) < Math.abs(a - U) ? b : a));
-  const mid = (o: Opt | undefined): number | null => {
-    if (!o) return null;
-    if (o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0) return (o.bid + o.ask) / 2; // prefer the quote midpoint
-    return o.last != null && o.last > 0 ? o.last : null; // fall back to last trade
-  };
-  const c = mid(chain.calls.find((o) => o.strike === atm)), p = mid(chain.puts.find((o) => o.strike === atm));
-  if (c == null || p == null) return null;
-  const cost = c + p;
-  if (cost <= 0 || cost / U > 0.6) return null; // sanity (>60%-of-spot straddle = junk quotes)
-  const dte = chain.selected ? Math.round((Date.parse(chain.selected + "T00:00:00Z") - Date.now()) / 86_400_000) : null;
-  return { movePct: (cost / U) * 100, cost, atmStrike: atm, upperBE: U + cost, lowerBE: U - cost, price: U, expiry: chain.selected, dte, isEvent };
-}
+// The earnings trade idea + the live straddle-implied move live in lib/earningsTrade.ts — shared with the
+// nightly trade-log (scripts/refresh-trade-log.ts) so the LOGGED play is the exact one the card shows.
+// tradeIdea prices its legs on the SAME (event) expiry as the straddle and reports that expiry/dte.
 
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
@@ -321,7 +245,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false }
         : null;
     const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
-    const trade = tradeIdea(richness, options, straddle, chain, impliedMove);
+    // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
+    // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
+    const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove);
     // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
     // the move comes in UNDER the priced move and the IV crushes. Synthesize: how often the realized move
     // cleared the implied (incl. CONDITIONAL on a beat — the call-buyer's case), + rich/cheap + the crush.

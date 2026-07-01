@@ -307,6 +307,14 @@ jobs:
         run: npm run refresh-earnings-move
         continue-on-error: true
 
+      # Earnings-play TRACK RECORD: log the card's suggested option structure for names about to report
+      # (entry premiums + expiry captured live), then settle logged plays after the print / at expiry.
+      # Pure forward accumulation — depends on the snapshots (earnings dates) refreshed earlier this run.
+      - name: Refresh earnings-play track record
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-trade-log
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow

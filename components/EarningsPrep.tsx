@@ -18,7 +18,7 @@ interface DataPart {
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
-  trade: { verdict: string; structure: string; legs: string; rationale: string; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[] } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[] } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
@@ -328,6 +328,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
             <div className="mt-2.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
               <span className="font-semibold text-[var(--text)]">Play </span>
               <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              {d.trade.expiry && (
+                <span className="ml-1 rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-3)]" title="The option expiry these legs are priced on — the first one after the earnings date, so it captures the event.">
+                  exp {d.trade.expiry}{d.trade.dte != null ? ` · ${d.trade.dte}d` : ""}
+                </span>
+              )}
               <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>
               <span className="text-[var(--text-4)]"> — {d.trade.rationale}</span>
               {d.trade.legsData && d.straddle && d.impliedMove != null && (

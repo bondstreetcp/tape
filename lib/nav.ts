@@ -41,6 +41,7 @@ export const FEATURES: NavItem[] = [
   { label: "Credit Spreads", path: "/credit-spreads", desc: "Bull-put and iron-condor setups ranked by reward vs risk", group: "Strategies", job: "Income strategies", kw: "options spreads iron condor" },
   { label: "Earnings Move", path: "/earnings-move", desc: "Where options over- or under-price an earnings event", group: "Strategies", job: "Find ideas", kw: "earnings straddle implied move volatility" },
   { label: "Earnings Setup Cards", path: "/earnings-setup", desc: "Glanceable cards of upcoming reporters — implied vs. historical move, rich/cheap", group: "Strategies", job: "Find ideas", kw: "earnings setup cards implied move straddle reporting this week" },
+  { label: "Earnings Play Track Record", path: "/track-record", desc: "How the earnings card's suggested option plays have actually done — logged live, settled at expiry", group: "Strategies", job: "Find ideas", kw: "track record performance earnings play trade log scorecard win rate pnl settled straddle strangle results hit rate accountability" },
   { label: "CEF Screener", path: "/cef", desc: "Closed-end funds trading at a discount to their NAV", group: "Strategies", job: "Income strategies", kw: "closed end funds discount nav yield" },
   { label: "CEF Discount Hunter", path: "/cef-hunter", desc: "The scored shortlist of the most stretched closed-end-fund discounts", group: "Strategies", job: "Income strategies", kw: "cef closed end fund discount hunter stretched z-score yield" },
   { label: "Holdco NAV Tracker", path: "/holdco-nav", desc: "Holding companies vs their look-through NAV — discount/premium (Prosus, Exor, GBL…)", group: "Research", job: "Find ideas", kw: "holdco holding company nav discount premium look-through prosus exor gbl arbitrage sum of the parts sotp" },
@@ -74,7 +75,7 @@ export interface NavHub { label: string; blurb: string; paths: string[] }
 export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   Strategies: [
     { label: "Options Income", blurb: "Sell premium on quality names — cash-secured puts, covered calls, spreads", paths: ["/put-writing", "/covered-call", "/credit-spreads"] },
-    { label: "Earnings Plays", blurb: "Trade the earnings event — implied vs. historical move", paths: ["/earnings-move", "/earnings-setup"] },
+    { label: "Earnings Plays", blurb: "Trade the earnings event — implied vs. historical move, with a live track record", paths: ["/earnings-move", "/earnings-setup", "/track-record"] },
     { label: "Closed-End Funds", blurb: "Funds trading below NAV — the full screener + the stretched-discount shortlist", paths: ["/cef", "/cef-hunter"] },
     { label: "Backtest", blurb: "Test factor screens and strategies against history", paths: ["/backtest"] },
   ],
