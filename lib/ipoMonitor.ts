@@ -5,21 +5,30 @@
  * separate S&P/Russell source and aren't included here.)
  */
 
-export type IpoKind = "ipo" | "lockup";
+export type IpoKind = "ipo" | "lockup" | "upcoming";
+
+export interface IpoSummary {
+  business: string; // what the company does
+  sector: string;
+  financials: string; // revenue / growth / profitability snapshot
+  useOfProceeds: string; // what they'll do with the money
+  risks: string[]; // 2-4 key risk factors
+}
 
 export interface IpoEvent {
   id: string; // accession
   kind: IpoKind;
-  ticker: string;
+  ticker: string; // may be a proposed ticker for upcoming filings
   company: string;
-  ipoDate: string; // ISO — the 424B4 / pricing date
+  ipoDate: string; // ISO — the 424B4 pricing date (recent/lockup) or the S-1 filing date (upcoming)
   lockupDate: string | null; // ISO — IPO date + ~180d (for the lockup calendar)
   daysToLockup: number | null; // signed days until the unlock
-  priceUsd: number | null; // IPO price
+  priceUsd: number | null; // IPO price (or proposed range midpoint)
   sizeUsdM: number | null; // deal size, $M
   exchange: string;
-  sinceIpoPct: number | null; // return from the IPO price to now
-  url: string;
+  sinceIpoPct: number | null; // return from the IPO price to now (recent/lockup only)
+  url: string; // the SEC prospectus
+  summary?: IpoSummary | null; // AI recap of the S-1 / prospectus (what the company does)
 }
 
 export interface IpoData {

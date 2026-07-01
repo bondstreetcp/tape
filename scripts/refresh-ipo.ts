@@ -1,38 +1,64 @@
 /**
- * Builds data/ipo-monitor.json — recent IPOs + the IPO-lockup-expiry calendar.
- *
- * Two EDGAR full-text scans of 424B4 final prospectuses: (a) the last ~16 days = recent IPOs;
- * (b) ~150-215 days ago = IPOs whose ~180-day lockup is expiring soon (a supply catalyst). GLM
- * confirms each is a genuine IPO (not a follow-on/shelf) and extracts ticker/price/size/exchange.
- *
- * Run: npm run refresh-ipo. Nightly. Not advice.
+ * Builds data/ipo-monitor.json — the IPO desk:
+ *   • UPCOMING IPOs — companies that filed an S-1/F-1 to go public (the pipeline).
+ *   • RECENT IPOs — priced in the last ~16 days (424B4 final prospectus).
+ *   • LOCKUP expiries — IPOs from ~180 days ago whose insider lockup is about to lift (supply catalyst).
+ * Each carries an AI summary of the S-1/prospectus (what the company does, financials, use of proceeds,
+ * risks) for the per-company detail page. GLM confirms genuine first-time IPOs (drops resales/shelves/
+ * SPACs). Free EDGAR. Run: npm run refresh-ipo. Nightly. Not advice.
  */
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
-import type { IpoData, IpoEvent, IpoKind } from "../lib/ipoMonitor";
+import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "ipo-monitor.json");
 const DAY = 86_400_000;
 const LOCKUP_DAYS = 180;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const iso = (d: number) => new Date(d).toISOString().slice(0, 10);
+const num = (x: any) => (typeof x === "number" && isFinite(x) && x > 0 ? x : null);
 
-async function classify(hit: EftsHit, text: string): Promise<{ ticker: string; company: string; priceUsd: number | null; sizeUsdM: number | null; exchange: string } | null> {
+// A priced IPO (424B4).
+async function classifyIpo(hit: EftsHit, text: string) {
   const SYSTEM =
-    "You read one SEC 424B4 prospectus and determine if it is an INITIAL public offering (a company listing its common stock for the FIRST time) — NOT a follow-on, secondary, shelf takedown, ETF, SPAC unit, or debt/notes offering. If it IS an IPO, return the ticker symbol, company name, the IPO price per share (number), the total deal size in US$ MILLIONS (number), and the exchange (NYSE/Nasdaq). " +
-    "If it is NOT a first-time common-stock IPO, return isIpo=false and it is dropped. " + NO_ADVICE;
+    "You read one SEC 424B4 prospectus and determine if it is an INITIAL public offering (a company listing common stock for the FIRST time) — NOT a follow-on, secondary, shelf takedown, ETF, SPAC unit, or debt offering. If it IS an IPO, return the ticker, company name, IPO price per share, total deal size in US$ MILLIONS, and exchange (NYSE/Nasdaq). Else isIpo=false. " + NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"isIpo":boolean,"ticker":string,"company":string,"priceUsd":number|null,"sizeUsdM":number|null,"exchange":string}';
   const out = await chatJSON<any>(SYSTEM, `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6000)}\n\n${SCHEMA}`, { maxTokens: 260 });
   if (!out || out.isIpo === false) return null;
   const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
   if (!ticker) return null;
-  const num = (x: any) => (typeof x === "number" && isFinite(x) && x > 0 ? x : null);
   return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd), sizeUsdM: num(out.sizeUsdM), exchange: String(out.exchange || "").slice(0, 12) };
+}
+
+// An S-1/F-1 registration for a company still trying to go public (the pipeline).
+async function classifyUpcoming(hit: EftsHit, text: string) {
+  const SYSTEM =
+    "You read one SEC S-1/F-1 registration statement and determine if it is a GENUINE upcoming INITIAL public offering — a company registering to list its common stock publicly for the FIRST time. Return isIpo=false (dropped) if it is: a resale/secondary registration by an already-public company, a shelf, a SPAC/blank-check, a debt/warrant/unit-only registration, or an amendment with no offering. If it IS a real IPO registration, return the proposed ticker ('' if not yet assigned), company name, expected deal size in US$ MILLIONS (or null), proposed price-range midpoint per share (or null), and the intended exchange. " + NO_ADVICE;
+  const SCHEMA = 'Return ONLY JSON: {"isIpo":boolean,"ticker":string,"company":string,"priceUsd":number|null,"sizeUsdM":number|null,"exchange":string}';
+  const out = await chatJSON<any>(SYSTEM, `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6500)}\n\n${SCHEMA}`, { maxTokens: 260 });
+  if (!out || out.isIpo === false) return null;
+  const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
+  return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd), sizeUsdM: num(out.sizeUsdM), exchange: String(out.exchange || "").slice(0, 12) };
+}
+
+// The investor recap of the prospectus (for the per-company detail page).
+async function summarizeFiling(hit: EftsHit, text: string): Promise<IpoSummary | null> {
+  const SYSTEM =
+    "You read an IPO prospectus (S-1 or 424B4) and write a crisp investor summary. Return: 'business' (2-3 sentences: what the company does and how it makes money); 'sector'; 'financials' (revenue, growth rate, and whether it's profitable — with the actual figures if stated in the summary); 'useOfProceeds' (what they'll do with the money raised); 'risks' (2-4 of the most material risk factors, each a terse phrase). Use only what the prospectus supports; don't invent numbers. " + NO_ADVICE;
+  const SCHEMA = 'Return ONLY JSON: {"business":string,"sector":string,"financials":string,"useOfProceeds":string,"risks":string[]}';
+  const out = await chatJSON<any>(SYSTEM, `${hit.issuer}. Prospectus excerpt:\n\n${text.slice(0, 15000)}\n\n${SCHEMA}`, { maxTokens: 900 });
+  if (!out || !out.business) return null;
+  return {
+    business: String(out.business).slice(0, 600),
+    sector: String(out.sector || "").slice(0, 60),
+    financials: String(out.financials || "").slice(0, 400),
+    useOfProceeds: String(out.useOfProceeds || "").slice(0, 400),
+    risks: Array.isArray(out.risks) ? out.risks.filter((r: any) => typeof r === "string" && r.trim()).map((r: string) => r.trim().slice(0, 160)).slice(0, 4) : [],
+  };
 }
 
 async function ipoPerf(ticker: string, ipoPrice: number | null): Promise<number | null> {
@@ -54,53 +80,65 @@ async function main() {
   const nowISO = new Date().toISOString();
   if (!(await llmConfigured())) { console.log("LLM not configured — skipping."); return; }
 
-  // (a) recent IPOs; (b) IPOs whose ~180d lockup is expiring soon
-  const recent = await eftsSearch({ forms: "424B4", startdt: iso(Date.now() - 16 * DAY), enddt: iso(Date.now()) });
-  const lockWin = await eftsSearch({ forms: "424B4", startdt: iso(Date.now() - (LOCKUP_DAYS + 35) * DAY), enddt: iso(Date.now() - (LOCKUP_DAYS - 30) * DAY) });
-  const tagged = [...recent.map((h) => ({ hit: h, kind: "ipo" as IpoKind })), ...lockWin.map((h) => ({ hit: h, kind: "lockup" as IpoKind }))];
+  const [recent, lockWin, s1, f1] = await Promise.all([
+    eftsSearch({ forms: "424B4", startdt: iso(Date.now() - 16 * DAY), enddt: iso(Date.now()) }),
+    eftsSearch({ forms: "424B4", startdt: iso(Date.now() - (LOCKUP_DAYS + 35) * DAY), enddt: iso(Date.now() - (LOCKUP_DAYS - 30) * DAY) }),
+    eftsSearch({ forms: "S-1", startdt: iso(Date.now() - 30 * DAY), enddt: iso(Date.now()) }),
+    eftsSearch({ forms: "F-1", startdt: iso(Date.now() - 30 * DAY), enddt: iso(Date.now()) }),
+  ]);
+  const tagged = [
+    ...recent.map((h) => ({ hit: h, kind: "ipo" as IpoKind })),
+    ...lockWin.map((h) => ({ hit: h, kind: "lockup" as IpoKind })),
+    ...[...s1, ...f1].map((h) => ({ hit: h, kind: "upcoming" as IpoKind })),
+  ];
   const seen = new Set<string>();
   const uniq = tagged.filter((t) => (seen.has(t.hit.accession) ? false : (seen.add(t.hit.accession), true)));
-  console.log(`fetched ${recent.length} recent + ${lockWin.length} lockup-window 424B4 → ${uniq.length} unique`);
+  console.log(`fetched ${recent.length} recent + ${lockWin.length} lockup-window 424B4 + ${s1.length + f1.length} S-1/F-1 → ${uniq.length} unique`);
 
   const prior: IpoData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: nowISO, scanned: 0, events: [] as IpoEvent[] }));
   const known = new Set(prior.events.map((e) => e.id));
-  const fresh = uniq.filter((t) => !known.has(t.hit.accession)).slice(0, 70);
-  console.log(`${fresh.length} new 424B4 to screen`);
+  // cap per kind so the S-1 pile doesn't starve the 424B4 IPOs
+  const cap: Record<string, number> = {};
+  const fresh = uniq.filter((t) => !known.has(t.hit.accession)).filter((t) => { const n = cap[t.kind] || 0; if (n >= 30) return false; cap[t.kind] = n + 1; return true; });
+  console.log(`${fresh.length} new filings to screen ${JSON.stringify(cap)}`);
 
   const built = await mapPool(fresh, 4, async ({ hit, kind }): Promise<IpoEvent | null> => {
     const text = await fetchFilingBodyText(hit);
     if (!text) return null;
-    const c = await classify(hit, text);
-    if (!c) return null;
+    const c = kind === "upcoming" ? await classifyUpcoming(hit, text) : await classifyIpo(hit, text);
+    if (!c || (kind !== "upcoming" && !c.ticker)) return null;
+    const summary = await summarizeFiling(hit, text).catch(() => null);
     const ipoT = Date.parse((hit.date || iso(Date.now())) + "T12:00:00Z");
     const lockupT = ipoT + LOCKUP_DAYS * DAY;
+    const url = hit.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(hit.ciks[0])}/${hit.accession.replace(/-/g, "")}/${hit.doc}` : "";
     return {
-      id: hit.accession, kind, ticker: c.ticker, company: c.company,
-      ipoDate: iso(ipoT), lockupDate: iso(lockupT), daysToLockup: Math.round((lockupT - Date.now()) / DAY),
-      priceUsd: c.priceUsd, sizeUsdM: c.sizeUsdM, exchange: c.exchange, sinceIpoPct: null,
-      url: hit.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(hit.ciks[0])}/${hit.accession.replace(/-/g, "")}/${hit.doc}` : "",
+      id: hit.accession, kind, ticker: c.ticker || "", company: c.company,
+      ipoDate: iso(ipoT), lockupDate: kind === "upcoming" ? null : iso(lockupT), daysToLockup: kind === "upcoming" ? null : Math.round((lockupT - Date.now()) / DAY),
+      priceUsd: c.priceUsd, sizeUsdM: c.sizeUsdM, exchange: c.exchange, sinceIpoPct: null, url, summary,
     };
   });
 
   const merged = [...built.filter((x): x is IpoEvent => !!x), ...prior.events]
     .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)
-    .map((e) => ({ ...e, daysToLockup: e.lockupDate ? Math.round((Date.parse(e.lockupDate) - Date.now()) / DAY) : null })) // refresh the clock
-    .filter((e) => e.kind === "ipo" ? Date.now() - Date.parse(e.ipoDate) < 60 * DAY : (e.daysToLockup != null && e.daysToLockup > -30 && e.daysToLockup < 60)) // keep recent IPOs + near-term unlocks
-    .sort((a, b) => a.kind !== b.kind ? (a.kind === "lockup" ? -1 : 1) : (a.kind === "lockup" ? (a.daysToLockup! - b.daysToLockup!) : (Date.parse(b.ipoDate) - Date.parse(a.ipoDate))))
-    .slice(0, 200);
+    .map((e) => ({ ...e, daysToLockup: e.lockupDate ? Math.round((Date.parse(e.lockupDate) - Date.now()) / DAY) : null }))
+    .filter((e) =>
+      e.kind === "ipo" ? Date.now() - Date.parse(e.ipoDate) < 60 * DAY
+        : e.kind === "upcoming" ? Date.now() - Date.parse(e.ipoDate) < 75 * DAY
+          : (e.daysToLockup != null && e.daysToLockup > -30 && e.daysToLockup < 60))
+    .slice(0, 300);
 
-  // refresh perf
-  const syms = [...new Set(merged.map((e) => e.ticker))];
-  const priceByTicker: Record<string, number | null> = {};
-  merged.forEach((e) => { if (e.priceUsd) priceByTicker[e.ticker] = e.priceUsd; });
+  // perf for priced names (recent + lockup); upcoming aren't trading yet
+  const syms = [...new Set(merged.filter((e) => e.kind !== "upcoming" && e.ticker).map((e) => e.ticker))];
+  const priceBy: Record<string, number | null> = {};
+  merged.forEach((e) => { if (e.priceUsd && e.ticker) priceBy[e.ticker] = e.priceUsd; });
   const perf: Record<string, number | null> = {};
-  await mapPool(syms, 6, async (s) => { perf[s] = await ipoPerf(s, priceByTicker[s] ?? null); });
-  for (const e of merged) e.sinceIpoPct = perf[e.ticker] ?? null;
+  await mapPool(syms, 6, async (s) => { perf[s] = await ipoPerf(s, priceBy[s] ?? null); });
+  for (const e of merged) e.sinceIpoPct = e.kind !== "upcoming" && e.ticker ? (perf[e.ticker] ?? null) : null;
 
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData));
-  const nIpo = merged.filter((e) => e.kind === "ipo").length, nLock = merged.filter((e) => e.kind === "lockup").length;
-  console.log(`\nwrote ${merged.length} events (${nIpo} recent IPOs, ${nLock} upcoming lockups).`);
-  for (const e of merged.slice(0, 10)) console.log(`  [${e.kind.padEnd(6)}] ${e.ticker.padEnd(6)} ipo ${e.ipoDate} ${e.priceUsd ? "$" + e.priceUsd : ""} ${e.kind === "lockup" ? `unlock ${e.lockupDate} (${e.daysToLockup}d)` : ""} since ${e.sinceIpoPct ?? "—"}%`);
+  const by = (k: string) => merged.filter((e) => e.kind === k).length;
+  console.log(`\nwrote ${merged.length} events (${by("upcoming")} upcoming, ${by("ipo")} recent IPOs, ${by("lockup")} lockups).`);
+  for (const e of merged.slice(0, 12)) console.log(`  [${e.kind.padEnd(8)}] ${(e.ticker || "—").padEnd(6)} ${e.company.slice(0, 30).padEnd(30)} ${e.summary ? "✓summary" : ""}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
