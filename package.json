@@ -41,6 +41,7 @@
     "refresh-trump-truth": "tsx scripts/refresh-trump-truth.ts",
     "refresh-fed": "tsx scripts/refresh-fed.ts",
     "refresh-campaigns": "tsx scripts/refresh-campaigns.ts",
+    "refresh-biotech": "tsx scripts/refresh-biotech.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
