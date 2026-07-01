@@ -342,6 +342,13 @@ jobs:
         run: npm run refresh-campaigns
         continue-on-error: true
 
+      # Biotech Catalysts — ClinicalTrials.gov Phase 2/3 status changes → GLM maps sponsor→ticker +
+      # catalyst read. Free API; needs OPENROUTER_API_KEY; forward-accumulating.
+      - name: Refresh biotech catalysts
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-biotech
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
