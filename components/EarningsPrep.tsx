@@ -30,6 +30,8 @@ interface WhyState {
   state: "loading" | "done" | "error";
   why?: string | null;
   confidence?: string | null;
+  grounded?: boolean; // recap backed by the actual 8-K earnings release
+  filing?: { url: string; date: string } | null;
   headlines?: { title: string; publisher: string; link: string; time: string | null }[];
 }
 interface AiPart {
@@ -190,9 +192,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const loadWhy = (dateISO: string) => {
     if (why[dateISO]) return; // cached
     setWhy((w) => ({ ...w, [dateISO]: { state: "loading" } }));
-    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=why&d=${encodeURIComponent(dateISO.slice(0, 10))}`)
+    // no-store so a redeploy's fresher answer isn't masked by a stale browser copy; the client-state
+    // guard above + the route's s-maxage already keep repeat clicks cheap.
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=why&d=${encodeURIComponent(dateISO.slice(0, 10))}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setWhy((w) => ({ ...w, [dateISO]: { state: "done", why: j.why, confidence: j.confidence, headlines: j.headlines || [] } })))
+      .then((j) => setWhy((w) => ({ ...w, [dateISO]: { state: "done", why: j.why, confidence: j.confidence, grounded: j.grounded, filing: j.filing, headlines: j.headlines || [] } })))
       .catch(() => setWhy((w) => ({ ...w, [dateISO]: { state: "error" } })));
   };
 
@@ -519,6 +523,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                                   <div className="text-[13px] leading-snug text-[var(--text-2)]">
                                     {w.why}
                                     {w.confidence && <span className="ml-1 rounded bg-[var(--surface)] px-1 py-0.5 align-middle text-[10px] uppercase tracking-wide text-[var(--text-4)]" title="How confident this recap is — LOW means the specific catalyst isn't confirmed from the data here (common for very recent quarters).">{w.confidence}</span>}
+                                    {w.grounded && <span className="ml-1 rounded px-1 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide" style={{ background: "color-mix(in oklab, #22c55e 18%, transparent)", color: "#22c55e" }} title="Grounded in the actual 8-K earnings press release for this quarter.">8-K</span>}
                                   </div>
                                 ) : <div className="text-[13px] text-[var(--text-4)]">No explanation available for this print.</div>}
                                 {w.headlines && w.headlines.length > 0 && (
@@ -528,7 +533,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                                     ))}
                                   </div>
                                 )}
-                                <div className="mt-1 text-[10px] text-[var(--text-4)]">AI recap grounded in the reaction + headlines dated near the print. May be approximate for very recent quarters.</div>
+                                <div className="mt-1 text-[10px] text-[var(--text-4)]">
+                                  {w.grounded && w.filing
+                                    ? <>Grounded in the <a href={w.filing.url} target="_blank" rel="noopener noreferrer" onClick={(ev2) => ev2.stopPropagation()} className="text-[var(--accent)] hover:underline">8-K earnings release</a> filed {w.filing.date}.</>
+                                    : "AI recap grounded in the reaction + any dated headlines. May be approximate for very recent quarters."}
+                                </div>
                               </>
                             )}
                           </td>

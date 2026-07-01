@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
+import { getFilings, getFilingText } from "@/lib/edgar";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import { getOptions, getTermStructure, type OptionChain, type Opt } from "@/lib/options";
 import { straddleMove, tradeIdea } from "@/lib/earningsTrade";
@@ -93,6 +94,33 @@ function ivScenarioFrom(
   if (ladder.length < 4) return null;
   const expectedCrushPct = term && term.crushRatio > 1 ? Math.round((1 - 1 / term.crushRatio) * 100) : null;
   return { spot: S, atmStrike: atm, expiry: sm?.expiry ?? src.selected, dteNow: sm?.dte ?? null, expectedCrushPct, ladder };
+}
+
+// Pull the actual 8-K item-2.02 earnings PRESS RELEASE for a specific past print — the primary source
+// that turns "likely guidance" into the real guidance/segment figures. Returns a focused excerpt
+// (headline results + the outlook/guidance window) or null if there's no matching 8-K / the fetch fails.
+function releaseExcerpt(text: string): string {
+  const head = text.slice(0, 6000);
+  const kw = /(outlook|guidance|full[- ]?year|fiscal\s*20\d\d|we (?:now )?expect|expects?|anticipat|rais(?:e|ing|ed)|lower(?:ed|ing)?|reaffirm|updat(?:e|ed|ing)\s+(?:its\s+)?(?:guidance|outlook)|for the (?:full year|year))/i;
+  const rest = text.slice(6000);
+  const m = rest.search(kw);
+  const guide = m >= 0 ? rest.slice(Math.max(0, m - 200), m + 3800) : "";
+  return (guide ? `${head}\n…\n[OUTLOOK / GUIDANCE SECTION]\n${guide}` : head).slice(0, 11000);
+}
+async function earningsReleaseText(sym: string, dISO: string): Promise<{ text: string; url: string; date: string } | null> {
+  try {
+    const eT = Date.parse(dISO);
+    const { filings } = await getFilings(sym, 0, 100);
+    const earn = filings.filter((f) => f.isEarnings); // 8-K item 2.02 (Results of Operations)
+    let best: (typeof earn)[number] | null = null, bestGap = Infinity;
+    for (const f of earn) { const g = Math.abs(Date.parse(f.date) - eT); if (g < bestGap) { bestGap = g; best = f; } }
+    if (!best || bestGap > 6 * 86_400_000) return null; // no earnings 8-K within ±6 days of the print
+    const doc = await getFilingText(sym, best.acc);
+    if (!doc?.text || doc.text.length < 400) return null;
+    return { text: releaseExcerpt(doc.text), url: doc.url, date: best.date };
+  } catch {
+    return null;
+  }
 }
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -214,9 +242,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     if (part === "why") {
       const dISO = (() => { const dd = sp.get("d"); return dd && /^\d{4}-\d{2}-\d{2}/.test(dd) ? dd.slice(0, 10) : null; })();
       if (!dISO || !(await llmConfigured())) return NextResponse.json({ why: null });
-      const [reactions, news] = await Promise.all([
+      const [reactions, news, release] = await Promise.all([
         getEarningsReactions(sym, 8).catch(() => []),
         getNews(sym, 30).catch(() => []),
+        earningsReleaseText(sym, dISO).catch(() => null), // the actual 8-K press release (primary source)
       ]);
       const eT = Date.parse(dISO);
       let rx: (typeof reactions)[number] | null = null, bestGap = Infinity;
@@ -233,18 +262,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       const ctx =
         `Ticker ${sym}. Earnings reported around ${qLabel} (${dISO}). ` +
         `EPS surprise vs consensus: ${s2(rx?.surprise)}. One-day price reaction: ${s2(rx?.move, 1)}. Post-print 5-session drift: ${s2(rx?.drift5, 1)}. ${contradiction} ` +
-        (near.length ? `\n\nHeadlines dated near the report:\n${near.map((n) => `- ${n.title} (${n.publisher})`).join("\n")}` : `\n\n(No headlines dated near this report are available.)`);
+        (near.length ? `\n\nHeadlines dated near the report:\n${near.map((n) => `- ${n.title} (${n.publisher})`).join("\n")}` : `\n\n(No headlines dated near this report are available.)`) +
+        (release?.text ? `\n\nEARNINGS PRESS RELEASE excerpt (8-K item 2.02 filed ${release.date} — the PRIMARY SOURCE; results highlights + the outlook/guidance section):\n"""\n${release.text}\n"""` : "");
       const SYSTEM =
         "You explain WHY a stock moved the way it did after ONE specific past earnings report, for a professional investor. " +
         "When EPS beat but the stock fell (or missed but rose), the driver is almost always something OTHER than headline EPS — identify the single most likely one: forward GUIDANCE (cut/raise), a key SEGMENT or KPI, GROSS/OPERATING MARGIN, a PIPELINE/REGULATORY/one-time item, BUYBACK/dividend, or MACRO/positioning (a 'sell-the-news' unwind after a run-up). " +
-        "Ground your answer in the supplied facts and any headlines. Be specific and concise: 1-3 sentences. " +
-        "CRITICAL ANTI-FABRICATION RULE: if you do NOT have reliable, specific knowledge of THIS exact report (very recent quarters after your training, or any you're unsure of), DO NOT invent a driver, numbers, or events. Instead say plainly that the specific catalyst isn't confirmed from the data here, and explain what the beat-but-fell / miss-but-rose pattern IMPLIES about what the market focused on. Never fabricate. " +
+        "If an EARNINGS PRESS RELEASE excerpt is provided below, it is the PRIMARY SOURCE — base your answer on it and CITE the specific guidance range, segment, or margin figure that explains the reaction (quote the actual numbers from it, e.g. 'guided FY26 organic sales to +1-2%, below the ~3% Street'). When grounded in the release you may use 'high' or 'medium' confidence. Be specific and concise: 1-3 sentences. " +
+        "CRITICAL ANTI-FABRICATION RULE: if NO press release is provided AND you do NOT have reliable specific knowledge of THIS exact report (very recent quarters after your training, or any you're unsure of), DO NOT invent a driver, numbers, or events — set confidence 'low', say plainly the specific catalyst isn't confirmed from the data here, and explain what the beat-but-fell / miss-but-rose pattern IMPLIES about what the market focused on. Never fabricate figures. " +
         NO_ADVICE;
       const SCHEMA = 'Return ONLY JSON: {"why": string, "confidence": "high"|"medium"|"low"}';
       const out = await chatJSON<{ why?: string; confidence?: string }>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 1600, model: PRO_MODEL, reasoningEffort: "low" });
       const why = out && typeof out.why === "string" && out.why.trim() ? out.why.trim() : null;
       return NextResponse.json(
-        { why, confidence: out?.confidence ?? null, headlines: near.map((n) => ({ title: n.title, publisher: n.publisher, link: n.link, time: n.time })), fact: rx ? { surprise: rx.surprise, move: rx.move, drift5: rx.drift5, timing: rx.timing } : null },
+        {
+          why,
+          confidence: out?.confidence ?? null,
+          grounded: !!release?.text, // whether the recap is backed by the actual 8-K release
+          filing: release ? { url: release.url, date: release.date } : null,
+          headlines: near.map((n) => ({ title: n.title, publisher: n.publisher, link: n.link, time: n.time })),
+          fact: rx ? { surprise: rx.surprise, move: rx.move, drift5: rx.drift5, timing: rx.timing } : null,
+        },
         { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } },
       );
     }
