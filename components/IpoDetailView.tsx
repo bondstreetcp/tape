@@ -43,6 +43,17 @@ export default function IpoDetailView({ universe, event }: { universe: string; e
         {s?.sector && <Fact label="Sector" value={s.sector} />}
       </div>
 
+      {s?.underwriters && s.underwriters.length > 0 && (
+        <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-3">
+          <div className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Underwriters / book-runners</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {s.underwriters.map((u, i) => (
+              <span key={i} className="rounded bg-[var(--surface-2)] px-2 py-0.5 text-[12.5px] text-[var(--text-2)]">{u}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {s ? (
         <div className="mt-4 space-y-3">
           <Section title="What the company does"><p className="text-[14px] leading-relaxed text-[var(--text-2)]">{s.business}</p></Section>

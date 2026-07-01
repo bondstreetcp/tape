@@ -64,6 +64,7 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
                 <th className="px-2 py-2 text-right font-medium">Size</th>
                 {tab !== "upcoming" && <th className="px-2 py-2 text-right font-medium">Since IPO</th>}
                 {tab === "lockup" && <th className="px-2 py-2 font-medium">Lockup expiry</th>}
+                <th className="px-2 py-2 font-medium">Underwriters</th>
                 <th className="px-2 py-2 font-medium"></th>
               </tr>
             </thead>
@@ -86,6 +87,11 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
                       {e.daysToLockup != null && <b className="ml-1" style={{ color: e.daysToLockup >= 0 && e.daysToLockup < 14 ? "#f59e0b" : "var(--text-4)" }}>{e.daysToLockup >= 0 ? `in ${e.daysToLockup}d` : `${-e.daysToLockup}d ago`}</b>}
                     </td>
                   )}
+                  <td className="px-2 py-2 text-[12px] text-[var(--text-4)]">
+                    {e.summary?.underwriters?.length
+                      ? <div className="max-w-[210px] truncate" title={e.summary.underwriters.join(", ")}>{e.summary.underwriters.join(", ")}</div>
+                      : "—"}
+                  </td>
                   <td className="px-2 py-2 whitespace-nowrap"><Link href={`/u/${universe}/ipos/${slug(e)}`} className="text-[11px] text-[var(--accent)] hover:underline">Details →</Link></td>
                 </tr>
               ))}

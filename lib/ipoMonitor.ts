@@ -13,6 +13,7 @@ export interface IpoSummary {
   financials: string; // revenue / growth / profitability snapshot
   useOfProceeds: string; // what they'll do with the money
   risks: string[]; // 2-4 key risk factors
+  underwriters?: string[]; // lead / book-running managers (undefined = pre-underwriter-extraction summary)
 }
 
 export interface IpoEvent {
