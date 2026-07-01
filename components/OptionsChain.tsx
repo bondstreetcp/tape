@@ -152,9 +152,9 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="mb-1 flex items-center justify-between text-xs">
+          <div className="mb-1 flex items-center justify-between text-[13px]">
             <span className="font-semibold text-[var(--text-2)]">IV skew · {expiry ?? ""}</span>
-            <span className="flex gap-2 text-[10px]">
+            <span className="flex gap-2 text-[11px]">
               <span style={{ color: "#60a5fa" }}>● calls</span>
               <span style={{ color: "#f472b6" }}>● puts</span>
             </span>
@@ -162,13 +162,13 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
           <SkewChart calls={data.calls} puts={data.puts} underlying={data.underlying} />
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="mb-1 text-xs font-semibold text-[var(--text-2)]">IV term structure · ATM by expiry</div>
+          <div className="mb-1 text-[13px] font-semibold text-[var(--text-2)]">IV term structure · ATM by expiry</div>
           <TermChart term={term} />
         </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <table className="w-full min-w-[760px] text-xs">
+        <table className="w-full min-w-[760px] text-[13px]">
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
               <th colSpan={6} className="bg-[#0f2a1a]/30 px-2 py-1.5 text-center font-semibold text-[#22c55e]">CALLS</th>
