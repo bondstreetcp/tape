@@ -1,5 +1,12 @@
 # Accounts, persistence & alerts — setup
 
+> **STATUS: SHELVED during beta (intentional).** This is code-complete but deliberately left OFF so
+> the site stays fully open — anyone can browse/use everything with no sign-in. Do NOT run the setup
+> below until you're ready to gate the app. When you activate it, add **email magic-link** sign-in
+> (passwordless, zero OAuth config, any tester with any email) as the beta-friendly method — the
+> Google flow here needs a Google Cloud consent screen + a test-user allowlist, which is high friction
+> for open beta.
+
 Everything ships **inert** until you complete the steps below: with the two `NEXT_PUBLIC_*` vars unset,
 `supabaseEnabled` is false and the app runs exactly as before (anonymous, localStorage watchlist, no
 account menu / bell). Once configured, sign-in appears, watchlists + saved screens persist per-user,
