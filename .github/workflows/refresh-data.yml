@@ -320,6 +320,14 @@ jobs:
         run: npm run refresh-flow
         continue-on-error: true
 
+      # Trump's Truth Social STOCK CALLS — scrape his recent posts (trumpstruth.org RSS; Truth Social
+      # API is Cloudflare-blocked from CI), GLM keeps only the ones naming a public company, price the
+      # move since. Forward-accumulating. Needs OPENROUTER_API_KEY; skips cleanly if unset.
+      - name: Refresh Trump stock calls
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-trump-truth
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).

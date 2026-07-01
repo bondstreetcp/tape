@@ -38,6 +38,7 @@
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
     "refresh-trade-log": "tsx scripts/refresh-trade-log.ts",
     "refresh-trump": "tsx scripts/refresh-trump.ts",
+    "refresh-trump-truth": "tsx scripts/refresh-trump-truth.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
