@@ -1,0 +1,180 @@
+/**
+ * Builds data/campaigns.json — the activism & short-campaign board.
+ *
+ * 1. SEC EDGAR full-text search (efts.sec.gov) for recent SCHEDULE 13D (activist stakes) + DEFC14A /
+ *    PREC14A / DFAN14A (proxy fights). 2. Muddy Waters RSS for short reports. 3. GLM reads each and
+ *    extracts {ticker, company, campaigner, type, the ASK/allegation} and drops routine/non-campaign
+ *    filings. 4. Price the stock since the event.
+ *
+ * Forward-accumulating; only new items hit the LLM. Run: npm run refresh-campaigns. Nightly (FULL).
+ * A public-disclosure tracker, not advice.
+ */
+import { promises as fsp } from "fs";
+import path from "path";
+import YahooFinance from "yahoo-finance2";
+import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import type { Campaign, CampaignType, CampPerf, CampaignsData } from "../lib/campaigns";
+
+const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
+const DATA = path.join(process.cwd(), "data");
+const FILE = path.join(DATA, "campaigns.json");
+const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
+const DAY = 86_400_000;
+const KEEP = 200;
+const WINDOW_DAYS = 21;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const FORMS: { form: string; type: CampaignType }[] = [
+  { form: "SCHEDULE 13D", type: "activist" },
+  { form: "DEFC14A", type: "proxy-fight" },
+  { form: "PREC14A", type: "proxy-fight" },
+  { form: "DFAN14A", type: "proxy-fight" },
+];
+
+interface Raw { id: string; date: string; type: CampaignType; form: string; issuer: string; ticker: string | null; other: string; url: string; docUrl: string; ciks: string[]; doc: string }
+
+function htmlToText(html: string): string {
+  return (html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+// From a display_name like "Newegg Commerce, Inc.  (NEGG)  (CIK 0001474627)" pull the ticker + clean name.
+function parseName(dn: string): { name: string; ticker: string | null } {
+  const parens = [...dn.matchAll(/\(([^)]+)\)/g)].map((m) => m[1].trim());
+  let ticker: string | null = null;
+  for (const p of parens) {
+    if (/^CIK/i.test(p)) continue;
+    const first = p.split(",")[0].trim();
+    if (/^[A-Z][A-Z0-9.\-]{0,5}$/.test(first)) { ticker = first; break; }
+  }
+  const name = dn.replace(/\s*\([^)]*\)/g, "").trim();
+  return { name, ticker };
+}
+
+async function eftsFetch(form: string, startdt: string, enddt: string): Promise<any[]> {
+  const u = `https://efts.sec.gov/LATEST/search-index?forms=${encodeURIComponent(form)}&startdt=${startdt}&enddt=${enddt}`;
+  const res = await fetch(u, { headers: { "User-Agent": UA } });
+  if (!res.ok) return [];
+  const j = await res.json();
+  return j?.hits?.hits || [];
+}
+async function fetchFilingText(r: Raw): Promise<string> {
+  // _id = accession:doc ; the doc lives under one of the filing's CIKs — try each.
+  const accNo = r.id.replace(/-/g, "");
+  for (const cik of r.ciks) {
+    const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}/${r.doc}`;
+    try { const res = await fetch(url, { headers: { "User-Agent": UA } }); if (res.ok) return htmlToText(await res.text()); } catch { /* try next */ }
+    await sleep(120);
+  }
+  return "";
+}
+
+async function muddyWaters(): Promise<Raw[]> {
+  try {
+    const res = await fetch("https://muddywatersresearch.com/feed/?post_type=reports", { headers: { "User-Agent": UA } });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const cd = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
+    const out: Raw[] = [];
+    for (const it of xml.split("<item>").slice(1)) {
+      const g = (t: string) => { const m = it.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`)); return m ? cd(m[1]) : ""; };
+      const title = g("title"), link = g("link"), date = g("pubDate");
+      const body = htmlToText(g("content:encoded") || g("description"));
+      out.push({ id: link, date: date ? new Date(date).toISOString() : "", type: "short", form: "short report", issuer: title, ticker: null, other: "Muddy Waters", url: link, docUrl: link, ciks: [], doc: body.slice(0, 6000) });
+    }
+    return out;
+  } catch { return []; }
+}
+
+async function classify(r: Raw, text: string): Promise<{ ticker: string | null; company: string; campaigner: string; ask: string; summary: string; material: boolean } | null> {
+  const SYSTEM =
+    "You read one SEC activist/proxy filing or one short-seller report and summarize the CAMPAIGN for a professional investor. Extract: the TARGET public company + its ticker; the CAMPAIGNER (the activist/dissident investor, or the short firm); a one-line ASK (what the activist wants — board seats, sale, breakup, strategy change) or ALLEGATION (what the short alleges — fraud, accounting, overvaluation); and a 1-2 sentence summary. " +
+    "Set material=false and it will be DROPPED if this is NOT a genuine campaign: a passive/routine 13D with no stated activist intent, a company's own routine proxy mailing, an administrative amendment with no new demand, or anything without a clear target company. Be strict. " +
+    NO_ADVICE;
+  const SCHEMA = 'Return ONLY JSON: {"ticker":string|null,"company":string,"campaigner":string,"ask":string,"summary":string,"material":boolean}';
+  const ctx = `Form: ${r.form}. Type: ${r.type}. Subject as filed: ${r.issuer}${r.ticker ? ` (${r.ticker})` : ""}. Other party: ${r.other}.\n\n${text.slice(0, 6500)}`;
+  const out = await chatJSON<any>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 700 });
+  if (!out || out.material === false) return null;
+  const ticker = out.ticker ? String(out.ticker).toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6) : r.ticker;
+  return { ticker: ticker || r.ticker, company: String(out.company || r.issuer).slice(0, 80), campaigner: String(out.campaigner || r.other).slice(0, 80), ask: String(out.ask || "").slice(0, 220), summary: String(out.summary || "").slice(0, 400), material: true };
+}
+
+async function perfFor(ticker: string, eventISO: string): Promise<CampPerf | null> {
+  try {
+    const eT = Date.parse(eventISO);
+    const ch: any = await yf.chart(ticker, { period1: new Date(eT - 8 * DAY), interval: "1d" } as any, { validateResult: false });
+    const q = (ch?.quotes || []).filter((x: any) => x?.close != null).map((x: any) => ({ t: new Date(x.date).getTime(), c: x.close as number }));
+    if (!q.length) return null;
+    const at = (q.find((p: any) => p.t >= eT) || q[0]).c;
+    const now = q[q.length - 1].c;
+    return { priceAtEvent: at, priceNow: now, sincePct: at && now ? +(((now / at) - 1) * 100).toFixed(2) : null };
+  } catch { return null; }
+}
+
+async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length); let idx = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } }
+  }));
+  return out;
+}
+
+async function main() {
+  const nowISO = new Date().toISOString();
+  if (!(await llmConfigured())) { console.log("LLM not configured — skipping."); return; }
+  const enddt = nowISO.slice(0, 10);
+  const startdt = new Date(Date.now() - WINDOW_DAYS * DAY).toISOString().slice(0, 10);
+
+  // ── gather raw items ──
+  const raw: Raw[] = [];
+  for (const { form, type } of FORMS) {
+    const hits = await eftsFetch(form, startdt, enddt).catch(() => []);
+    for (const h of hits) {
+      const src = h._source || {}; const dns: string[] = src.display_names || [];
+      const parsed = dns.map(parseName);
+      const issuerIdx = parsed.findIndex((p) => p.ticker); // the public company (has a ticker)
+      const iss = parsed[issuerIdx >= 0 ? issuerIdx : 0] || { name: dns[0] || "?", ticker: null };
+      const other = parsed.filter((_, i) => i !== (issuerIdx >= 0 ? issuerIdx : 0)).map((p) => p.name).join(", ") || dns[1] || "";
+      const [acc, doc] = String(h._id || "").split(":");
+      if (!acc || !doc) continue;
+      raw.push({ id: acc, date: (src.file_date || "") + "T12:00:00Z", type, form, issuer: iss.name, ticker: iss.ticker, other, url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${src.ciks?.[0]}&type=${encodeURIComponent(form)}`, docUrl: "", ciks: src.ciks || [], doc });
+    }
+    await sleep(300);
+  }
+  const mw = await muddyWaters();
+  console.log(`fetched ${raw.length} SEC filings + ${mw.length} short reports`);
+
+  // dedup by id, newest first, cap
+  const seenRaw = new Set<string>();
+  const allRaw = [...mw, ...raw].filter((r) => (seenRaw.has(r.id) ? false : (seenRaw.add(r.id), true))).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+
+  const prior: CampaignsData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: nowISO, scanned: 0, campaigns: [] as Campaign[] }));
+  const known = new Set(prior.campaigns.map((c) => c.id));
+  const fresh = allRaw.filter((r) => !known.has(r.id)).slice(0, 60); // cap LLM work per run
+  console.log(`${fresh.length} new to classify`);
+
+  const built = await mapPool(fresh, 4, async (r): Promise<Campaign | null> => {
+    const text = r.type === "short" ? r.doc : await fetchFilingText(r);
+    const c = await classify(r, text);
+    if (!c) return null;
+    return { id: r.id, date: r.date, type: r.type, ticker: c.ticker, company: c.company, campaigner: c.campaigner, form: r.form, ask: c.ask, summary: c.summary, url: r.type === "short" ? r.url : (r.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(r.ciks[0])}/${r.id.replace(/-/g, "")}/${r.doc}` : r.url) };
+  });
+
+  const merged = [...built.filter((x): x is Campaign => !!x), ...prior.campaigns]
+    .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, KEEP);
+
+  // refresh perf for tickered campaigns (dedupe tickers)
+  const syms = [...new Set(merged.map((c) => c.ticker).filter((t): t is string => !!t))];
+  const perfMap: Record<string, CampPerf | null> = {};
+  await mapPool(syms, 6, async (s) => { perfMap[s] = await perfFor(s, merged.find((c) => c.ticker === s)!.date); });
+  for (const c of merged) c.perf = c.ticker ? (perfMap[c.ticker] ?? null) : null;
+
+  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: allRaw.length, campaigns: merged } satisfies CampaignsData));
+  console.log(`\nwrote ${merged.length} campaigns (${built.filter(Boolean).length} new).`);
+  for (const c of merged.slice(0, 10)) console.log(`  ${c.date.slice(0, 10)} [${c.type.padEnd(11)}] ${(c.ticker || "—").padEnd(6)} ${c.campaigner.slice(0, 24).padEnd(24)} — ${c.ask.slice(0, 50)}`);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
