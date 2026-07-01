@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
 import type { SssTicker } from "@/lib/sameStoreSales";
@@ -26,6 +26,12 @@ interface DataPart {
   longPremium: { verdict: "favorable" | "neutral" | "unfavorable"; beatClear: number; beatN: number; crushRatio: number | null } | null;
   ivScenario?: IvScenario | null;
 }
+interface WhyState {
+  state: "loading" | "done" | "error";
+  why?: string | null;
+  confidence?: string | null;
+  headlines?: { title: string; publisher: string; link: string; time: string | null }[];
+}
 interface AiPart {
   moneyLine: string;
   overview: string;
@@ -51,12 +57,26 @@ function Bento({ title, hint, children, className = "" }: { title: string; hint?
   );
 }
 
+// "Nice" round tick values spanning [min,max] (~count of them) for a readable axis.
+function niceTicks(min: number, max: number, count = 4): number[] {
+  const span = max - min;
+  if (!(span > 0)) return [min];
+  const step0 = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const norm = step0 / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(v);
+  return out;
+}
+
 // Expected-move CONE — recent price line + the ±straddle range fanned out to the event expiry (1σ band
 // in accent, a lighter 2σ band behind), so "where could it be after the print" is visual, not just a %.
+// Framed with a price (y) axis on the left and a date (x) axis along the bottom.
 function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: [number, number][]; lowerBE: number; upperBE: number; spot: number; expiry: string }) {
   const expT = Date.parse(expiry + "T00:00:00Z");
   if (series.length < 5 || Number.isNaN(expT)) return null;
-  const W = 600, H = 130, ML = 2, MR = 52, MT = 10, MB = 16;
+  const W = 600, H = 150, ML = 34, MR = 46, MT = 10, MB = 22; // ML/MB leave room for the axis labels
   const now = Date.now();
   const t0 = series[0][0], tMax = Math.max(expT, series[series.length - 1][0] + 86_400_000);
   const up2 = spot + 2 * (upperBE - spot), lo2 = spot - 2 * (spot - lowerBE);
@@ -66,20 +86,45 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: 
   const x = (t: number) => ML + ((t - t0) / (tMax - t0)) * (W - ML - MR);
   const y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
   const path = series.map((s, i) => `${i ? "L" : "M"}${x(s[0]).toFixed(1)} ${y(s[1]).toFixed(1)}`).join("");
-  const xN = x(now), xE = x(expT);
+  const xN = x(now), xE = x(expT), yAxisX = ML, xAxisY = H - MB;
+  const yTicks = niceTicks(yMin + pad * 0.5, yMax - pad * 0.5, 4);
+  // x date ticks: start → a couple through history → now → expiry
+  const dLabel = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+  const xTicks = [
+    { t: t0, label: dLabel(t0), anchor: "start" as const },
+    { t: t0 + (now - t0) * 0.5, label: dLabel(t0 + (now - t0) * 0.5), anchor: "middle" as const },
+    { t: now, label: "now", anchor: "middle" as const },
+    { t: expT, label: dLabel(expT), anchor: "end" as const },
+  ];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+      {/* y gridlines + price labels */}
+      {yTicks.map((v) => (
+        <g key={`y${v}`}>
+          <line x1={yAxisX} x2={W - MR} y1={y(v)} y2={y(v)} stroke="var(--text-4)" strokeOpacity={0.14} />
+          <text x={yAxisX - 4} y={y(v) + 3} fontSize={9} fill="var(--text-4)" textAnchor="end" className="tabular-nums">${v.toFixed(0)}</text>
+        </g>
+      ))}
+      {/* cone */}
       <path d={`M${xN} ${y(spot)} L${xE} ${y(up2)} L${xE} ${y(lo2)} Z`} fill="var(--text-4)" fillOpacity={0.1} />
       <path d={`M${xN} ${y(spot)} L${xE} ${y(upperBE)} L${xE} ${y(lowerBE)} Z`} fill="var(--accent)" fillOpacity={0.16} />
-      <line x1={xN} y1={MT} x2={xN} y2={H - MB} stroke="var(--text-4)" strokeOpacity={0.45} strokeDasharray="2 3" />
+      <line x1={xN} y1={MT} x2={xN} y2={xAxisY} stroke="var(--text-4)" strokeOpacity={0.45} strokeDasharray="2 3" />
       <line x1={xE} y1={y(up2)} x2={xE} y2={y(lo2)} stroke="var(--text-4)" strokeOpacity={0.3} />
       <path d={path} fill="none" stroke="var(--text-2)" strokeWidth={1.5} />
       <circle cx={xN} cy={y(spot)} r={2.5} fill="var(--text)" />
-      <text x={xE + 4} y={y(upperBE) + 3} fontSize={10} fill="#22c55e" className="tabular-nums">${upperBE.toFixed(0)}</text>
-      <text x={xE + 4} y={y(spot) + 3} fontSize={10} fill="var(--text-4)" className="tabular-nums">${spot.toFixed(0)}</text>
-      <text x={xE + 4} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
-      <text x={xN} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="middle">now</text>
-      <text x={xE} y={H - 4} fontSize={9} fill="var(--text-4)" textAnchor="end">{expiry.slice(5)}</text>
+      {/* axes */}
+      <line x1={yAxisX} y1={MT} x2={yAxisX} y2={xAxisY} stroke="var(--text-4)" strokeOpacity={0.5} />
+      <line x1={yAxisX} y1={xAxisY} x2={W - MR} y2={xAxisY} stroke="var(--text-4)" strokeOpacity={0.5} />
+      {xTicks.map((tk, i) => (
+        <g key={`x${i}`}>
+          <line x1={x(tk.t)} x2={x(tk.t)} y1={xAxisY} y2={xAxisY + 3} stroke="var(--text-4)" strokeOpacity={0.5} />
+          <text x={x(tk.t)} y={H - 6} fontSize={9} fill="var(--text-4)" textAnchor={tk.anchor} className="tabular-nums">{tk.label}</text>
+        </g>
+      ))}
+      {/* breakeven price labels at the cone mouth */}
+      <text x={xE + 3} y={y(upperBE) + 3} fontSize={10} fill="#22c55e" className="tabular-nums">${upperBE.toFixed(0)}</text>
+      <text x={xE + 3} y={y(spot) + 3} fontSize={10} fill="var(--text-4)" className="tabular-nums">${spot.toFixed(0)}</text>
+      <text x={xE + 3} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
     </svg>
   );
 }
@@ -139,11 +184,24 @@ function Big({ value, label, color }: { value: string; label: string; color?: st
 export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
+  const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
+  const [why, setWhy] = useState<Record<string, WhyState>>({}); // per-print "why it moved" recap, by date
+
+  const loadWhy = (dateISO: string) => {
+    if (why[dateISO]) return; // cached
+    setWhy((w) => ({ ...w, [dateISO]: { state: "loading" } }));
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=why&d=${encodeURIComponent(dateISO.slice(0, 10))}`)
+      .then((r) => r.json())
+      .then((j) => setWhy((w) => ({ ...w, [dateISO]: { state: "done", why: j.why, confidence: j.confidence, headlines: j.headlines || [] } })))
+      .catch(() => setWhy((w) => ({ ...w, [dateISO]: { state: "error" } })));
+  };
 
   useEffect(() => {
     let a = true;
     setData("loading");
     setAi("idle");
+    setOpenQ(null);
+    setWhy({});
     const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate.slice(0, 10))}` : "";
     fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=data${eParam}`)
       .then((r) => r.json())
@@ -435,14 +493,50 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                 </tr>
               </thead>
               <tbody>
-                {ev.map((e, i) => (
-                  <tr key={i} className="border-t border-[var(--divider)]">
-                    <td className="py-1 pr-2 text-left text-[var(--text-3)]">{new Date(e.date).toLocaleDateString("en-US", { month: "short", year: "2-digit" })}</td>
-                    <td className="py-1 px-1 text-right" style={{ color: col(e.surprise) }}>{e.surprise != null ? pp(e.surprise, 0) : "—"}</td>
-                    <td className="py-1 px-1 text-right font-semibold" style={{ color: col(e.move) }}>{e.move != null ? pp(e.move) : "—"}</td>
-                    <td className="py-1 pl-1 text-right" style={{ color: col(e.drift5) }}>{e.drift5 != null ? pp(e.drift5) : "—"}</td>
-                  </tr>
-                ))}
+                {ev.map((e, i) => {
+                  const open = openQ === i;
+                  const w = why[e.date];
+                  const beatFell = e.surprise != null && e.move != null && e.surprise > 0 && e.move < 0;
+                  return (
+                    <Fragment key={i}>
+                      <tr onClick={() => { const next = open ? null : i; setOpenQ(next); if (next != null) loadWhy(e.date); }} className="cursor-pointer border-t border-[var(--divider)] hover:bg-[var(--surface-2)]" title="Click for why the stock reacted this way">
+                        <td className="py-1 pr-2 text-left text-[var(--text-3)]"><span className="mr-1 inline-block w-2 text-[10px] text-[var(--text-4)]">{open ? "▾" : "▸"}</span>{new Date(e.date).toLocaleDateString("en-US", { month: "short", year: "2-digit" })}</td>
+                        <td className="py-1 px-1 text-right" style={{ color: col(e.surprise) }}>{e.surprise != null ? pp(e.surprise, 0) : "—"}</td>
+                        <td className="py-1 px-1 text-right font-semibold" style={{ color: col(e.move) }}>{e.move != null ? pp(e.move) : "—"}{beatFell && <span title="beat EPS but fell — click why" className="ml-0.5 text-[10px] text-[#ef4444]">⚠</span>}</td>
+                        <td className="py-1 pl-1 text-right" style={{ color: col(e.drift5) }}>{e.drift5 != null ? pp(e.drift5) : "—"}</td>
+                      </tr>
+                      {open && (
+                        <tr className="bg-[var(--surface-2)]">
+                          <td colSpan={4} className="px-2 py-2 align-top">
+                            <div className="mb-1 text-[11px] text-[var(--text-4)]">
+                              {e.timing === "amc" ? "Reported after close" : "Reported before open"} · surprise {e.surprise != null ? pp(e.surprise, 0) : "—"} · 1-day <b style={{ color: col(e.move) }}>{e.move != null ? pp(e.move) : "—"}</b> · 5-day drift {e.drift5 != null ? pp(e.drift5) : "—"}
+                            </div>
+                            {(!w || w.state === "loading") && <div className="text-[13px] text-[var(--text-4)]">Reading the tape…</div>}
+                            {w?.state === "error" && <div className="text-[13px] text-[var(--text-4)]">Couldn&apos;t load an explanation.</div>}
+                            {w?.state === "done" && (
+                              <>
+                                {w.why ? (
+                                  <div className="text-[13px] leading-snug text-[var(--text-2)]">
+                                    {w.why}
+                                    {w.confidence && <span className="ml-1 rounded bg-[var(--surface)] px-1 py-0.5 align-middle text-[10px] uppercase tracking-wide text-[var(--text-4)]" title="How confident this recap is — LOW means the specific catalyst isn't confirmed from the data here (common for very recent quarters).">{w.confidence}</span>}
+                                  </div>
+                                ) : <div className="text-[13px] text-[var(--text-4)]">No explanation available for this print.</div>}
+                                {w.headlines && w.headlines.length > 0 && (
+                                  <div className="mt-1.5 space-y-0.5">
+                                    {w.headlines.map((h, hi) => (
+                                      <a key={hi} href={h.link} target="_blank" rel="noopener noreferrer" onClick={(ev2) => ev2.stopPropagation()} className="block truncate text-[12px] text-[var(--accent)] hover:underline" title={h.title}>› {h.title} <span className="text-[var(--text-4)]">— {h.publisher}</span></a>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="mt-1 text-[10px] text-[var(--text-4)]">AI recap grounded in the reaction + headlines dated near the print. May be approximate for very recent quarters.</div>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
             {d?.surpriseReaction && (() => {
