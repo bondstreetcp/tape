@@ -5,6 +5,7 @@ import type { StockRow } from "@/lib/types";
 import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
+import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -23,6 +24,7 @@ interface DataPart {
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
   longPremium: { verdict: "favorable" | "neutral" | "unfavorable"; beatClear: number; beatN: number; crushRatio: number | null } | null;
+  ivScenario?: IvScenario | null;
 }
 interface AiPart {
   moneyLine: string;
@@ -357,6 +359,12 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
             );
           })()}
         </div>
+      )}
+
+      {/* Interactive IV-crush scenario — reprice a call/put/straddle across move × vol-crush (answers the
+          "a right call still loses to the crush" trap directly, with a $ P&L box + slider + matrix). */}
+      {d?.ivScenario && (
+        <IvCrushScenario scenario={d.ivScenario} impliedMovePct={d.impliedMove} earningsDate={earningsDate} />
       )}
 
       <div className="sm:columns-2 sm:gap-3">

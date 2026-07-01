@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCompanyStats } from "@/lib/companyStats";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { loadEarningsMove } from "@/lib/earningsMove";
-import { getOptions, getTermStructure, type OptionChain } from "@/lib/options";
+import { getOptions, getTermStructure, type OptionChain, type Opt } from "@/lib/options";
 import { straddleMove, tradeIdea } from "@/lib/earningsTrade";
 import { peerCohort } from "@/lib/peerCohorts";
 import YahooFinance from "yahoo-finance2";
@@ -61,6 +61,38 @@ function termRead(ts: { points: { date: string; dte: number; atmIV: number | nul
   const back = pts.find((p) => p.dte >= front.dte + 15) || pts[pts.length - 1]; // a genuinely later cycle
   if (back === front || back.atmIV == null || back.atmIV <= 0 || front.atmIV == null) return null;
   return { frontIV: front.atmIV, backIV: back.atmIV, frontDte: front.dte, backDte: back.dte, crushRatio: front.atmIV / back.atmIV };
+}
+
+// Compact strike ladder (~15 strikes around ATM) from the EVENT chain + context — feeds the client-side
+// IV-crush scenario tool (components/IvCrushScenario), which reprices with Black-Scholes as the user
+// drags a vol-crush slider. Sent once; all the interactivity (IV solved from premium) is client-side.
+function ivScenarioFrom(
+  sm: { price: number; atmStrike: number; expiry: string | null; dte: number | null; chain: OptionChain } | null,
+  chain: OptionChain | null,
+  term: { crushRatio: number } | null,
+) {
+  const src = sm?.chain ?? chain;
+  if (!src?.underlying || (!src.calls.length && !src.puts.length)) return null;
+  const S = sm?.price ?? src.underlying;
+  const strikes = [...new Set([...src.calls, ...src.puts].map((o) => o.strike))].sort((a, b) => a - b);
+  if (strikes.length < 5) return null;
+  // Nearest LISTED strike to spot — re-derive from the strike set so the ATM is always in the ladder
+  // (sm.atmStrike can be a float that isn't an exact set member → indexOf -1 → a mis-centered slice).
+  const atm = strikes.reduce((a, b) => (Math.abs(b - S) < Math.abs(a - S) ? b : a));
+  const ai = strikes.indexOf(atm);
+  const lo = Math.max(0, ai - 7), hi = Math.min(strikes.length, ai + 8);
+  const mid = (o: Opt | undefined): number | null =>
+    o && o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0 ? (o.bid + o.ask) / 2 : o?.last != null && o.last > 0 ? o.last : null;
+  const ladder = strikes
+    .slice(lo, hi)
+    .map((k) => {
+      const c = src.calls.find((o) => o.strike === k), p = src.puts.find((o) => o.strike === k);
+      return { k, cMid: mid(c), cIV: c?.iv ?? null, pMid: mid(p), pIV: p?.iv ?? null };
+    })
+    .filter((r) => r.cMid != null || r.pMid != null);
+  if (ladder.length < 4) return null;
+  const expectedCrushPct = term && term.crushRatio > 1 ? Math.round((1 - 1 / term.crushRatio) * 100) : null;
+  return { spot: S, atmStrike: atm, expiry: sm?.expiry ?? src.selected, dteNow: sm?.dte ?? null, expectedCrushPct, ladder };
 }
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -248,6 +280,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
     // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
     const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove);
+    // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
+    const ivScenario = ivScenarioFrom(sm, chain, term);
     // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
     // the move comes in UNDER the priced move and the IV crushes. Synthesize: how often the realized move
     // cleared the implied (incl. CONDITIONAL on a beat — the call-buyer's case), + rich/cheap + the crush.
@@ -268,7 +302,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries, longPremium } },
+      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries, longPremium, ivScenario } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
