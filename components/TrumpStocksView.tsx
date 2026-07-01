@@ -12,20 +12,26 @@ const pct = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "
 const GREEN = "#22c55e", RED = "#ef4444";
 
 type StanceF = "all" | "bullish" | "bearish";
+type WinF = "all" | "1w" | "1m" | "3m" | "1y";
+const WIN_DAYS: Record<WinF, number> = { all: Infinity, "1w": 7, "1m": 31, "3m": 93, "1y": 366 };
+const WIN_LABEL: Record<WinF, string> = { all: "All", "1w": "1W", "1m": "1M", "3m": "3M", "1y": "1Y" };
 
 export default function TrumpStocksView({ universe, data }: { universe: string; data: TrumpStocksData }) {
   const [stanceF, setStanceF] = useState<StanceF>("all");
+  const [winF, setWinF] = useState<WinF>("all");
   const [q, setQ] = useState("");
 
   const stats = useMemo(() => summarize(data.posts), [data.posts]);
   const posts = useMemo(() => {
     const ql = q.trim().toLowerCase();
+    const cutoff = WIN_DAYS[winF] === Infinity ? -Infinity : Date.now() - WIN_DAYS[winF] * 86_400_000;
     return data.posts.filter((p) => {
+      if (Date.parse(p.date) < cutoff) return false;
       if (stanceF !== "all" && !p.tickers.some((t) => t.stance === stanceF)) return false;
       if (ql && !p.tickers.some((t) => t.ticker.toLowerCase().includes(ql) || t.company.toLowerCase().includes(ql)) && !p.excerpt.toLowerCase().includes(ql)) return false;
       return true;
     });
-  }, [data.posts, stanceF, q]);
+  }, [data.posts, stanceF, winF, q]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
   const Stat = ({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) => (
@@ -71,6 +77,9 @@ export default function TrumpStocksView({ universe, data }: { universe: string; 
           <button onClick={() => setStanceF("all")} className={TB(stanceF === "all")}>All</button>
           <button onClick={() => setStanceF("bullish")} className={TB(stanceF === "bullish")}>Bullish</button>
           <button onClick={() => setStanceF("bearish")} className={TB(stanceF === "bearish")}>Bearish</button>
+        </div>
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5" title="Filter by how recent the post is">
+          {(["1w", "1m", "3m", "1y", "all"] as WinF[]).map((w) => <button key={w} onClick={() => setWinF(w)} className={TB(winF === w)}>{WIN_LABEL[w]}</button>)}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or company…" className="w-44 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}

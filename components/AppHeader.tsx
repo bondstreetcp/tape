@@ -134,10 +134,14 @@ export default function AppHeader({
                 </svg>
               </button>
             ))}
-            <Link href={`${base}/watchlist`} className={linkCls(isActive(`${base}/watchlist`))} title="Watchlist">★</Link>
           </nav>
         </div>
         <div className="flex items-center gap-1.5">
+          <Link
+            href={`${base}/watchlist`}
+            title="Watchlist"
+            className={"hidden shrink-0 rounded-md px-1.5 py-1 text-base transition-colors lg:inline-flex " + (isActive(`${base}/watchlist`) ? "text-[var(--accent)]" : "text-[var(--text-4)] hover:bg-[var(--surface-hover)] hover:text-[#fbbf24]")}
+          >★</Link>
           <button
             onClick={() => window.dispatchEvent(new Event("open-cmdk"))}
             title="Jump to any feature or company (⌘K / Ctrl-K)"
