@@ -349,6 +349,13 @@ jobs:
         run: npm run refresh-biotech
         continue-on-error: true
 
+      # Policy & Contracts — Federal Register rules + USAspending contract awards → GLM maps to tickers.
+      # Free APIs; needs OPENROUTER_API_KEY; forward-accumulating.
+      - name: Refresh policy & contracts
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-policy
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
