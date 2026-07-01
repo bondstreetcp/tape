@@ -216,6 +216,20 @@ export default function CompanyStats({ stats, currency = "USD", show = "all" }: 
       )}
       {show !== "earnings" && (
         <>
+      {/* Key-metrics headline — the at-a-glance read */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 lg:col-span-2">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Key metrics</div>
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
+          <Big value={r1(s.forwardPE)} label="Forward P/E" />
+          <Big value={r1(s.evToEbitda)} label="EV / EBITDA" />
+          <Big value={pct(s.profitMargins)} label="Net margin" color={trend(s.profitMargins)} />
+          <Big value={pct(s.returnOnEquity)} label="Return on equity" color={trend(s.returnOnEquity)} />
+          <Big value={pct(s.dividendYield)} label="Dividend yield" />
+          <Big value={big(s.freeCashflow)} label="Free cash flow" />
+          {s.beta != null && <Big value={r2(s.beta)} label="Beta" />}
+        </div>
+      </div>
+
       {/* Valuation */}
       <Section title="Valuation">
         <Grid>
@@ -390,11 +404,20 @@ function Grid({ children }: { children: React.ReactNode }) {
 }
 function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 border-b border-[var(--divider)] py-1.5">
-      <span className="text-xs text-[var(--text-3)]">{label}</span>
-      <span className="text-sm font-medium tabular-nums" style={color ? { color } : undefined}>
+    <div className="flex items-baseline justify-between gap-2 border-b border-[var(--divider)] py-2">
+      <span className="text-[13px] text-[var(--text-3)]">{label}</span>
+      <span className="text-[15px] font-semibold tabular-nums" style={color ? { color } : undefined}>
         {value}
       </span>
+    </div>
+  );
+}
+// A large lead metric for the valuation headline strip.
+function Big({ value, label, color }: { value: string; label: string; color?: string }) {
+  return (
+    <div>
+      <div className="font-mono text-2xl font-bold leading-none tabular-nums" style={color ? { color } : undefined}>{value}</div>
+      <div className="mt-1 text-[12px] text-[var(--text-4)]">{label}</div>
     </div>
   );
 }
