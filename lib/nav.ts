@@ -34,6 +34,7 @@ export const FEATURES: NavItem[] = [
   { label: "Reddit Buzz", path: "/reddit-buzz", desc: "What retail is talking about — Reddit mention counts + 24h surge (r/wallstreetbets &c.)", group: "Markets", job: "Find ideas", kw: "reddit wallstreetbets wsb buzz mentions retail social sentiment apewisdom meme trending chatter" },
   { label: "Earnings Calendar", path: "/earnings", desc: "Who reports when, with the options-implied move", group: "Markets", job: "Find ideas", kw: "earnings dates report calendar" },
   { label: "Macro & Rates", path: "/macro", desc: "Yield curve, inflation, growth, and credit spreads (FRED)", group: "Markets", job: "Track the market", kw: "fred yields inflation rates economy" },
+  { label: "Fed Watch", path: "/fed", desc: "FOMC statements, minutes, speeches & the Beige Book — AI-scored hawkish↔dovish with what changed", group: "Markets", job: "Track the market", kw: "fed federal reserve fomc powell hawkish dovish rate cut hike minutes beige book monetary policy speeches" },
   { label: "Breadth & Regime", path: "/breadth", desc: "Market internals — how many names participate, plus the macro risk backdrop", group: "Markets", job: "Track the market", kw: "breadth internals advance decline new highs lows above 200 day ma participation t2108 regime risk-on risk-off" },
   // ── Strategies
   { label: "Put-Writing", path: "/put-writing", desc: "Cash-secured puts on quality names, fairly priced", group: "Strategies", job: "Income strategies", kw: "options income sell puts premium" },
