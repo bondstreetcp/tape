@@ -8,7 +8,9 @@ export const metadata: Metadata = {
     "Multi-universe equity research: charts, screening, financials, estimates, ownership, filings, options, macro, and news across US and international indices.",
   applicationName: "Tape",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Tape", statusBarStyle: "black-translucent" },
+  // "default" (not black-translucent) so iOS reserves the status-bar space and the app's top bar
+  // isn't hidden under the clock/notch in the installed PWA.
+  appleWebApp: { capable: true, title: "Tape", statusBarStyle: "default" },
   icons: {
     icon: [
       { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
@@ -35,7 +37,8 @@ export default function RootLayout({
       <head>
         {/* Belt-and-suspenders for older iOS full-screen home-screen apps (Next emits mobile-web-app-capable). */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        {/* "default" keeps the app content BELOW the status bar so the top nav isn't hidden under the notch. */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <script
           dangerouslySetInnerHTML={{
             __html: `try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}`,

@@ -5,7 +5,7 @@
  *   - navigations (HTML)             → network-first, fall back to the offline page
  *   - everything else same-origin    → network, fall back to cache
  * Bump VERSION to invalidate the shell cache on deploy. */
-const VERSION = "tape-v1";
+const VERSION = "tape-v2"; // bump on any app-shell change → old caches cleared on activate
 const SHELL = ["/offline.html", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

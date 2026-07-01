@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
@@ -21,6 +22,9 @@ export default function AppHeader({
   const pathname = usePathname();
   const base = `/u/${universe}`;
   const [open, setOpen] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false); // mobile left slide-out nav
+  const [mounted, setMounted] = useState(false); // portal the drawer to <body> only after hydration
+  useEffect(() => { setMounted(true); }, []);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   const navRef = useRef<HTMLElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
@@ -32,8 +36,15 @@ export default function AppHeader({
     items: FEATURES.filter((f) => f.group === label).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job })),
   }));
 
-  // Close the dropdown on outside-click, scroll, or navigation.
-  useEffect(() => { setOpen(null); }, [pathname]);
+  // Close the dropdown + mobile drawer on navigation.
+  useEffect(() => { setOpen(null); setDrawerOpen(false); }, [pathname]);
+  // Lock body scroll while the drawer is open.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [drawerOpen]);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -60,6 +71,9 @@ export default function AppHeader({
     (active
       ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
       : "text-[var(--text-3)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]");
+  const drawerLink = (active: boolean) =>
+    "block rounded-md px-3 py-2 text-[15px] transition-colors " +
+    (active ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-[var(--text-2)] hover:bg-[var(--surface-hover)]");
 
   const toggle = (label: string, e: React.MouseEvent) => {
     if (open === label) { setOpen(null); return; }
@@ -75,14 +89,26 @@ export default function AppHeader({
   const hub = hubForPath(relPath);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--divider)] bg-[var(--bg)]/90 backdrop-blur">
+    <>
+    <header
+      className="sticky top-0 z-40 border-b border-[var(--divider)] bg-[var(--bg)]/90 backdrop-blur"
+      // Clear the iOS status bar / notch when running as an installed PWA (0 in a normal browser).
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            className="-ml-1 shrink-0 rounded-md p-1.5 text-[var(--text-2)] transition-colors hover:bg-[var(--surface-hover)] lg:hidden"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          </button>
           <Link href={base} className="mr-1 flex shrink-0 items-center gap-1.5 font-semibold text-[var(--text)]">
             <span className="text-[var(--accent)]">▦</span>
-            <span className="hidden font-bold tracking-tight sm:inline">Tape</span>
+            <span className="font-bold tracking-tight">Tape</span>
           </Link>
-          <nav ref={navRef} className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <nav ref={navRef} className="hidden min-w-0 items-center gap-0.5 overflow-x-auto text-sm lg:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Link href={base} className={linkCls(isActive(base, true))}>Home</Link>
             <Link href={`${base}/morning-desk`} className={linkCls(isActive(`${base}/morning-desk`))}>Morning Desk</Link>
             <Link href={`${base}/briefing`} className={linkCls(isActive(`${base}/briefing`))}>Daily Briefing</Link>
@@ -204,5 +230,45 @@ export default function AppHeader({
 
       <CommandPalette universe={universe} />
     </header>
+
+    {/* Mobile left slide-out nav — portaled to <body> so it fills the full viewport (a plain fixed
+        element gets confined by the header's backdrop-filter containing block). */}
+    {mounted && createPortal(
+      <div className={"fixed inset-0 z-[60] lg:hidden " + (drawerOpen ? "" : "pointer-events-none")} aria-hidden={!drawerOpen}>
+      <div className={"absolute inset-0 bg-black/50 transition-opacity duration-200 " + (drawerOpen ? "opacity-100" : "opacity-0")} onClick={() => setDrawerOpen(false)} />
+      <div
+        className={"absolute inset-y-0 left-0 flex w-[86%] max-w-[340px] flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--bg)] shadow-xl transition-transform duration-200 " + (drawerOpen ? "translate-x-0" : "-translate-x-full")}
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="flex items-center justify-between border-b border-[var(--divider)] px-4 py-3">
+          <Link href={base} onClick={() => setDrawerOpen(false)} className="flex items-center gap-1.5 font-bold text-[var(--text)]"><span className="text-[var(--accent)]">▦</span> Tape</Link>
+          <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" className="rounded-md p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-hover)]">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+        <nav className="flex-1 px-2 py-3">
+          {[
+            { path: "", label: "Home", exact: true },
+            { path: "/morning-desk", label: "Morning Desk" },
+            { path: "/briefing", label: "Daily Briefing" },
+            { path: "/screener", label: "Screener" },
+            { path: "/watchlist", label: "★ Watchlist" },
+          ].map((m) => {
+            const href = `${base}${m.path}`;
+            return <Link key={m.path} href={href} className={drawerLink(isActive(href, (m as any).exact))}>{m.label}</Link>;
+          })}
+          {groups.map((g) => (
+            <div key={g.label} className="mt-3">
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{g.label}</div>
+              {g.items.map((it) => <Link key={it.href} href={it.href} className={drawerLink(isActive(it.href))}>{it.label}</Link>)}
+            </div>
+          ))}
+          <a href="/guide.html" target="_blank" rel="noreferrer" className="mt-4 block rounded-md px-3 py-2 text-[15px] text-[var(--text-3)] hover:bg-[var(--surface-hover)]">📖 Guide</a>
+        </nav>
+      </div>
+      </div>,
+      document.body,
+    )}
+    </>
   );
 }
