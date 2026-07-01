@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
 import InstallPWA from "./InstallPWA";
+import AccountMenu from "./AccountMenu";
+import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
 import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath } from "@/lib/nav";
 
@@ -162,6 +164,8 @@ export default function AppHeader({
           </a>
           <InstallPWA />
           <ThemeToggle />
+          <AlertBell base={base} />
+          <AccountMenu />
         </div>
       </div>
 

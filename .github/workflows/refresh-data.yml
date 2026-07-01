@@ -459,6 +459,16 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         continue-on-error: true
 
+      # Evaluate user alert rules against the freshly-refreshed data and write matches to Postgres
+      # (the in-app bell). Runs on EVERY tick — intraday (after the quotes refresh, so price alerts
+      # fire during the session) and FULL (after the full rebuild). Writes to the DB, not data/, so
+      # it's outside the commit. No-ops if RESEARCH_DATABASE_URL isn't set as a repo secret.
+      - name: Evaluate alerts
+        run: npm run eval-alerts
+        env:
+          RESEARCH_DATABASE_URL: ${{ secrets.RESEARCH_DATABASE_URL }}
+        continue-on-error: true
+
       - name: Commit & push if data changed
         env:
           SCHED: ${{ github.event.schedule }}

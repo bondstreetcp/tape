@@ -33,6 +33,7 @@ import ShortInterestPanel from "./ShortInterestPanel";
 import StockOverview from "./StockOverview";
 import QualityScorecard from "./QualityScorecard";
 import WatchStar from "./WatchStar";
+import AddAlertButton from "./AddAlertButton";
 import UniverseSwitcher from "./UniverseSwitcher";
 import type { SeriesPoint } from "@/lib/types";
 import { fmtMoney, fmtPct, currencyPrefix, fmtDateTime } from "@/lib/format";
@@ -327,6 +328,7 @@ export default function FinancialsView({
           </div>
           <div className="flex items-center gap-3">
             <WatchStar symbol={symbol} withLabel />
+            <AddAlertButton symbol={symbol} universe={universe} />
             {etf && <UniverseSwitcher current={universe} etf={etf} />}
           </div>
         </div>
