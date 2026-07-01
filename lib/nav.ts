@@ -83,12 +83,13 @@ export interface NavHub { label: string; blurb: string; paths: string[] }
 export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   Strategies: [
     { label: "Options Income", blurb: "Sell premium on quality names — cash-secured puts, covered calls, spreads", paths: ["/put-writing", "/covered-call", "/credit-spreads"] },
-    { label: "Earnings Plays", blurb: "Trade the earnings event — implied vs. historical move, with a live track record", paths: ["/earnings-move", "/earnings-setup", "/track-record"] },
+    { label: "Earnings & Events", blurb: "Trade the event — implied vs. historical move, a live track record, and cheap options into a known catalyst", paths: ["/earnings-move", "/earnings-setup", "/track-record", "/catalyst-vol"] },
     { label: "Closed-End Funds", blurb: "Funds trading below NAV — the full screener + the stretched-discount shortlist", paths: ["/cef", "/cef-hunter"] },
     { label: "Backtest", blurb: "Test factor screens and strategies against history", paths: ["/backtest"] },
   ],
   Research: [
     { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
+    { label: "Event-Driven", blurb: "Catalyst monitors — activism & shorts, corporate events, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/campaigns", "/corp-events", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
     { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
     { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, sector compare", paths: ["/compare-stocks", "/ratio", "/compare"] },
