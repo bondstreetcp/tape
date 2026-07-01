@@ -363,6 +363,13 @@ jobs:
         run: npm run refresh-catalyst-vol
         continue-on-error: true
 
+      # Corporate Events — SEC 8-K full-text (buybacks, strategic-alts, spin-offs, splits, CEO changes)
+      # → GLM extract. Free EDGAR; needs OPENROUTER_API_KEY; forward-accumulating.
+      - name: Refresh corporate events
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-corp-events
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
