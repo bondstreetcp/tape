@@ -277,12 +277,12 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
-        <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">Net Greeks</span>
+        <span className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Net Greeks</span>
         <GreekStat label="Δ" value={(greeks.delta >= 0 ? "+" : "") + greeks.delta.toFixed(0)} sub="≈ shares" color={greeks.delta >= 0 ? "#22c55e" : "#ef4444"} title="Delta — share-equivalent: the position moves like this many shares for a $1 stock move." />
         <GreekStat label="Γ" value={(greeks.gamma >= 0 ? "+" : "") + greeks.gamma.toFixed(1)} sub="Δ/$1" title="Gamma — how much the net delta itself changes per $1 move in the stock." />
         <GreekStat label="Θ" value={dollars(greeks.theta)} sub="per day" color={greeks.theta >= 0 ? "#22c55e" : "#ef4444"} title="Theta — P/L from one day of time passing, all else equal. Negative = you pay decay; positive = you collect it." />
         <GreekStat label="V" value={dollars(greeks.vega)} sub="per +1% IV" color={greeks.vega >= 0 ? "#22c55e" : "#ef4444"} title="Vega — P/L for a 1-point rise in implied vol. Long vega gains when IV rises; short vega gains when it falls." />
-        <span className="ml-auto text-[10px] text-[var(--text-4)]">at spot {price2(u)} · {stratDte}d · ATM IV {Math.round(atmIV * 100)}%</span>
+        <span className="ml-auto text-[11px] text-[var(--text-4)]">at spot {price2(u)} · {stratDte}d · ATM IV {Math.round(atmIV * 100)}%</span>
       </div>
 
       {cmp && (
@@ -344,7 +344,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
       <div className="mt-4 border-t border-[var(--divider)] pt-3">
         <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
           <button onClick={() => setShowGrid((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
-            <span className="text-[10px]">{showGrid ? "▾" : "▸"}</span> Scenario grid · P/L by price &amp; date
+            <span className="text-[11px]">{showGrid ? "▾" : "▸"}</span> Scenario grid · P/L by price &amp; date
           </button>
           {showGrid && scenario && (
             <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-3)]" title="Shift every leg's implied vol — re-prices the grid only (an IV pop/crush what-if)">
@@ -360,7 +360,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[420px] text-right text-[11px] tabular-nums">
                 <thead>
-                  <tr className="text-[10px] text-[var(--text-4)]">
+                  <tr className="text-[11px] text-[var(--text-4)]">
                     <th className="px-2 py-1 text-left font-medium">Price \ days</th>
                     {scenario.days.map((d, j) => (
                       <th key={j} className="px-2 py-1 font-medium">{d === 0 ? "Now" : d === stratDte ? `Exp (${d}d)` : `${d}d`}</th>
@@ -379,7 +379,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
                 </tbody>
               </table>
             </div>
-            <p className="mt-1.5 text-[10px] text-[var(--text-4)]">Each cell = position P/L if the stock is at that price on that date, Black-Scholes valued at the legs&apos; implied vol (held constant). Expiry column matches the payoff curve above.</p>
+            <p className="mt-1.5 text-[11px] text-[var(--text-4)]">Each cell = position P/L if the stock is at that price on that date, Black-Scholes valued at the legs&apos; implied vol (held constant). Expiry column matches the payoff curve above.</p>
           </>
         ) : (
           <p className="text-xs text-[var(--text-4)]">Pick an expiry at least a few days out to model intermediate dates.</p>
@@ -394,7 +394,7 @@ function GreekStat({ label, value, sub, color, title }: { label: string; value: 
     <span className="inline-flex items-baseline gap-1" title={title}>
       <span className="font-mono text-[var(--text-4)]">{label}</span>
       <span className="font-mono font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</span>
-      {sub && <span className="text-[10px] text-[var(--text-4)]">{sub}</span>}
+      {sub && <span className="text-[11px] text-[var(--text-4)]">{sub}</span>}
     </span>
   );
 }
@@ -402,9 +402,9 @@ function GreekStat({ label, value, sub, color, title }: { label: string; value: 
 function Metric({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">{label}</div>
       <div className="font-mono text-sm font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</div>
-      {sub && <div className="text-[10px] text-[var(--text-4)]">{sub}</div>}
+      {sub && <div className="text-[11px] text-[var(--text-4)]">{sub}</div>}
     </div>
   );
 }

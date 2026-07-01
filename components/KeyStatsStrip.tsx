@@ -34,8 +34,8 @@ export default function KeyStatsStrip({ stats, row, currency = "USD" }: { stats:
     <div className="grid grid-cols-3 gap-x-4 gap-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:grid-cols-5 lg:grid-cols-7">
       {items.map((it) => (
         <div key={it.label} className="min-w-0" title={it.title}>
-          <div className="truncate text-[10px] uppercase tracking-wide text-[var(--text-4)]">{it.label}</div>
-          <div className="font-mono text-sm font-semibold tabular-nums text-[var(--text)]">{it.value}</div>
+          <div className="truncate text-[11px] uppercase tracking-wide text-[var(--text-4)]">{it.label}</div>
+          <div className="font-mono text-base font-semibold tabular-nums text-[var(--text)]">{it.value}</div>
         </div>
       ))}
     </div>
