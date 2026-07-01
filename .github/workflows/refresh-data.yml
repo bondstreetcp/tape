@@ -356,6 +356,13 @@ jobs:
         run: npm run refresh-policy
         continue-on-error: true
 
+      # Catalyst-Vol — SEC 8-K investor/analyst days × options straddle vs realized-vol baseline
+      # (cheap options into a known event). Free EDGAR + options; needs OPENROUTER_API_KEY.
+      - name: Refresh catalyst vol
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-catalyst-vol
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
