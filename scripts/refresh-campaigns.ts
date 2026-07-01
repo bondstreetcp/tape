@@ -54,10 +54,13 @@ function parseName(dn: string): { name: string; ticker: string | null } {
 
 async function eftsFetch(form: string, startdt: string, enddt: string): Promise<any[]> {
   const u = `https://efts.sec.gov/LATEST/search-index?forms=${encodeURIComponent(form)}&startdt=${startdt}&enddt=${enddt}`;
-  const res = await fetch(u, { headers: { "User-Agent": UA } });
-  if (!res.ok) return [];
-  const j = await res.json();
-  return j?.hits?.hits || [];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(u, { headers: { "User-Agent": UA } }).catch(() => null);
+    if (res?.ok) { const j = await res.json(); return j?.hits?.hits || []; }
+    await sleep(600 + attempt * 800); // EFTS throttles bursts (429/403) — back off and retry
+  }
+  console.log(`  EFTS ${form}: failed after retries`);
+  return [];
 }
 async function fetchFilingText(r: Raw): Promise<string> {
   // _id = accession:doc ; the doc lives under one of the filing's CIKs — try each.
