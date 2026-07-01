@@ -61,6 +61,13 @@ async function summarizeFiling(hit: EftsHit, text: string): Promise<IpoSummary |
   };
 }
 
+// Reconstruct a minimal EftsHit from a stored prospectus URL so we can re-fetch + summarize old rows.
+function hitFromUrl(url: string, id: string, company: string): EftsHit | null {
+  const m = url.match(/\/data\/(\d+)\/(\d+)\/(.+)$/);
+  if (!m) return null;
+  return { accession: id, doc: m[3], form: "", date: "", issuer: company, ticker: null, others: "", ciks: [m[1]] };
+}
+
 async function ipoPerf(ticker: string, ipoPrice: number | null): Promise<number | null> {
   try {
     const ch: any = await yf.chart(ticker, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false });
@@ -134,6 +141,21 @@ async function main() {
   const perf: Record<string, number | null> = {};
   await mapPool(syms, 6, async (s) => { perf[s] = await ipoPerf(s, priceBy[s] ?? null); });
   for (const e of merged) e.sinceIpoPct = e.kind !== "upcoming" && e.ticker ? (perf[e.ticker] ?? null) : null;
+
+  // Backfill S-1 summaries for kept rows that lack one (rows created before summaries existed, or a
+  // failed summary call last run) — self-healing, so gaps fill over a few nights.
+  const needSummary = merged.filter((e) => !e.summary && e.url).slice(0, 40);
+  if (needSummary.length) {
+    console.log(`backfilling ${needSummary.length} missing prospectus summaries…`);
+    await mapPool(needSummary, 3, async (e) => {
+      const hit = hitFromUrl(e.url, e.id, e.company);
+      if (!hit) return;
+      const text = await fetchFilingBodyText(hit);
+      if (!text) return;
+      const s = await summarizeFiling(hit, text).catch(() => null);
+      if (s) e.summary = s;
+    });
+  }
 
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData));
   const by = (k: string) => merged.filter((e) => e.kind === k).length;
