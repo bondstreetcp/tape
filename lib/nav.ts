@@ -21,6 +21,8 @@ export const TOP_LINKS: NavItem[] = [
   { label: "Daily Briefing", path: "/briefing", desc: "The day's market news wire", job: "Track the market", kw: "news reuters wire" },
   { label: "Screener", path: "/screener", desc: "Filter the whole universe by return, valuation, and quality", job: "Find ideas", kw: "filter screen factors" },
   { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Research a name", kw: "saved favorites star" },
+  // NOTE: when auth activates (docs/SETUP-auth.md), add an "Alerts" entry here — the page exists at
+  // /alerts but is a dead-end ("accounts aren't configured") until then, so it stays out of the nav.
 ];
 
 // Grouped (dropdown) features.
@@ -34,6 +36,7 @@ export const FEATURES: NavItem[] = [
   { label: "Reddit Buzz", path: "/reddit-buzz", desc: "What retail is talking about — Reddit mention counts + 24h surge (r/wallstreetbets &c.)", group: "Markets", job: "Find ideas", kw: "reddit wallstreetbets wsb buzz mentions retail social sentiment apewisdom meme trending chatter" },
   { label: "Earnings Calendar", path: "/earnings", desc: "Who reports when, with the options-implied move", group: "Markets", job: "Find ideas", kw: "earnings dates report calendar" },
   { label: "Macro & Rates", path: "/macro", desc: "Yield curve, inflation, growth, and credit spreads (FRED)", group: "Markets", job: "Track the market", kw: "fred yields inflation rates economy" },
+  { label: "Fixed Income", path: "/rates", desc: "The bond desk — curve spreads, inversion, and credit OAS in one view", group: "Markets", job: "Track the market", kw: "rates bonds curve inversion 2s10s oas credit spreads treasury fixed income" },
   { label: "Fed Watch", path: "/fed", desc: "FOMC statements, minutes, speeches & the Beige Book — AI-scored hawkish↔dovish with what changed", group: "Markets", job: "Track the market", kw: "fed federal reserve fomc powell hawkish dovish rate cut hike minutes beige book monetary policy speeches" },
   { label: "Breadth & Regime", path: "/breadth", desc: "Market internals — how many names participate, plus the macro risk backdrop", group: "Markets", job: "Track the market", kw: "breadth internals advance decline new highs lows above 200 day ma participation t2108 regime risk-on risk-off" },
   // ── Strategies
