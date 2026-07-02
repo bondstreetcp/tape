@@ -1,12 +1,12 @@
 {
   "since": "2026-07-02T17:13:47.943Z",
-  "updatedAt": "2026-07-02T17:43:11.804Z",
+  "updatedAt": "2026-07-02T17:46:01.054Z",
   "note": "Token counts are exact; estUsd is a BALLPARK from lib/llmUsage.ts PRICES (edit to match your dashboards). Delete this file to reset the meter.",
   "totals": {
-    "calls": 316,
-    "inTok": 2698256,
-    "outTok": 194538,
-    "estUsd": 3.438604
+    "calls": 321,
+    "inTok": 2711082,
+    "outTok": 211052,
+    "estUsd": 3.6624240000000006
   },
   "byModel": {
     "z-ai/glm-5.2": {
@@ -16,10 +16,10 @@
       "estUsd": 0.9652660000000003
     },
     "google/gemini-3.1-pro-preview": {
-      "calls": 175,
-      "inTok": 716391,
-      "outTok": 86713,
-      "estUsd": 2.473338
+      "calls": 180,
+      "inTok": 729217,
+      "outTok": 103227,
+      "estUsd": 2.6971580000000004
     }
   },
   "byJob": {
@@ -52,14 +52,38 @@
       "inTok": 6517,
       "outTok": 6422,
       "estUsd": 0.090098
+    },
+    "refresh-confluence": {
+      "calls": 1,
+      "inTok": 2188,
+      "outTok": 2520,
+      "estUsd": 0.034616
+    },
+    "refresh-valuation-explain": {
+      "calls": 2,
+      "inTok": 8050,
+      "outTok": 9842,
+      "estUsd": 0.134204
+    },
+    "refresh-13f-story": {
+      "calls": 1,
+      "inTok": 831,
+      "outTok": 1952,
+      "estUsd": 0.025086
+    },
+    "refresh-congress-summary": {
+      "calls": 1,
+      "inTok": 1757,
+      "outTok": 2200,
+      "estUsd": 0.029914
     }
   },
   "byDay": {
     "2026-07-02": {
-      "calls": 316,
-      "inTok": 2698256,
-      "outTok": 194538,
-      "estUsd": 3.438604
+      "calls": 321,
+      "inTok": 2711082,
+      "outTok": 211052,
+      "estUsd": 3.6624240000000006
     }
   }
 }
