@@ -14,13 +14,15 @@ export interface SpinoffSeed {
   parentTicker: string;
   spinDate: string; // first regular-way trading day (ISO)
   wiTicker?: string; // when-issued symbol if Yahoo carries one
+  ratio?: number; // spinco shares per parent share (from the distribution terms) — lets the tracker
+  // derive shares outstanding from the PARENT's count while Yahoo has nothing for a days-old ticker
 }
 
 // Curated: US spinoffs completed in the last ~18 months. Add new ones at the TOP as they distribute
 // (the Corp Events board's spin-off announcements are the upstream pipeline). Seeded 2026-07-02 from
 // KEDM Vol.280's "Completed Domestic Spin-offs" table cross-checked against completion press releases.
 export const SPINOFF_ROSTER: SpinoffSeed[] = [
-  { ticker: "MBGL", name: "Mobility Global", parent: "S&P Global", parentTicker: "SPGI", spinDate: "2026-07-01" },
+  { ticker: "MBGL", name: "Mobility Global", parent: "S&P Global", parentTicker: "SPGI", spinDate: "2026-07-01", ratio: 1 }, // 1 MBGL per SPGI
   { ticker: "HONA", name: "Honeywell Aerospace", parent: "Honeywell", parentTicker: "HON", spinDate: "2026-06-29" },
   { ticker: "FDXF", name: "FedEx Freight", parent: "FedEx", parentTicker: "FDX", spinDate: "2026-05-29" },
   { ticker: "OCTV", name: "Octave Intelligence", parent: "Hexagon AB", parentTicker: "HXGBF", spinDate: "2026-05-28" },
