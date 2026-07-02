@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildSqueeze } from "@/lib/shortSqueeze";
 import type { EstimatesFile } from "@/lib/revisions";
 import SqueezeView from "@/components/SqueezeView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +27,7 @@ export default async function SqueezePage({ params }: { params: Promise<{ univer
 
   const data = snap?.stocks && file ? buildSqueeze(file, snap.stocks) : null;
   if (!data || !data.rows.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-        <h1 className="mt-4 text-2xl font-bold">Short-Squeeze Radar</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">No short-interest data for this universe — it&apos;s built nightly for US names (`npm run refresh-estimates`). This radar is US-only; try the S&amp;P 500 or a broad US universe.</p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Short-Squeeze Radar" note="US names only — try the S&P 500 or a broad US universe." />;
   }
   return <SqueezeView data={data} universe={universe} />;
 }

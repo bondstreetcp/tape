@@ -23,6 +23,7 @@ export default function InsidersView({ data, universe }: { data: InsidersData; u
       <PageHeader
         title="Insider Cluster-Buying"
         desc={`Open-market insider BUYS (SEC Form 4, code P) over the last ${data.windowDays} days — corporate insiders putting their own cash in, especially on weakness, is a high-conviction accumulation tell. Cluster buys (several insiders, or large $) rank highest. Open-market buying is RARE in mega-caps, so this is far richer on broad / small-cap universes. Decision-support, not advice.`}
+        universe={universe}
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

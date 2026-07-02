@@ -37,6 +37,7 @@ export default function EarningsSetupView({ rows, universe, asOf }: { rows: Earn
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Earnings Setup Cards"
         desc="Names reporting soon, with how the options market is pricing the event vs. how the stock has ACTUALLY moved on past prints. Rich = the straddle costs more than history (premium to sell); cheap = the market's underpricing the move. Decision-support, not advice."
       />

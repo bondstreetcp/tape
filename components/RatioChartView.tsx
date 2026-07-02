@@ -128,7 +128,7 @@ export default function RatioChartView({ universe }: { universe: string }) {
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
-      <PageHeader title="Ratio, Spread & Formula Charts" desc="Plot one security against another over time — relative strength (A÷B), a spread (A−B), the ratio rebased to 100, or any FORMULA (e.g. MDT − 0.19 MMED = the implied value of core Medtronic ex its MiniMed stake). Any Yahoo symbol works, including indices (^GSPC) and ETFs (SPY, GLD). Decision-support, not advice." />
+      <PageHeader title="Ratio, Spread & Formula Charts" desc="Plot one security against another over time — relative strength (A÷B), a spread (A−B), the ratio rebased to 100, or any FORMULA (e.g. MDT − 0.19 MMED = the implied value of core Medtronic ex its MiniMed stake). Any Yahoo symbol works, including indices (^GSPC) and ETFs (SPY, GLD). Decision-support, not advice." universe={universe} />
 
       {/* mode toggle */}
       <div className="mb-3 inline-flex flex-wrap rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">

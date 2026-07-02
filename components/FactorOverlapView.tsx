@@ -26,6 +26,7 @@ export default function FactorOverlapView({ names, universe }: { names: FactorOv
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Factor-Screen Overlap"
         desc="Names that land in the top of MULTIPLE classic value/quality screens at once — cheap AND high-quality AND improving AND returning cash. A single screen can miss the best all-round profiles; the overlap surfaces them. Decision-support, not advice."
       />

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildRevisions, type EstimatesFile } from "@/lib/revisions";
 import RevisionsView from "@/components/RevisionsView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,7 @@ export default async function RevisionsPage({ params }: { params: Promise<{ univ
 
   const data = snap?.stocks && file ? buildRevisions(file, snap.stocks) : null;
   if (!data || !data.rows.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-        <h1 className="mt-4 text-2xl font-bold">Revisions Momentum</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">No estimate-revision data for this universe yet — it&apos;s built nightly (`npm run refresh-estimates`). The S&amp;P 500 is covered first.</p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Revisions Momentum" note="The S&P 500 is covered first — try that universe." />;
   }
   return <RevisionsView data={data} universe={universe} />;
 }

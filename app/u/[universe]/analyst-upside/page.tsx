@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildAnalystUpside } from "@/lib/analystUpside";
 import type { EstimatesFile } from "@/lib/revisions";
 import AnalystUpsideView from "@/components/AnalystUpsideView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +27,7 @@ export default async function AnalystUpsidePage({ params }: { params: Promise<{ 
 
   const data = snap?.stocks && file ? buildAnalystUpside(file, snap.stocks) : null;
   if (!data || !data.rows.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-        <h1 className="mt-4 text-2xl font-bold">Analyst Upside</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">No analyst-target data for this universe yet — it&apos;s built nightly (`npm run refresh-estimates`). The S&amp;P 500 is covered first.</p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Analyst Upside" note="The S&P 500 is covered first — try that universe." />;
   }
   return <AnalystUpsideView data={data} universe={universe} />;
 }

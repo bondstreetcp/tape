@@ -6,6 +6,7 @@ import { loadSuperInvestors } from "@/lib/superinvestors";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { ThirteenFStory } from "@/lib/thirteenFStory";
 import SuperInvestorsView from "@/components/SuperInvestorsView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,7 @@ export default async function SuperInvestorsPage({ params }: { params: Promise<{
 
   const [data, snapshot, story] = await Promise.all([loadSuperInvestors(), loadSnapshot(universe), loadStory()]);
   if (!data || !data.investors.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Super-Investors</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">Holdings data isn&apos;t built yet. Run <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-13f</code> to fetch the latest 13F filings.</p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Super-Investors" />;
   }
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   return <SuperInvestorsView universe={universe} data={data} known={known} story={story} />;

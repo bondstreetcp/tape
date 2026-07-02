@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { ConfluenceData } from "@/lib/confluence";
 import ConfluenceView from "@/components/ConfluenceView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +24,7 @@ export default async function ConfluencePage({ params }: { params: Promise<{ uni
 
   const data = await loadConfluence();
   if (!data || !data.names.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Confluence Engine</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">
-          The board isn&apos;t built yet. Run <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-confluence</code> to fuse the signals.
-        </p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Confluence Engine" />;
   }
   return <ConfluenceView universe={universe} data={data} />;
 }

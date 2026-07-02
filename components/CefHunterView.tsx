@@ -17,6 +17,7 @@ export default function CefHunterView({ funds, universe }: { funds: CefHunterNam
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="CEF Discount Hunter"
         desc="Closed-end funds at the most STRETCHED discounts — cheap versus their own history, not just a big headline discount — ranked by a hunter score that blends discount depth, how unusual it is (z-score), and the distribution yield you collect while waiting. US funds. Decision-support, not advice."
       />

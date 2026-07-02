@@ -5,6 +5,7 @@ import { loadSuperInvestors } from "@/lib/superinvestors";
 import { loadCongress } from "@/lib/congress";
 import { buildSmartMoney } from "@/lib/smartMoney";
 import SmartMoneyView from "@/components/SmartMoneyView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +20,7 @@ export default async function SmartMoneyPage({ params }: { params: Promise<{ uni
   const names = buildSmartMoney(si, cong, ctxBy);
 
   if (!names.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Smart-Money Radar</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">
-          No accumulation data yet. Run <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-13f</code> and{" "}
-          <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-congress</code> first.
-        </p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Smart-Money Radar" />;
   }
   const asOf = si?.generatedAt ? new Date(si.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
   return <SmartMoneyView names={names} universe={universe} asOf={asOf} />;

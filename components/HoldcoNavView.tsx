@@ -126,6 +126,7 @@ export default function HoldcoNavView({ data, universe }: { data: HoldcoNavData;
       <PageHeader
         title="Holdco NAV / Discount Tracker"
         desc="Holding companies vs their look-through net asset value — Σ(listed stakes) + private assets − net debt, against the holdco's own price. The discount is the whole game; 'stretched' flags a discount unusually wide vs its own recent history (z ≤ −1). Same idea as the CEF Discount Hunter. Decision-support, not advice."
+        universe={universe}
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
