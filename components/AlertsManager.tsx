@@ -8,6 +8,7 @@ import { useAlertRules } from "@/lib/supabase/useAlertRules";
 import { useUser } from "@/lib/supabase/useUser";
 import type { AlertKind, AlertRule } from "@/lib/alerts";
 import { KIND_COLOR, KIND_LABEL } from "@/lib/alerts";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
 
 const EVENT_TYPES = [
   { key: "filing", label: "Material 8-K" },
@@ -75,7 +76,7 @@ export default function AlertsManager({ universe }: { universe: string }) {
 
   const wrap = (child: React.ReactNode) => (
     <main className="mx-auto max-w-[52rem] px-4 py-6 sm:px-6">
-      <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← Home</Link>
+      <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <h1 className="mt-1 text-2xl font-bold">Alerts</h1>
       {child}
     </main>

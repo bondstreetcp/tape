@@ -53,6 +53,11 @@ GitHub → repo → Settings → Secrets and variables → Actions → **New rep
 
 If unset, the alert step no-ops cleanly (no error); everything else keeps working.
 
+## 6. Un-hide Alerts in the nav
+`lib/nav.ts` deliberately leaves `/alerts` out of TOP_LINKS while auth is off (it would be a
+dead-end for anonymous users). When activating, add next to Watchlist:
+`{ label: "Alerts", path: "/alerts", desc: "Your alert rules — price levels, filings, earnings, and signals on watched names", job: "Research a name", kw: "alerts notify bell price rules" }`
+
 ## How it works
 - **Auth:** Supabase Auth (Google), `@supabase/ssr`. `proxy.ts` refreshes the session cookie.
 - **Persistence:** `useWatchlist` / `useSavedScreens` read+write Postgres under RLS when signed in,

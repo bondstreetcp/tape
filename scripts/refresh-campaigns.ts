@@ -2,9 +2,11 @@
  * Builds data/campaigns.json — the activism & short-campaign board.
  *
  * 1. SEC EDGAR full-text search (efts.sec.gov) for recent SCHEDULE 13D (activist stakes) + DEFC14A /
- *    PREC14A / DFAN14A (proxy fights). 2. Muddy Waters RSS for short reports. 3. GLM reads each and
- *    extracts {ticker, company, campaigner, type, the ASK/allegation} and drops routine/non-campaign
- *    filings. 4. Price the stock since the event.
+ *    PREC14A / DFAN14A (proxy fights). 2. Short-seller reports from 13 firms — 8 RSS feeds + 2 HTML
+ *    pages (Spruce Point, Viceroy) + 3 X timelines via nitter.net RSS (Culper/NINGI/Iceberg, whose
+ *    sites are Cloudflare-walled; x.com itself is login-walled — probed 2026-07-01). 3. GLM reads
+ *    each and extracts {ticker, company, campaigner, type, the ASK/allegation} and drops routine /
+ *    non-campaign / long-idea items. 4. Price the stock since the event.
  *
  * Forward-accumulating; only new items hit the LLM. Run: npm run refresh-campaigns. Nightly (FULL).
  * A public-disclosure tracker, not advice.
@@ -73,27 +75,120 @@ async function fetchFilingText(r: Raw): Promise<string> {
   return "";
 }
 
-async function muddyWaters(): Promise<Raw[]> {
+// ── Short-seller report sources ─────────────────────────────────────────────────────────────────
+// The firms' OWN sites are the primary route — X/x.com is login-walled and both twitter-syndication
+// endpoints are dead (probed 2026-07-01: 429 / empty body / JS shell). nitter.net RSS mirrors the X
+// timelines and is the only route for the three Cloudflare-403 firms (Culper, NINGI, Iceberg) —
+// best-effort by nature (other nitter instances are already challenge-walled). Kerrisdale and Bear
+// Cave publish longs/roundups too — classify() drops anything that isn't a genuine short campaign.
+const SHORT_RSS: { firm: string; url: string; nitter?: boolean }[] = [
+  { firm: "Muddy Waters", url: "https://muddywatersresearch.com/feed/?post_type=reports" },
+  { firm: "Kerrisdale Capital", url: "https://www.kerrisdalecap.com/feed/?post_type=investments" },
+  { firm: "Grizzly Research", url: "https://grizzlyreports.com/feed/" },
+  { firm: "Fuzzy Panda", url: "https://fuzzypandaresearch.com/feed/" },
+  { firm: "Blue Orca Capital", url: "https://www.blueorcacapital.com/feed/" },
+  { firm: "The Bear Cave", url: "https://thebearcave.substack.com/feed" },
+  { firm: "Hunterbrook", url: "https://hntrbrk.com/feed" },
+  { firm: "Gotham City Research", url: "https://www.gothamcityresearch.com/blog-feed.xml" },
+  { firm: "Culper Research", url: "https://nitter.net/CulperResearch/rss", nitter: true },
+  { firm: "NINGI Research", url: "https://nitter.net/NingiResearch/rss", nitter: true },
+  { firm: "Iceberg Research", url: "https://nitter.net/IcebergResear/rss", nitter: true },
+];
+const SHORT_SEED_DAYS = 120; // feeds carry history; only seed items this recent
+// Firm sites / nitter want a BROWSER UA (Cloudflare et al. reject research UAs) — EDGAR keeps the
+// SEC-style UA above, per its fair-access policy.
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+async function rssShorts(firm: string, url: string, nitter = false): Promise<Raw[]> {
   try {
-    const res = await fetch("https://muddywatersresearch.com/feed/?post_type=reports", { headers: { "User-Agent": UA } });
+    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA } });
     if (!res.ok) return [];
     const xml = await res.text();
     const cd = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
     const out: Raw[] = [];
     for (const it of xml.split("<item>").slice(1)) {
       const g = (t: string) => { const m = it.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`)); return m ? cd(m[1]) : ""; };
-      const title = g("title"), link = g("link"), date = g("pubDate");
+      const title = htmlToText(g("title"));
+      let link = g("link");
+      const date = g("pubDate");
+      if (!title || !link || !date) continue;
+      if (nitter) {
+        if (/^(RT by|R to) /.test(title)) continue; // retweets/replies — not the firm's own report
+        link = link.replace(/^https?:\/\/nitter\.[^/]+/, "https://x.com").replace(/#m$/, ""); // store the real X link
+      }
       const body = htmlToText(g("content:encoded") || g("description"));
-      out.push({ id: link, date: date ? new Date(date).toISOString() : "", type: "short", form: "short report", issuer: title, ticker: null, other: "Muddy Waters", url: link, docUrl: link, ciks: [], doc: body.slice(0, 6000) });
+      out.push({ id: link, date: new Date(date).toISOString(), type: "short", form: nitter ? "X post" : "short report", issuer: title.slice(0, 200), ticker: null, other: firm, url: link, docUrl: link, ciks: [], doc: (title + "\n\n" + body).slice(0, 6000) });
     }
     return out;
   } catch { return []; }
+}
+
+// Spruce Point publishes on a Webflow /research/ page (no RSS) — server-rendered HTML.
+async function sprucePoint(): Promise<Raw[]> {
+  try {
+    const res = await fetch("https://www.sprucepointcap.com/research/", { headers: { "User-Agent": BROWSER_UA } });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out: Raw[] = [];
+    // Card shape: <div class="research-date">Apr 24, 2026</div><a href="/research/slug" ...><h3 class="research-h3">Title</h3></a>
+    for (const m of html.matchAll(/research-date"[^>]*>([^<]+)<\/div>\s*<a[^>]+href="(\/research\/[^"]+)"[^>]*>\s*<h3[^>]*research-h3[^>]*>([^<]+)</g)) {
+      const [, date, href, title] = m;
+      if (Number.isNaN(Date.parse(date))) continue;
+      const link = `https://www.sprucepointcap.com${href}`;
+      out.push({ id: link, date: new Date(date).toISOString(), type: "short", form: "short report", issuer: htmlToText(title).slice(0, 200), ticker: null, other: "Spruce Point", url: link, docUrl: link, ciks: [], doc: htmlToText(title).slice(0, 6000) });
+    }
+    return out;
+  } catch { return []; }
+}
+
+// Viceroy's /publications page (they left WordPress — /feed/ is a 404) — anchors + <time> pairs.
+async function viceroy(): Promise<Raw[]> {
+  try {
+    const res = await fetch("https://viceroyresearch.org/publications", { headers: { "User-Agent": BROWSER_UA } });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out: Raw[] = [];
+    // Card shape: <a wire:navigate href="https://viceroyresearch.org/publications/slug" ...> … <h2 …>Title</h2> … (a date somewhere in the card)
+    for (const block of html.split(/<a [^>]*href="(?=https?:\/\/viceroyresearch\.org\/publications\/)/).slice(1)) {
+      const href = block.match(/^([^"]+)"/)?.[1];
+      const title = htmlToText(block.match(/<h2[^>]*>([\s\S]{0,300}?)<\/h2>/)?.[1] || "");
+      const head = block.slice(0, 2500);
+      let time = head.match(/<time[^>]*>([^<]+)<\/time>/)?.[1] || head.match(/datetime="([^"]+)"/)?.[1] || head.match(/\b([A-Z][a-z]{2,8} \d{1,2}, \d{4})\b/)?.[1] || "";
+      if (!time) {
+        // Viceroy's cards print year-less dates ("Jun 30") — assume the current year, and if that
+        // lands in the future (a December item read in January), roll back a year.
+        const m = head.match(/\b([A-Z][a-z]{2,8} \d{1,2})\b/);
+        if (m) {
+          const d = new Date(`${m[1]}, ${new Date().getFullYear()}`);
+          if (!Number.isNaN(d.getTime())) time = (d.getTime() > Date.now() + 30 * DAY ? new Date(d.getTime() - 365 * DAY) : d).toISOString();
+        }
+      }
+      if (!href || !title || title.length < 8 || Number.isNaN(Date.parse(time))) continue;
+      out.push({ id: href, date: new Date(time).toISOString(), type: "short", form: "short report", issuer: title.slice(0, 200), ticker: null, other: "Viceroy Research", url: href, docUrl: href, ciks: [], doc: title.slice(0, 6000) });
+    }
+    return out;
+  } catch { return []; }
+}
+
+async function shortReports(): Promise<Raw[]> {
+  const lists = await mapPool(SHORT_RSS, 4, (s) => rssShorts(s.firm, s.url, s.nitter));
+  const html = await Promise.all([sprucePoint(), viceroy()]);
+  const all = [...lists.flat().filter(Boolean), ...html.flat()];
+  const cutoff = Date.now() - SHORT_SEED_DAYS * DAY;
+  const kept = all.filter((r) => Date.parse(r.date) >= cutoff);
+  const byFirm: Record<string, number> = {};
+  for (const r of kept) byFirm[r.other] = (byFirm[r.other] || 0) + 1;
+  console.log(`short sources: ${kept.length} items ${JSON.stringify(byFirm)}`);
+  return kept;
 }
 
 async function classify(r: Raw, text: string): Promise<{ ticker: string | null; company: string; campaigner: string; ask: string; summary: string; material: boolean } | null> {
   const SYSTEM =
     "You read one SEC activist/proxy filing or one short-seller report and summarize the CAMPAIGN for a professional investor. Extract: the TARGET public company + its ticker; the CAMPAIGNER (the activist/dissident investor, or the short firm); a one-line ASK (what the activist wants — board seats, sale, breakup, strategy change) or ALLEGATION (what the short alleges — fraud, accounting, overvaluation); and a 1-2 sentence summary. " +
     "Set material=false and it will be DROPPED if this is NOT a genuine campaign: a passive/routine 13D with no stated activist intent, a company's own routine proxy mailing, an administrative amendment with no new demand, or anything without a clear target company. Be strict. " +
+    (r.type === "short"
+      ? "This item comes from a short-seller's site or X feed, and some publish MORE than short reports: set material=false for LONG/positive theses, portfolio or performance updates, newsletter roundups/compilations covering many names, media appearances, replies or general commentary. material=true ONLY for a new NEGATIVE report/allegation targeting ONE specific public company (a $CASHTAG in a tweet announcing a new short counts). "
+      : "") +
     NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"ticker":string|null,"company":string,"campaigner":string,"ask":string,"summary":string,"material":boolean}';
   const ctx = `Form: ${r.form}. Type: ${r.type}. Subject as filed: ${r.issuer}${r.ticker ? ` (${r.ticker})` : ""}. Other party: ${r.other}.\n\n${text.slice(0, 6500)}`;
@@ -145,7 +240,7 @@ async function main() {
     }
     await sleep(300);
   }
-  const mw = await muddyWaters();
+  const mw = await shortReports();
   console.log(`fetched ${raw.length} SEC filings + ${mw.length} short reports`);
 
   // dedup by id, newest first, cap
@@ -154,8 +249,18 @@ async function main() {
 
   const prior: CampaignsData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: nowISO, scanned: 0, campaigns: [] as Campaign[] }));
   const known = new Set(prior.campaigns.map((c) => c.id));
-  const fresh = allRaw.filter((r) => !known.has(r.id)).slice(0, 60); // cap LLM work per run
-  console.log(`${fresh.length} new to classify`);
+  // Per-bucket LLM caps so the short-report seed (13 sources × history) can't starve the EDGAR
+  // activist/proxy stream in one run — same pattern as refresh-ipo/corp-events. Overflow is picked
+  // up next run (forward-accumulating).
+  const capBy: Record<string, number> = {};
+  const fresh = allRaw.filter((r) => !known.has(r.id)).filter((r) => {
+    const k = r.type === "short" ? "short" : "sec";
+    const n = capBy[k] || 0;
+    if (n >= 40) return false;
+    capBy[k] = n + 1;
+    return true;
+  });
+  console.log(`${fresh.length} new to classify ${JSON.stringify(capBy)}`);
 
   const built = await mapPool(fresh, 4, async (r): Promise<Campaign | null> => {
     const text = r.type === "short" ? r.doc : await fetchFilingText(r);

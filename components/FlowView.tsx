@@ -1,8 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { OptionsFlow, FlowEntry } from "@/lib/optionsFlow";
 import { fmtDateTime } from "@/lib/format";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
+import UniverseSwitcher from "./UniverseSwitcher";
 
 const prem = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${(v / 1e3).toFixed(0)}K`);
 const num = (v: number) => v.toLocaleString("en-US");
@@ -36,11 +39,15 @@ export default function FlowView({ flow, universe }: { flow: OptionsFlow; univer
 
   return (
     <main className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6">
-      <header className="mb-4">
-        <h1 className="text-2xl font-bold">Options Flow</h1>
-        <p className="mt-1 text-xs text-[var(--text-3)]">
-          Largest options trades across the S&amp;P 500 by premium · {flow.totalFlows.toLocaleString()} unusual flows from {flow.withOptions} optionable names · as of {fmtDateTime(flow.generatedAt)}
-        </p>
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
+          <h1 className="mt-1 text-2xl font-bold">Options Flow</h1>
+          <p className="mt-1 text-xs text-[var(--text-3)]">
+            Largest options trades across the S&amp;P 500 by premium · {flow.totalFlows.toLocaleString()} unusual flows from {flow.withOptions} optionable names · as of {fmtDateTime(flow.generatedAt)}
+          </p>
+        </div>
+        <UniverseSwitcher current={universe} />
       </header>
 
       {/* call vs put sentiment */}
