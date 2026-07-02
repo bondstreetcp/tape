@@ -57,7 +57,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 150 # FULL run is long (~2h): overnight-filings broad scan alone ~30m + insider/OGE/valuation-history ~15m each + the LLM write-up tail. 90m was cutting off the Morning Desk Note + the final commit.
+    timeout-minutes: 210 # FULL run keeps growing: overnight-filings broad scan ~30m + insider/OGE/valuation-history ~15m each + campaigns/IPO/LLM tails. 150m KILLED the 2026-07-01 run at exactly 2h30 (conclusion "cancelled") → flow/desk-note went stale for a day; multi-expiry flow adds ~15m more. Keep comfortable headroom.
     # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close
     # international-only refresh (10:00). Both gate which steps run. The intraday quotes tick instead
     # picks WHICH universes to re-quote from the wall-clock UTC hour at run time (see the "Pick session

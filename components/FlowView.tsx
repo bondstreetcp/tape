@@ -17,24 +17,50 @@ const expLabel = (e: string | null, dte: number | null) => {
 
 type SortKey = "premium" | "vol" | "volOI";
 
+// Expiry buckets — mega-caps expire daily, so unfiltered flow is dominated by 0DTE lottery volume;
+// the longer buckets isolate actual positioning. null dte only shows under "All".
+type DteBucket = "all" | "0d" | "1w" | "1m" | "far";
+const DTE_BUCKETS: { key: DteBucket; label: string; title: string; test: (dte: number | null) => boolean }[] = [
+  { key: "all", label: "All expiries", title: "Every captured expiration", test: () => true },
+  { key: "0d", label: "0-1 DTE", title: "Same/next-day expiry — mostly intraday speculation", test: (d) => d != null && d <= 1 },
+  { key: "1w", label: "≤1 wk", title: "2-7 days out", test: (d) => d != null && d >= 2 && d <= 7 },
+  { key: "1m", label: "1wk-1mo", title: "8-35 days out — earnings/event positioning", test: (d) => d != null && d >= 8 && d <= 35 },
+  { key: "far", label: "1mo+", title: "Beyond a month — longer-horizon positioning", test: (d) => d != null && d > 35 },
+];
+
 export default function FlowView({ flow, universe }: { flow: OptionsFlow; universe: string }) {
   const router = useRouter();
   const [type, setType] = useState<"all" | "call" | "put">("all");
   const [unusualOnly, setUnusualOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("premium");
+  const [bucket, setBucket] = useState<DteBucket>("all");
+
+  // The expiry slice first — both the table AND the sentiment bar reflect it.
+  const inBucket = useMemo(() => {
+    const test = DTE_BUCKETS.find((b) => b.key === bucket)!.test;
+    return bucket === "all" ? flow.entries : flow.entries.filter((e) => test(e.dte));
+  }, [flow.entries, bucket]);
 
   const rows = useMemo(() => {
-    let r = flow.entries.filter((e) => (type === "all" || e.type === type) && (!unusualOnly || e.unusual));
+    let r = inBucket.filter((e) => (type === "all" || e.type === type) && (!unusualOnly || e.unusual));
     r = [...r].sort((a, b) => {
       if (sort === "premium") return b.premium - a.premium;
       if (sort === "vol") return b.vol - a.vol;
       return (b.volOI ?? 0) - (a.volOI ?? 0);
     });
     return r.slice(0, 120);
-  }, [flow.entries, type, unusualOnly, sort]);
+  }, [inBucket, type, unusualOnly, sort]);
 
-  const total = flow.callPremium + flow.putPremium;
-  const callPct = total > 0 ? (flow.callPremium / total) * 100 : 50;
+  // Sentiment over the selected expiry slice. On "All" use the scan-wide totals (they cover every
+  // flow found, not just the capped list); for a bucket, sum the captured entries in it.
+  const { callPrem, putPrem } = useMemo(() => {
+    if (bucket === "all") return { callPrem: flow.callPremium, putPrem: flow.putPremium };
+    let c = 0, p = 0;
+    for (const e of inBucket) (e.type === "call" ? (c += e.premium) : (p += e.premium));
+    return { callPrem: c, putPrem: p };
+  }, [bucket, inBucket, flow.callPremium, flow.putPremium]);
+  const total = callPrem + putPrem;
+  const callPct = total > 0 ? (callPrem / total) * 100 : 50;
   const sentiment = callPct >= 60 ? { t: "Call-heavy — bullish flow", c: "#22c55e" } : callPct <= 40 ? { t: "Put-heavy — bearish/hedging flow", c: "#ef4444" } : { t: "Balanced flow", c: "var(--text-2)" };
 
   return (
@@ -55,7 +81,8 @@ export default function FlowView({ flow, universe }: { flow: OptionsFlow; univer
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 text-xs">
           <span className="font-semibold" style={{ color: sentiment.c }}>{sentiment.t}</span>
           <span className="text-[var(--text-3)]">
-            <span className="text-[#22c55e]">Calls {prem(flow.callPremium)}</span> · <span className="text-[#ef4444]">Puts {prem(flow.putPremium)}</span>
+            {bucket !== "all" && <span className="mr-1.5 text-[var(--text-4)]">{DTE_BUCKETS.find((b) => b.key === bucket)!.label} ·</span>}
+            <span className="text-[#22c55e]">Calls {prem(callPrem)}</span> · <span className="text-[#ef4444]">Puts {prem(putPrem)}</span>
           </span>
         </div>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-[var(--bg)]">
@@ -70,6 +97,13 @@ export default function FlowView({ flow, universe }: { flow: OptionsFlow; univer
 
       {/* controls */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
+          {DTE_BUCKETS.map((b) => (
+            <button key={b.key} onClick={() => setBucket(b.key)} title={b.title} className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (bucket === b.key ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>
+              {b.label}
+            </button>
+          ))}
+        </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
           {(["all", "call", "put"] as const).map((t) => (
             <button key={t} onClick={() => setType(t)} className={"rounded-md px-2.5 py-1 capitalize transition-colors " + (type === t ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>
@@ -108,6 +142,15 @@ export default function FlowView({ flow, universe }: { flow: OptionsFlow; univer
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={99} className="p-10 text-center text-sm text-[var(--text-3)]">
+                  {bucket !== "all" && inBucket.length === 0
+                    ? "No captured flows in this expiry bucket yet — longer-dated expiries are scanned from the next nightly refresh onward."
+                    : "No matches for these filters — try loosening them."}
+                </td>
+              </tr>
+            )}
             {rows.map((e, i) => (
               <Row key={i} e={e} onClick={() => router.push(`/u/${universe}/stock/${encodeURIComponent(e.symbol)}?tab=options`)} />
             ))}

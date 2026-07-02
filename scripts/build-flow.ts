@@ -1,7 +1,9 @@
 /**
- * Market-wide options flow scanner. Fetches the front-expiry options chain for every
- * S&P 500 name, keeps contracts with meaningful dollar premium traded today, and writes
- * the top flows to data/options-flow.json (read by the Flow page). Run with:
+ * Market-wide options flow scanner. For every S&P 500 name it fetches the FRONT expiry chain PLUS
+ * the nearest weekly (≥7d), monthly (≥25d), and quarter-out (≥60d) expirations — mega-caps have
+ * DAILY expiries, so a front-only scan made the board pure 0DTE noise and hid real positioning
+ * flow. Keeps contracts with meaningful dollar premium traded today and writes the top flows to
+ * data/options-flow.json (read by the Flow page, which buckets by DTE). Run with:
  *   npx tsx scripts/build-flow.ts            (sp500)
  *   npx tsx scripts/build-flow.ts nasdaq100
  */
@@ -11,8 +13,9 @@ import { getOptions } from "../lib/options";
 
 const MIN_PREMIUM = 250_000; // $ value traded today (volume × mid × 100)
 const MIN_VOL = 200;
-const TOP = 250;
+const TOP = 500; // deeper cap so the longer-dated flows aren't crowded out by 0DTE premium
 const CONCURRENCY = 5;
+const EXTRA_DTE_TARGETS = [7, 25, 60]; // beyond the front expiry: nearest weekly / monthly / quarter-out
 
 const universe = process.argv[2] || "sp500";
 const root = process.cwd();
@@ -40,37 +43,55 @@ async function main() {
     await Promise.all(
       batch.map(async (sym) => {
         try {
-          const chain = await getOptions(sym);
-          if (!chain.calls.length && !chain.puts.length) return;
+          const front = await getOptions(sym);
+          if (!front.calls.length && !front.puts.length) return;
           withOpts++;
           const m = meta.get(sym)!;
-          const dte = chain.selected
-            ? Math.round((new Date(chain.selected + "T00:00:00Z").getTime() - Date.now()) / 86_400_000)
-            : null;
-          for (const [type, opts] of [["call", chain.calls], ["put", chain.puts]] as const) {
-            for (const o of opts) {
-              const vol = o.vol ?? 0;
-              const oi = o.oi ?? 0;
-              const px = mid(o);
-              const premium = vol * px * 100;
-              if (vol < MIN_VOL || premium < MIN_PREMIUM) continue;
-              entries.push({
-                symbol: sym,
-                name: m.name,
-                underlying: chain.underlying ?? m.price,
-                chgPct: m.returns?.["1d"] ?? null,
-                type,
-                strike: o.strike,
-                expiry: chain.selected,
-                dte,
-                vol,
-                oi,
-                volOI: oi > 0 ? vol / oi : null,
-                premium: Math.round(premium),
-                iv: o.iv,
-                mid: Math.round(px * 100) / 100,
-                unusual: vol > Math.max(oi, MIN_VOL), // today's volume exceeds open interest
-              });
+
+          const dteOf = (exp: string | null) =>
+            exp ? Math.round((new Date(exp + "T00:00:00Z").getTime() - Date.now()) / 86_400_000) : null;
+          const scan = (chain: { selected: string | null; underlying: number | null; calls: any[]; puts: any[] }) => {
+            const dte = dteOf(chain.selected);
+            for (const [type, opts] of [["call", chain.calls], ["put", chain.puts]] as const) {
+              for (const o of opts) {
+                const vol = o.vol ?? 0;
+                const oi = o.oi ?? 0;
+                const px = mid(o);
+                const premium = vol * px * 100;
+                if (vol < MIN_VOL || premium < MIN_PREMIUM) continue;
+                entries.push({
+                  symbol: sym,
+                  name: m.name,
+                  underlying: chain.underlying ?? m.price,
+                  chgPct: m.returns?.["1d"] ?? null,
+                  type,
+                  strike: o.strike,
+                  expiry: chain.selected,
+                  dte,
+                  vol,
+                  oi,
+                  volOI: oi > 0 ? vol / oi : null,
+                  premium: Math.round(premium),
+                  iv: o.iv,
+                  mid: Math.round(px * 100) / 100,
+                  unusual: vol > Math.max(oi, MIN_VOL), // today's volume exceeds open interest
+                });
+              }
+            }
+          };
+          scan(front);
+
+          // Beyond the front expiry: the nearest expiration at each DTE target (weekly / monthly /
+          // quarter-out), deduped. Mega-caps expire DAILY, so front-only = a pure-0DTE board.
+          const picked = new Set([front.selected]);
+          for (const target of EXTRA_DTE_TARGETS) {
+            const exp = front.expirations.find((e) => !picked.has(e) && (dteOf(e) ?? -1) >= target);
+            if (!exp) continue;
+            picked.add(exp);
+            try {
+              scan(await getOptions(sym, exp));
+            } catch {
+              /* one bad expiry shouldn't sink the symbol */
             }
           }
         } catch {
