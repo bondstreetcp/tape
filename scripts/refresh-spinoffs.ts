@@ -56,7 +56,10 @@ async function main() {
   const rows: SpinoffRow[] = [];
   for (const seed of SPINOFF_ROSTER) {
     const spinT = Date.parse(seed.spinDate);
-    const [b, shares, wiLine] = await Promise.all([bars(seed.ticker, seed.spinDate), sharesOutstanding(seed.ticker), whenIssuedVol(seed)]);
+    const [b, sharesOwn, wiLine] = await Promise.all([bars(seed.ticker, seed.spinDate), sharesOutstanding(seed.ticker), whenIssuedVol(seed)]);
+    // Yahoo publishes NOTHING (not even market cap) for a days-old spinco — derive the count from
+    // the PARENT's shares × the distribution ratio until the spinco's own figure appears.
+    const shares = sharesOwn ?? (seed.ratio ? await sharesOutstanding(seed.parentTicker).then((p) => (p ? Math.round(p * seed.ratio!) : null)) : null);
     const reg = b.filter((x) => x.t >= spinT && x.close != null);
     // When-issued = the separate V-line (if Yahoo carries it) PLUS any pre-spin-date bars Yahoo
     // folds into the regular ticker's own history (it does for e.g. SNDK).
