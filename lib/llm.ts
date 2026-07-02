@@ -16,6 +16,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { recordUsage } from "./llmUsage";
 
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "z-ai/glm-5.2";
@@ -123,6 +124,8 @@ async function callChat(
         return null;
       }
       const j: any = await res.json();
+      // Meter tokens even on an empty-content reply — reasoning tokens are still billed.
+      if (j?.usage) recordUsage(opts.model || model(), j.usage.prompt_tokens, j.usage.completion_tokens);
       const content: string = j?.choices?.[0]?.message?.content ?? "";
       if (content.trim()) return content;
       lastInfo = "empty content"; // transient (truncated/blank) → retry

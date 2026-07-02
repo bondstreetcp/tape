@@ -4,6 +4,8 @@
  * task type so cosine similarity is meaningful. Chunking splits a report's full text into
  * overlapping passages on sentence boundaries.
  */
+import { recordUsage } from "@/lib/llmUsage";
+
 const EMBED_MODEL = "gemini-embedding-001";
 export const EMBED_DIM = 768; // MRL-truncated from 3072; cosine (<=>) is scale-invariant so no re-norm needed
 
@@ -18,6 +20,7 @@ async function embed(text: string, taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_Q
     });
     if (!res.ok) return null;
     const j: any = await res.json();
+    recordUsage(EMBED_MODEL, j?.usageMetadata?.promptTokenCount || Math.ceil(Math.min(text.length, 8000) / 4), 0);
     const v = j?.embedding?.values;
     return Array.isArray(v) && v.length ? v : null;
   } catch {

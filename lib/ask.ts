@@ -10,6 +10,7 @@ import { getCompanyProfile } from "./companyProfile";
 import { getNews } from "./news";
 import { getFinancials, type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
+import { recordUsage } from "./llmUsage";
 
 const KEY = process.env.GEMINI_API_KEY;
 // gemini-3.1-pro-preview — sharpest model in the bake-off (more sources, segment-level
@@ -158,6 +159,8 @@ export async function askGemini(
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);
   const j: any = await res.json();
+  const um = j?.usageMetadata;
+  if (um) recordUsage(MODEL, um.promptTokenCount || 0, (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0));
   const cand = j?.candidates?.[0];
   const answer = (cand?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
   if (!answer) return null;
