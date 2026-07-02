@@ -91,7 +91,7 @@ export default function HoldcoDetailView({ h, universe, xref = {} }: { h: Holdco
       {/* constituents */}
       <section className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="mb-2 text-sm font-semibold text-[var(--text-2)]">Look-through basket · {moneyM(h.navM, cur)} NAV</div>
-        <table className="w-full text-xs">
+        <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-xs">
           <tbody>
             {h.stakes.map((s) => {
               const dd = xref[s.ticker];
@@ -116,7 +116,7 @@ export default function HoldcoDetailView({ h, universe, xref = {} }: { h: Holdco
               <td colSpan={2} className="py-1.5 pl-2 text-right text-[var(--text-4)]">net {h.netDebtM <= 0 ? "cash" : "debt"} {moneyM(Math.abs(h.netDebtM), cur)}</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
         {h.note && <p className="mt-2.5 text-[11px] leading-snug text-[var(--text-4)]">{h.note}</p>}
         <p className="mt-1.5 text-[10px] text-[var(--text-4)]">Stake prices + FX live; net debt / private NAV / share counts are estimates — verify against the holdco&apos;s NAV statement. Not investment advice.</p>
       </section>

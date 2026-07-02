@@ -6,6 +6,7 @@ import { typeColor, typeLabel, perfColor } from "@/lib/campaigns";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
@@ -39,7 +40,7 @@ export default function CampaignsView({ universe, data }: { universe: string; da
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Activism &amp; Short Campaigns</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Who&apos;s publicly pressuring or betting against a company — <b style={{ color: typeColor("activist") }}>activist stakes</b> (13D), <b style={{ color: typeColor("proxy-fight") }}>proxy fights</b> (DEFC14A/DFAN14A), and <b style={{ color: typeColor("short") }}>short reports</b> — with the AI-extracted ask/allegation and the stock since. {data.campaigns.length} campaigns · {data.scanned} filings scanned · {fmtDateTime(data.generatedAt)}
+            Who&apos;s publicly pressuring or betting against a company — <b style={{ color: typeColor("activist") }}>activist stakes</b> (13D <InfoDot term="13D" />), <b style={{ color: typeColor("proxy-fight") }}>proxy fights</b> (DEFC14A/DFAN14A), and <b style={{ color: typeColor("short") }}>short reports</b> — with the AI-extracted ask/allegation and the stock since. {data.campaigns.length} campaigns · {data.scanned} filings scanned · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />

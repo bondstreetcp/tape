@@ -22,9 +22,9 @@ const dt = (s: string | null) =>
 // Cheap (current ≤ median) → green; rich → red. Intensity scales with how far from median.
 function discountColor(discountPct: number): string {
   if (discountPct <= -25) return "#22c55e";
-  if (discountPct < 0) return "#4ade80";
+  if (discountPct < 0) return "#22c55e";
   if (discountPct >= 25) return "#ef4444";
-  if (discountPct > 0) return "#f87171";
+  if (discountPct > 0) return "#ef4444";
   return "var(--text-2)";
 }
 

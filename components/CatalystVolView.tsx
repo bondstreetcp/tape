@@ -6,6 +6,7 @@ import { ratioColor, ratioVerdict } from "@/lib/catalystVol";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 type F = "all" | "cheap";
@@ -32,7 +33,7 @@ export default function CatalystVolView({ universe, data }: { universe: string; 
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Catalyst Vol — cheap options into an event</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Names with a scheduled <b>investor / analyst / capital-markets day</b> where the options market isn&apos;t pricing the event: the ATM straddle over the event window vs the stock&apos;s own realized-vol baseline. <b style={{ color: ratioColor(0.9) }}>Ratio &lt; 1</b> = options priced <i>below</i> normal vol — no catalyst premium. {data.rows.length} events · {fmtDateTime(data.generatedAt)}
+            Names with a scheduled <b>investor / analyst / capital-markets day</b> where the options market isn&apos;t pricing the event: the ATM straddle <InfoDot term="Straddle" /> over the event window vs the stock&apos;s own realized-vol baseline. <b style={{ color: ratioColor(0.9) }}>Ratio &lt; 1</b> = options priced <i>below</i> normal vol — no catalyst premium. {data.rows.length} events · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />

@@ -54,6 +54,17 @@ export function fmtMoney(v: number | null | undefined, currency = "USD", dec?: n
   return c.suffix ? `${num}${c.sym}` : `${c.sym}${num}`;
 }
 
+/** Standard user-facing date: "Jul 1, 2026" (pass {year:false} for "Jul 1" in space-tight cells). */
+export function fmtDate(d: string | number | Date, opts?: { year?: boolean }): string {
+  try {
+    const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(opts?.year === false ? {} : { year: "numeric" }) });
+  } catch {
+    return String(d);
+  }
+}
+
 export function fmtDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {

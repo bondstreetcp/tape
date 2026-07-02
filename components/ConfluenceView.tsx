@@ -50,6 +50,9 @@ export default function ConfluenceView({ data, universe }: { data: ConfluenceDat
         {names.length} names · across the Russell 3000{asOf ? ` · as of ${asOf}` : ""}
       </div>
 
+      {names.length === 0 && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--text-3)]">No names match right now — the board rebuilds on the nightly refresh.</div>
+      )}
       <ul className="space-y-3">
         {names.map((n) => (
           <ConfluenceCard key={n.symbol} n={n} universe={universe} />

@@ -6,6 +6,7 @@ import { perfColor, fmtSize } from "@/lib/ipoMonitor";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
@@ -28,7 +29,7 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">IPOs &amp; Lockups</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            The IPO pipeline (S-1 filings), recent listings, and the <b>lockup-expiry calendar</b> — each with an AI summary of the prospectus. From SEC filings. {data.events.length} events · {fmtDateTime(data.generatedAt)}
+            The IPO pipeline (S-1 filings), recent listings, and the <b>lockup-expiry calendar</b> <InfoDot term="Lockup" /> — each with an AI summary of the prospectus. From SEC filings. {data.events.length} events · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />

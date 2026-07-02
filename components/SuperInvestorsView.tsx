@@ -1,4 +1,5 @@
 "use client";
+import { fmtDate } from "@/lib/format";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SuperInvestorsData, InvestorPortfolio, Holding } from "@/lib/superinvestors";
@@ -87,7 +88,7 @@ export default function SuperInvestorsView({ universe, data, known, story }: { u
               </button>
             ))}
           </div>
-          <p className="px-2.5 py-2 text-[10px] text-[var(--text-4)]">As of {new Date(data.generatedAt).toLocaleDateString()}. 13F is a lagged, long-only snapshot.</p>
+          <p className="px-2.5 py-2 text-[10px] text-[var(--text-4)]">As of {fmtDate(data.generatedAt)}. 13F is a lagged, long-only snapshot.</p>
         </div>
 
         {/* detail */}

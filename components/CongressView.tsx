@@ -11,7 +11,7 @@ type SortKey = "traded" | "disclosed" | "amount";
 const k = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${n}`);
 const fmtAmt = (lo: number, hi: number) => (lo === hi ? `${k(lo)}+` : `${k(lo)}–${k(hi)}`);
 const typeColor: Record<string, string> = { buy: "#22c55e", sell: "#ef4444", exchange: "#f59e0b" };
-const dt = (s: string) => (s ? new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—");
+const dt = (s: string) => (s ? new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 const chamberBadge = (c: string) =>
   c === "Senate" ? { t: "SEN", cls: "bg-[var(--accent-soft)] text-[var(--accent)]" }
   : c === "House" ? { t: "REP", cls: "bg-[#7c3aed]/15 text-[#a78bfa]" }

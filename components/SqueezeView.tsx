@@ -66,6 +66,9 @@ export default function SqueezeView({ data, universe }: { data: SqueezeData; uni
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={99} className="p-10 text-center text-sm text-[var(--text-3)]">No coverage for this universe — this dataset covers US names (S&P 500 first). Use the universe switcher above.</td></tr>
+            )}
             {rows.map((r, i) => (
               <tr key={r.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                 <td className="px-3 py-2 tabular-nums text-[var(--text-4)]">{i + 1}</td>

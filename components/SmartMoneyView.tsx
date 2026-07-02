@@ -49,6 +49,9 @@ export default function SmartMoneyView({ names, universe, asOf, limit = 80 }: { 
 
       <div className="mb-3 text-xs text-[var(--text-4)]">{filtered.length} names{asOf ? ` · 13F as of latest filings · ${asOf}` : ""}</div>
 
+      {filtered.length === 0 && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--text-3)]">No matches for these filters — try loosening them.</div>
+      )}
       <ul className="space-y-2.5">
         {filtered.map((n) => (
           <li key={n.symbol} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--border-strong)]">

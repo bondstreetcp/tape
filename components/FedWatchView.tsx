@@ -6,6 +6,7 @@ import { biasColor, biasLabel, kindLabel, currentStance } from "@/lib/fedWatch";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 type KindF = "all" | "statement" | "speech";
@@ -32,7 +33,7 @@ export default function FedWatchView({ universe, data }: { universe: string; dat
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Fed Watch</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            FOMC statements &amp; minutes, Fed-speaker speeches, and the Beige Book — read by AI and scored <b style={{ color: biasColor("hawkish") }}>hawkish</b> ↔ <b style={{ color: biasColor("dovish") }}>dovish</b>, with what changed. The policy narrative next to your FRED numbers. {data.items.length} items · {fmtDateTime(data.generatedAt)}
+            FOMC statements &amp; minutes, Fed-speaker speeches, and the Beige Book — read by AI and scored <b style={{ color: biasColor("hawkish") }}>hawkish</b> ↔ <b style={{ color: biasColor("dovish") }}>dovish</b> <InfoDot term="Hawkish / dovish" />, with what changed. The policy narrative next to your FRED numbers. {data.items.length} items · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />

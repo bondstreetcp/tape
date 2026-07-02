@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { StockRow } from "@/lib/types";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
-import { fmtPct, fmtMarketCap, fmtMoney } from "@/lib/format";
+import { fmtPct, fmtMarketCap, fmtMoney, fmtDate } from "@/lib/format";
 import { trendColor } from "@/lib/color";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -168,7 +168,7 @@ export default function StockCompareView({ universe, stocks, initial, generatedA
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-[var(--text-4)]">Best in each row highlighted (lower P/E·P/B·leverage = better). Valuation from the snapshot; quality/growth from annual fundamentals · as of {new Date(generatedAt).toLocaleDateString()}.</p>
+          <p className="text-[11px] text-[var(--text-4)]">Best in each row highlighted (lower P/E·P/B·leverage = better). Valuation from the snapshot; quality/growth from annual fundamentals · as of {fmtDate(generatedAt)}.</p>
         </div>
       )}
     </main>
