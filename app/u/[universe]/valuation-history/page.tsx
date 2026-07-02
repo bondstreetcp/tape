@@ -6,6 +6,7 @@ import { loadValuationHistory } from "@/lib/valuationHistory";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { ValuationExplainMap } from "@/lib/valuationExplain";
 import ValuationHistoryView from "@/components/ValuationHistoryView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -26,14 +27,7 @@ export default async function ValuationHistoryPage({ params }: { params: Promise
 
   const [data, snapshot, explain] = await Promise.all([loadValuationHistory(), loadSnapshot(universe), loadExplain()]);
   if (!data || !Object.keys(data.names).length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Discount to Own History</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">
-          Data isn&apos;t built yet. Run <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-valuation-history</code> to build the valuation-history dataset.
-        </p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Discount to Own History" />;
   }
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   const sectorBy: Record<string, string> = {};

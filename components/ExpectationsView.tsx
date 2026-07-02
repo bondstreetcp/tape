@@ -27,6 +27,7 @@ export default function ExpectationsView({ data, universe }: { data: Expectation
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Expectations (Reverse-DCF)"
         desc="What growth is baked into the price. For every name we solve the free-cash-flow growth rate the current price implies (a 2-stage reverse-DCF) and compare it to the growth the business has actually delivered. Priced for far LESS than it delivers = cheap expectations; far MORE = priced for perfection. Equity-basis, uniform 9% discount — decision-support, not advice."
       />

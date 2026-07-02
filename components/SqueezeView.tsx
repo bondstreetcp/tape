@@ -25,6 +25,7 @@ export default function SqueezeView({ data, universe }: { data: SqueezeData; uni
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Short-Squeeze Radar"
         desc="The classic squeeze setup, ranked: short interest as a % of float, days to cover (how long shorts need to buy back), and whether shorts are still rising. Crowded + hard-to-cover + still being pressed = the most squeezable. Open a candidate's stock page for its live borrow cost. US names only — decision-support, not advice."
       />

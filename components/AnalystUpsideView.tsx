@@ -25,6 +25,7 @@ export default function AnalystUpsideView({ data, universe }: { data: UpsideData
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Analyst Upside"
         desc="Where the Street sees the most room — every name ranked by mean price-target upside (consensus target ÷ price), with the Buy/Hold/Sell rating and the high–low target spread alongside. Read it WITH the rating: a big upside on a Hold-rated name usually means stale targets or a falling price, not conviction. Decision-support, not advice."
       />

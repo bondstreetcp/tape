@@ -30,6 +30,7 @@ export default function BreadthView({ data, regime, universe }: { data: BreadthD
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Breadth & Regime"
         desc="Market internals: how many names actually participate in the move (above their moving averages, at new highs, positive on the year) and the macro risk backdrop. Tells you whether a rally is broad or a few names carrying the tape. Decision-support, not advice."
       />

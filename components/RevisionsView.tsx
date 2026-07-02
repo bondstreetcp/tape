@@ -24,6 +24,7 @@ export default function RevisionsView({ data, universe }: { data: RevisionsData;
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Revisions Momentum"
         desc="Where the Street is quietly moving numbers. Ranks every name by estimate drift — how much consensus EPS has changed over the last 90/30 days — and revision breadth (analysts revising up vs down). Rising estimates ahead of a print is one of the most durable public-market signals (the PEAD factor). Decision-support, not advice."
       />

@@ -30,6 +30,7 @@ export default function SmartMoneyView({ names, universe, asOf, limit = 80 }: { 
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Smart-Money Radar"
         desc="Who's quietly accumulating — names where super-investors initiated or added last quarter (13F) and/or members of Congress are net buyers. The ⤓ dip badge flags names being bought while they're down. Follow-the-money, not advice."
       />

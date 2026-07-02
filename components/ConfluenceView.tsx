@@ -20,6 +20,7 @@ export default function ConfluenceView({ data, universe }: { data: ConfluenceDat
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Confluence Engine"
         desc="Names where several INDEPENDENT bullish signals line up — cheap vs its own 10-year history, super-investor 13F buying, Congress buys, analyst upgrades, call-heavy options flow, catalysts. One signal is noise; a stack of unrelated ones agreeing is a setup worth a look. Decision-support, not advice."
       />

@@ -38,7 +38,7 @@ export default function CompsBoardView({ rows, universe, asOf }: { rows: CompRow
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       <Link href={`/u/${universe}/holdco-nav`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
-      <PageHeader title="Same-Store Sales (Comps) Board" desc="Every restaurant & retailer ranked by its latest comparable-/same-store-sales %. Watch sequential acceleration (vs the prior quarter) and the 2-year stack (this comp + last year's) for durable vs flattering strength. Comps are company-defined and not perfectly comparable across names — decision-support, not advice." />
+      <PageHeader title="Same-Store Sales (Comps) Board" desc="Every restaurant & retailer ranked by its latest comparable-/same-store-sales %. Watch sequential acceleration (vs the prior quarter) and the 2-year stack (this comp + last year's) for durable vs flattering strength. Comps are company-defined and not perfectly comparable across names — decision-support, not advice." universe={universe} />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">

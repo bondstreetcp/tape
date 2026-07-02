@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildInsiderBuys, type InsidersFile } from "@/lib/insiders";
 import InsidersView from "@/components/InsidersView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,7 @@ export default async function InsidersPage({ params }: { params: Promise<{ unive
 
   const data = snap?.stocks && file ? buildInsiderBuys(file, snap.stocks) : null;
   if (!data) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-        <h1 className="mt-4 text-2xl font-bold">Insider Cluster-Buying</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">No insider-buy data yet — it&apos;s built nightly for US names (`npm run refresh-insiders`).</p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="Insider Cluster-Buying" note="US names only — try the S&P 500 or a broad US universe." />;
   }
   return <InsidersView data={data} universe={universe} />;
 }

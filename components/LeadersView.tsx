@@ -33,6 +33,7 @@ export default function LeadersView({ rows, universe }: { rows: LeaderRow[]; uni
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
       <PageHeader
+        universe={universe}
         title="Leaders Board"
         desc="Every name ranked by relative strength (RS) — its multi-timeframe return percentile vs the rest of the universe (1–99, IBD-style) — and placed in a momentum quadrant from its RS level vs. whether that RS is accelerating. Breakout = near a 52-week high AND in a golden cross above the 200-day MA. Decision-support, not advice."
       />

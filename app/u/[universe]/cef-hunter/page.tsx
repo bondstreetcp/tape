@@ -3,6 +3,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadCef } from "@/lib/cef";
 import { buildCefHunter } from "@/lib/cefHunter";
 import CefHunterView from "@/components/CefHunterView";
+import EmptyState from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -15,14 +16,7 @@ export default async function CefHunterPage({ params }: { params: Promise<{ univ
   const data = await loadCef();
   const funds = data?.funds ? buildCefHunter(data.funds) : [];
   if (!funds.length) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">CEF Discount Hunter</h1>
-        <p className="mt-3 text-sm text-[var(--text-3)]">
-          No fund data yet. Run <code className="rounded bg-[var(--surface)] px-1.5 py-0.5">npm run refresh-cef</code>.
-        </p>
-      </main>
-    );
+    return <EmptyState universe={universe} title="CEF Discount Hunter" />;
   }
   return <CefHunterView universe={universe} funds={funds} />;
 }

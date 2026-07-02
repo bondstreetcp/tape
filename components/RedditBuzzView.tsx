@@ -33,7 +33,7 @@ export default function RedditBuzzView({ rows, universe, asOf }: { rows: BuzzRow
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uname}</Link>
       <div className="mt-1" />
-      <PageHeader title="Reddit Buzz" desc="What retail is talking about — mention counts across r/wallstreetbets, r/stocks, r/investing and more (via ApeWisdom). This is ATTENTION, not sentiment: a high or fast-rising count means the crowd is watching, not that they're bullish. Decision-support, not advice." />
+      <PageHeader title="Reddit Buzz" desc="What retail is talking about — mention counts across r/wallstreetbets, r/stocks, r/investing and more (via ApeWisdom). This is ATTENTION, not sentiment: a high or fast-rising count means the crowd is watching, not that they're bullish. Decision-support, not advice." universe={universe} />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
