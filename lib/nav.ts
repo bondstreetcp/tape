@@ -37,6 +37,7 @@ export const FEATURES: NavItem[] = [
   { label: "Earnings Calendar", path: "/earnings", desc: "Who reports when, with the options-implied move", group: "Markets", job: "Find ideas", kw: "earnings dates report calendar" },
   { label: "Macro & Rates", path: "/macro", desc: "Yield curve, inflation, growth, and credit spreads (FRED)", group: "Markets", job: "Track the market", kw: "fred yields inflation rates economy" },
   { label: "Fixed Income", path: "/rates", desc: "The bond desk — curve spreads, inversion, and credit OAS in one view", group: "Markets", job: "Track the market", kw: "rates bonds curve inversion 2s10s oas credit spreads treasury fixed income" },
+  { label: "Spinoff Turnover", path: "/spinoffs", desc: "Completed spinoffs with the share-register turnover clock — ~50% turned has historically marked the bottom", group: "Research", job: "Find ideas", kw: "spinoff spin-off turnover when-issued forced selling seller exhaustion greenblatt special situations bottom" },
   { label: "Fed Watch", path: "/fed", desc: "FOMC statements, minutes, speeches & the Beige Book — AI-scored hawkish↔dovish with what changed", group: "Markets", job: "Track the market", kw: "fed federal reserve fomc powell hawkish dovish rate cut hike minutes beige book monetary policy speeches" },
   { label: "Breadth & Regime", path: "/breadth", desc: "Market internals — how many names participate, plus the macro risk backdrop", group: "Markets", job: "Track the market", kw: "breadth internals advance decline new highs lows above 200 day ma participation t2108 regime risk-on risk-off" },
   // ── Strategies
@@ -92,7 +93,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Research: [
     { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
-    { label: "Event-Driven", blurb: "Catalyst monitors — activism & shorts, corporate events, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/campaigns", "/corp-events", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
+    { label: "Event-Driven", blurb: "Catalyst monitors — activism & shorts, corporate events, spinoff turnover, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/campaigns", "/corp-events", "/spinoffs", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
     { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
     { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, sector compare", paths: ["/compare-stocks", "/ratio", "/compare"] },

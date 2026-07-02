@@ -9,6 +9,7 @@
     "refresh-data": "tsx scripts/build-data.ts",
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "eval-alerts": "tsx scripts/eval-alerts.ts",
+    "refresh-spinoffs": "tsx scripts/refresh-spinoffs.ts",
     "refresh-sss": "tsx scripts/refresh-sss.ts",
     "refresh-sss-intl": "tsx scripts/refresh-sss-intl.ts",
     "refresh-guidance": "tsx scripts/refresh-guidance.ts",
