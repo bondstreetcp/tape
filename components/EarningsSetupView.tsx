@@ -71,10 +71,17 @@ export default function EarningsSetupView({ rows, universe, asOf }: { rows: Earn
                   </div>
                   <div className="mt-0.5 text-xs text-[var(--text-4)]">{r.sector || "—"} · {money(r.marketCap)}</div>
                 </div>
-                <div className="shrink-0 rounded-md bg-[var(--surface-hover)] px-2 py-0.5 text-right text-[11px] text-[var(--text-2)]">
-                  {r.daysToEarnings <= 0 ? "today" : `in ${r.daysToEarnings}d`}
-                  <div className="text-[10px] text-[var(--text-4)]">{when(r.earningsDate)}</div>
-                </div>
+                {(() => {
+                  // Compute LIVE from the date (daysToEarnings is frozen at build time, so a
+                  // day-old snapshot mislabeled already-reported names as "today").
+                  const d = Math.round((Date.parse(r.earningsDate) - Date.now()) / 86_400_000);
+                  return (
+                    <div className="shrink-0 rounded-md bg-[var(--surface-hover)] px-2 py-0.5 text-right text-[11px]" style={{ color: d < 0 ? "var(--text-4)" : "var(--text-2)" }}>
+                      {d < 0 ? "reported" : d === 0 ? "today" : `in ${d}d`}
+                      <div className="text-[10px] text-[var(--text-4)]">{when(r.earningsDate)}</div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="mt-3 flex items-end gap-4">
