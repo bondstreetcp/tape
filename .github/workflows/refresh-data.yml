@@ -496,6 +496,19 @@ jobs:
           LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
         continue-on-error: true
 
+      # Upload the operational data/ tree to R2 as ONE tarball (build-time hydration — see
+      # docs/DATA-ON-R2.md). Runs every tick so R2 stays as fresh as git. MIGRATION SAFETY PHASE: we
+      # STILL commit data/ below, so R2 and git carry the same data until the Vercel cutover is proven;
+      # then the commit is dropped and this becomes the sole data path. Inert without the LAKE_S3_* secrets.
+      - name: Upload site data to R2 (build-time hydration)
+        run: npm run data-to-r2
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+        continue-on-error: true
+
       - name: Commit & push if data changed
         env:
           SCHED: ${{ github.event.schedule }}
