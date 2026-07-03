@@ -10,19 +10,26 @@ import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 type F = "all" | "cheap";
+// The data file also carries UNPRICED calendar rows (null pricing — kept so a transient options
+// failure doesn't forget a future event); the board shows priced rows only.
+type PricedRow = CatalystRow & { impliedMovePct: number; baselineMovePct: number; ratio: number; dte: number };
 
 export default function CatalystVolView({ universe, data }: { universe: string; data: CatalystVolData }) {
   const [f, setF] = useState<F>("all");
   const [q, setQ] = useState("");
 
+  const priced = useMemo(
+    () => data.rows.filter((r): r is PricedRow => r.ratio != null && r.impliedMovePct != null && r.baselineMovePct != null && r.dte != null),
+    [data.rows],
+  );
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    return data.rows.filter((r) => {
+    return priced.filter((r) => {
       if (f === "cheap" && r.ratio > 1.1) return false;
       if (ql && !r.ticker.toLowerCase().includes(ql) && !r.company.toLowerCase().includes(ql)) return false;
       return true;
     });
-  }, [data.rows, f, q]);
+  }, [priced, f, q]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
 
@@ -33,7 +40,7 @@ export default function CatalystVolView({ universe, data }: { universe: string; 
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Catalyst Vol — cheap options into an event</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Names with a scheduled <b>investor / analyst / capital-markets day</b> where the options market isn&apos;t pricing the event: the ATM straddle <InfoDot term="Straddle" /> over the event window vs the stock&apos;s own realized-vol baseline. <b style={{ color: ratioColor(0.9) }}>Ratio &lt; 1</b> = options priced <i>below</i> normal vol — no catalyst premium. {data.rows.length} events · {fmtDateTime(data.generatedAt)}
+            Names with a scheduled <b>investor / analyst / capital-markets day</b> where the options market isn&apos;t pricing the event: the ATM straddle <InfoDot term="Straddle" /> over the event window vs the stock&apos;s own realized-vol baseline. <b style={{ color: ratioColor(0.9) }}>Ratio &lt; 1</b> = options priced <i>below</i> normal vol — no catalyst premium. {priced.length} priced events{data.rows.length > priced.length ? ` (${data.rows.length - priced.length} more on the calendar awaiting pricing)` : ""} · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -46,14 +53,14 @@ export default function CatalystVolView({ universe, data }: { universe: string; 
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or company…" className="w-48 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
-        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} of {data.rows.length}</span>
+        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} of {priced.length}</span>
       </div>
 
       <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
         Implied = ATM straddle ÷ spot over the expiry bracketing the event. Baseline = the stock&apos;s realized vol projected over the same window. A cheap ratio means the market isn&apos;t adding event premium — but a catalyst calendar is genuinely hard to source, so this covers investor days announced via SEC 8-K and grows as more are filed. Decision support, not advice.
       </div>
 
-      {data.rows.length === 0 ? (
+      {priced.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--text-3)]">
           <div className="text-[var(--text-2)]">No scheduled investor-day catalysts priced yet.</div>
           <div className="mx-auto mt-1 max-w-md text-[13px]">This scans SEC 8-Ks for announced investor/analyst days and prices the options over each — it fills as companies file them.</div>

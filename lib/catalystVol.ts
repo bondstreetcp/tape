@@ -11,13 +11,17 @@ export interface CatalystRow {
   eventType: string; // "Investor Day" | "Analyst Day" | "Capital Markets Day"
   eventDate: string; // ISO date of the event
   daysToEvent: number;
-  price: number;
-  expiry: string; // the option expiry bracketing the event
-  dte: number; // days to that expiry
-  impliedMovePct: number; // ATM straddle ÷ spot, over the expiry
-  baselineMovePct: number; // the stock's realized-vol expected move over the same window
-  ratio: number; // implied ÷ baseline — <1 = options pricing LESS than normal vol (no catalyst premium)
-  hvAnnual: number; // annualized realized vol
+  // Pricing fields are null when the options couldn't be priced THIS run (no chain, thin quotes,
+  // transient Yahoo failure). Unpriced rows stay in the file so the future event isn't forgotten —
+  // prior rows are the calendar's only memory once the 8-K ages out of the EDGAR scan window.
+  // The view shows priced rows only; unpriced ones re-price on a later run.
+  price: number | null;
+  expiry: string | null; // the option expiry bracketing the event
+  dte: number | null; // days to that expiry
+  impliedMovePct: number | null; // ATM straddle ÷ spot, over the expiry
+  baselineMovePct: number | null; // the stock's realized-vol expected move over the same window
+  ratio: number | null; // implied ÷ baseline — <1 = options pricing LESS than normal vol (no catalyst premium)
+  hvAnnual: number | null; // annualized realized vol
   url: string;
 }
 

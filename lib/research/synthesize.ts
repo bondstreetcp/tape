@@ -137,6 +137,9 @@ export function signalsFor(d: StoredDoc): DocSignal {
   for (const e of d.estimates) {
     if (e.value != null && e.priorValue) {
       const ch = pctChange(e.value, e.priorValue);
+      // |change| > 300% is almost always a unit inconsistency in the extraction ($B current vs $M
+      // prior) — such a "revision" would fabricate the top actionable idea. Ignore it for signals.
+      if (Math.abs(ch) > 300) continue;
       if (!topRevision || Math.abs(ch) > Math.abs(topRevision.changePct)) topRevision = { metric: e.metric, period: e.period, changePct: ch };
     }
   }

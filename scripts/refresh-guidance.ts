@@ -70,15 +70,33 @@ const ACTIONS = new Set<GuidanceAction>(["raise", "reaffirm", "cut", "initiate",
 
 interface Extracted { reportedEps: number | null; nextQEpsLow: number | null; nextQEpsHigh: number | null; guides: GuidancePeriod[] }
 
-async function extract(sym: string, text: string): Promise<Extracted | null> {
+async function extract(sym: string, text: string, ctx: { mktcapM: number | null; consEps: number | null }): Promise<Extracted | null> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: PRO_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
   if (raw == null) return null; // LLM transport failure ≠ "no guidance" — caller must not store [] or advance the gate
   const root = Array.isArray(raw) ? raw[0] : raw;
   const arr: any[] = Array.isArray(root?.guides) ? root.guides : Array.isArray(raw) ? raw : root && typeof root === "object" && root.period ? [root] : [];
+  // Quote grounding (the SSS pattern): a "verbatim" quote must actually appear in the filing text
+  // (whitespace/punctuation-normalized) — a fabricated citation is worse than none.
+  const normText = text.replace(/\s+/g, " ").replace(/[,$]/g, "").toLowerCase();
+  const groundedQuote = (q: unknown): string | null => {
+    if (typeof q !== "string" || !q.trim()) return null;
+    const nq = q.replace(/\s+/g, " ").replace(/[,$]/g, "").toLowerCase();
+    return normText.includes(nq.slice(0, 80)) ? q.slice(0, 400) : null;
+  };
+  // Revenue sanity vs market cap: quarterly/annual guides live within a wide but finite band of the
+  // company's size — a 1000× unit misread ($40.9B stored as 40.9, or raw dollars as "millions")
+  // lands far outside [0.001×, 10×] mktcap and is nulled rather than stored wrong.
+  const revOk = (v: number | null): number | null => {
+    if (v == null) return null;
+    if (ctx.mktcapM != null) return v >= ctx.mktcapM * 0.001 && v <= ctx.mktcapM * 10 ? v : null;
+    return v >= 1 && v <= 1_000_000 ? v : null; // no mktcap known → absolute $1M-$1T band
+  };
   const out: GuidancePeriod[] = [];
   for (const o of arr) {
     if (!o || typeof o !== "object" || typeof o.period !== "string") continue;
-    const revLowM = num(o.revLowM), revHighM = num(o.revHighM), epsLow = num(o.epsLow), epsHigh = num(o.epsHigh);
+    let revLowM = revOk(num(o.revLowM)), revHighM = revOk(num(o.revHighM));
+    if (revLowM != null && revHighM != null && revLowM > revHighM) [revLowM, revHighM] = [revHighM, revLowM]; // enforce low ≤ high
+    const epsLow = num(o.epsLow), epsHigh = num(o.epsHigh);
     const metricLabel = typeof o.metricLabel === "string" ? o.metricLabel.slice(0, 60) : undefined;
     // Keep a period only if it carries a usable dollar/EPS range OR a described metric (metricLabel/quote).
     if (revLowM == null && epsLow == null && revHighM == null && epsHigh == null && !metricLabel && !o.quote) continue;
@@ -87,15 +105,22 @@ async function extract(sym: string, text: string): Promise<Extracted | null> {
       metricLabel,
       revLowM, revHighM, epsLow, epsHigh,
       action: ACTIONS.has(o.action) ? o.action : "none",
-      quote: typeof o.quote === "string" ? o.quote.slice(0, 400) : null,
+      quote: groundedQuote(o.quote),
       confidence: ["high", "medium", "low"].includes(o.confidence) ? o.confidence : "medium",
     });
   }
   // Dedup repeated periods (the model sometimes emits FY27 three times) — keep the first per period.
   const byPeriod = new Map<string, GuidancePeriod>();
   for (const g of out) { const k = g.period.toLowerCase().replace(/\s/g, ""); if (!byPeriod.has(k)) byPeriod.set(k, g); }
-  // EPS sanity: drop an obviously-bad per-share figure (> $200/sh is a misread, not EPS).
-  const epsOk = (v: number | null) => v == null || Math.abs(v) <= 200;
+  // EPS sanity: > $200/sh is a misread, not EPS; and when a consensus estimate exists, a reported
+  // quarterly EPS more than ~5× the ANNUAL consensus (or wildly negative vs it) is a misread too —
+  // reportedEps feeds the "beats its own guide" track record, so one bad figure poisons the stat.
+  const epsOk = (v: number | null) => {
+    if (v == null) return true;
+    if (Math.abs(v) > 200) return false;
+    if (ctx.consEps != null && Math.abs(ctx.consEps) >= 0.1) return Math.abs(v) <= Math.max(Math.abs(ctx.consEps) * 5, 5);
+    return true;
+  };
   return {
     reportedEps: epsOk(num(root?.reportedEps)) ? num(root?.reportedEps) : null,
     nextQEpsLow: epsOk(num(root?.nextQuarterEpsLow)) ? num(root?.nextQuarterEpsLow) : null,
@@ -104,18 +129,36 @@ async function extract(sym: string, text: string): Promise<Extracted | null> {
   };
 }
 
-async function buildWatchSet(): Promise<string[]> {
+async function buildWatchSet(): Promise<{ list: string[]; mktcapM: Map<string, number> }> {
   const seen = new Set<string>();
-  for (const u of UNIVERSES) { const snap = await loadSnapshot(u); for (const s of snap?.stocks ?? []) seen.add(s.symbol); }
+  const mktcapM = new Map<string, number>();
+  for (const u of UNIVERSES) {
+    const snap = await loadSnapshot(u);
+    for (const s of snap?.stocks ?? []) {
+      seen.add(s.symbol);
+      if (s.marketCap > 0 && !mktcapM.has(s.symbol)) mktcapM.set(s.symbol, s.marketCap / 1e6);
+    }
+  }
   let list = [...seen];
   if (ONLY.length) list = list.filter((s) => ONLY.includes(s));
-  return list.sort();
+  return { list: list.sort(), mktcapM };
+}
+
+// Consensus EPS per symbol (data/estimates.json cyNow = current-year est) — the reportedEps gate.
+function loadConsensus(): Map<string, number> {
+  try {
+    const e = JSON.parse(readFileSync(join(process.cwd(), "data", "estimates.json"), "utf8"));
+    const m = new Map<string, number>();
+    for (const [sym, v] of Object.entries<any>(e?.names ?? {})) if (typeof v?.cyNow === "number" && Number.isFinite(v.cyNow)) m.set(sym, v.cyNow);
+    return m;
+  } catch { return new Map(); }
 }
 
 (async () => {
   if (!(await llmConfigured())) { console.error("✗ no LLM key (OPENROUTER_API_KEY). Aborting."); process.exit(1); }
   const data: GuidanceData = existsSync(OUT) ? JSON.parse(readFileSync(OUT, "utf8")) : { generatedAt: "", byTicker: {} };
-  const watch = await buildWatchSet();
+  const { list: watch, mktcapM } = await buildWatchSet();
+  const consensus = loadConsensus();
   console.log(`guidance watch-set: ${watch.length} names${ONLY.length ? ` [ONLY ${ONLY.join(",")}]` : ""}${LIMIT ? ` · LIMIT ${LIMIT}` : ""}`);
 
   let touched = 0, calls = 0, processed = 0;
@@ -140,7 +183,7 @@ async function buildWatchSet(): Promise<string[]> {
       for (const f of targets) {
         const ft = await getFilingText(sym, f.acc);
         if (!ft || ft.text.length < 400) { console.log(`  ${sym} ${f.date}: no text — will retry next run`); continue; }
-        const ex = await extract(sym, ft.text); calls++;
+        const ex = await extract(sym, ft.text, { mktcapM: mktcapM.get(sym) ?? null, consEps: consensus.get(sym) ?? null }); calls++;
         if (ex == null) { console.log(`  ${sym} ${f.date}: LLM failed — will retry next run`); continue; }
         if (f.acc === e0.acc) e0ok = true;
         const hp = { date: f.date, reportedEps: ex.reportedEps, nextQEpsLow: ex.nextQEpsLow, nextQEpsHigh: ex.nextQEpsHigh };

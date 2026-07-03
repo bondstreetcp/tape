@@ -277,7 +277,24 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
     sentiment: ["bullish", "neutral", "bearish"].includes(digest.sentiment) ? digest.sentiment : "neutral",
     surprise: ["beat", "inline", "miss", "na"].includes(digest.surprise) ? digest.surprise : "na",
     impact: ["high", "medium", "low"].includes(digest.impact) ? digest.impact : "medium",
-    keyMetrics: digest.keyMetrics && typeof digest.keyMetrics === "object" ? digest.keyMetrics : {},
+    // keyMetrics hardening: only string/number values (an object rendered "[object Object]"), and
+    // at least one numeric token of each figure must appear in the filing clip — a metric with no
+    // number from the filing is fabricated or derived, which the prompt forbids. ("some" not
+    // "every": comparisons like "vs $1.95 cons" legitimately carry a non-filing number.)
+    keyMetrics: (() => {
+      const src = (newClip || "").replace(/,/g, "");
+      const out: Record<string, string> = {};
+      if (digest.keyMetrics && typeof digest.keyMetrics === "object" && !Array.isArray(digest.keyMetrics)) {
+        for (const [k, v] of Object.entries(digest.keyMetrics).slice(0, 8)) {
+          if (typeof v !== "string" && typeof v !== "number") continue;
+          const val = String(v).slice(0, 80);
+          const nums = val.replace(/,/g, "").match(/\d+(?:\.\d+)?/g) || [];
+          if (nums.length && !nums.some((n) => src.includes(n))) continue;
+          out[String(k).slice(0, 40)] = val;
+        }
+      }
+      return out;
+    })(),
     riskFactorsAdded: rfAdded,
     riskFactorsRemoved: rfRemoved,
     accession: nf.accession,

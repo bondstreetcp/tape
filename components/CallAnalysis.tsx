@@ -5,6 +5,7 @@ interface Exchange { topic: string; analyst: string; question: string; answer: s
 interface Analysis {
   configured: boolean;
   available?: boolean;
+  aiFailed?: boolean; // the transcript exists but the AI read failed (transient) — offer a retry
   title?: string;
   date?: string | null;
   url?: string;
@@ -29,7 +30,7 @@ export default function CallAnalysis({ symbol, name }: { symbol: string; name?: 
     fetch(`/api/transcript-analysis/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
       .then((r) => r.json())
       .then((d: Analysis) => setData(d))
-      .catch(() => setData({ configured: true, available: false }));
+      .catch(() => setData({ configured: true, aiFailed: true })); // network error = retryable, not "no transcript"
   };
   const d = typeof data === "object" ? data : null;
 
@@ -48,7 +49,10 @@ export default function CallAnalysis({ symbol, name }: { symbol: string; name?: 
       {data === "loading" && <div className="flex items-center gap-2 px-4 py-4 text-xs text-[var(--text-3)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> Reading the transcript &amp; the prior call…</div>}
 
       {d && d.configured === false && <div className="px-4 py-4 text-xs text-[var(--text-3)]">AI isn&apos;t configured.</div>}
-      {d && d.configured && d.available === false && <div className="px-4 py-4 text-xs text-[var(--text-3)]">No transcript found for the latest call yet.</div>}
+      {d && d.configured && d.aiFailed && (
+        <div className="px-4 py-4 text-xs text-[var(--text-3)]">AI read failed — <button onClick={run} className="text-[var(--accent)] underline hover:no-underline">try again</button>.</div>
+      )}
+      {d && d.configured && !d.aiFailed && d.available === false && <div className="px-4 py-4 text-xs text-[var(--text-3)]">No transcript found for the latest call yet.</div>}
 
       {d && d.available && (
         <div className="space-y-3 px-4 py-3 text-[12px] leading-snug">

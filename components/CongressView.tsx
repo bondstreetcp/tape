@@ -104,7 +104,7 @@ export default function CongressView({ universe, data, trump, known, summary }: 
         <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="mb-1.5 flex items-center gap-2">
             <span className="text-sm font-semibold text-[var(--text)]">What&apos;s notable</span>
-            <span className="text-[10px] text-[var(--text-4)]">· AI summary — the signal vs. the data dump</span>
+            <span className="text-[10px] text-[var(--text-4)]">· AI summary — the signal vs. the data dump{summary.generatedAt ? ` · as of ${new Date(summary.generatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}</span>
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--text-2)]">{summary.tldr}</p>
           {summary.highlights.length > 0 && (

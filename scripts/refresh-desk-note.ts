@@ -141,7 +141,13 @@ async function main() {
     return;
   }
 
-  const cleanTickers = (t: unknown) => (Array.isArray(t) ? t.filter((x) => typeof x === "string").slice(0, 6) : []);
+  // Whitelist: every ticker the note names must exist in the inputs it was given (snapshot universe
+  // ∪ filing tickers) — a hallucinated/truncated symbol otherwise renders as a broken or
+  // wrong-company /stock/ link on the home dashboard.
+  const knownSyms = new Set<string>(stocks.map((s) => s.symbol));
+  for (const f of overnight?.items ?? []) if (f?.ticker) knownSyms.add(String(f.ticker).toUpperCase());
+  const cleanTickers = (t: unknown) =>
+    (Array.isArray(t) ? t.filter((x) => typeof x === "string").map((x) => x.toUpperCase()).filter((x) => knownSyms.has(x)).slice(0, 6) : []);
   const sections = out.sections
     .filter((s) => s && s.heading && Array.isArray(s.bullets) && s.bullets.length)
     .map((s) => ({
@@ -165,7 +171,11 @@ async function main() {
 
   const note: DeskNote = {
     generatedAt: new Date().toISOString(),
-    asOf: overnight?.since ? `since ${new Date(overnight.since).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}` : "overnight",
+    // Always dated — a bare "overnight" on a note that survives a failed rebuild reads as fresh
+    // when it's actually yesterday's (F13 staleness honesty).
+    asOf: overnight?.since
+      ? `since ${new Date(overnight.since).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+      : `overnight · ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`,
     tldr: typeof out.tldr === "string" ? out.tldr.trim() : "",
     sections,
     watchToday,

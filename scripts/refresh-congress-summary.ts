@@ -28,6 +28,8 @@ async function main() {
   const sectorBy = new Map((snap?.stocks || []).map((s) => [s.symbol, s.sector] as const));
   const now = Date.now();
   const recent = cong.trades.filter((t) => now - Date.parse(t.txDate) <= 75 * 86_400_000);
+  // Every ticker the summary may name must exist in the disclosed trades themselves.
+  const tradedSyms = new Set(cong.trades.map((t) => String(t.ticker || "").toUpperCase()).filter(Boolean));
 
   // Cluster buys — names several members bought (net buyers), by member breadth then notional.
   const clusters = cong.topTickers
@@ -83,7 +85,9 @@ async function main() {
       headline: String(h.headline).trim(),
       detail: String(h.detail).trim(),
       tag: typeof h.tag === "string" ? h.tag.trim().slice(0, 16) : "Watch",
-      tickers: (Array.isArray(h.tickers) ? h.tickers : []).filter((x) => typeof x === "string").slice(0, 8),
+      // whitelist: only tickers present in the disclosed trades fed to the prompt — a hallucinated
+      // symbol would render as a wrong-company /stock/ link
+      tickers: (Array.isArray(h.tickers) ? h.tickers : []).filter((x) => typeof x === "string" && tradedSyms.has(x.toUpperCase())).map((x) => x.toUpperCase()).slice(0, 8),
     }))
     .slice(0, 7);
 

@@ -74,8 +74,9 @@ async function validTicker(sym: string): Promise<boolean> {
   try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
 }
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } } }));
+  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
+  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
   return out;
 }
 
@@ -91,10 +92,16 @@ async function main() {
   const freshRules = rules.filter((r) => !known.has(r.id));
   const freshContracts = contracts.filter((r) => !known.has(r.id)).slice(0, 60);
 
+  // Batch classify with per-batch failure logging — a swallowed .catch(()=>({})) made a dead batch
+  // (LLM outage mid-run) indistinguishable from "nothing market-relevant in this batch" (A8).
+  let deadBatches = 0;
   const ruleMap: Record<string, { tickers: AffectedTicker[]; summary: string }> = {};
-  for (let i = 0; i < freshRules.length; i += 10) Object.assign(ruleMap, await classifyRules(freshRules.slice(i, i + 10)).catch(() => ({})));
+  for (let i = 0; i < freshRules.length; i += 10)
+    Object.assign(ruleMap, await classifyRules(freshRules.slice(i, i + 10)).catch((e) => { deadBatches++; console.warn(`  rules batch @${i} failed: ${e?.message || e}`); return {}; }));
   const conMap: Record<string, { ticker: string; summary: string }> = {};
-  for (let i = 0; i < freshContracts.length; i += 12) Object.assign(conMap, await classifyContracts(freshContracts.slice(i, i + 12)).catch(() => ({})));
+  for (let i = 0; i < freshContracts.length; i += 12)
+    Object.assign(conMap, await classifyContracts(freshContracts.slice(i, i + 12)).catch((e) => { deadBatches++; console.warn(`  contracts batch @${i} failed: ${e?.message || e}`); return {}; }));
+  console.log(`classify: rules kept ${Object.keys(ruleMap).length}/${freshRules.length} · contracts kept ${Object.keys(conMap).length}/${freshContracts.length}${deadBatches ? ` · ${deadBatches} DEAD batches (items lost this run)` : ""}`);
 
   const newRules: PolicyItem[] = freshRules.filter((r) => ruleMap[r.id]).map((r) => ({ id: r.id, date: r.date, kind: "rule", title: r.title, agency: r.agency, amount: null, recipient: null, tickers: ruleMap[r.id].tickers, summary: ruleMap[r.id].summary, url: r.url }));
   const newCons: PolicyItem[] = freshContracts.filter((r) => conMap[r.id]).map((r) => ({ id: r.id, date: r.date, kind: "contract", title: r.desc || `${r.recipient} award`, agency: r.agency, amount: r.amount, recipient: r.recipient, tickers: [{ ticker: conMap[r.id].ticker, impact: "positive" as Impact }], summary: conMap[r.id].summary, url: r.url }));

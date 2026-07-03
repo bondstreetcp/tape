@@ -14,6 +14,12 @@ export interface Catalyst {
   tf?: string; // the timeframe the catalyst explains ("1d"/"1w"/"ytd"/"1y") — gates cache reuse
 }
 export type CatalystMap = Record<string, Catalyst>;
+// File shape on disk: { generatedAt, bySymbol } (staleness-stamped); the loader also accepts the
+// legacy bare symbol map so a not-yet-regenerated file still loads.
+export interface CatalystData {
+  generatedAt: string;
+  bySymbol: CatalystMap;
+}
 
 let _cache: Promise<CatalystMap> | null = null;
 
@@ -21,7 +27,10 @@ export function loadCatalysts(): Promise<CatalystMap> {
   if (!_cache)
     _cache = fsp
       .readFile(path.join(process.cwd(), "data", "catalysts.json"), "utf8")
-      .then((s) => JSON.parse(s) as CatalystMap)
+      .then((s) => {
+        const raw = JSON.parse(s) as CatalystData | CatalystMap;
+        return ((raw as CatalystData).bySymbol ?? raw) as CatalystMap;
+      })
       .catch(() => ({}));
   return _cache;
 }

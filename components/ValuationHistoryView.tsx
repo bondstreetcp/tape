@@ -68,12 +68,14 @@ export default function ValuationHistoryView({
   known,
   sectorBy,
   explain = {},
+  explainAsOf = null,
 }: {
   universe: string;
   data: ValuationHistoryData;
   known: string[];
   sectorBy: Record<string, string>;
   explain?: ValuationExplainMap;
+  explainAsOf?: string | null; // generatedAt of the AI genuine/trap verdicts — staleness label
 }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [metric, setMetric] = useState<MultipleKey>("pe");
@@ -186,7 +188,10 @@ export default function ValuationHistoryView({
         </button>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker…" className="w-40 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
-        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} names · {label}</span>
+        <span className="ml-auto text-xs text-[var(--text-4)]">
+          {rows.length} names · {label}
+          {explainAsOf && Object.keys(explain).length > 0 && <> · AI verdicts as of {dt(explainAsOf)}</>}
+        </span>
       </div>
 
       {/* table */}

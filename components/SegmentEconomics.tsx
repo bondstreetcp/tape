@@ -3,7 +3,7 @@ import { useState } from "react";
 import { currencyPrefix } from "@/lib/format";
 
 interface Seg { name: string; revenue: number; operatingIncome: number | null; marginPct: number | null; revGrowthPct: number | null }
-interface Data { configured: boolean; available?: boolean; period?: string; url?: string; segments?: Seg[]; read?: string }
+interface Data { configured: boolean; available?: boolean; aiFailed?: boolean; period?: string; url?: string; segments?: Seg[]; read?: string }
 
 export default function SegmentEconomics({ symbol, currency }: { symbol: string; currency?: string }) {
   const [data, setData] = useState<Data | "idle" | "loading">("idle");
@@ -12,7 +12,7 @@ export default function SegmentEconomics({ symbol, currency }: { symbol: string;
     fetch(`/api/segment-economics/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
       .then((d: Data) => setData(d))
-      .catch(() => setData({ configured: true, available: false }));
+      .catch(() => setData({ configured: true, aiFailed: true })); // network error = retryable, not "not disclosed"
   };
   const d = typeof data === "object" ? data : null;
   const sym = currencyPrefix(currency);
@@ -32,7 +32,12 @@ export default function SegmentEconomics({ symbol, currency }: { symbol: string;
 
       {data === "loading" && <div className="flex items-center gap-2 py-2 text-xs text-[var(--text-3)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> Reading the segment footnote…</div>}
       {d && d.configured === false && <div className="py-2 text-xs text-[var(--text-3)]">AI isn&apos;t configured.</div>}
-      {d && d.configured && d.available === false && <div className="py-2 text-xs text-[var(--text-3)]">Per-segment operating income isn&apos;t broken out in the latest filing.</div>}
+      {d && d.configured && d.aiFailed && (
+        <div className="py-2 text-xs text-[var(--text-3)]">AI read failed — <button onClick={run} className="text-[var(--accent)] underline hover:no-underline">try again</button>.</div>
+      )}
+      {d && d.configured && !d.aiFailed && d.available === false && <div className="py-2 text-xs text-[var(--text-3)]">Per-segment operating income isn&apos;t broken out in the latest filing.</div>}
+      {/* the model read the footnote but segment OI isn't disclosed — its explanation is in `read` */}
+      {d && d.available && (!d.segments || d.segments.length === 0) && d.read && <p className="py-1 text-[12px] leading-snug text-[var(--text-2)]">{d.read}</p>}
 
       {d && d.available && d.segments && d.segments.length > 0 && (
         <div>

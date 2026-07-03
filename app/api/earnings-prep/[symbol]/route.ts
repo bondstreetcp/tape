@@ -10,6 +10,10 @@ import YahooFinance from "yahoo-finance2";
 import { getNews } from "@/lib/news";
 import { getLatestTranscript } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
+import { beatGuide, type GuidanceData, type GuidanceTicker } from "@/lib/guidance";
+import type { SssData, SssTicker } from "@/lib/sameStoreSales";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -180,6 +184,155 @@ function volRegimeFrom(closes: number[], atmIV: number | null) {
 // nightly trade-log (scripts/refresh-trade-log.ts) so the LOGGED play is the exact one the card shows.
 // tradeIdea prices its legs on the SAME (event) expiry as the straddle and reports that expiry/dte.
 
+// Standing guidance + comp series (nightly LLM extracts) — read here so the AI preview's signal
+// line is built from the server's own data, mirroring what the stock page feeds the card.
+function loadGuidance(sym: string): GuidanceTicker | null {
+  try {
+    const p = join(process.cwd(), "data", "guidance.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as GuidanceData).byTicker?.[sym] ?? null;
+  } catch { return null; }
+}
+function loadSss(sym: string): SssTicker | null {
+  try {
+    const p = join(process.cwd(), "data", "same-store-sales.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as SssData).byTicker?.[sym] ?? null;
+  } catch { return null; }
+}
+
+// The full options + reaction-history quant read — shared by part=data (the card) and part=ai (the
+// preview's QUANT SIGNALS line), so the signals the LLM grounds on are the SAME numbers the card shows.
+async function computeQuant(sym: string, earningsISO: string | null) {
+  const [reactions, emove, chain, ts, closes] = await Promise.all([
+    getEarningsReactions(sym, 8).catch(() => []),
+    loadEarningsMove().catch(() => null),
+    getOptions(sym).catch(() => null),
+    getTermStructure(sym, 6).catch(() => null),
+    dailyCloses(sym),
+  ]);
+  const term = termRead(ts);
+  const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
+  const reaction = moves.length
+    ? { avgAbsMove: moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length, maxAbsMove: Math.max(...moves.map(Math.abs)), upRate: moves.filter((m) => m > 0).length / moves.length, n: moves.length }
+    : null;
+  const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move, drift5: r.drift5, timing: r.timing }));
+  // Typical reporting timing (the company's own pattern) → when the NEXT print's move lands: before-open
+  // reporters move that session, after-close reporters move the next session.
+  const tg = (reactions || []).map((r) => r.timing);
+  const nextTiming: "bmo" | "amc" | null = tg.length ? (tg.filter((t) => t === "amc").length >= tg.length / 2 ? "amc" : "bmo") : null;
+  // Implied move: PREFER the live ATM-straddle cost from the chain (works for any name, always fresh);
+  // fall back to the precomputed earnings-move file when there's no usable chain.
+  const sm = await straddleMove(sym, chain, earningsISO);
+  const impliedMove = sm?.movePct ?? (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
+  // The straddle ≈ the EARNINGS move only when we picked the expiry bracketing earnings AND it's near
+  // (a far-out straddle is mostly time value, not the event) — so the rich/cheap-vs-1-day-reaction
+  // comparison is gated on that. The precomputed-file fallback (sm==null) is already an ≤16d event move.
+  const nearTerm = !sm ? true : sm.isEvent && (sm.dte == null || sm.dte <= 21);
+  const options = optionsRead(chain);
+
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  // Straddle "win-rate": of past prints, how often the realized move EXCEEDED what options price now.
+  const straddleWinRate = nearTerm && impliedMove != null && moves.length ? { exceeded: moves.filter((m) => Math.abs(m) > impliedMove / 100).length, total: moves.length } : null;
+  // PEAD: post-earnings 5-day drift after beats vs misses + follow-through rate (drift same sign as the day-1 move).
+  const withDrift = (reactions || []).filter((r) => r.drift5 != null) as { move: number | null; surprise: number | null; drift5: number }[];
+  const beatDrift = withDrift.filter((r) => r.surprise != null && r.surprise > 0).map((r) => r.drift5);
+  const missDrift = withDrift.filter((r) => r.surprise != null && r.surprise <= 0).map((r) => r.drift5);
+  const ftSet = withDrift.filter((r) => r.move != null);
+  const pead = ftSet.length >= 3
+    ? { avgBeatDrift5: avg(beatDrift), avgMissDrift5: avg(missDrift), followThrough: ftSet.filter((r) => Math.sign(r.move!) === Math.sign(r.drift5)).length / ftSet.length, n: ftSet.length }
+    : null;
+
+  // Reaction reliability: does a beat actually mean UP (sell-the-news), and a miss mean DOWN? The
+  // DIRECTIONAL hit-rate is robust at small n (Yahoo keeps ~4 surprises); a fitted slope/intercept is
+  // not, so we don't report one. Complements the beats/misses AVERAGE (which shows magnitude, not consistency).
+  const srP = (reactions || []).filter((r) => r.surprise != null && r.move != null).map((r) => ({ x: r.surprise as number, y: r.move as number }));
+  const surpriseReaction = (() => {
+    const beats = srP.filter((p) => p.x > 0), misses = srP.filter((p) => p.x < 0);
+    if (beats.length < 3 && misses.length < 3) return null;
+    return {
+      n: srP.length,
+      beatUp: beats.length ? beats.filter((p) => p.y > 0).length / beats.length : null, beatN: beats.length,
+      missDown: misses.length ? misses.filter((p) => p.y < 0).length / misses.length : null, missN: misses.length,
+    };
+  })();
+
+  // Options rich/cheap (implied vs avg REALIZED move) + the straddle breakevens.
+  const price = chain?.underlying ?? null;
+  const avgRealized = reaction ? reaction.avgAbsMove * 100 : null; // %
+  const richness =
+    nearTerm && impliedMove != null && avgRealized != null && avgRealized > 0
+      ? { ratio: impliedMove / avgRealized, verdict: impliedMove / avgRealized >= 1.2 ? "rich" : impliedMove / avgRealized <= 0.85 ? "cheap" : "fair", avgRealized }
+      : null;
+  // Straddle breakevens + cost: the REAL straddle when we have the live chain (with its expiry/DTE),
+  // else derived from the implied-move % and spot.
+  const straddle = sm
+    ? { cost: sm.cost, upperBE: sm.upperBE, lowerBE: sm.lowerBE, price: sm.price, expiry: sm.expiry, dte: sm.dte, live: true }
+    : impliedMove != null && price
+      ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false }
+      : null;
+  const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
+  // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
+  // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
+  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove);
+  // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
+  const ivScenario = ivScenarioFrom(sm, chain, term);
+  // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
+  // the move comes in UNDER the priced move and the IV crushes. Synthesize: how often the realized move
+  // cleared the implied (incl. CONDITIONAL on a beat — the call-buyer's case), + rich/cheap + the crush.
+  const longPremium = (() => {
+    if (!nearTerm || impliedMove == null) return null;
+    const im = impliedMove / 100;
+    const beats = (reactions || []).filter((r) => r.surprise != null && r.surprise > 0 && r.move != null);
+    const beatClear = beats.filter((r) => (r.move as number) > im).length; // beat AND rose MORE than priced
+    const clearRate = straddleWinRate && straddleWinRate.total ? straddleWinRate.exceeded / straddleWinRate.total : null;
+    const richV = richness?.verdict;
+    let verdict: "favorable" | "neutral" | "unfavorable" = "neutral";
+    if (richV === "cheap" && (clearRate == null || clearRate >= 0.45)) verdict = "favorable";
+    else if (richV === "rich" || (clearRate != null && clearRate <= 0.4)) verdict = "unfavorable";
+    return { verdict, beatClear, beatN: beats.length, crushRatio: term?.crushRatio ?? null };
+  })();
+  // Recent price series (compact [t,c] tuples) for the expected-move cone visual.
+  const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
+
+  return { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, surpriseReaction, priceSeries, longPremium, ivScenario, closes };
+}
+
+// Server-side rebuild of the card's quant-signal line for the AI preview. The LLM's "QUANT SIGNALS"
+// input must come from this terminal's OWN computation — the old client-supplied ?sig= param let a
+// crafted URL feed the model fabricated signals (and the poisoned preview would be CDN-cached).
+// Mirrors the aiSignals composition in components/EarningsPrep.tsx.
+function buildSig(q: Awaited<ReturnType<typeof computeQuant>>, guid: GuidanceTicker | null, sss: SssTicker | null): string {
+  const pp = (v: number | null) => (v == null ? "n/a" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+  const o: string[] = [];
+  if (q.richness && q.impliedMove != null) o.push(`options ${q.richness.verdict.toUpperCase()} — pricing ±${q.impliedMove.toFixed(1)}% vs ±${q.richness.avgRealized.toFixed(1)}% avg realized move (${q.richness.ratio.toFixed(1)}x)`);
+  else if (q.impliedMove != null && q.straddle?.dte != null) o.push(`options imply ±${q.impliedMove.toFixed(1)}% by expiry (${q.straddle.dte}d out)`);
+  if (q.term && q.term.crushRatio >= 1.04) o.push(`IV term backwardated ${q.term.crushRatio.toFixed(2)}x (vol crush into the print)`);
+  if (q.volRegime) o.push(`IV ${(q.volRegime.atmIV * 100).toFixed(0)}% vs realized HV ${(q.volRegime.hv20 * 100).toFixed(0)}% (${q.volRegime.ivHvRatio.toFixed(1)}x; HV ${q.volRegime.hvPctile?.toFixed(0) ?? "?"}th pctile)`);
+  if (q.options?.skew != null && Math.abs(q.options.skew) > 0.02) o.push(`options skew: ${q.options.skew > 0 ? "puts bid (downside hedging)" : "calls bid (upside chase)"}`);
+  if (q.pead) o.push(`post-print 5d drift: after beats ${pp(q.pead.avgBeatDrift5)}, after misses ${pp(q.pead.avgMissDrift5)}`);
+  if (q.surpriseReaction?.beatUp != null && q.surpriseReaction.beatN >= 3) o.push(`beats→up ${Math.round(q.surpriseReaction.beatUp * 100)}% of ${q.surpriseReaction.beatN}${q.surpriseReaction.beatUp <= 0.5 && q.surpriseReaction.beatN >= 4 ? " (sell-the-news pattern)" : ""}`);
+  if (q.longPremium && q.longPremium.beatN >= 3) o.push(`buying premium ${q.longPremium.verdict} — on past beats the stock cleared the implied move only ${q.longPremium.beatClear}/${q.longPremium.beatN} (a right call can lose to a small move + IV crush)`);
+  const ps = (sss?.periods || []).filter((p) => p.comp != null);
+  if (ps.length) {
+    const seq = ps[1]?.comp != null ? (ps[0].comp as number) - (ps[1].comp as number) : null;
+    o.push(`last comp ${(ps[0].comp as number) >= 0 ? "+" : ""}${(ps[0].comp as number).toFixed(1)}%${seq != null ? ` (${seq >= 0 ? "accelerating" : "decelerating"})` : ""}`);
+  }
+  const g0 = (guid?.guides || []).find((g) => g.action !== "none");
+  if (g0) o.push(`standing guidance ${g0.period} ${g0.action.toUpperCase()}`);
+  const bg = beatGuide(guid?.history);
+  if (bg) o.push(`beats its own guide ${bg.beats}/${bg.total}${bg.avgVsGuide != null && bg.avgVsGuide > 0.01 && bg.beats / bg.total >= 0.7 ? " — guides conservatively" : ""}`);
+  // Momentum into the print, from the same daily-close series (the card shows the snapshot's 1w/52wk-high).
+  if (q.closes.length >= 6) {
+    const last = q.closes[q.closes.length - 1].c, wAgo = q.closes[q.closes.length - 6].c;
+    const hi52 = Math.max(...q.closes.slice(-252).map((x) => x.c));
+    const r1w = wAgo > 0 ? (last / wAgo - 1) * 100 : null;
+    const fromHigh = hi52 > 0 ? (last / hi52 - 1) * 100 : null;
+    if (r1w != null) o.push(`into the print ${r1w >= 0 ? "+" : ""}${r1w.toFixed(1)}% 1wk${fromHigh != null ? `, ${fromHigh >= -1.5 ? "at" : `${Math.abs(fromHigh).toFixed(0)}% below`} 52wk high` : ""}`);
+  }
+  return o.join(" · ");
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
@@ -193,7 +346,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // ── AI part: the StreetAccount-style preview (button-triggered) ──
     if (part === "ai") {
       if (!(await llmConfigured())) return NextResponse.json({ ai: null });
-      const [stats, news, transcript] = await Promise.all([
+      const [stats, news, transcript, quant] = await Promise.all([
         getCompanyStats(sym).catch(() => null),
         getNews(sym, 8).catch(() => []),
         // The transcript scrape (Google News) can be slow/flaky — time-bound it so it never blows the
@@ -202,8 +355,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
           getLatestTranscript(sym).catch(() => null),
           new Promise<null>((res) => setTimeout(() => res(null), 12000)),
         ]),
+        computeQuant(sym, earningsISO).catch(() => null),
       ]);
-      const sig = sp.get("sig"); // the card's computed quant signals, passed by the component
+      // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —
+      // a client-supplied string was spoofable and the poisoned preview would be CDN-cached).
+      const sig = quant ? buildSig(quant, loadGuidance(sym), loadSss(sym)) : "";
       const q0 = stats?.estimates?.find((e) => e.period === "0q") || stats?.estimates?.[0];
       const revDir = q0 && q0.epsCurrent != null && q0.eps90dAgo != null ? (q0.epsCurrent > q0.eps90dAgo ? "rising" : q0.epsCurrent < q0.eps90dAgo ? "falling" : "flat") : "n/a";
       const dist = stats?.ratings ? `${stats.ratings.strongBuy + stats.ratings.buy} buy / ${stats.ratings.hold} hold / ${stats.ratings.sell + stats.ratings.strongSell} sell` : "n/a";
@@ -293,100 +449,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     }
 
     // ── Data part: reaction history + implied move + options skew/max-pain (fast, auto-loaded) ──
-    const [reactions, emove, chain, ts, closes] = await Promise.all([
-      getEarningsReactions(sym, 8).catch(() => []),
-      loadEarningsMove().catch(() => null),
-      getOptions(sym).catch(() => null),
-      getTermStructure(sym, 6).catch(() => null),
-      dailyCloses(sym),
-    ]);
-    const term = termRead(ts);
-    const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
-    const reaction = moves.length
-      ? { avgAbsMove: moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length, maxAbsMove: Math.max(...moves.map(Math.abs)), upRate: moves.filter((m) => m > 0).length / moves.length, n: moves.length }
-      : null;
-    const events = (reactions || []).filter((r) => r.move != null).slice(0, 8).map((r) => ({ date: r.date, surprise: r.surprise, move: r.move, drift5: r.drift5, timing: r.timing }));
-    // Typical reporting timing (the company's own pattern) → when the NEXT print's move lands: before-open
-    // reporters move that session, after-close reporters move the next session.
-    const tg = (reactions || []).map((r) => r.timing);
-    const nextTiming: "bmo" | "amc" | null = tg.length ? (tg.filter((t) => t === "amc").length >= tg.length / 2 ? "amc" : "bmo") : null;
-    // Implied move: PREFER the live ATM-straddle cost from the chain (works for any name, always fresh);
-    // fall back to the precomputed earnings-move file when there's no usable chain.
-    const sm = await straddleMove(sym, chain, earningsISO);
-    const impliedMove = sm?.movePct ?? (emove?.rows || []).find((r) => r.symbol === sym)?.impliedMovePct ?? null;
-    // The straddle ≈ the EARNINGS move only when we picked the expiry bracketing earnings AND it's near
-    // (a far-out straddle is mostly time value, not the event) — so the rich/cheap-vs-1-day-reaction
-    // comparison is gated on that. The precomputed-file fallback (sm==null) is already an ≤16d event move.
-    const nearTerm = !sm ? true : sm.isEvent && (sm.dte == null || sm.dte <= 21);
-    const options = optionsRead(chain);
-
-    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-    // Straddle "win-rate": of past prints, how often the realized move EXCEEDED what options price now.
-    const straddleWinRate = nearTerm && impliedMove != null && moves.length ? { exceeded: moves.filter((m) => Math.abs(m) > impliedMove / 100).length, total: moves.length } : null;
-    // PEAD: post-earnings 5-day drift after beats vs misses + follow-through rate (drift same sign as the day-1 move).
-    const withDrift = (reactions || []).filter((r) => r.drift5 != null) as { move: number | null; surprise: number | null; drift5: number }[];
-    const beatDrift = withDrift.filter((r) => r.surprise != null && r.surprise > 0).map((r) => r.drift5);
-    const missDrift = withDrift.filter((r) => r.surprise != null && r.surprise <= 0).map((r) => r.drift5);
-    const ftSet = withDrift.filter((r) => r.move != null);
-    const pead = ftSet.length >= 3
-      ? { avgBeatDrift5: avg(beatDrift), avgMissDrift5: avg(missDrift), followThrough: ftSet.filter((r) => Math.sign(r.move!) === Math.sign(r.drift5)).length / ftSet.length, n: ftSet.length }
-      : null;
-
-    // Reaction reliability: does a beat actually mean UP (sell-the-news), and a miss mean DOWN? The
-    // DIRECTIONAL hit-rate is robust at small n (Yahoo keeps ~4 surprises); a fitted slope/intercept is
-    // not, so we don't report one. Complements the beats/misses AVERAGE (which shows magnitude, not consistency).
-    const srP = (reactions || []).filter((r) => r.surprise != null && r.move != null).map((r) => ({ x: r.surprise as number, y: r.move as number }));
-    const surpriseReaction = (() => {
-      const beats = srP.filter((p) => p.x > 0), misses = srP.filter((p) => p.x < 0);
-      if (beats.length < 3 && misses.length < 3) return null;
-      return {
-        n: srP.length,
-        beatUp: beats.length ? beats.filter((p) => p.y > 0).length / beats.length : null, beatN: beats.length,
-        missDown: misses.length ? misses.filter((p) => p.y < 0).length / misses.length : null, missN: misses.length,
-      };
-    })();
-
-    // Options rich/cheap (implied vs avg REALIZED move) + the straddle breakevens.
-    const price = chain?.underlying ?? null;
-    const avgRealized = reaction ? reaction.avgAbsMove * 100 : null; // %
-    const richness =
-      nearTerm && impliedMove != null && avgRealized != null && avgRealized > 0
-        ? { ratio: impliedMove / avgRealized, verdict: impliedMove / avgRealized >= 1.2 ? "rich" : impliedMove / avgRealized <= 0.85 ? "cheap" : "fair", avgRealized }
-        : null;
-    // Straddle breakevens + cost: the REAL straddle when we have the live chain (with its expiry/DTE),
-    // else derived from the implied-move % and spot.
-    const straddle = sm
-      ? { cost: sm.cost, upperBE: sm.upperBE, lowerBE: sm.lowerBE, price: sm.price, expiry: sm.expiry, dte: sm.dte, live: true }
-      : impliedMove != null && price
-        ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false }
-        : null;
-    const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
-    // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
-    // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
-    const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove);
-    // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
-    const ivScenario = ivScenarioFrom(sm, chain, term);
-    // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
-    // the move comes in UNDER the priced move and the IV crushes. Synthesize: how often the realized move
-    // cleared the implied (incl. CONDITIONAL on a beat — the call-buyer's case), + rich/cheap + the crush.
-    const longPremium = (() => {
-      if (!nearTerm || impliedMove == null) return null;
-      const im = impliedMove / 100;
-      const beats = (reactions || []).filter((r) => r.surprise != null && r.surprise > 0 && r.move != null);
-      const beatClear = beats.filter((r) => (r.move as number) > im).length; // beat AND rose MORE than priced
-      const clearRate = straddleWinRate && straddleWinRate.total ? straddleWinRate.exceeded / straddleWinRate.total : null;
-      const richV = richness?.verdict;
-      let verdict: "favorable" | "neutral" | "unfavorable" = "neutral";
-      if (richV === "cheap" && (clearRate == null || clearRate >= 0.45)) verdict = "favorable";
-      else if (richV === "rich" || (clearRate != null && clearRate <= 0.4)) verdict = "unfavorable";
-      return { verdict, beatClear, beatN: beats.length, crushRatio: term?.crushRatio ?? null };
-    })();
+    const { closes, ...quant } = await computeQuant(sym, earningsISO);
     const peerSympathy = await peerReadThrough(sym, closes);
-    // Recent price series (compact [t,c] tuples) for the expected-move cone visual.
-    const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
     return NextResponse.json(
-      { data: { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, peerSympathy, surpriseReaction, priceSeries, longPremium, ivScenario } },
+      { data: { ...quant, peerSympathy } },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
