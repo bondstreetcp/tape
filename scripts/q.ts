@@ -10,6 +10,9 @@
  */
 import { DuckDBInstance } from "@duckdb/node-api";
 import { promises as fs } from "fs";
+import { loadLocalEnv } from "../lib/localEnv";
+
+loadLocalEnv(); // pick up LAKE_S3_* from .env.local on local runs (CI injects the real env vars)
 
 const LOCAL_DIR = process.env.LAKE_DIR || "lake";
 const S3 = { endpoint: process.env.LAKE_S3_ENDPOINT, keyId: process.env.LAKE_S3_KEY_ID, secret: process.env.LAKE_S3_SECRET, bucket: process.env.LAKE_S3_BUCKET };
@@ -26,7 +29,12 @@ async function main() {
   await conn.run("SET TimeZone='UTC';");
   if (useS3) {
     await conn.run("INSTALL httpfs; LOAD httpfs;");
-    await conn.run(`CREATE OR REPLACE SECRET r2 (TYPE S3, KEY_ID ${lit(S3.keyId!)}, SECRET ${lit(S3.secret!)}, ENDPOINT ${lit(S3.endpoint!)}, URL_STYLE 'path', REGION 'auto');`);
+    try {
+      await conn.run(`CREATE OR REPLACE SECRET r2 (TYPE S3, KEY_ID ${lit(S3.keyId!)}, SECRET ${lit(S3.secret!)}, ENDPOINT ${lit(S3.endpoint!)}, URL_STYLE 'path', REGION 'auto');`);
+    } catch {
+      console.error("Failed to configure R2 credentials — check the LAKE_S3_* values.");
+      process.exit(1);
+    }
   }
   const views = (await fs.readFile("sql/views.sql", "utf8")).replaceAll("{{LAKE}}", base);
   await conn.run(views);

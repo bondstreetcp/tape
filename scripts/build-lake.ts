@@ -16,6 +16,9 @@
 import { DuckDBInstance } from "@duckdb/node-api";
 import { promises as fs } from "fs";
 import path from "path";
+import { loadLocalEnv } from "../lib/localEnv";
+
+loadLocalEnv(); // pick up LAKE_S3_* from .env.local on local runs (CI injects the real env vars)
 
 // US universes to fold into the panel — uniform snapshot schema (build-data). Broadest first; the
 // `universe` column keeps them distinguishable and the us_panel view dedups (see sql/views.sql).
@@ -128,10 +131,13 @@ async function main() {
 
   if (useS3) {
     await conn.run("INSTALL httpfs; LOAD httpfs;");
-    // secret held in memory only; never printed
-    await conn.run(
-      `CREATE OR REPLACE SECRET r2 (TYPE S3, KEY_ID ${lit(S3.keyId!)}, SECRET ${lit(S3.secret!)}, ENDPOINT ${lit(S3.endpoint!)}, URL_STYLE 'path', REGION 'auto');`,
-    );
+    // secret held in memory only; the try/catch keeps a bad-credential error from echoing the key
+    try {
+      await conn.run(`CREATE OR REPLACE SECRET r2 (TYPE S3, KEY_ID ${lit(S3.keyId!)}, SECRET ${lit(S3.secret!)}, ENDPOINT ${lit(S3.endpoint!)}, URL_STYLE 'path', REGION 'auto');`);
+    } catch {
+      console.error("Failed to configure R2 credentials — check the LAKE_S3_* values (error suppressed to avoid leaking the secret).");
+      process.exit(1);
+    }
     console.log(`lake target: s3://${S3.bucket} (Cloudflare R2)`);
   } else {
     await fs.mkdir(path.join(LOCAL_DIR, mode === "prices" ? "prices" : "equity_panel"), { recursive: true });
