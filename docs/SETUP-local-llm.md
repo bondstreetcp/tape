@@ -30,7 +30,7 @@ vllm serve Qwen/Qwen2.5-72B-Instruct-AWQ \
 # smoke test:
 curl -s http://localhost:8000/v1/chat/completions -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"Qwen/Qwen2.5-32B-Instruct-AWQ","messages":[{"role":"user","content":"Return {\"ok\":true} as JSON"}],"response_format":{"type":"json_object"}}'
+  -d '{"model":"Qwen/Qwen2.5-72B-Instruct-AWQ","messages":[{"role":"user","content":"Return {\"ok\":true} as JSON"}],"response_format":{"type":"json_object"}}'
 ```
 `--max-model-len 20000` covers the largest prompts (15k-char filing slices ≈ 4-5k tokens + schema).
 
