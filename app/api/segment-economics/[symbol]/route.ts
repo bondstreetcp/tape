@@ -41,13 +41,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
       })
       .slice(0, 12);
 
-    if (!segments.length && !(typeof out?.read === "string" && out.read.trim())) return NextResponse.json({ configured: true, available: false });
+    // The segment source EXISTS here. A legit "OI isn't disclosed per segment" reply carries the
+    // explanation in `read`; a reply with NEITHER segments NOR read (or a null from chatJSON) is a
+    // failed AI read — flag it distinctly (never cached) so the UI offers a retry instead of
+    // asserting the filing doesn't break out segments.
+    if (!segments.length && !(typeof out?.read === "string" && out.read.trim()))
+      return NextResponse.json({ configured: true, aiFailed: true }, { headers: { "Cache-Control": "no-store" } });
 
     return NextResponse.json(
       { configured: true, available: true, period: typeof out?.period === "string" ? out.period.trim() : src.date, url: src.url, form: src.form, segments, read: typeof out?.read === "string" ? out.read.trim() : "" },
       { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } },
     );
   } catch (e: any) {
-    return NextResponse.json({ configured: true, available: false, error: String(e?.message || e).slice(0, 200) });
+    // A thrown error (fetch/transport) is transient — "try again", not "not broken out".
+    return NextResponse.json({ configured: true, aiFailed: true, error: String(e?.message || e).slice(0, 200) }, { headers: { "Cache-Control": "no-store" } });
   }
 }

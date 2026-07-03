@@ -22,7 +22,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
     const user = `${SCHEMA}\n\nCompany $${sym}.\n\n=== PRIOR 10-K (filed ${secs.prior.date}) — Item 1A Risk Factors ===\n${secs.prior.text}\n\n=== CURRENT 10-K (filed ${secs.curr.date}) — Item 1A Risk Factors ===\n${secs.curr.text}`;
 
     const out = await chatJSON<{ summary: string; added: RiskChange[]; removed: RiskChange[]; intensified: RiskChange[] }>(SYSTEM, user, { maxTokens: 2500, model: PRO_MODEL });
-    if (!out) return NextResponse.json({ diff: null });
+    // Both 10-K sections were located — a null here is a failed AI read, not "can't compare".
+    // The distinct flag (never cached) lets the panel offer a retry instead of a false negative.
+    if (!out) return NextResponse.json({ diff: null, aiFailed: true }, { headers: { "Cache-Control": "no-store" } });
     const clean = (a: unknown): RiskChange[] =>
       (Array.isArray(a) ? a : [])
         .filter((x): x is RiskChange => !!x && typeof (x as any).title === "string")
@@ -41,9 +43,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
     // A degenerate-but-parseable reply ({}) used to cache 24h as the affirmative "no material
     // changes" verdict. Require actual content before the CDN may hold it.
     if (!diff.summary && diff.added.length + diff.removed.length + diff.intensified.length === 0)
-      return NextResponse.json({ diff: null }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ diff: null, aiFailed: true }, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ diff }, { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } });
   } catch {
-    return NextResponse.json({ diff: null });
+    // Thrown = transient (EDGAR fetch/transport) — retryable, not "fewer than two 10-Ks on file".
+    return NextResponse.json({ diff: null, aiFailed: true }, { headers: { "Cache-Control": "no-store" } });
   }
 }

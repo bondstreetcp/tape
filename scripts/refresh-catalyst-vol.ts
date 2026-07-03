@@ -64,8 +64,9 @@ async function hvAnnual(sym: string): Promise<number | null> {
 }
 
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } } }));
+  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
+  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
   return out;
 }
 
@@ -100,13 +101,20 @@ async function main() {
 
   const rows = await mapPool([...calendar.values()], 4, async (ev): Promise<CatalystRow | null> => {
     const days = Math.round((Date.parse(ev.eventDate) - Date.now()) / DAY);
-    if (days < 0 || days > MAX_DAYS_OUT) return null;
+    if (days < 0 || days > MAX_DAYS_OUT) return null; // event passed / too far out — off the calendar
+    // A pricing failure must NOT drop the row: this file is the calendar's only memory, so a
+    // transient options failure would permanently forget a still-future event. Keep it unpriced
+    // (null pricing fields — the view hides it) and let a later run re-price it.
+    const unpriced: CatalystRow = {
+      ticker: ev.ticker, company: ev.company, eventType: ev.eventType, eventDate: ev.eventDate, daysToEvent: days,
+      price: null, expiry: null, dte: null, impliedMovePct: null, baselineMovePct: null, ratio: null, hvAnnual: null, url: ev.url,
+    };
     const [chain, hv] = await Promise.all([getOptions(ev.ticker).catch(() => null), hvAnnual(ev.ticker)]);
-    if (!chain || hv == null || hv <= 0) return null;
-    const sm = await straddleMove(ev.ticker, chain, ev.eventDate);
-    if (!sm || !sm.isEvent || sm.dte == null || sm.dte < 1) return null;
+    if (!chain || hv == null || hv <= 0) return unpriced;
+    const sm = await straddleMove(ev.ticker, chain, ev.eventDate).catch(() => null);
+    if (!sm || !sm.isEvent || sm.dte == null || sm.dte < 1) return unpriced;
     const baselineMovePct = hv * Math.sqrt(sm.dte / 365) * 100;
-    if (!(baselineMovePct > 0)) return null;
+    if (!(baselineMovePct > 0)) return unpriced;
     return {
       ticker: ev.ticker, company: ev.company, eventType: ev.eventType, eventDate: ev.eventDate, daysToEvent: days,
       price: +sm.price.toFixed(2), expiry: sm.expiry || "", dte: sm.dte,
@@ -115,10 +123,11 @@ async function main() {
     };
   });
 
-  const out = (rows.filter(Boolean) as CatalystRow[]).sort((a, b) => a.ratio - b.ratio); // cheapest first
+  const out = (rows.filter(Boolean) as CatalystRow[]).sort((a, b) => (a.ratio ?? 99) - (b.ratio ?? 99)); // cheapest first, unpriced last
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: hits.length, rows: out } satisfies CatalystVolData));
-  console.log(`\nwrote ${out.length} catalyst rows (cheapest first):`);
-  for (const r of out.slice(0, 12)) console.log(`  ${r.ticker.padEnd(6)} ${r.eventType.padEnd(16)} ${r.eventDate} (${r.daysToEvent}d) implied ±${r.impliedMovePct}% vs baseline ±${r.baselineMovePct}% = ${r.ratio}×`);
+  const priced = out.filter((r) => r.ratio != null);
+  console.log(`\nwrote ${out.length} calendar rows (${priced.length} priced, ${out.length - priced.length} kept unpriced):`);
+  for (const r of priced.slice(0, 12)) console.log(`  ${r.ticker.padEnd(6)} ${r.eventType.padEnd(16)} ${r.eventDate} (${r.daysToEvent}d) implied ±${r.impliedMovePct}% vs baseline ±${r.baselineMovePct}% = ${r.ratio}×`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

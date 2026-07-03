@@ -11,11 +11,15 @@ import EmptyState from "@/components/EmptyState";
 export const dynamic = "force-dynamic";
 
 // GLM genuine-vs-trap verdicts on the deepest discounts (scripts/refresh-valuation-explain.ts).
-function loadExplain(): Promise<ValuationExplainMap> {
+// generatedAt rides along so the badges can carry an "AI · as of" staleness label.
+function loadExplain(): Promise<{ map: ValuationExplainMap; asOf: string | null }> {
   return fs
     .readFile(path.join(process.cwd(), "data", "valuation-explain.json"), "utf8")
-    .then((s) => (JSON.parse(s).verdicts ?? {}) as ValuationExplainMap)
-    .catch(() => ({}));
+    .then((s) => {
+      const j = JSON.parse(s);
+      return { map: (j.verdicts ?? {}) as ValuationExplainMap, asOf: typeof j.generatedAt === "string" ? j.generatedAt : null };
+    })
+    .catch(() => ({ map: {} as ValuationExplainMap, asOf: null }));
 }
 
 // "Discount to own 10-year history" valuation screen. Universe-independent data (its own US-name
@@ -32,5 +36,5 @@ export default async function ValuationHistoryPage({ params }: { params: Promise
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   const sectorBy: Record<string, string> = {};
   for (const s of snapshot?.stocks ?? []) sectorBy[s.symbol] = s.sector;
-  return <ValuationHistoryView universe={universe} data={data} known={known} sectorBy={sectorBy} explain={explain} />;
+  return <ValuationHistoryView universe={universe} data={data} known={known} sectorBy={sectorBy} explain={explain.map} explainAsOf={explain.asOf} />;
 }

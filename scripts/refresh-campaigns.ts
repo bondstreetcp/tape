@@ -14,7 +14,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
 import type { Campaign, CampaignType, CampPerf, CampaignsData } from "../lib/campaigns";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -183,7 +183,10 @@ async function shortReports(): Promise<Raw[]> {
   return kept;
 }
 
-async function classify(r: Raw, text: string): Promise<{ ticker: string | null; company: string; campaigner: string; ask: string; summary: string; material: boolean } | null> {
+// Returns the campaign, null for a JUDGMENT reject (material=false), or "llmfail" for a transport/
+// parse failure — the two must stay distinguishable: a reject is a decision, a failure should be
+// retried next run (the item stays out of the stored set, so the incremental gate re-offers it).
+async function classify(r: Raw, text: string, pro = false): Promise<{ ticker: string | null; company: string; campaigner: string; ask: string; summary: string; material: boolean } | null | "llmfail"> {
   const SYSTEM =
     "You read one SEC activist/proxy filing or one short-seller report and summarize the CAMPAIGN for a professional investor. Extract: the TARGET public company + its ticker; the CAMPAIGNER (the activist/dissident investor, or the short firm); a one-line ASK (what the activist wants — board seats, sale, breakup, strategy change) or ALLEGATION (what the short alleges — fraud, accounting, overvaluation); and a 1-2 sentence summary. " +
     "Set material=false and it will be DROPPED if this is NOT a genuine campaign: a passive/routine 13D with no stated activist intent, a company's own routine proxy mailing, an administrative amendment with no new demand, or anything without a clear target company. Be strict. " +
@@ -193,8 +196,9 @@ async function classify(r: Raw, text: string): Promise<{ ticker: string | null; 
     NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"ticker":string|null,"company":string,"campaigner":string,"ask":string,"summary":string,"material":boolean}';
   const ctx = `Form: ${r.form}. Type: ${r.type}. Subject as filed: ${r.issuer}${r.ticker ? ` (${r.ticker})` : ""}. Other party: ${r.other}.\n\n${text.slice(0, 6500)}`;
-  const out = await chatJSON<any>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 700 });
-  if (!out || out.material === false) return null;
+  const out = await chatJSON<any>(SYSTEM, ctx + "\n\n" + SCHEMA, pro ? { maxTokens: 1600, model: PRO_MODEL, reasoningEffort: "high" } : { maxTokens: 700 });
+  if (!out) return "llmfail";
+  if (out.material === false) return null;
   const ticker = out.ticker ? String(out.ticker).toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6) : r.ticker;
   return { ticker: ticker || r.ticker, company: String(out.company || r.issuer).slice(0, 80), campaigner: String(out.campaigner || r.other).slice(0, 80), ask: String(out.ask || "").slice(0, 220), summary: String(out.summary || "").slice(0, 400), material: true };
 }
@@ -218,10 +222,11 @@ async function perfFor(ticker: string, eventISO: string): Promise<CampPerf | nul
 }
 
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0;
+  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } }
+    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } }
   }));
+  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
   return out;
 }
 
@@ -269,13 +274,20 @@ async function main() {
   });
   console.log(`${fresh.length} new to classify ${JSON.stringify(capBy)}`);
 
+  let llmFails = 0, rejects = 0;
   const built = await mapPool(fresh, 4, async (r): Promise<Campaign | null> => {
     const text = r.type === "short" ? r.doc : await fetchFilingText(r);
-    const c = await classify(r, text);
-    if (c && c.ticker && c.ticker !== r.ticker && !(await validTicker(c.ticker))) c.ticker = r.ticker; // reject LLM-invented symbols
-    if (!c) return null;
+    let c = await classify(r, text);
+    // PRO second opinion on the SHORT bucket: short reports are few per week and each one matters —
+    // a wrong material=false (or a transport blip) silently loses a campaign forever once the item
+    // ages past the seed window. Only drop a short item when the PRO tier agrees.
+    if (r.type === "short" && (c === null || c === "llmfail")) c = await classify(r, text, true);
+    if (c === "llmfail") { llmFails++; return null; } // not stored → the gate re-offers it next run
+    if (!c) { rejects++; return null; } // judgment reject (material=false) — a decision, not an error
+    if (c.ticker && c.ticker !== r.ticker && !(await validTicker(c.ticker))) c.ticker = r.ticker; // reject LLM-invented symbols
     return { id: r.id, date: r.date, type: r.type, ticker: c.ticker, company: c.company, campaigner: c.campaigner, form: r.form, ask: c.ask, summary: c.summary, url: r.type === "short" ? r.url : (r.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(r.ciks[0])}/${r.id.replace(/-/g, "")}/${r.doc}` : r.url) };
   });
+  console.log(`classify: ${built.filter(Boolean).length} kept · ${rejects} rejected immaterial · ${llmFails} LLM failures (retry next run)`);
 
   const merged = [...built.filter((x): x is Campaign => !!x), ...prior.campaigns]
     .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)

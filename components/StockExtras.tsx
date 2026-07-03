@@ -400,15 +400,17 @@ function RiskList({ title, color, items }: { title: string; color: string; items
 // Filing Risk-Factor Watch — user-triggered (the 10-K diff is an expensive LLM call, so it doesn't
 // auto-fire on every page view). US 10-K filers only.
 export function RiskFactorPanel({ symbol }: { symbol: string }) {
-  const [state, setState] = useState<"idle" | "loading" | "none" | RiskDiff>("idle");
+  const [state, setState] = useState<"idle" | "loading" | "none" | "failed" | RiskDiff>("idle");
   if (RF_NON_US.test(symbol.toUpperCase())) return null;
 
   const run = () => {
     setState("loading");
     fetch(`/api/risk-factors/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((d) => setState(d.diff || "none"))
-      .catch(() => setState("none"));
+      // aiFailed = both 10-Ks were located but the AI read failed (transient) — distinct from
+      // "none" (genuinely fewer than two 10-Ks), so we offer a retry, not a false negative.
+      .then((d) => setState(d.diff || (d.aiFailed ? "failed" : "none")))
+      .catch(() => setState("failed"));
   };
   const d = typeof state === "object" ? state : null;
 
@@ -424,6 +426,7 @@ export function RiskFactorPanel({ symbol }: { symbol: string }) {
         <div className="flex items-center gap-2 py-2 text-sm text-[var(--text-3)]"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> Reading both 10-Ks &amp; diffing the risk factors…</div>
       )}
       {state === "none" && <p className="py-1 text-sm text-[var(--text-3)]">Couldn&apos;t compare — fewer than two US 10-Ks on file, or the Risk Factors section couldn&apos;t be located.</p>}
+      {state === "failed" && <p className="py-1 text-sm text-[var(--text-3)]">AI read failed — <button onClick={run} className="text-[var(--accent)] underline hover:no-underline">try again</button>.</p>}
       {d && (
         <div className="space-y-3">
           <p className="text-[13px] leading-relaxed text-[var(--text-2)]">{d.summary}</p>

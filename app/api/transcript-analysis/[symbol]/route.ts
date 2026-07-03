@@ -34,7 +34,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
       (prior?.text ? `\n\n=== PRIOR CALL (for the what-changed diff): ${prior.title} (${prior.date || ""}) ===\n${prior.text.slice(0, 7000)}` : "");
 
     const out = await chatJSON<any>(SYSTEM, user, { maxTokens: 4500, model: PRO_MODEL, reasoningEffort: "low" });
-    if (!out || (!out.tone && !(Array.isArray(out.exchanges) && out.exchanges.length))) return NextResponse.json({ configured: true, available: false });
+    // The transcript EXISTS at this point — an empty/failed LLM read is a transient failure, not
+    // "no transcript found". Return the distinct aiFailed flag (never cached) so the UI says
+    // "try again" instead of asserting the source doesn't exist.
+    if (!out || (!out.tone && !(Array.isArray(out.exchanges) && out.exchanges.length)))
+      return NextResponse.json({ configured: true, aiFailed: true }, { headers: { "Cache-Control": "no-store" } });
 
     const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
     const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 8) : []);
@@ -62,6 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
       { headers: { "Cache-Control": "public, s-maxage=21600, stale-while-revalidate=86400" } },
     );
   } catch (e: any) {
-    return NextResponse.json({ configured: true, available: false, error: String(e?.message || e).slice(0, 200) });
+    // A thrown error (scrape/transport) is transient too — "try again", not "no transcript".
+    return NextResponse.json({ configured: true, aiFailed: true, error: String(e?.message || e).slice(0, 200) }, { headers: { "Cache-Control": "no-store" } });
   }
 }

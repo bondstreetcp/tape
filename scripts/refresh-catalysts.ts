@@ -93,7 +93,9 @@ async function main() {
   }
   console.log(`${movers.size} unique mover symbols across ${UNIVERSES.length} universes`);
 
-  const prev: CatalystMap = await fs.readFile(path.join(DATA, "catalysts.json"), "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
+  // Accept both file shapes: the current { generatedAt, bySymbol } and the legacy bare symbol map.
+  const prevRaw: any = await fs.readFile(path.join(DATA, "catalysts.json"), "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
+  const prev: CatalystMap = prevRaw?.bySymbol ?? prevRaw ?? {};
   const out: CatalystMap = {};
   const todo: string[] = [];
   for (const [sym, m] of movers) {
@@ -135,7 +137,8 @@ async function main() {
     }),
   );
 
-  await fs.writeFile(path.join(DATA, "catalysts.json"), JSON.stringify(out));
+  // generatedAt = the file-level staleness stamp (each row also keeps its own ts for the TTL).
+  await fs.writeFile(path.join(DATA, "catalysts.json"), JSON.stringify({ generatedAt: new Date().toISOString(), bySymbol: out }));
   const total = Object.values(out).filter((c) => c.why).length;
   console.log(`\nWrote ${Object.keys(out).length} catalysts (${total} with a why, ${withWhy} new this run).`);
 }

@@ -35,14 +35,18 @@ const HINT: Record<CorpEventType, string> = {
   leadership: "a CEO or CFO change — a departure and/or appointment (name who is leaving and who is coming in)",
 };
 
-async function classify(hit: EftsHit, type: CorpEventType, text: string): Promise<{ ticker: string | null; headline: string } | null> {
+// Returns the event, null for a JUDGMENT reject (material=false), or "llmfail" for a transport/
+// parse failure — kept distinguishable so failures are counted and retried next run (the item
+// isn't stored, so the incremental gate re-offers it) instead of silently reading as "immaterial".
+async function classify(hit: EftsHit, type: CorpEventType, text: string): Promise<{ ticker: string | null; headline: string } | null | "llmfail"> {
   const SYSTEM =
     `You read one SEC 8-K and confirm it announces ${HINT[type]}. If it genuinely does, return the company ticker and a ONE-LINE headline with the key specifics. ` +
     "If the filing does NOT actually announce this event (routine mention, a past event, an unrelated 8-K, a director-only change for a leadership query, a buyback merely referenced not newly authorized), return material=false and it is dropped. Be strict. " +
     NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"ticker":string|null,"headline":string,"material":boolean}';
   const out = await chatJSON<any>(SYSTEM, `Subject: ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}. Filed ${hit.date}.\n\n${text.slice(0, 5500)}\n\n${SCHEMA}`, { maxTokens: 300 });
-  if (!out || out.material === false) return null;
+  if (!out) return "llmfail";
+  if (out.material === false) return null;
   const ticker = out.ticker ? String(out.ticker).toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6) : hit.ticker;
   return { ticker: ticker || hit.ticker, headline: String(out.headline || "").slice(0, 240) };
 }
@@ -64,8 +68,9 @@ async function sinceFor(ticker: string, iso: string): Promise<number | null> {
   } catch { return null; }
 }
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } } }));
+  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
+  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
   return out;
 }
 
@@ -94,14 +99,18 @@ async function main() {
   const fresh = uniq.filter((r) => !known.has(r.hit.accession)).filter((r) => { const n = perType[r.type] || 0; if (n >= 22) return false; perType[r.type] = n + 1; return true; });
   console.log(`${fresh.length} new to classify (${JSON.stringify(perType)})`);
 
+  let llmFails = 0, rejects = 0, noText = 0;
   const built = await mapPool(fresh, 4, async ({ hit, type }): Promise<CorpEvent | null> => {
     const text = await fetchFilingBodyText(hit);
-    if (!text) return null;
+    if (!text) { noText++; return null; }
     const c = await classify(hit, type, text);
-    if (c && c.ticker && c.ticker !== hit.ticker && !(await validTicker(c.ticker))) c.ticker = hit.ticker; // reject LLM-invented symbols
-    if (!c || !c.ticker) return null;
+    if (c === "llmfail") { llmFails++; return null; } // not stored → retried next run
+    if (!c) { rejects++; return null; } // judgment reject (material=false)
+    if (c.ticker && c.ticker !== hit.ticker && !(await validTicker(c.ticker))) c.ticker = hit.ticker; // reject LLM-invented symbols
+    if (!c.ticker) return null;
     return { id: hit.accession, date: (hit.date || enddt) + "T12:00:00Z", type, ticker: c.ticker, company: hit.issuer, headline: c.headline, url: hit.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(hit.ciks[0])}/${hit.accession.replace(/-/g, "")}/${hit.doc}` : "", sincePct: null };
   });
+  console.log(`classify: ${built.filter(Boolean).length} kept · ${rejects} rejected immaterial · ${llmFails} LLM failures (retry next run) · ${noText} unfetchable filings`);
 
   const merged = [...built.filter((x): x is CorpEvent => !!x), ...prior.events]
     .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)

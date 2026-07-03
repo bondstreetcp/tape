@@ -79,10 +79,11 @@ async function classify(item: RawItem, body: string): Promise<{ bias: Bias; head
 }
 
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0;
+  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } }
+    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } }
   }));
+  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
   return out;
 }
 

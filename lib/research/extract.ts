@@ -67,14 +67,22 @@ export async function extractResearch(text: string): Promise<ResearchDoc | null>
   );
   if (!d) return null;
   try {
+    // Ticker grounding: a misread ticker files the note into the WRONG company's stack, and
+    // consensus()/synthesize() then blend two companies' targets. Warn loudly when the extracted
+    // ticker never appears in the report text (kept, but flagged for the ingest log).
+    const ticker = String(d.ticker || "").toUpperCase().replace(/\.(O|OQ|N|A|K|P|PK|Q)$/i, "");
+    if (ticker && !text.slice(0, 30_000).toUpperCase().includes(ticker)) {
+      console.warn(`research/extract: ticker "${ticker}" does not appear in the report text — verify the doc filed under the right company.`);
+    }
+    const DOC_TYPES = new Set(["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "idea", "note", "other"]);
     // normalise to the canonical shape with safe defaults
     return {
-      ticker: String(d.ticker || "").toUpperCase().replace(/\.(O|OQ|N|A|K|P|PK|Q)$/i, ""),
+      ticker,
       company: d.company || "",
       source: d.source || "Unknown",
       analysts: Array.isArray(d.analysts) ? d.analysts : [],
-      publishDate: d.publishDate || "",
-      docType: d.docType || "other",
+      publishDate: typeof d.publishDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(d.publishDate) ? d.publishDate.slice(0, 10) : "",
+      docType: DOC_TYPES.has(d.docType) ? d.docType : "other",
       title: d.title || "",
       rating: d.rating ?? null,
       ratingPrior: d.ratingPrior ?? null,
