@@ -17,3 +17,8 @@ _*.csv
 
 # Licensed research corpus — never commit (raw PDFs + extracted/derived data)
 data/.research/
+
+# Research lake — Parquet lives in R2 (or a local ./lake for dev), NOT the repo. Keeping bulk,
+# frequently-rewritten data OUT of git history is the whole point (see docs/RESEARCH-LAKE.md).
+lake/
+sql/views_local.sql

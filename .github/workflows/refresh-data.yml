@@ -481,6 +481,21 @@ jobs:
           RESEARCH_DATABASE_URL: ${{ secrets.RESEARCH_DATABASE_URL }}
         continue-on-error: true
 
+      # Research lake — export the day's equity panel + refresh the ~6yr price history to Parquet on
+      # Cloudflare R2 (DuckDB) for ad-hoc historical cross-sections. Reads the snapshots + series
+      # refreshed earlier this run. INERT until the LAKE_S3_* secrets are set (it writes to a discarded
+      # local dir otherwise). Data lands in R2, NOT git — the whole point is keeping bulk, frequently-
+      # rewritten data out of the repo history. See docs/RESEARCH-LAKE.md.
+      - name: Export research lake (Parquet → R2)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run build-lake && npm run backfill-prices
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+        continue-on-error: true
+
       - name: Commit & push if data changed
         env:
           SCHED: ${{ github.event.schedule }}
