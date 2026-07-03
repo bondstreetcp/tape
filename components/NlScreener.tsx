@@ -76,7 +76,13 @@ export default function NlScreener({ universe, stocks, currency = "USD" }: { uni
       }).then((r) => r.json());
       if (d.configured === false) { setError("AI screening needs GEMINI_API_KEY configured."); setSpec(null); }
       else if (d.error || !d.spec) { setError(d.error || "Couldn't parse that — try rephrasing."); setSpec(null); }
-      else { setSpec(d.spec); }
+      else if (Array.isArray(d.ignored) && d.ignored.length && !d.spec.filters?.length) {
+        // Every criterion was unmappable — showing the full unfiltered universe would silently lie.
+        setError(`Couldn't map ${d.ignored.join(", ")} to a known metric — try different wording.`); setSpec(null);
+      } else {
+        setSpec(d.spec);
+        if (Array.isArray(d.ignored) && d.ignored.length) setError(`Note: ignored unsupported criteria (${d.ignored.join(", ")}) — results reflect only the applied filters.`);
+      }
     } catch {
       setError("Something went wrong reaching the AI.");
     }

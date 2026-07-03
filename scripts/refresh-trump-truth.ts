@@ -79,7 +79,8 @@ async function fetchViaRss(): Promise<RawPost[]> {
     const id = ((link.match(/(\d{6,})/) || [])[1]) || link;
     const dateRaw = g("pubDate");
     const text = htmlToText(g("description") || g("title"));
-    if (id && text) out.push({ id, date: dateRaw ? new Date(dateRaw).toISOString() : new Date().toISOString(), url: link, text });
+    const dT = dateRaw ? Date.parse(dateRaw) : NaN; // a malformed pubDate must not throw and kill the whole RSS fallback
+    if (id && text) out.push({ id, date: Number.isFinite(dT) ? new Date(dT).toISOString() : new Date().toISOString(), url: link, text });
   }
   return out;
 }
@@ -100,7 +101,7 @@ async function classifyBatch(posts: RawPost[]): Promise<Record<string, Extracted
   for (const it of out?.items || []) {
     const p = posts[it?.index];
     if (!p) continue;
-    const tickers: TickerCall[] = (it.tickers || [])
+    const tickers: TickerCall[] = (Array.isArray(it.tickers) ? it.tickers : [])
       .map((t: any) => ({
         ticker: String(t?.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, ""),
         company: String(t?.company || "").slice(0, 60),
@@ -176,12 +177,16 @@ async function main() {
   const seriesMap: Record<string, { t: number; c: number }[] | null> = {};
   await mapPool(symbols, 6, async (sym) => { seriesMap[sym] = await seriesFor(sym); });
 
+  // The hallucination-drop applies to NEW posts only. Prior posts already passed that gate once —
+  // re-applying it nightly meant one Yahoo 429 on the re-pricing pass permanently deleted tracked
+  // history (old posts are outside the RSS window and never come back). Prior posts now keep their
+  // tickers with the previous perf (or null) on a failed fetch, and re-price on the next run.
+  const isNew = new Set(newStockPosts.map((p) => p.id));
   let dropped = 0;
   for (const post of merged) {
     const postT = Date.parse(post.date);
-    post.tickers = post.tickers
-      .map((t) => { const s = seriesMap[t.ticker]; return { ...t, perf: s ? perfFrom(s, postT) : null }; })
-      .filter((t) => t.perf); // drop tickers Yahoo can't price (hallucinated / delisted)
+    const priced = post.tickers.map((t) => { const s = seriesMap[t.ticker]; return { ...t, perf: s ? perfFrom(s, postT) : t.perf ?? null }; });
+    post.tickers = isNew.has(post.id) ? priced.filter((t) => t.perf) : priced;
     if (!post.tickers.length) dropped++;
   }
   const posts = merged.filter((p) => p.tickers.length);

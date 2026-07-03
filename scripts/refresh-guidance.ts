@@ -70,8 +70,9 @@ const ACTIONS = new Set<GuidanceAction>(["raise", "reaffirm", "cut", "initiate",
 
 interface Extracted { reportedEps: number | null; nextQEpsLow: number | null; nextQEpsHigh: number | null; guides: GuidancePeriod[] }
 
-async function extract(sym: string, text: string): Promise<Extracted> {
+async function extract(sym: string, text: string): Promise<Extracted | null> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: PRO_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
+  if (raw == null) return null; // LLM transport failure ≠ "no guidance" — caller must not store [] or advance the gate
   const root = Array.isArray(raw) ? raw[0] : raw;
   const arr: any[] = Array.isArray(root?.guides) ? root.guides : Array.isArray(raw) ? raw : root && typeof root === "object" && root.period ? [root] : [];
   const out: GuidancePeriod[] = [];
@@ -132,10 +133,16 @@ async function buildWatchSet(): Promise<string[]> {
       const targets = BACKFILL ? earnings.slice(0, BACKFILL) : [e0];
       const history = BACKFILL ? [] : [...(prior?.history ?? [])];
       let latestGuides = prior?.guides ?? [], latestSrc = prior?.source, latestUpd = prior?.updated;
+      // The incremental gate may only advance once the NEWEST 8-K was actually read AND extracted —
+      // a transient EDGAR/LLM failure previously stored guides:[] and stamped lastAccession, erasing
+      // a standing guide until the NEXT quarter's print. Failures now leave the gate untouched.
+      let e0ok = false;
       for (const f of targets) {
         const ft = await getFilingText(sym, f.acc);
-        if (!ft || ft.text.length < 400) { console.log(`  ${sym} ${f.date}: no text`); continue; }
+        if (!ft || ft.text.length < 400) { console.log(`  ${sym} ${f.date}: no text — will retry next run`); continue; }
         const ex = await extract(sym, ft.text); calls++;
+        if (ex == null) { console.log(`  ${sym} ${f.date}: LLM failed — will retry next run`); continue; }
+        if (f.acc === e0.acc) e0ok = true;
         const hp = { date: f.date, reportedEps: ex.reportedEps, nextQEpsLow: ex.nextQEpsLow, nextQEpsHigh: ex.nextQEpsHigh };
         const hi = history.findIndex((h) => h.date === f.date);
         if (hi >= 0) history[hi] = hp; else history.push(hp);
@@ -144,7 +151,7 @@ async function buildWatchSet(): Promise<string[]> {
         await sleep(150);
       }
       history.sort((a, b) => b.date.localeCompare(a.date));
-      data.byTicker[sym] = { lastAccession: e0.acc, updated: latestUpd || e0.date, source: latestSrc || { form: e0.form, url: "", date: e0.date }, guides: latestGuides, history: history.slice(0, 10) } as GuidanceTicker;
+      data.byTicker[sym] = { lastAccession: e0ok ? e0.acc : (prior?.lastAccession ?? ""), updated: latestUpd || e0.date, source: latestSrc || { form: e0.form, url: "", date: e0.date }, guides: latestGuides, history: history.slice(0, 10) } as GuidanceTicker;
       if (latestGuides.length) touched++;
     } catch (e: any) {
       console.log(`  ${sym}: ERROR ${String(e?.message || e).slice(0, 100)}`);

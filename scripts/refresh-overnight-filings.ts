@@ -29,7 +29,7 @@ import { tickerToCik, getSubmissions, getFilingText, HEADERS, pool } from "../li
 import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
-import { chatJSON } from "../lib/llm";
+import { chatJSON, llmConfigured } from "../lib/llm";
 
 const DATA = path.join(process.cwd(), "data");
 const WINDOW_HOURS = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : 36;
@@ -201,7 +201,7 @@ async function filingTextByAccession(symbol: string, f: { form: string; accessio
   return t?.text || "";
 }
 
-async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
+async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail"> {
   const isPeriodic = nf.formClean === "10-K" || nf.formClean === "10-Q";
   // Prior comparable for 8-Ks only (earnings-8-K → prior earnings-8-K). For a 10-K/10-Q we
   // deliberately DON'T paste a prior filing's text: the report already carries its own
@@ -261,7 +261,8 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null> {
     rfLine;
 
   const digest = await chatJSON<Digest>(SYSTEM, user, { maxTokens: 2000 });
-  if (!digest || typeof digest.headline !== "string") return null;
+  if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
+  if (typeof digest.headline !== "string") return null;
   const headline = digest.headline.trim();
   if (!headline || /^none$/i.test(headline)) return null; // NONE-gate
 
@@ -300,6 +301,9 @@ function prevTradingDayStart(now: number): number {
 }
 
 async function main() {
+  // Preflight: with no LLM key every digest nulls out and the run would write items:[] with a fresh
+  // timestamp — a convincing FAKE "quiet night" on the Morning Desk. Keep last night's file instead.
+  if (!(await llmConfigured())) { console.error("✗ no LLM configured (OPENROUTER_API_KEY) — keeping the previous overnight file."); process.exit(1); }
   const now = Date.now();
   // Reach back the configured window OR to the previous trading session, whichever is
   // earlier — so a Monday/weekend run still catches Friday's filings (the weekend gap
@@ -338,12 +342,15 @@ async function main() {
 
   // --- Summarize each new filing via the LLM (sequential — frugal + polite) ---
   const items: OvernightItem[] = [];
-  let gatedNone = 0;
+  let gatedNone = 0, llmFails = 0;
   for (let i = 0; i < newFilings.length; i++) {
     const nf = newFilings[i];
     try {
       const item = await summarize(nf);
-      if (item) {
+      if (item === "llmfail") {
+        llmFails++;
+        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: LLM FAILED (not gated)`);
+      } else if (item) {
         items.push(item);
         console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: ${item.headline}`);
       } else {
@@ -355,6 +362,14 @@ async function main() {
     }
     await sleep(150);
   }
+
+  // Refuse to publish a mass-failure run: if the LLM died mid-run (outage/rate-limit), writing
+  // whatever survived (or nothing) with a fresh timestamp fakes a quiet night. Keep the old file.
+  if (newFilings.length >= 5 && llmFails > newFilings.length * 0.3) {
+    console.error(`✗ ${llmFails}/${newFilings.length} digests failed at the LLM — refusing to overwrite last night's file.`);
+    process.exit(1);
+  }
+  if (llmFails) console.warn(`⚠ ${llmFails} filings failed at the LLM this run (they are NOT in the digest).`);
 
   items.sort((a, b) => Date.parse(b.filedAt) - Date.parse(a.filedAt)); // newest-first
 

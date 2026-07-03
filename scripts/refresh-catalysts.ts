@@ -123,7 +123,10 @@ async function main() {
           out[sym] = { why, ts: new Date().toISOString(), tf: m.tf };
           if (why) withWhy++;
         } catch (e: any) {
-          out[sym] = { why: "", ts: new Date().toISOString(), tf: m.tf };
+          // A transient LLM/news error must not overwrite a good "why it moved" with an empty one
+          // stamped fresh (that suppressed regeneration for the whole TTL). Keep the prior entry;
+          // if there was none, backdate ts so the next run retries instead of honoring the TTL.
+          out[sym] = prev[sym]?.why ? prev[sym] : { why: "", ts: new Date(0).toISOString(), tf: m.tf };
           console.log(`  ${sym}: ${e.message}`);
         }
         if (++done % 25 === 0) console.log(`  …${done} generated`);

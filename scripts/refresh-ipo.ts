@@ -20,7 +20,9 @@ const FILE = path.join(DATA, "ipo-monitor.json");
 const DAY = 86_400_000;
 const LOCKUP_DAYS = 180;
 const iso = (d: number) => new Date(d).toISOString().slice(0, 10);
-const num = (x: any) => (typeof x === "number" && isFinite(x) && x > 0 ? x : null);
+const num = (x: any, max = Infinity) => (typeof x === "number" && isFinite(x) && x > 0 && x <= max ? x : null);
+// Bounds: an IPO priced above $1,000/share or $100B raised means the model confused units (size
+// in dollars not millions, or total-raise as the share price) — store null over a wrong number.
 
 // A priced IPO (424B4).
 async function classifyIpo(hit: EftsHit, text: string) {
@@ -42,7 +44,7 @@ async function classifyIpo(hit: EftsHit, text: string) {
   }
   const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
   if (!ticker) return null;
-  return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd), sizeUsdM: num(out.sizeUsdM), exchange: String(out.exchange || "").slice(0, 12) };
+  return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd, 1000), sizeUsdM: num(out.sizeUsdM, 100000), exchange: String(out.exchange || "").slice(0, 12) };
 }
 
 // An S-1/F-1 registration for a company still trying to go public (the pipeline).
@@ -50,10 +52,18 @@ async function classifyUpcoming(hit: EftsHit, text: string) {
   const SYSTEM =
     "You read one SEC S-1/F-1 registration statement and determine if it is a GENUINE upcoming INITIAL public offering — a company registering to list its common stock publicly for the FIRST time. Return isIpo=false (dropped) if it is: a resale/secondary registration by an already-public company, a shelf, a SPAC/blank-check, a debt/warrant/unit-only registration, or an amendment with no offering. If it IS a real IPO registration, return the proposed ticker ('' if not yet assigned), company name, expected deal size in US$ MILLIONS (or null), proposed price-range midpoint per share (or null), and the intended exchange. " + NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"isIpo":boolean,"ticker":string,"company":string,"priceUsd":number|null,"sizeUsdM":number|null,"exchange":string}';
-  const out = await chatJSON<any>(SYSTEM, `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6500)}\n\n${SCHEMA}`, { maxTokens: 1200, reasoningEffort: "low" });
+  const user = `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6500)}\n\n${SCHEMA}`;
+  let out = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low" });
+  // Second opinion on rejects — but ONLY for TICKERED registrations (a reserved exchange ticker is
+  // the strongest tell of a real deal; the tickerless S-1 pile is mostly shells and not worth 2×).
+  if ((!out || out.isIpo === false) && hit.ticker) {
+    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: PRO_MODEL }).catch(() => null);
+    if (second && second.isIpo !== false) { console.log(`  ${hit.ticker}: upcoming reject overturned by second opinion`); out = second; }
+    else return null;
+  }
   if (!out || out.isIpo === false) return null;
   const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
-  return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd), sizeUsdM: num(out.sizeUsdM), exchange: String(out.exchange || "").slice(0, 12) };
+  return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd, 1000), sizeUsdM: num(out.sizeUsdM, 100000), exchange: String(out.exchange || "").slice(0, 12) };
 }
 
 // The investor recap of the prospectus (for the per-company detail page).

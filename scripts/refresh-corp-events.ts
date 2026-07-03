@@ -47,6 +47,12 @@ async function classify(hit: EftsHit, type: CorpEventType, text: string): Promis
   return { ticker: ticker || hit.ticker, headline: String(out.headline || "").slice(0, 240) };
 }
 
+
+// A ticker the LLM emitted (vs one EDGAR supplied) must actually price on Yahoo before it is
+// stored — else a wrong-but-real symbol shows another company's move as this event's performance.
+async function validTicker(sym: string): Promise<boolean> {
+  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
+}
 async function sinceFor(ticker: string, iso: string): Promise<number | null> {
   try {
     const eT = Date.parse(iso);
@@ -92,6 +98,7 @@ async function main() {
     const text = await fetchFilingBodyText(hit);
     if (!text) return null;
     const c = await classify(hit, type, text);
+    if (c && c.ticker && c.ticker !== hit.ticker && !(await validTicker(c.ticker))) c.ticker = hit.ticker; // reject LLM-invented symbols
     if (!c || !c.ticker) return null;
     return { id: hit.accession, date: (hit.date || enddt) + "T12:00:00Z", type, ticker: c.ticker, company: hit.issuer, headline: c.headline, url: hit.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(hit.ciks[0])}/${hit.accession.replace(/-/g, "")}/${hit.doc}` : "", sincePct: null };
   });

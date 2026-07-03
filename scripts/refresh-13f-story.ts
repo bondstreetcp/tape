@@ -81,7 +81,7 @@ async function main() {
   }
   const themes = (Array.isArray(out.themes) ? out.themes : [])
     .filter((t) => t && t.heading && t.detail)
-    .map((t) => ({ heading: String(t.heading).trim(), detail: String(t.detail).trim(), tickers: (Array.isArray(t.tickers) ? t.tickers : []).filter((x) => typeof x === "string").slice(0, 8) }))
+    .map((t) => ({ heading: String(t.heading).trim(), detail: String(t.detail).trim(), tickers: (Array.isArray(t.tickers) ? t.tickers : []).filter((x) => typeof x === "string" && names.has(x.toUpperCase())).map((x) => x.toUpperCase()).slice(0, 8) /* only tickers the roster actually traded — hallucinated symbols must not render as links */ }))
     .slice(0, 4);
 
   const story: ThirteenFStory = { generatedAt: new Date().toISOString(), asOf, tldr: String(out.tldr).trim(), themes };
