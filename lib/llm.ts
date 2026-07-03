@@ -42,8 +42,10 @@ async function apiKey(): Promise<string> {
   return _key;
 }
 
-/** True if an OpenRouter key is resolvable (env or .env.local) — gate GLM features on this, NOT GEMINI_API_KEY. */
+/** True if an OpenRouter key is resolvable (env or .env.local) OR a local inference server is
+ *  configured — gate GLM features on this, NOT GEMINI_API_KEY. */
 export async function llmConfigured(): Promise<boolean> {
+  if (process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL) return true;
   return !!(await apiKey());
 }
 
@@ -76,26 +78,28 @@ interface ChatMessage {
   content: string;
 }
 
+// ── Local-inference split (env-gated; INERT until both vars are set) ────────────────────────────
+// When LLM_LOCAL_BASE_URL + LLM_LOCAL_MODEL are configured, DEFAULT-tier calls (the mechanical
+// extraction fleet — overnight filings, event feeds…) try the local OpenAI-compatible server
+// (vLLM on the EPYC/3090 box, via a tunnel) FIRST; PRO_MODEL judgment calls always stay on
+// OpenRouter. Any local failure falls through to OpenRouter on the next attempt, so the home box
+// being offline never kills a feed. See docs/SETUP-local-llm.md.
+const LOCAL_URL = (process.env.LLM_LOCAL_BASE_URL || "").replace(/\/+$/, "");
+const LOCAL_MODEL = process.env.LLM_LOCAL_MODEL || "";
+const LOCAL_KEY = process.env.LLM_LOCAL_API_KEY || "local";
+
 async function callChat(
   messages: ChatMessage[],
   opts: ChatOpts,
   jsonMode: boolean,
 ): Promise<string | null> {
   const key = await apiKey();
-  if (!key) {
+  const wantLocal = !!LOCAL_URL && !!LOCAL_MODEL && !opts.model; // default tier only — PRO stays cloud
+  if (!key && !wantLocal) {
     console.warn("lib/llm: OPENROUTER_API_KEY not set (env or .env.local) — skipping LLM call.");
     return null;
   }
-  const url = `${baseUrl()}/chat/completions`;
   const retries = opts.retries ?? 4;
-  const body: Record<string, unknown> = {
-    model: opts.model || model(),
-    temperature: opts.temperature ?? 0.1,
-    messages,
-  };
-  if (jsonMode) body.response_format = { type: "json_object" };
-  if (opts.maxTokens) body.max_tokens = opts.maxTokens;
-  if (opts.reasoningEffort) body.reasoning = { effort: opts.reasoningEffort };
 
   let lastInfo = "";
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -104,13 +108,27 @@ async function callChat(
       // provider rate-limit instead of re-bursting in lockstep.
       await sleep(Math.min(12_000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 500));
     }
+    // Attempt 0 goes local when configured; failures fall through to OpenRouter.
+    const useLocal = wantLocal && attempt === 0;
+    if (!useLocal && !key) { lastInfo = "local failed and no OPENROUTER_API_KEY for cloud fallback"; break; }
+    const targetModel = useLocal ? LOCAL_MODEL : opts.model || model();
+    const body: Record<string, unknown> = {
+      model: targetModel,
+      temperature: opts.temperature ?? 0.1,
+      messages,
+    };
+    if (jsonMode) body.response_format = { type: "json_object" };
+    if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+    // `reasoning` is an OpenRouter extension — local vLLM servers may reject unknown fields.
+    if (opts.reasoningEffort && !useLocal) body.reasoning = { effort: opts.reasoningEffort };
+
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 120_000); // a big 10-K/Q prompt can be slow; don't hang forever
     try {
-      const res = await fetch(url, {
+      const res = await fetch(`${useLocal ? LOCAL_URL : baseUrl()}/chat/completions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${key}`,
+          Authorization: `Bearer ${useLocal ? LOCAL_KEY : key}`,
           "Content-Type": "application/json",
           "X-Title": "Tape",
         },
@@ -118,19 +136,19 @@ async function callChat(
         signal: ctrl.signal,
       });
       if (!res.ok) {
-        lastInfo = `${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`;
-        if (res.status === 429 || res.status >= 500) continue; // transient → retry
-        console.warn(`lib/llm: ${lastInfo}`); // real 4xx (e.g. 400 context-too-long) — retrying won't help
+        lastInfo = `${useLocal ? "local " : ""}${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`;
+        if (useLocal || res.status === 429 || res.status >= 500) continue; // local error OR transient → next attempt
+        console.warn(`lib/llm: ${lastInfo}`); // real cloud 4xx (e.g. 400 context-too-long) — retrying won't help
         return null;
       }
       const j: any = await res.json();
       // Meter tokens even on an empty-content reply — reasoning tokens are still billed.
-      if (j?.usage) recordUsage(opts.model || model(), j.usage.prompt_tokens, j.usage.completion_tokens);
+      if (j?.usage) recordUsage(targetModel, j.usage.prompt_tokens, j.usage.completion_tokens);
       const content: string = j?.choices?.[0]?.message?.content ?? "";
       if (content.trim()) return content;
-      lastInfo = "empty content"; // transient (truncated/blank) → retry
+      lastInfo = `${useLocal ? "local " : ""}empty content`; // transient (truncated/blank) → retry
     } catch (e: any) {
-      lastInfo = e?.name === "AbortError" ? "timeout (120s)" : e?.message || String(e); // network/timeout → retry
+      lastInfo = `${useLocal ? "local " : ""}${e?.name === "AbortError" ? "timeout (120s)" : e?.message || String(e)}`; // network/timeout → retry
     } finally {
       clearTimeout(timer);
     }
