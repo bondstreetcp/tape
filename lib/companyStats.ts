@@ -75,6 +75,7 @@ export interface CompanyStats {
   trailingEps: number | null;
   earningsGrowth: number | null;
   revenueGrowth: number | null;
+  totalRevenue: number | null; // TTM revenue, raw dollars — the reconciliation base for LLM-extracted figures
   estimates: EstimatePeriod[];
   surprises: SurpriseRow[];
   ratingChanges: RatingChange[];
@@ -161,6 +162,7 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
       trailingEps: num(ks.trailingEps),
       earningsGrowth: num(fd.earningsGrowth),
       revenueGrowth: num(fd.revenueGrowth),
+      totalRevenue: num(fd.totalRevenue),
       estimates: et
         .map((t: any) => ({
           period: String(t.period ?? ""),
