@@ -12,13 +12,19 @@ failure** — the box being offline never kills a feed. `PRO_MODEL` calls always
 Until the vars are set, nothing changes.
 
 ## 1. Serve a model with vLLM (on the EPYC box)
-Dual 3090s = 48 GB VRAM. Two sensible choices:
-- **Qwen2.5-72B-Instruct-AWQ** — best quality, fits across both cards (`--tensor-parallel-size 2`), ~15–25 tok/s/stream.
-- **Qwen2.5-32B-Instruct-AWQ** — ~3× faster, still strong for schema extraction; start here.
+Dual 3090s = 48 GB VRAM. The overnight window is 8+ hours and the batch needs ~2.5h on the big
+model, so **default to the 72B** — the robustness is free in wall-clock terms:
+- **Qwen2.5-72B-Instruct-AWQ (recommended)** — 4-bit across both cards (`--tensor-parallel-size 2`),
+  ~2.5 h/night for the full batch, ≈ GLM-5.2 parity on schema extraction. ~1.75 kWh/night (~$5/mo).
+- **Qwen2.5-32B-Instruct-AWQ** — ~3× faster (~1 h/night) if you ever need the box back sooner.
+- NOT the giant CPU-offload MoEs (DeepSeek-class in the 512 GB RAM): prefill throughput ~100-200
+  tok/s can't chew the ~4.5M tokens/night of filing text — 25+ hours. GPU-resident models only.
+- Model landscape moves fast — check the current open-weights leaderboard when you set this up;
+  the router doesn't care what vLLM serves.
 
 ```bash
 pip install vllm
-vllm serve Qwen/Qwen2.5-32B-Instruct-AWQ \
+vllm serve Qwen/Qwen2.5-72B-Instruct-AWQ \
   --tensor-parallel-size 2 --max-model-len 20000 \
   --api-key <MAKE-UP-A-LONG-TOKEN> --port 8000
 # smoke test:
@@ -42,7 +48,7 @@ GitHub → repo → Settings → Secrets → Actions, add:
 | Secret | Value |
 |---|---|
 | `LLM_LOCAL_BASE_URL` | `https://<tunnel-host>/v1` |
-| `LLM_LOCAL_MODEL` | `Qwen/Qwen2.5-32B-Instruct-AWQ` (exactly as served) |
+| `LLM_LOCAL_MODEL` | `Qwen/Qwen2.5-72B-Instruct-AWQ` (exactly as served) |
 | `LLM_LOCAL_API_KEY` | the vLLM `--api-key` token |
 
 Then expose them in `.github/workflows/refresh-data.yml` job env (next to OPENROUTER_API_KEY):
