@@ -11,6 +11,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { cleanTicker } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
 
@@ -42,7 +43,7 @@ async function classifyIpo(hit: EftsHit, text: string) {
     if (second && second.isIpo !== false) { console.log(`  ${hit.ticker || hit.issuer.slice(0, 20)}: reject overturned by second opinion`); out = second; }
     else return null;
   }
-  const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
+  const ticker = cleanTicker(out.ticker || hit.ticker);
   if (!ticker) return null;
   return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd, 1000), sizeUsdM: num(out.sizeUsdM, 100000), exchange: String(out.exchange || "").slice(0, 12) };
 }
@@ -62,7 +63,7 @@ async function classifyUpcoming(hit: EftsHit, text: string) {
     else return null;
   }
   if (!out || out.isIpo === false) return null;
-  const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
+  const ticker = cleanTicker(out.ticker || hit.ticker);
   return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd, 1000), sizeUsdM: num(out.sizeUsdM, 100000), exchange: String(out.exchange || "").slice(0, 12) };
 }
 

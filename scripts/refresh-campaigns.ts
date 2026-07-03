@@ -15,6 +15,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
+import { cleanTicker } from "../lib/llmValidate";
 import type { Campaign, CampaignType, CampPerf, CampaignsData } from "../lib/campaigns";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -199,7 +200,7 @@ async function classify(r: Raw, text: string, pro = false): Promise<{ ticker: st
   const out = await chatJSON<any>(SYSTEM, ctx + "\n\n" + SCHEMA, pro ? { maxTokens: 1600, model: PRO_MODEL, reasoningEffort: "high" } : { maxTokens: 700 });
   if (!out) return "llmfail";
   if (out.material === false) return null;
-  const ticker = out.ticker ? String(out.ticker).toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6) : r.ticker;
+  const ticker = out.ticker ? cleanTicker(out.ticker) : r.ticker;
   return { ticker: ticker || r.ticker, company: String(out.company || r.issuer).slice(0, 80), campaigner: String(out.campaigner || r.other).slice(0, 80), ask: String(out.ask || "").slice(0, 220), summary: String(out.summary || "").slice(0, 400), material: true };
 }
 
