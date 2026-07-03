@@ -13,6 +13,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { cleanTicker, coerceEnum } from "../lib/llmValidate";
 import type { AffectedTicker, Impact, PolicyData, PolicyItem } from "../lib/policy";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -42,9 +43,9 @@ async function fetchContracts(): Promise<RawContract[]> {
   return (j?.results || []).filter((r: any) => (r["Award Amount"] || 0) >= 5e7).map((r: any) => ({ id: `us-${r.generated_internal_id}`, date: end + "T12:00:00Z", recipient: r["Recipient Name"] || "", amount: r["Award Amount"] || 0, agency: r["Awarding Agency"] || "", desc: (r["Description"] || "").slice(0, 120), url: r.generated_internal_id ? `https://www.usaspending.gov/award/${r.generated_internal_id}` : "https://www.usaspending.gov" }));
 }
 
-const imp = (x: any): Impact => (["positive", "negative", "mixed"].includes(x) ? x : "mixed");
+const imp = (x: any): Impact => coerceEnum(x, ["positive", "negative", "mixed"] as const, "mixed");
 function cleanTickers(arr: any): AffectedTicker[] {
-  return (Array.isArray(arr) ? arr : []).map((t) => ({ ticker: String(t?.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6), impact: imp(t?.impact) })).filter((t) => t.ticker.length >= 1);
+  return (Array.isArray(arr) ? arr : []).map((t) => ({ ticker: cleanTicker(t?.ticker), impact: imp(t?.impact) })).filter((t) => t.ticker.length >= 1);
 }
 
 async function classifyRules(rows: RawRule[]): Promise<Record<string, { tickers: AffectedTicker[]; summary: string }>> {
@@ -66,7 +67,7 @@ async function classifyContracts(rows: RawContract[]): Promise<Record<string, { 
   const SCHEMA = 'Return ONLY JSON: {"items":[{"index":number,"ticker":string,"summary":string}]}';
   const out = await chatJSON<{ items: any[] }>(SYSTEM, numbered + "\n\n" + SCHEMA, { maxTokens: 1600 });
   const map: Record<string, { ticker: string; summary: string }> = {};
-  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const ticker = String(it.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6); if (ticker.length < 1) continue; map[r.id] = { ticker, summary: String(it.summary || "").slice(0, 300) }; }
+  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const ticker = cleanTicker(it.ticker); if (ticker.length < 1) continue; map[r.id] = { ticker, summary: String(it.summary || "").slice(0, 300) }; }
   return map;
 }
 

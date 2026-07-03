@@ -8,6 +8,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { cleanTicker } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { CorpEvent, CorpEventType, CorpEventsData } from "../lib/corpEvents";
 
@@ -47,7 +48,7 @@ async function classify(hit: EftsHit, type: CorpEventType, text: string): Promis
   const out = await chatJSON<any>(SYSTEM, `Subject: ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}. Filed ${hit.date}.\n\n${text.slice(0, 5500)}\n\n${SCHEMA}`, { maxTokens: 300 });
   if (!out) return "llmfail";
   if (out.material === false) return null;
-  const ticker = out.ticker ? String(out.ticker).toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6) : hit.ticker;
+  const ticker = out.ticker ? cleanTicker(out.ticker) : hit.ticker;
   return { ticker: ticker || hit.ticker, headline: String(out.headline || "").slice(0, 240) };
 }
 
