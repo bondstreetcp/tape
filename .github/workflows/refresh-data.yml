@@ -522,3 +522,16 @@ jobs:
           done
           echo "Push failed after retries"
           exit 1
+
+      # Data-freshness gate — the ONE step deliberately allowed to fail the job. EVERY refresh step
+      # above is continue-on-error (a single source hiccup must not abort the whole night), so a
+      # silently-dead feed — a broken scraper, a dead key, a step that failed under continue-on-error —
+      # leaves no trace except a data file that quietly stops updating. This reads each feed's
+      # generatedAt + each snapshot's row count (lib/dataFreshness) and exits non-zero if any is
+      # stale / missing / empty, turning the run RED and emailing the owner — the site's only recurring
+      # incident (a feed nobody noticed had died) finally has an alarm. Runs AFTER the push so a stale
+      # feed never blocks the data that DID refresh from landing. FULL-only: on intraday ticks only
+      # quotes refresh, so the nightly derived files are legitimately hours old.
+      - name: Data-freshness gate
+        if: ${{ env.FULL == 'true' }}
+        run: npm run check-freshness

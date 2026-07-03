@@ -19,6 +19,7 @@ import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from ".
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
 import { adjustForCorporateActions, splitsFromYahoo, type SplitEvent } from "../lib/splits";
+import { snapshotWriteAllowed } from "../lib/snapshotGuard";
 import type {
   Returns,
   SectorAgg,
@@ -430,6 +431,7 @@ async function main() {
 
   // 6) Assemble per-universe snapshots.
   console.log("Writing per-universe snapshots…");
+  const blocked: string[] = []; // universes whose snapshot collapsed this run (write-guard kept the prior)
   for (const u of UNIVERSES) {
     const stocks: StockRow[] = [];
     const seen = new Set<string>();
@@ -481,13 +483,24 @@ async function main() {
       stocks,
       sectors,
     };
+    // Write-guard: never REPLACE a healthy snapshot with a collapsed one. This loop drops any symbol
+    // it couldn't quote (line above), so a partial-fetch night — Yahoo rate-limited to 60% of names —
+    // would otherwise ship an index missing constituents (gapped treemap, truncated breadth). Keep the
+    // prior good file instead; a PERSISTENT problem then surfaces as staleness in the freshness monitor.
+    const snapPath = path.join(DATA_DIR, u.id, "snapshot.json");
+    let prevCount: number | null = null;
+    try { prevCount = (JSON.parse(await fs.readFile(snapPath, "utf8")) as Snapshot).stocks?.length ?? null; } catch { /* no prior snapshot */ }
+    const guard = snapshotWriteAllowed(prevCount, stocks.length);
+    if (!guard.allowed) {
+      console.error(`  ⚠ ${u.id}: ${guard.reason} — SKIPPING write, keeping prior snapshot`);
+      blocked.push(u.id);
+      continue;
+    }
     await fs.mkdir(path.join(DATA_DIR, u.id), { recursive: true });
-    await fs.writeFile(
-      path.join(DATA_DIR, u.id, "snapshot.json"),
-      JSON.stringify(snapshot),
-    );
+    await fs.writeFile(snapPath, JSON.stringify(snapshot));
     console.log(`  ${u.id}: ${stocks.length} stocks, ${sectors.length} sectors`);
   }
+  if (blocked.length) console.error(`\n⚠ write-guard kept the prior snapshot for ${blocked.length} universe(s): ${blocked.join(", ")} (partial fetch this run). npm run check-freshness will flag any that stay stale.`);
 
   console.log("\nDone.");
 }

@@ -12,9 +12,11 @@ import { INTL_UNIVERSES, YAHOO_SECTOR_TO_ETF, type IntlUniverse } from "../lib/i
 import { ETF_TO_SECTOR, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
+import { snapshotWriteAllowed } from "../lib/snapshotGuard";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const ROOT = path.join(process.cwd(), "data");
+const blocked: string[] = []; // universes whose snapshot collapsed this run (write-guard kept the prior)
 const DAY = 86_400_000;
 const TFS = ["1d", "1w", "3m", "6m", "ytd", "1y", "3y", "5y"] as const;
 const num = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -106,9 +108,21 @@ async function buildOne(uni: IntlUniverse) {
     return { etf, name: ETF_TO_SECTOR[etf]?.name || etf, returns };
   });
 
+  // Write-guard: keep the prior good snapshot (+ constituents) if this build collapsed vs the last one
+  // — a partial fetch must not ship a half-empty index. A persistent problem surfaces as staleness in
+  // the freshness monitor. See lib/snapshotGuard.
   const uniDir = path.join(ROOT, uni.id);
+  const snapPath = path.join(uniDir, "snapshot.json");
+  let prevCount: number | null = null;
+  try { prevCount = JSON.parse(fs.readFileSync(snapPath, "utf8")).stocks?.length ?? null; } catch { /* no prior snapshot */ }
+  const guard = snapshotWriteAllowed(prevCount, rows.length);
+  if (!guard.allowed) {
+    console.error(`⚠ ${uni.id}: ${guard.reason} — SKIPPING write, keeping prior snapshot\n`);
+    blocked.push(uni.id);
+    return;
+  }
   fs.mkdirSync(uniDir, { recursive: true });
-  fs.writeFileSync(path.join(uniDir, "snapshot.json"), JSON.stringify({ generatedAt: new Date().toISOString(), stocks: rows, sectors }));
+  fs.writeFileSync(snapPath, JSON.stringify({ generatedAt: new Date().toISOString(), stocks: rows, sectors }));
   fs.mkdirSync(path.join(ROOT, "constituents"), { recursive: true });
   fs.writeFileSync(path.join(ROOT, "constituents", `${uni.id}.json`), JSON.stringify(rows.map((r) => ({ symbol: r.symbol, name: r.name, sector: r.sector, industry: r.industry }))));
   console.log(`${uni.id}: ${rows.length}/${uni.tickers.length} names written\n`);
