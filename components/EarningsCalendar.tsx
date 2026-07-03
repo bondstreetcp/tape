@@ -167,6 +167,18 @@ export default function EarningsCalendar({
                 <span className="text-xs text-[var(--text-3)]">{g.rows.length} {g.rows.length === 1 ? "report" : "reports"}</span>
               </div>
               <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--divider)] text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+                    <th className="w-8" />
+                    <th className="px-2 py-1 text-left font-medium">Ticker</th>
+                    <th className="px-2 py-1 text-left font-medium">Company</th>
+                    <th className="px-2 py-1 text-left font-medium">Session</th>
+                    <th className="px-2 py-1 text-right font-medium">Mkt cap</th>
+                    <th className="px-2 py-1 text-right font-medium" title="Forward annual consensus EPS">EPS est</th>
+                    <th className="px-2 py-1 text-right font-medium" title="Year-to-date price return">YTD</th>
+                    <th className="px-2 py-1 text-right font-medium" title="Options-implied move into the print; rich/cheap vs the stock's average historical reaction">Implied move</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {g.rows.map((s) => {
                     const tm = timing(s.earningsDate!);
