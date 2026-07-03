@@ -52,7 +52,11 @@ export interface SpinoffRow extends SpinoffSeed {
   cumVol: number; // regular-way cumulative volume since the spin
   wiVol: number; // when-issued volume captured (0 if none found)
   turnoverPct: number | null; // (cumVol + wiVol) / sharesOut × 100
-  floatTurned: boolean; // turnover ≥ 50% — the historical bottom zone
+  // Turnover ≥ 100% — the register has genuinely turned. Our 2020-24 backtest (28 spins,
+  // scripts/backtest-spinoff-turnover.ts): the classic "50%" fires at ~day 29 with a median −21%
+  // still ahead (modern churn double-counts volume); at 100-150% the +6m forward return is +12%
+  // median with a 71-74% hit rate.
+  floatTurned: boolean;
   weekly: { d: string; pct: number }[]; // cumulative turnover milestones (~weekly) for the mini trend
 }
 
@@ -62,4 +66,4 @@ export interface SpinoffsData {
 }
 
 export const turnoverColor = (pct: number | null): string =>
-  pct == null ? "var(--text-4)" : pct >= 50 ? "#22c55e" : pct >= 30 ? "#f59e0b" : "var(--text-2)";
+  pct == null ? "var(--text-4)" : pct >= 100 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "var(--text-2)";
