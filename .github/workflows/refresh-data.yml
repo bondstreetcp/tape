@@ -66,6 +66,11 @@ jobs:
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
       INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
+      # Job-level so EVERY LLM step inherits it — 8 steps (trump-truth, fed, campaigns, biotech,
+      # policy, catalyst-vol, corp-events, ipo) shipped without a per-step env block and silently
+      # printed "LLM not configured — skipping" every night; their feeds only updated when run
+      # locally. Per-step env blocks remain harmless duplicates.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
