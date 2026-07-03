@@ -14,8 +14,9 @@ Until the vars are set, nothing changes.
 ## 1. Serve a model with vLLM (on the EPYC box)
 Dual 3090s = 48 GB VRAM. The overnight window is 8+ hours and the batch needs ~2.5h on the big
 model, so **default to the 72B** — the robustness is free in wall-clock terms:
-- **Qwen2.5-72B-Instruct-AWQ (recommended)** — 4-bit across both cards (`--tensor-parallel-size 2`),
-  ~2.5 h/night for the full batch, ≈ GLM-5.2 parity on schema extraction. ~1.75 kWh/night (~$5/mo).
+- **Qwen2.5-72B-Instruct-AWQ** — 4-bit across both cards (`--tensor-parallel-size 2`), ~2.5 h/night
+  for the full batch, ~1.75 kWh/night (~$5/mo). **BUT: it failed the quality eval — see the verdict
+  at the bottom. Don't port to this model; benchmark a newer candidate first.**
 - **Qwen2.5-32B-Instruct-AWQ** — ~3× faster (~1 h/night) if you ever need the box back sooner.
 - NOT the giant CPU-offload MoEs (DeepSeek-class in the 512 GB RAM): prefill throughput ~100-200
   tok/s can't chew the ~4.5M tokens/night of filing text — 25+ hours. GPU-resident models only.
@@ -78,3 +79,12 @@ did for GLM): `npm run refresh-corp-events` and `npm run refresh-ipo`, then chec
 Net: **~$10–15/mo cloud + ~$2–4/mo electricity** (the nightly batch is ~1–1.5 h of dual-3090 load
 ≈ 1 kWh). The FULL run fires 22:47 UTC (~5:47pm CT); if time-of-use rates matter, the LLM-heavy
 steps could move to a 06:00 UTC (1am CT) tick — worth ~$2/mo, so only do it if the box sleeps anyway.
+
+## Eval verdict (2026-07-03 — HOLD the port)
+Benchmarked the exact production prompts via OpenRouter (`scripts/eval-local-model.ts`, graded
+against hand-verified gold): **Qwen2.5-72B underperformed the incumbents** — 4/10 exact comps vs
+GLM-5.2 at 7/10, and it rejected **5 of 10 real IPOs** as "not an IPO" (GLM: 2). At ~$70/mo of
+savings that quality loss is a bad trade, so the fleet stays on cloud for now. Everything here
+stays staged; when a stronger open model appears, run
+`CANDIDATE=<openrouter-model-id> npx tsx scripts/eval-local-model.ts`
+and port only if it beats GLM on both tasks.
