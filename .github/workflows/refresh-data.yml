@@ -563,3 +563,19 @@ jobs:
       - name: Data-freshness gate
         if: ${{ env.FULL == 'true' }}
         run: npm run check-freshness
+
+      # Trigger a Vercel production deploy via Deploy Hook. Reliable — the git-push webhook is flaky,
+      # and after the data/→R2 cutover there is NO data commit to trigger a deploy at all, so this
+      # becomes the sole trigger. Placed LAST: if the freshness gate above failed, this is skipped
+      # (default step behaviour), so we never deploy known-stale data. Inert without the secret.
+      - name: Trigger Vercel deploy (Deploy Hook)
+        run: |
+          if [ -n "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "Triggering Vercel deploy…"
+            curl -sS -X POST "$VERCEL_DEPLOY_HOOK" | head -c 300; echo
+          else
+            echo "VERCEL_DEPLOY_HOOK not set — skipping (relying on Vercel's git integration)."
+          fi
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        continue-on-error: true
