@@ -105,3 +105,23 @@ backlog only (C12, A-low).
 ## Clean bills worth knowing
 fed = cleanest event feed; biotech = best logging; confluence numbers all code-computed; desk-note
 skip-write preserves old note; 13f/congress skip-write same; guidance per-symbol checkpointing good.
+
+## Phase 2 — data-integrity BEYOND the LLM surface (shipped 2026-07-03, 92138eaf)
+The 38 findings above were an LLM-surface audit. Three categories were never in scope: freshness
+monitoring, the non-LLM price backbone, and regression prevention. Phase 2 shipped the first two —
+they map to incidents that have actually recurred (silently-dead feeds; a half-empty snapshot day).
+- **Freshness monitor** — `lib/dataFreshness.ts` (registry of ~35 feeds + every universe snapshot,
+  tiered max-age core 30h / event+synthesis 96h, count floors where empty = broken) + `scripts/
+  check-freshness.ts` (`npm run check-freshness`). Wired into refresh-data.yml as the ONE non-
+  continue-on-error step (stale/missing/empty → red job + owner email). Also `/api/health/data`
+  (503 when degraded). Reads `generatedAt` from content, not mtime (git touch lies). Snapshot floors
+  are ~70% of ACTUAL constituent counts — intl universes are curated subsets (ftse100/nikkei/
+  stoxx600/kospi = 40/40/195/36), NOT nominal index size.
+- **Snapshot write-guard** — `lib/snapshotGuard.ts` (`snapshotWriteAllowed()`, pure) wired into
+  build-data + build-intl: refuse to replace a healthy snapshot with a >15%-collapsed one (partial
+  fetch). refresh-quotes updates in place → no guard needed. Composes with the monitor's count-floor.
+
+Still open (the higher-leverage "stop the rot" investments): regression guards for the 34 fixes
+(shared `lib/llmValidate.ts` + lint), an automated test suite on the pure-function core (BS pricing,
+settlement, reconciliation gates — no test runner exists yet), runtime schema validation (zod) at the
+data-load boundary, plus the accepted-risk backlog (C12, A-low).
