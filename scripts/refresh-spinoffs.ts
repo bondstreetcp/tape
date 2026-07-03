@@ -90,7 +90,7 @@ async function main() {
       cumVol: cum,
       wiVol,
       turnoverPct,
-      floatTurned: turnoverPct != null && turnoverPct >= 50,
+      floatTurned: turnoverPct != null && turnoverPct >= 100, // backtest-calibrated (see lib/spinoffs)
       weekly: weekly.slice(-26), // ~6 months of weekly milestones
     });
     console.log(`  ${seed.ticker.padEnd(6)} turnover ${turnoverPct ?? "?"}%${wiVol ? ` (incl. ${(wiVol / 1e6).toFixed(1)}M WI)` : ""} · ${rows[rows.length - 1].daysSince}d since spin · since-spin ${rows[rows.length - 1].sincePct}%`);
