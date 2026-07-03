@@ -171,6 +171,16 @@ function parseJson<T = any>(raw: string): T | null {
  * empty, or unparseable responses. Returns the parsed object or null.
  */
 export async function chatJSON<T = any>(system: string, user: string, opts: ChatOpts = {}): Promise<T | null> {
+  // SAFETY DEFAULTS for structured extraction — GLM-5.2/Gemini are REASONING models, and a tight
+  // max_tokens gets fully consumed by reasoning → EMPTY content → the item silently drops
+  // (observed at ~14% on refresh-ipo with maxTokens 260; several feeds shipped with 200-900).
+  // chatJSON is always mechanical extraction, so default reasoning to "low" (callers can override)
+  // and floor a caller-set max_tokens at 1200 — JSON output self-terminates, so the floor is free.
+  opts = {
+    reasoningEffort: "low",
+    ...opts,
+    ...(opts.maxTokens != null && opts.maxTokens < 1200 ? { maxTokens: 1200 } : {}),
+  };
   // callChat owns transport reliability (retry/backoff/timeout). Here we only re-prompt
   // when an OK reply isn't parseable JSON — a null reply means transport already gave up,
   // so don't loop pointlessly.
