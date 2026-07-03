@@ -2,7 +2,9 @@
 
 Full-codebase sweep of the LLM surface (22 nightly scripts + 11 live routes) against the failure
 taxonomy proven this week (unvalidated numbers, blind rejects, merge/null-clobber, unvalidated
-tickers, bad dates, shape guards, silent drops, staleness honesty). Status: ☐ open · ☑ fixed. 18 of 38 closed 2026-07-03 (Tier 1 complete except catalyst-vol A5; Tier 2 mostly complete).
+tickers, bad dates, shape guards, silent drops, staleness honesty). Status: ☐ open · ☑ fixed.
+33 of 38 closed 2026-07-03 (commits a48f869f + d377ed06). Remaining: routes C2 (segment-revenue
+reconciliation) + the accepted-risk backlog (C12, A-low).
 
 ## Tier 1 — data destroyed or blanked (fix first)
 - ☑ **guidance F1** (fixed 2026-07-03): `refresh-guidance.ts` — a chatJSON null (LLM outage) was stored as "no guidance"
@@ -19,9 +21,10 @@ tickers, bad dates, shape guards, silent drops, staleness honesty). Status: ☐ 
 - ☑ **catalysts F5** (fixed 2026-07-03): `refresh-catalysts.ts:125-127` — an ask() throw overwrites a good "why it
   moved" with `{why:""}` stamped fresh (suppresses retry for the whole TTL). Fix: carry forward the
   prior entry on error.
-- ☐ **catalyst-vol A5**: unpriced-but-known future events are dropped before storage; once the 8-K
-  ages out of the EFTS window the catalyst is lost. Fix: persist calendar rows with null pricing;
-  UI shows priced only. (Needs type + UI tolerance — medium.)
+- ☑ **catalyst-vol A5** (fixed 2026-07-03, d377ed06): unpriced-but-known future events were dropped before storage; once
+  the 8-K ages out of the EFTS window the catalyst is lost. Fix: CatalystRow pricing fields nullable;
+  pricing failure returns the row unpriced (re-priced a later run); view/type-predicate shows priced
+  only. Verified live: 1 priced + 3 kept unpriced.
 
 ## Tier 2 — wrong data shown
 - ☑ **ipo A2** (fixed 2026-07-03): `refresh-ipo.ts` num() had floor only — price 17500 or size-in-dollars renders
@@ -29,57 +32,66 @@ tickers, bad dates, shape guards, silent drops, staleness honesty). Status: ☐ 
 - ☑ **campaigns/corp-events A1** (fixed 2026-07-03): LLM tickers stored with regex-clean only (policy/biotech have the
   Yahoo `validTicker` pattern; these don't) → a wrong-but-real symbol prices the wrong company's
   move. Fix: validate NEW items' tickers; null (don't drop) on failure.
-- ☐ **guidance F3**: rev ranges unbounded, no low≤high check; `reportedEps` feeds beatGuide() with
-  no consensus gate → one misread poisons the sandbagger stat.
-- ☐ **guidance F4**: "verbatim" quote never substring-grounded (SSS pattern exists at refresh-sss).
+- ☑ **guidance F3** (fixed 2026-07-03, d377ed06): rev ranges bounded vs the name's own market cap ([0.1%, 10×], absolute
+  band fallback) + low/high swap when inverted; EPS gated vs consensus (≤ max(5×|cons|, $5)) feeding
+  beatGuide().
+- ☑ **guidance F4** (fixed 2026-07-03, d377ed06): quotes normalized-substring-grounded against the release text (SSS
+  pattern); ungrounded quotes nulled.
 - ☑ **valuation-explain F8** (fixed 2026-07-03): verdicts accepted for symbols outside the candidate list can pin a
   "value trap" badge on the wrong row. Fix: `if (!cand.some(c=>c.sym===sym)) continue;`.
-- ☐ **overnight F10**: keyMetrics stored as unknown passthrough (renders `[object Object]`); no
-  figure grounded against the filing clip.
-- ☐ **research F11/F12**: extract ticker/publishDate unvalidated (misfiled docs blend two companies'
-  consensus); unbounded estimate revisions can mint "+99,900%" and top the actionable scan.
+- ☑ **overnight F10** (fixed 2026-07-03, d377ed06): keyMetrics coerced to string/number only (80-char cap) and each
+  numeric must appear in the filing clip ("some" not "every" — a vs-consensus figure legitimately
+  isn't in the clip).
+- ☑ **research F11/F12** (fixed 2026-07-03, d377ed06): extract warns when the ticker never appears in the report text,
+  publishDate regex-validated (else ""), docType Set-coerced to the real enum; synthesize skips
+  |revision| > 300% (unit inconsistency) in signalsFor.
 
 ## Tier 3 — hallucinated-ticker links in syntheses (inputs known → whitelist)
-- ☐ **desk note F6**: tickers not filtered against the input movers/filings/flow set; rendered as
-  /stock/ links. ☐ **congress F7** same. ☑ **13f-story F9** fixed 2026-07-03.
+- ☑ **desk note F6** (fixed 2026-07-03, d377ed06): cleanTickers filters against the snapshot + overnight-filing symbol
+  set. ☑ **congress F7** (fixed 2026-07-03, d377ed06): highlight tickers must exist in the disclosed trades.
+  ☑ **13f-story F9** fixed 2026-07-03 (a48f869f).
 
 ## Tier 4 — blind rejects / silent drops
 - ☑ **ipo A6** (fixed 2026-07-03): `classifyUpcoming` lacks the PRO second-opinion its 424B4 sibling has.
-- ☐ **campaigns/corp-events A7**: material=false indistinguishable from transport failure; no
-  reject counters; no second opinion on the low-volume short-report bucket.
-- ☐ **policy A8**: batch classify `.catch(()=>({}))` — a dead batch is invisible. Log kept/total.
-- ☐ **A9**: shared mapPool swallows exceptions with no counter (all 8 event scripts).
+- ☑ **campaigns/corp-events A7** (fixed 2026-07-03, d377ed06): classify returns "llmfail" (retried next run — the item
+  isn't stored so the gate re-offers it) distinct from material=false (judgment); kept/rejected/failed
+  counters logged; short-report items get a PRO second opinion before being dropped.
+- ☑ **policy A8** (fixed 2026-07-03, d377ed06): per-batch .catch logs the failure; kept/total + dead-batch count logged.
+- ☑ **A9** (fixed 2026-07-03, d377ed06): mapPool counts swallowed exceptions and warns "N/M tasks threw" in all 8 event
+  scripts (campaigns, corp-events, policy, fed, biotech, ipo, catalyst-vol, trump-truth).
 
 ## Tier 5 — guards & honesty
 - ☑ **A10 dates** (fixed 2026-07-03): unguarded `new Date(raw).toISOString()` — campaigns:120 (kills one firm's feed),
   fed:58 (crashes the whole run), trump:82 (kills RSS fallback). Fix: Date.parse + skip.
 - ☑ **A11** (fixed 2026-07-03): catalyst-vol extractDate accepts "2026-13-45" (NaN passes bounds by accident).
 - ☑ **A12** (fixed 2026-07-03): trump tickers array unguarded (string → throws, batch lost).
-- ☐ **F13 staleness**: catalysts.json has no generatedAt; congress-AI + valuation-explain badges
-  show no as-of; desk note falls back to dateless "overnight".
+- ☑ **F13 staleness** (fixed 2026-07-03, d377ed06): catalysts.json → { generatedAt, bySymbol } (loader + script accept
+  the legacy bare map); congress AI block + valuation-history badges show "as of"; desk-note fallback
+  label carries the date ("overnight · Jul 3").
 - ☑ **F14** (fixed 2026-07-03): confluence `(r.thesis||"").trim()` throws on non-string → whole board write dies.
 - ☐ **A-low**: perf fields overwritten with null on transient Yahoo errors (self-heals next run);
   campaigns short-report URL-vs-x.com dup rows; dedupeUpcoming ticker-recycling edge; EFTS missing
   file_date stores "T12:00:00Z".
 
 ## Live routes (auditor C) — Tier 1-2 equivalents
-- ☐ **routes C1 supply-chain**: map generated from model knowledge, tickers only charset-scrubbed,
-  rendered as /stock/ links, cached 24h+48h SWR — wrong-company click-throughs. Fix: Yahoo-validate
-  each ticker, blank on failure (route.ts:25-32; SupplyChain.tsx:26).
+- ☑ **routes C1 supply-chain** (fixed 2026-07-03, a48f869f): tickers validated against the universe snapshots' known-
+  symbol set + a company-name token match; ticker blanked on identity mismatch.
 - ☐ **routes C2 segment-economics**: revenue/OI rendered with no reconciliation vs known company
   revenue (thousands-vs-millions / YTD-column risk), cached 24h. Fix: gate Σsegments within 0.5-2×
   of period revenue.
-- ☐ **routes C3 cache-poisoning**: earnings-prep caches {ai:null} 3h and {why:null} 24h (chatJSON
-  returns null, never throws → success path caches). risk-factors caches a degenerate {} as 'No
-  material changes' 24h. Fix: no-store whenever the LLM payload is null/empty.
-- ☐ **routes C5-C7 nl-screen**: unknown filter fields silently DROPPED (screen results confidently
-  wrong); non-number value crashes render (v.toFixed); bad op/limit → empty/truncated silently.
-  Fix: whitelist-validate field/op, coerce value, clamp limit [1,100], surface ignored criteria.
-- ☐ **routes C8-C9 injection**: stocktwits posts are an adversarial prompt channel into a shared
-  30-60m cached summary (wrap as DATA-not-instructions); earnings-prep 'sig' GET param is spliced
-  in as "this terminal's own analysis" and CDN-cached — recompute server-side or POST+untrusted.
-- ☐ **routes C10 error honesty**: LLM failure rendered as facts ('No transcript found', 'isn't
-  broken out in the latest filing') — return a distinct error flag; clients say 'AI read failed'.
+- ☑ **routes C3 cache-poisoning** (fixed 2026-07-03, a48f869f): earnings-prep no-store on null ai/why; risk-factors
+  requires substantive content before the CDN may hold it.
+- ☑ **routes C5-C7 nl-screen** (fixed 2026-07-03, a48f869f): OPS/FIELD_KEYS whitelists, Number coercion, limit clamped
+  [1,100], ignored criteria returned + shown in NlScreener (all-ignored → error).
+- ☑ **routes C8-C9 injection** (fixed 2026-07-03, d377ed06): stocktwits posts wrapped in an explicit DATA-not-
+  instructions boundary (system + user + end-marker); earnings-prep QUANT SIGNALS recomputed server-
+  side via a shared computeQuant (options/reactions/vol) + guidance/SSS/momentum — the ?sig= GET
+  param is gone from route and component.
+- ☑ **routes C10 error honesty** (fixed 2026-07-03, d377ed06): transcript-analysis / segment-economics / risk-factors
+  return { aiFailed: true } (no-store) on chatJSON null, degenerate replies, and thrown transport
+  errors; CallAnalysis / SegmentEconomics / RiskFactorPanel render "AI read failed — try again" with
+  a retry, and available:false keeps meaning "source genuinely absent". Segment `read` now renders
+  when OI isn't disclosed (was silently blank).
 - ☑ **routes C11** (fixed 2026-07-03): earnings-prep 'why' confidence not enum-coerced.
 - ☐ **routes C12 (accepted-risk)**: free-narrative numbers in ask/compare/digest unvalidated by
   construction — disclaimed, uncached, no links; cheapest hardening = substring-check quoted figures
