@@ -111,6 +111,7 @@ async function main() {
       if (seen.has(s.symbol)) continue;
       const e = s.earningsDate ? Date.parse(s.earningsDate) : NaN;
       if (!Number.isFinite(e)) continue;
+      if (e <= now) continue; // print already happened — never log a play after the event
       const days = Math.round((e - now) / DAY);
       if (days < 0 || days > WINDOW) continue;
       if (!(s.marketCap > MIN_MKTCAP)) continue;
@@ -126,7 +127,9 @@ async function main() {
 
   let logged = 0;
   await mapPool(work, 5, async (s) => {
-    const eIso = new Date(s._e).toISOString().slice(0, 10);
+    // FULL timestamp, not date-only — straddleMove needs the hour to apply the AMC bracketing rule
+    // (an after-close print must use an expiry strictly after the report date).
+    const eIso = new Date(s._e).toISOString();
     await throttle();
     const built = await buildEarningsTrade(s.symbol, eIso).catch(() => null);
     if (!built || !built.trade.legsData) return;
@@ -144,7 +147,7 @@ async function main() {
       verdict: built.verdict,
       structure: built.trade.structure,
       legsText: built.trade.legs,
-      expiry: built.trade.expiry || eIso,
+      expiry: built.trade.expiry || eIso.slice(0, 10),
       dte: built.trade.dte ?? Math.round((Date.parse((built.trade.expiry || eIso) + "T00:00:00Z") - now) / DAY),
       spotAtRec: +built.spot.toFixed(2),
       impliedMovePct: +built.impliedMovePct.toFixed(2),

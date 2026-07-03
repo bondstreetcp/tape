@@ -185,7 +185,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
   const sym = decodeURIComponent(symbol).toUpperCase();
   const sp = new URL(req.url).searchParams;
   const part = sp.get("part") || "data";
-  const earningsISO = (() => { const e = sp.get("e"); return e && /^\d{4}-\d{2}-\d{2}/.test(e) ? e.slice(0, 10) : null; })();
+  // Keep the FULL timestamp when provided — straddleMove uses the hour for the AMC bracketing rule
+  // (after-close prints need an expiry strictly after the report date; date-only keeps on-or-after).
+  const earningsISO = (() => { const e = sp.get("e"); return e && /^\d{4}-\d{2}-\d{2}/.test(e) ? e : null; })();
 
   try {
     // ── AI part: the StreetAccount-style preview (button-triggered) ──
