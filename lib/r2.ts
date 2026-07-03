@@ -9,7 +9,9 @@ import { loadLocalEnv } from "./localEnv";
 
 loadLocalEnv();
 
-const EP = process.env.LAKE_S3_ENDPOINT; // <account>.r2.cloudflarestorage.com (no scheme)
+// Normalize the endpoint to host-only: tolerate a pasted "https://" scheme, surrounding quotes,
+// whitespace, or a trailing slash — otherwise `https://${EP}/...` doubles the scheme and DNS-fails.
+const EP = (process.env.LAKE_S3_ENDPOINT || "").trim().replace(/^["']|["']$/g, "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 const BUCKET = process.env.LAKE_S3_BUCKET;
 const KEY = process.env.LAKE_S3_KEY_ID;
 const SECRET = process.env.LAKE_S3_SECRET;

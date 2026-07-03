@@ -26,7 +26,8 @@ const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "sp500", "nasdaq10
 
 const LOCAL_DIR = process.env.LAKE_DIR || "lake";
 const S3 = {
-  endpoint: process.env.LAKE_S3_ENDPOINT, // <account>.r2.cloudflarestorage.com
+  // host-only endpoint — tolerate a pasted https:// / quotes / trailing slash (DuckDB wants no scheme)
+  endpoint: (process.env.LAKE_S3_ENDPOINT || "").trim().replace(/^["']|["']$/g, "").replace(/^https?:\/\//i, "").replace(/\/+$/, ""),
   keyId: process.env.LAKE_S3_KEY_ID,
   secret: process.env.LAKE_S3_SECRET,
   bucket: process.env.LAKE_S3_BUCKET,

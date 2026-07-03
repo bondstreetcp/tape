@@ -31,9 +31,10 @@ async function main() {
     execFileSync("tar", ["-xzf", tarPath], { stdio: ["ignore", "ignore", "inherit"] }); // extracts data/ into cwd
     console.log(`data-from-r2: hydrated data/ from R2 (${(buf.length / 1e6).toFixed(1)} MB)`);
   } catch (e: any) {
-    const msg = String(e?.message || e).slice(0, 140);
-    if (haveCommitted()) { console.warn(`data-from-r2: R2 download failed — falling back to committed data/. (${msg})`); return; }
-    console.error(`data-from-r2: R2 download failed and no committed data/ — build cannot proceed. (${msg})`);
+    // Endpoint (account host) is not a secret — log it so a bad value (e.g. a pasted scheme) is obvious.
+    const diag = `${String(e?.message || e).slice(0, 140)} [endpoint="${process.env.LAKE_S3_ENDPOINT || ""}"]`;
+    if (haveCommitted()) { console.warn(`data-from-r2: R2 download failed — falling back to committed data/. (${diag})`); return; }
+    console.error(`data-from-r2: R2 download failed and no committed data/ — build cannot proceed. (${diag})`);
     process.exit(1);
   }
 }

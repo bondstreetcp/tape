@@ -15,7 +15,7 @@ import { loadLocalEnv } from "../lib/localEnv";
 loadLocalEnv(); // pick up LAKE_S3_* from .env.local on local runs (CI injects the real env vars)
 
 const LOCAL_DIR = process.env.LAKE_DIR || "lake";
-const S3 = { endpoint: process.env.LAKE_S3_ENDPOINT, keyId: process.env.LAKE_S3_KEY_ID, secret: process.env.LAKE_S3_SECRET, bucket: process.env.LAKE_S3_BUCKET };
+const S3 = { endpoint: (process.env.LAKE_S3_ENDPOINT || "").trim().replace(/^["']|["']$/g, "").replace(/^https?:\/\//i, "").replace(/\/+$/, ""), keyId: process.env.LAKE_S3_KEY_ID, secret: process.env.LAKE_S3_SECRET, bucket: process.env.LAKE_S3_BUCKET };
 const useS3 = !!(S3.endpoint && S3.keyId && S3.secret && S3.bucket);
 const base = useS3 ? `s3://${S3.bucket}` : LOCAL_DIR;
 const lit = (s: string) => `'${String(s).replace(/'/g, "''")}'`;
