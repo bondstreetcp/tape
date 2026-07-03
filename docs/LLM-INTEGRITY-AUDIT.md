@@ -3,8 +3,8 @@
 Full-codebase sweep of the LLM surface (22 nightly scripts + 11 live routes) against the failure
 taxonomy proven this week (unvalidated numbers, blind rejects, merge/null-clobber, unvalidated
 tickers, bad dates, shape guards, silent drops, staleness honesty). Status: ☐ open · ☑ fixed.
-33 of 38 closed 2026-07-03 (commits a48f869f + d377ed06). Remaining: routes C2 (segment-revenue
-reconciliation) + the accepted-risk backlog (C12, A-low).
+34 of 38 closed 2026-07-03 (commits a48f869f + d377ed06 + 2ea3a481). Remaining: the accepted-risk
+backlog only (C12, A-low).
 
 ## Tier 1 — data destroyed or blanked (fix first)
 - ☑ **guidance F1** (fixed 2026-07-03): `refresh-guidance.ts` — a chatJSON null (LLM outage) was stored as "no guidance"
@@ -76,9 +76,11 @@ reconciliation) + the accepted-risk backlog (C12, A-low).
 ## Live routes (auditor C) — Tier 1-2 equivalents
 - ☑ **routes C1 supply-chain** (fixed 2026-07-03, a48f869f): tickers validated against the universe snapshots' known-
   symbol set + a company-name token match; ticker blanked on identity mismatch.
-- ☐ **routes C2 segment-economics**: revenue/OI rendered with no reconciliation vs known company
-  revenue (thousands-vs-millions / YTD-column risk), cached 24h. Fix: gate Σsegments within 0.5-2×
-  of period revenue.
+- ☑ **routes C2 segment-economics** (fixed 2026-07-03, 2ea3a481): Σ(segment revenues) gated within 0.5–2× of TTM
+  revenue (new CompanyStats.totalRevenue, else FY consensus) OR quarterly consensus — both bases
+  tested since a 10-K note is annual and a 10-Q's quarterly/YTD. Outside both → { aiFailed } no-store
+  (retry UI); no reference → gate skipped with a log; matched basis logged + `reconciledVs` in the
+  payload; prompt demands MILLIONS explicitly. Verified live: AAPL Σ$416,161M vs TTM $451,442M (0.92×).
 - ☑ **routes C3 cache-poisoning** (fixed 2026-07-03, a48f869f): earnings-prep no-store on null ai/why; risk-factors
   requires substantive content before the CDN may hold it.
 - ☑ **routes C5-C7 nl-screen** (fixed 2026-07-03, a48f869f): OPS/FIELD_KEYS whitelists, Number coercion, limit clamped
