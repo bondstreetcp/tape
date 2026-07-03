@@ -1,0 +1,36 @@
+name: CI
+
+# Fast checks on CODE changes — typecheck + the pure-function unit tests (tests/). Deliberately skips
+# the refresh bot's data-only commits (11×/weekday intraday quotes etc.) via paths-ignore, so CI runs
+# on real changes, not every price tick. Vercel builds the app on deploy; this catches type and math
+# regressions BEFORE that. GitHub-hosted runner + read-only perms + no secrets → safe on fork PRs.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "data/**"
+  pull_request:
+    paths-ignore:
+      - "data/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests (pure-function core)
+        run: npm test
