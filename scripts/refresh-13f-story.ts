@@ -74,7 +74,7 @@ async function main() {
     `\n=== MOST-SOLD (sold-out + trims) ===\n${fmt(sells)}\n` +
     `\n=== MOST-OWNED ACROSS THE ROSTER ===\n${mostOwned}`;
 
-  const out = await chatJSON<{ tldr: string; themes: StoryTheme[] }>(SYSTEM, user, { maxTokens: 3500, model: PRO_MODEL });
+  const out = await chatJSON<{ tldr: string; themes: StoryTheme[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL, reasoningEffort: "high" });
   if (!out || !out.tldr) {
     console.warn("13f-story: LLM returned no usable story — skipping write.");
     return;

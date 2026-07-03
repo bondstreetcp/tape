@@ -135,7 +135,7 @@ async function main() {
     return;
   }
 
-  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 7000, model: PRO_MODEL });
+  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 9000, model: PRO_MODEL, reasoningEffort: "high" });
   if (!out || !Array.isArray(out.sections)) {
     console.warn("desk-note: LLM returned no usable brief — skipping write.");
     return;

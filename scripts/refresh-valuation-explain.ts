@@ -73,7 +73,7 @@ async function main() {
   const SCHEMA = 'Return ONLY JSON: {"verdicts":[{"symbol": string, "verdict": "genuine"|"trap"|"mixed", "reason": string}]}';
   const user = `${SCHEMA}\n\nDEEP DISCOUNTS (each with discount depth + price trend + earnings direction):\n${lines.join("\n")}`;
 
-  const out = await chatJSON<{ verdicts: { symbol: string; verdict: string; reason: string }[] }>(SYSTEM, user, { maxTokens: 5000, model: PRO_MODEL });
+  const out = await chatJSON<{ verdicts: { symbol: string; verdict: string; reason: string }[] }>(SYSTEM, user, { maxTokens: 6000, reasoningEffort: "high", model: PRO_MODEL });
   const valid = new Set<Verdict>(["genuine", "trap", "mixed"]);
   const map: ValuationExplainMap = {};
   for (const v of out?.verdicts || []) {

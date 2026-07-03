@@ -72,7 +72,7 @@ async function main() {
     block("OUTSIZED RECENT TRADES (≥$250k bracket, last 75d)", large) +
     block("MOST ACTIVE MEMBERS (last 75d)", activeMembers);
 
-  const out = await chatJSON<{ tldr: string; highlights: CongressHighlight[] }>(SYSTEM, user, { maxTokens: 4000, model: PRO_MODEL });
+  const out = await chatJSON<{ tldr: string; highlights: CongressHighlight[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL, reasoningEffort: "high" });
   if (!out || !out.tldr) {
     console.warn("congress-summary: LLM returned no usable summary — skipping write.");
     return;
