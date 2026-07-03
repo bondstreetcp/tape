@@ -70,10 +70,12 @@ const SYSTEM =
   "'periodEnd': the END date of that fiscal QUARTER, as ISO YYYY-MM-DD (e.g. 'quarter ended March 29, 2026' → '2026-03-29'; 'thirteen weeks ended May 25, 2025' → '2025-05-25'). 'fiscalLabel': a SHORT label like 'Q1 FY27' (max 12 chars). " +
   "'traffic'/'ticket': transactions/traffic and average-check/ticket/AUR decomposition if disclosed (signed), else null. 'segments': by brand/banner/region [{name,comp}] if disclosed, else []. 'twoYrStack': 2-year stacked comp if disclosed, else null. " +
   "'quote': the VERBATIM sentence or table fragment stating the headline comp. If you cannot find one, set comp=null and quote=null — NEVER invent a number. 'confidence': 'high' (explicit statement/table) | 'medium' (prose/inferred) | 'low' (ambiguous). " +
+  "COLUMN TRAP: Q3/Q4 releases print 'Three Months Ended' NEXT TO 'Six/Nine/Twelve Months Ended' columns — use ONLY the Three Months (quarter) column, never a year-to-date column. " +
+  "'compDollars': when the comp comes from a SAME-STORE DOLLAR TABLE (auto dealers &c.), return the total same-store revenue dollars you used as {\"current\": <this quarter>, \"prior\": <prior-year quarter>} — the two numbers from the QUARTER column of the total row; else null. " +
   "If the document discloses NO comparable-sales metric, return comp=null, segments=[], quote=null. Return a SINGLE JSON OBJECT, not an array. " + NO_ADVICE;
 
 const SCHEMA =
-  'Return ONLY JSON (a single object): {"comp": number|null, "basis": string, "metricLabel": string|null, "definition": string|null, "periodEnd": string|null, "fiscalLabel": string|null, "traffic": number|null, "ticket": number|null, "segments": [{"name": string, "comp": number}], "twoYrStack": number|null, "quote": string|null, "confidence": string}';
+  'Return ONLY JSON (a single object): {"comp": number|null, "basis": string, "metricLabel": string|null, "definition": string|null, "periodEnd": string|null, "fiscalLabel": string|null, "traffic": number|null, "ticket": number|null, "segments": [{"name": string, "comp": number}], "twoYrStack": number|null, "quote": string|null, "confidence": string, "compDollars": {"current": number, "prior": number}|null}';
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 // Restaurants/retail use many phrasings: comparable, same-store/-restaurant/-shop/-location, identical
@@ -94,9 +96,27 @@ async function extract(sym: string, text: string): Promise<Extracted | null> {
   const o = Array.isArray(raw) ? raw[0] : raw; // the model sometimes wraps the object in an array
   if (!o || typeof o !== "object") return null;
   let comp = num(o.comp);
+  // MODEL LOCATES, CODE CALCULATES: when the comp comes from a dollar table, the model returns the
+  // two dollar figures and WE do the division — this killed the two historical failure modes
+  // (reporting the table's rounded integer variance, and arithmetic slips on the hard quarters).
+  const cur = num(o.compDollars?.current), pri = num(o.compDollars?.prior);
+  if (cur != null && pri != null && pri > 0 && cur > 0) {
+    const computed = +(((cur / pri) - 1) * 100).toFixed(1);
+    if (Math.abs(computed) <= 60) {
+      if (comp != null && Math.abs(computed - comp) > 0.15) console.log(`  ${sym}: comp ${comp} → ${computed} (recomputed from $${cur}/$${pri})`);
+      comp = computed;
+    }
+  }
   const basis = typeof o.basis === "string" ? o.basis : "1yr";
   // Only a clean 1-yr comp on a real comparable-sales metric feeds the row.
   if (comp != null && (Math.abs(comp) > 60 || (basis && basis !== "1yr" && basis !== "reported") || !isCompMetric(o.metricLabel))) comp = null;
+  // QUOTE GROUNDING: a stored quote must actually appear in the source (whitespace-normalized) —
+  // a fabricated citation is worse than none. The comp itself is validated separately above.
+  let quoteOk = typeof o.quote === "string" && o.quote.trim().length > 0;
+  if (quoteOk) {
+    const norm = (s: string) => s.replace(/\s+/g, " ").replace(/[,$]/g, "").toLowerCase();
+    if (!norm(text).includes(norm(o.quote).slice(0, 80))) quoteOk = false;
+  }
   const segments = Array.isArray(o.segments)
     ? o.segments.filter((s: any) => s && typeof s.name === "string" && num(s.comp) != null).map((s: any) => ({ name: String(s.name).slice(0, 40), comp: num(s.comp) as number }))
     : [];
@@ -111,7 +131,7 @@ async function extract(sym: string, text: string): Promise<Extracted | null> {
     ticket: num(o.ticket),
     segments,
     twoYrStack: num(o.twoYrStack),
-    quote: typeof o.quote === "string" ? o.quote.slice(0, 400) : null,
+    quote: quoteOk ? String(o.quote).slice(0, 400) : null,
     confidence: ["high", "medium", "low"].includes(o.confidence) ? o.confidence : "medium",
   };
 }
@@ -153,14 +173,23 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
         if (ft && ft.text.length > 400) { text = ft.text; src.url = ft.url; }
         else if (!BACKFILL) { const doc = await getFilingDoc(sym, "10-Q"); if (doc) { text = doc.text; src = { form: doc.form, url: doc.url, date: doc.date }; } }
         if (!text) { console.log(`  ${sym}: no text for ${f.date}`); continue; }
-        const ex = await extract(sym, text); calls++;
+        let ex = await extract(sym, text); calls++;
+        // Retry-on-null: sampling variance sometimes returns comp=null on a doc that HAS one (a
+        // second pass usually lands it). A doc with genuinely no comp just nulls twice — no harm.
+        if (ex && ex.comp == null) {
+          const retry = await extract(sym, text); calls++;
+          if (retry && retry.comp != null) { ex = retry; console.log(`  ${sym} ${f.date}: null → ${retry.comp} on retry`); }
+        }
         if (!ex) { console.log(`  ${sym} ${f.date}: extract failed`); await sleep(150); continue; }
         const fpEnd = ex.periodEnd && !Number.isNaN(Date.parse(ex.periodEnd)) ? ex.periodEnd : null;
         if (!fpEnd) { console.log(`  ${sym} ${f.date}: no period-end → skip (comp ${ex.comp})`); await sleep(150); continue; }
         const { periodEnd, quote, ...rest } = ex;
         const period: SssPeriod = { fpEnd, ...rest, source: { ...src, quote: quote ?? null } };
         const ix = periods.findIndex((p) => p.fpEnd === fpEnd);
-        if (ix >= 0) periods[ix] = period; else periods.push(period);
+        // A comp-less extraction (e.g. a second, non-earnings 8-K covering the same quarter) must
+        // never CLOBBER a period that already has a real comp — null only fills, never overwrites.
+        if (ix >= 0) { if (period.comp != null || periods[ix].comp == null) periods[ix] = period; }
+        else periods.push(period);
         console.log(`  ${sym} ${ex.fiscalLabel || f.date}: comp ${ex.comp ?? "—"}%${ex.traffic != null ? ` (T ${ex.traffic}/Tk ${ex.ticket})` : ""}${ex.segments?.length ? ` · ${ex.segments.length} seg` : ""}`);
         await sleep(150);
       }

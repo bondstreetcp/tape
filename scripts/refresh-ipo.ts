@@ -10,7 +10,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
 
@@ -30,8 +30,16 @@ async function classifyIpo(hit: EftsHit, text: string) {
   // GLM-5.2 is a reasoning model — a tight max_tokens gets fully consumed by reasoning, yielding EMPTY
   // content (the filing then silently drops). Cap reasoning low + leave ample token room. (See the
   // same "reasoning eats max_tokens" gotcha in refresh-sss.)
-  const out = await chatJSON<any>(SYSTEM, `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6000)}\n\n${SCHEMA}`, { maxTokens: 1200, reasoningEffort: "low" });
-  if (!out || out.isIpo === false) return null;
+  const user = `Filed ${hit.date}. ${hit.issuer}${hit.ticker ? ` (${hit.ticker})` : ""}.\n\n${text.slice(0, 6000)}\n\n${SCHEMA}`;
+  let out = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low" });
+  // SECOND OPINION on rejects: a 424B4 is a PRICED prospectus, so a "not an IPO" verdict is usually
+  // a false negative (model-quality eval: the cheap tier rejected real IPOs). Before dropping the
+  // filing, re-ask the PRO model — a reject must be confirmed twice to stand. ~$0.002/reject.
+  if (!out || out.isIpo === false) {
+    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: PRO_MODEL }).catch(() => null);
+    if (second && second.isIpo !== false) { console.log(`  ${hit.ticker || hit.issuer.slice(0, 20)}: reject overturned by second opinion`); out = second; }
+    else return null;
+  }
   const ticker = String(out.ticker || hit.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "").slice(0, 6);
   if (!ticker) return null;
   return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd), sizeUsdM: num(out.sizeUsdM), exchange: String(out.exchange || "").slice(0, 12) };
