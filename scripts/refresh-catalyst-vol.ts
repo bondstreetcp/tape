@@ -43,7 +43,9 @@ async function extractDate(hit: EftsHit, text: string): Promise<{ eventType: str
     "If the date is only a month/quarter, use the first plausible day. If the event is in the PAST, or the filing doesn't actually schedule such a future event (e.g. it just mentions a past one, or a webcast replay), return eventDate ''. Only a real, dated, FUTURE event counts. " + NO_ADVICE;
   const SCHEMA = 'Return ONLY JSON: {"eventType":string,"eventDate":string}';
   const out = await chatJSON<any>(SYSTEM, `Filed ${hit.date}. Company: ${hit.issuer} (${hit.ticker}).\n\n${text.slice(0, 5000)}\n\n${SCHEMA}`, { maxTokens: 200 });
-  const d = out?.eventDate && /^\d{4}-\d{2}-\d{2}/.test(out.eventDate) ? out.eventDate.slice(0, 10) : "";
+  // Number.isFinite: "2026-13-45" matches the regex but parses NaN, which slips past the day-count
+  // bounds downstream (NaN compares false to everything) — require a real calendar date.
+  const d = out?.eventDate && /^\d{4}-\d{2}-\d{2}/.test(out.eventDate) && Number.isFinite(Date.parse(out.eventDate.slice(0, 10))) ? out.eventDate.slice(0, 10) : "";
   if (!d) return null;
   return { eventType: String(out.eventType || "Investor Day").slice(0, 40), eventDate: d };
 }

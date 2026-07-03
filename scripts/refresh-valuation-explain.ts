@@ -75,9 +75,13 @@ async function main() {
 
   const out = await chatJSON<{ verdicts: { symbol: string; verdict: string; reason: string }[] }>(SYSTEM, user, { maxTokens: 6000, reasoningEffort: "high", model: PRO_MODEL });
   const valid = new Set<Verdict>(["genuine", "trap", "mixed"]);
+  const inCand = new Set(cand.map((c) => c.sym));
   const map: ValuationExplainMap = {};
   for (const v of out?.verdicts || []) {
     const sym = String(v?.symbol || "").toUpperCase();
+    // Only symbols we actually ASKED about — a model typo or free-associated ticker that happens
+    // to match another table row would pin a "value trap" badge on the wrong company.
+    if (!inCand.has(sym)) continue;
     const verdict = String(v?.verdict || "").toLowerCase() as Verdict;
     if (sym && valid.has(verdict) && v?.reason) map[sym] = { verdict, reason: String(v.reason).trim().slice(0, 240) };
   }

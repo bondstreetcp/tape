@@ -29,20 +29,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
         .map((x) => ({ title: String(x.title).trim().slice(0, 120), note: String(x.note || "").trim().slice(0, 240) }))
         .slice(0, 8);
 
-    return NextResponse.json(
-      {
-        diff: {
-          symbol: sym,
-          currentDate: secs.curr.date,
-          priorDate: secs.prior.date,
-          summary: String(out.summary || "").trim(),
-          added: clean(out.added),
-          removed: clean(out.removed),
-          intensified: clean(out.intensified),
-        },
-      },
-      { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } },
-    );
+    const diff = {
+      symbol: sym,
+      currentDate: secs.curr.date,
+      priorDate: secs.prior.date,
+      summary: String(out.summary || "").trim(),
+      added: clean(out.added),
+      removed: clean(out.removed),
+      intensified: clean(out.intensified),
+    };
+    // A degenerate-but-parseable reply ({}) used to cache 24h as the affirmative "no material
+    // changes" verdict. Require actual content before the CDN may hold it.
+    if (!diff.summary && diff.added.length + diff.removed.length + diff.intensified.length === 0)
+      return NextResponse.json({ diff: null }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ diff }, { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } });
   } catch {
     return NextResponse.json({ diff: null });
   }

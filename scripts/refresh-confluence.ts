@@ -208,9 +208,12 @@ async function main() {
     // Cap the reasoning (effort low) and give ample output room.
     const out = await chatJSON<{ reads: (ConfluenceRead & { symbol: string })[] }>(SYSTEM, user, { maxTokens: 16000, model: PRO_MODEL, reasoningEffort: "low" });
     const bySym = new Map((out?.reads || []).filter((r) => r?.symbol).map((r) => [String(r.symbol).toUpperCase(), r] as const));
+    // typeof guard: a non-string truthy value from the model would throw on .trim() and kill the
+    // ENTIRE board write, including the deterministic LLM-free part.
+    const str = (x: unknown) => (typeof x === "string" ? x.trim() : "");
     for (const n of board) {
       const r = bySym.get(n.symbol.toUpperCase());
-      if (r && (r.thesis || r.risk || r.watch)) n.read = { thesis: (r.thesis || "").trim(), risk: (r.risk || "").trim(), watch: (r.watch || "").trim() };
+      if (r && (r.thesis || r.risk || r.watch)) n.read = { thesis: str(r.thesis), risk: str(r.risk), watch: str(r.watch) };
     }
   } else {
     console.warn("confluence: OPENROUTER_API_KEY not set — writing board without write-ups.");

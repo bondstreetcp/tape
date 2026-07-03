@@ -55,7 +55,8 @@ function parseFeed(xml: string, kind: FedKind): RawItem[] {
     else if (/minutes/i.test(title)) k = "minutes";
     else if (/statement/i.test(title)) k = "statement";
     else if (/beige book/i.test(title)) k = "beige-book";
-    out.push({ id: url, date: dateRaw ? new Date(dateRaw).toISOString() : "", title, url, desc, kind: k, speaker });
+    const dT = dateRaw ? Date.parse(dateRaw) : NaN; // a malformed pubDate must not crash the whole run
+    out.push({ id: url, date: Number.isFinite(dT) ? new Date(dT).toISOString() : "", title, url, desc, kind: k, speaker });
   }
   return out;
 }

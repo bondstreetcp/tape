@@ -72,7 +72,21 @@ export async function POST(req: NextRequest) {
     const txt = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join("");
     const spec = JSON.parse(txt) as ScreenSpec;
     if (!Array.isArray(spec.filters)) throw new Error("bad spec");
-    return NextResponse.json({ configured: true, spec });
+    // VALIDATE the spec — a filter with an unknown field/op used to be silently DROPPED downstream,
+    // so the table confidently showed names that fail the user's stated criterion. Unknown criteria
+    // are now surfaced as `ignored` (the UI must show them), values are coerced to real numbers,
+    // and limit is clamped to [1,100] (0/negative silently truncated results from the end).
+    const OPS = new Set(["lt", "lte", "gt", "gte"]);
+    const ignored: string[] = [];
+    spec.filters = spec.filters.filter((f: any) => {
+      const v = Number(f?.value);
+      const ok = f && FIELD_KEYS.includes(f.field) && OPS.has(f.op) && Number.isFinite(v);
+      if (ok) f.value = v;
+      else ignored.push(String(f?.field ?? "?"));
+      return ok;
+    });
+    if (spec.limit != null) spec.limit = Math.min(100, Math.max(1, Math.round(Number(spec.limit) || 50)));
+    return NextResponse.json({ configured: true, spec, ignored: ignored.length ? ignored : undefined });
   } catch (e: any) {
     return NextResponse.json({ configured: true, error: String(e?.message || e).slice(0, 200) });
   }

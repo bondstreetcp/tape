@@ -111,13 +111,14 @@ async function rssShorts(firm: string, url: string, nitter = false): Promise<Raw
       const title = htmlToText(g("title"));
       let link = g("link");
       const date = g("pubDate");
-      if (!title || !link || !date) continue;
+      const dT = Date.parse(date); // one malformed pubDate must not throw and kill the whole firm's feed
+      if (!title || !link || !Number.isFinite(dT)) continue;
       if (nitter) {
         if (/^(RT by|R to) /.test(title)) continue; // retweets/replies — not the firm's own report
         link = link.replace(/^https?:\/\/nitter\.[^/]+/, "https://x.com").replace(/#m$/, ""); // store the real X link
       }
       const body = htmlToText(g("content:encoded") || g("description"));
-      out.push({ id: link, date: new Date(date).toISOString(), type: "short", form: nitter ? "X post" : "short report", issuer: title.slice(0, 200), ticker: null, other: firm, url: link, docUrl: link, ciks: [], doc: (title + "\n\n" + body).slice(0, 6000) });
+      out.push({ id: link, date: new Date(dT).toISOString(), type: "short", form: nitter ? "X post" : "short report", issuer: title.slice(0, 200), ticker: null, other: firm, url: link, docUrl: link, ciks: [], doc: (title + "\n\n" + body).slice(0, 6000) });
     }
     return out;
   } catch { return []; }
@@ -198,6 +199,12 @@ async function classify(r: Raw, text: string): Promise<{ ticker: string | null; 
   return { ticker: ticker || r.ticker, company: String(out.company || r.issuer).slice(0, 80), campaigner: String(out.campaigner || r.other).slice(0, 80), ask: String(out.ask || "").slice(0, 220), summary: String(out.summary || "").slice(0, 400), material: true };
 }
 
+
+// A ticker the LLM emitted (vs one EDGAR supplied) must actually price on Yahoo before it is
+// stored — else a wrong-but-real symbol shows another company's move as this event's performance.
+async function validTicker(sym: string): Promise<boolean> {
+  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
+}
 async function perfFor(ticker: string, eventISO: string): Promise<CampPerf | null> {
   try {
     const eT = Date.parse(eventISO);
@@ -265,6 +272,7 @@ async function main() {
   const built = await mapPool(fresh, 4, async (r): Promise<Campaign | null> => {
     const text = r.type === "short" ? r.doc : await fetchFilingText(r);
     const c = await classify(r, text);
+    if (c && c.ticker && c.ticker !== r.ticker && !(await validTicker(c.ticker))) c.ticker = r.ticker; // reject LLM-invented symbols
     if (!c) return null;
     return { id: r.id, date: r.date, type: r.type, ticker: c.ticker, company: c.company, campaigner: c.campaigner, form: r.form, ask: c.ask, summary: c.summary, url: r.type === "short" ? r.url : (r.ciks[0] ? `https://www.sec.gov/Archives/edgar/data/${Number(r.ciks[0])}/${r.id.replace(/-/g, "")}/${r.doc}` : r.url) };
   });

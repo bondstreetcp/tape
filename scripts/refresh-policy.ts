@@ -100,12 +100,15 @@ async function main() {
   const newCons: PolicyItem[] = freshContracts.filter((r) => conMap[r.id]).map((r) => ({ id: r.id, date: r.date, kind: "contract", title: r.desc || `${r.recipient} award`, agency: r.agency, amount: r.amount, recipient: r.recipient, tickers: [{ ticker: conMap[r.id].ticker, impact: "positive" as Impact }], summary: conMap[r.id].summary, url: r.url }));
   console.log(`→ ${newRules.length} market-relevant rules + ${newCons.length} public-contractor awards`);
 
-  let merged = [...newRules, ...newCons, ...prior.items].filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
-  // validate all proposed tickers vs Yahoo; drop unmappable ones (and items left with none)
-  const syms = [...new Set(merged.flatMap((m) => m.tickers.map((t) => t.ticker)))];
+  // Validate NEW items' tickers only. Prior items already passed this gate — re-validating them
+  // nightly meant one Yahoo blip stripped a stored ticker and deleted the item forever (the
+  // Federal Register / USAspending windows have long moved past it).
+  const fresh: PolicyItem[] = [...newRules, ...newCons];
+  const syms = [...new Set(fresh.flatMap((m) => m.tickers.map((t) => t.ticker)))];
   const valid: Record<string, boolean> = {};
   await mapPool(syms, 6, async (s) => { valid[s] = await validTicker(s); });
-  merged = merged.map((m) => ({ ...m, tickers: m.tickers.filter((t) => valid[t.ticker]) })).filter((m) => m.tickers.length);
+  const freshValid = fresh.map((m) => ({ ...m, tickers: m.tickers.filter((t) => valid[t.ticker]) })).filter((m) => m.tickers.length);
+  let merged = [...freshValid, ...prior.items].filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
   merged.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   const items = merged.slice(0, KEEP);
 

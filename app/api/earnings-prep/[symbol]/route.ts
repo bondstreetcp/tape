@@ -235,7 +235,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       const ai = out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
         ? { moneyLine: s(out.moneyLine), overview: s(out.overview), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear), fromLastCall: s(out.fromLastCall) }
         : null;
-      return NextResponse.json({ ai }, { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } });
+      // Cache ONLY successes — chatJSON returns null (never throws) on failure, and caching {ai:null}
+      // at the CDN bricked the preview for every viewer of the symbol for 3 hours.
+      return NextResponse.json({ ai }, { headers: { "Cache-Control": ai ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
     }
 
     // ── "Why" part: explain a SINGLE past print's reaction (clicked from the reactions table) ──
@@ -278,13 +280,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       return NextResponse.json(
         {
           why,
-          confidence: out?.confidence ?? null,
+          // enum-coerce — the badge renders this raw, and models occasionally embellish the value
+          confidence: out?.confidence && ["high", "medium", "low"].includes(out.confidence) ? out.confidence : null,
           grounded: !!release?.text, // whether the recap is backed by the actual 8-K release
           filing: release ? { url: release.url, date: release.date } : null,
           headlines: near.map((n) => ({ title: n.title, publisher: n.publisher, link: n.link, time: n.time })),
           fact: rx ? { surprise: rx.surprise, move: rx.move, drift5: rx.drift5, timing: rx.timing } : null,
         },
-        { headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" } },
+        // Cache only successes — a cached {why:null} bricked the drill-down for 24h for everyone.
+        { headers: { "Cache-Control": why ? "public, s-maxage=86400, stale-while-revalidate=172800" : "no-store" } },
       );
     }
 
