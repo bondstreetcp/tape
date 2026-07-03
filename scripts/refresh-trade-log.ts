@@ -66,6 +66,24 @@ async function closeOn(sym: string, iso: string): Promise<number | null> {
   return pick?.close ?? null;
 }
 
+// The post-print reaction straight from the chart: prior close → the first COMPLETED session after
+// the print. AMC prints (≥20:00 UTC ≈ after the 4pm ET close) react the NEXT day; BMO react same-day.
+// Returns null while the reaction session is still trading, so a partial-day move is never frozen in.
+async function reactionFromChart(sym: string, eT: number): Promise<number | null> {
+  await throttle();
+  const ch: any = await yf.chart(sym, { period1: new Date(eT - 10 * DAY), period2: new Date(eT + 6 * DAY), interval: "1d" } as any, { validateResult: false }).catch(() => null);
+  const q = (ch?.quotes || [])
+    .filter((x: any) => x?.close != null)
+    .map((x: any) => ({ day: new Date(x.date).toISOString().slice(0, 10), close: x.close as number }));
+  if (q.length < 2) return null;
+  const eDay = new Date(eT).toISOString().slice(0, 10);
+  const amc = new Date(eT).getUTCHours() >= 20;
+  const idx = q.findIndex((b: { day: string }) => (amc ? b.day > eDay : b.day >= eDay));
+  if (idx <= 0) return null; // no prior close, or the reaction session hasn't printed yet
+  if (Date.now() < Date.parse(q[idx].day + "T21:30:00Z")) return null; // session not complete (~4:30pm ET buffer)
+  return q[idx].close / q[idx - 1].close - 1;
+}
+
 function outcomeOf(pnl: number, entry: number): TradeRec["outcome"] {
   const eps = Math.max(0.03, 0.03 * Math.abs(entry)); // ~3c/share (or 3% of the ticket) counts as a scratch
   return pnl > eps ? "win" : pnl < -eps ? "loss" : "scratch";
@@ -160,8 +178,13 @@ async function main() {
         const g = Math.abs(Date.parse(r.date) - eT);
         if (g < bestGap) { bestGap = g; best = r; }
       }
-      if (best && bestGap <= 7 * DAY && best.move != null) {
-        rec.realizedMovePct = +(best.move * 100).toFixed(2);
+      let mv: number | null = best && bestGap <= 7 * DAY && best.move != null ? best.move : null;
+      // Yahoo's earnings-history module LAGS a fresh print by days, so the reaction above often
+      // isn't there yet ("awaiting print" lingered after the report). Fall back to the chart:
+      // close before the print vs the first COMPLETED session after it.
+      if (mv == null) mv = await reactionFromChart(rec.symbol, eT);
+      if (mv != null) {
+        rec.realizedMovePct = +(mv * 100).toFixed(2);
         rec.moveCleared = Math.abs(rec.realizedMovePct) > rec.impliedMovePct;
         if (rec.status === "awaiting_print") rec.status = "awaiting_expiry";
         printed++;
