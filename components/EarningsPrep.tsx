@@ -206,7 +206,9 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
     setAi("idle");
     setOpenQ(null);
     setWhy({});
-    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate.slice(0, 10))}` : "";
+    // Full timestamp (not date-only): straddleMove uses the hour for the AMC bracketing rule —
+    // an after-close print must be priced on an expiry strictly after the report date.
+    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate)}` : "";
     fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=data${eParam}`)
       .then((r) => r.json())
       .then((d) => a && setData(d.data || null))

@@ -53,12 +53,19 @@ export async function straddleMove(sym: string, baseChain: OptionChain | null, e
   let expiry = baseChain.selected,
     isEvent = false;
   if (earningsISO) {
-    const ev = baseChain.expirations.find((d) => d >= earningsISO);
+    // Bracketing rule: an AFTER-CLOSE print (timestamped ≥20:00 UTC ≈ post-4pm-ET) happens AFTER
+    // same-day options die at the close, so the expiry must be STRICTLY after the report date —
+    // BMNR's play once used a same-day expiry and "settled" hours before the print. Date-only or
+    // pre-close timestamps keep on-or-after (a BMO print is bracketed by that day's expiry).
+    const day = earningsISO.slice(0, 10);
+    const t = Date.parse(earningsISO);
+    const amc = earningsISO.length > 10 && Number.isFinite(t) && new Date(t).getUTCHours() >= 20;
+    const ev = baseChain.expirations.find((d) => (amc ? d > day : d >= day));
     if (ev) {
       expiry = ev;
       isEvent = true;
     }
-  } // first expiry on/after earnings
+  }
   const chain = expiry && expiry !== baseChain.selected ? await getOptions(sym, expiry).catch(() => baseChain) : baseChain;
   const U = chain.underlying;
   if (!U || (!chain.calls.length && !chain.puts.length)) return null;
