@@ -1,57 +1,57 @@
 {
   "since": "2026-07-02T17:13:47.943Z",
-  "updatedAt": "2026-07-02T17:46:01.054Z",
+  "updatedAt": "2026-07-03T02:21:23.092Z",
   "note": "Token counts are exact; estUsd is a BALLPARK from lib/llmUsage.ts PRICES (edit to match your dashboards). Delete this file to reset the meter.",
   "totals": {
-    "calls": 321,
-    "inTok": 2711082,
-    "outTok": 211052,
-    "estUsd": 3.6624240000000006
+    "calls": 653,
+    "inTok": 5877043,
+    "outTok": 415822,
+    "estUsd": 7.1035132
   },
   "byModel": {
     "z-ai/glm-5.2": {
-      "calls": 141,
-      "inTok": 1981865,
-      "outTok": 107825,
-      "estUsd": 0.9652660000000003
+      "calls": 323,
+      "inTok": 4498891,
+      "outTok": 234828,
+      "estUsd": 2.1752812
     },
     "google/gemini-3.1-pro-preview": {
-      "calls": 180,
-      "inTok": 729217,
-      "outTok": 103227,
-      "estUsd": 2.6971580000000004
+      "calls": 330,
+      "inTok": 1378152,
+      "outTok": 180994,
+      "estUsd": 4.928232
     }
   },
   "byJob": {
     "refresh-overnight-filings": {
-      "calls": 141,
-      "inTok": 1981865,
-      "outTok": 107825,
-      "estUsd": 0.9652660000000003
+      "calls": 323,
+      "inTok": 4498891,
+      "outTok": 234828,
+      "estUsd": 2.1752812
     },
     "refresh-sss": {
-      "calls": 1,
-      "inTok": 2673,
-      "outTok": 93,
-      "estUsd": 0.006462
+      "calls": 2,
+      "inTok": 5346,
+      "outTok": 186,
+      "estUsd": 0.012924
     },
     "refresh-sss-intl": {
-      "calls": 2,
-      "inTok": 8013,
-      "outTok": 1648,
-      "estUsd": 0.035802
+      "calls": 3,
+      "inTok": 11677,
+      "outTok": 2573,
+      "estUsd": 0.05423
     },
     "refresh-guidance": {
-      "calls": 171,
-      "inTok": 699188,
-      "outTok": 78550,
-      "estUsd": 2.3409760000000004
+      "calls": 317,
+      "inTok": 1328826,
+      "outTok": 141327,
+      "estUsd": 4.3535759999999994
     },
     "refresh-desk-note": {
-      "calls": 1,
-      "inTok": 6517,
-      "outTok": 6422,
-      "estUsd": 0.090098
+      "calls": 3,
+      "inTok": 19477,
+      "outTok": 20394,
+      "estUsd": 0.28368200000000005
     },
     "refresh-confluence": {
       "calls": 1,
@@ -84,6 +84,12 @@
       "inTok": 2711082,
       "outTok": 211052,
       "estUsd": 3.6624240000000006
+    },
+    "2026-07-03": {
+      "calls": 332,
+      "inTok": 3165961,
+      "outTok": 204770,
+      "estUsd": 3.441089199999999
     }
   }
 }
