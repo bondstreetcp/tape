@@ -121,7 +121,18 @@ they map to incidents that have actually recurred (silently-dead feeds; a half-e
   build-data + build-intl: refuse to replace a healthy snapshot with a >15%-collapsed one (partial
   fetch). refresh-quotes updates in place → no guard needed. Composes with the monitor's count-floor.
 
-Still open (the higher-leverage "stop the rot" investments): regression guards for the 34 fixes
-(shared `lib/llmValidate.ts` + lint), an automated test suite on the pure-function core (BS pricing,
-settlement, reconciliation gates — no test runner exists yet), runtime schema validation (zod) at the
-data-load boundary, plus the accepted-risk backlog (C12, A-low).
+**Test suite** (shipped 2026-07-03, 3fbdb38a) — `npm test` (node:test + tsx, ZERO new deps) pins the
+pure-function core: `lib/snapshotGuard` (the write-guard boundary), `lib/blackScholes` (put-call
+parity, IV round-trip, intrinsic collapse), `lib/tradeLog` (settlement + payoff bounds for every
+suggested structure), `lib/guidance` (beatGuide alignment). 38 tests. Plus `.github/workflows/ci.yml`
+— the repo had NO CI; now tsc + tests run on every code push (paths-ignore data/**).
+
+**Shared validators** (shipped 2026-07-03) — `lib/llmValidate.ts` is the single TESTED home for the
+recurring audit patterns (`groundedQuote`, `boundedNumber`, `isoDateOnly`, `coerceEnum`,
+`whitelistTickers`, `cleanTicker`, `str`) so a new script inherits them instead of re-deriving (and
+re-breaking) an inline check. 9 tests. Adopted in research/extract.ts (docType/publishDate) +
+refresh-congress-summary (ticker whitelist) as the reference; adopt more incrementally.
+
+Still open (higher-leverage, not yet built): runtime schema validation (zod) at the data-load
+boundary (a cast is not a check — every loader is `JSON.parse(...) as T`); broader adoption of the
+validators across the remaining LLM scripts; plus the accepted-risk backlog (C12, A-low).

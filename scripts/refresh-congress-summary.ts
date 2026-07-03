@@ -10,6 +10,7 @@ import path from "path";
 import { loadCongress } from "../lib/congress";
 import { loadSnapshot } from "../lib/data";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { whitelistTickers } from "../lib/llmValidate";
 import type { CongressSummary, CongressHighlight } from "../lib/congressSummary";
 
 const DATA = path.join(process.cwd(), "data");
@@ -86,8 +87,8 @@ async function main() {
       detail: String(h.detail).trim(),
       tag: typeof h.tag === "string" ? h.tag.trim().slice(0, 16) : "Watch",
       // whitelist: only tickers present in the disclosed trades fed to the prompt — a hallucinated
-      // symbol would render as a wrong-company /stock/ link
-      tickers: (Array.isArray(h.tickers) ? h.tickers : []).filter((x) => typeof x === "string" && tradedSyms.has(x.toUpperCase())).map((x) => x.toUpperCase()).slice(0, 8),
+      // symbol would render as a wrong-company /stock/ link (shared validator, lib/llmValidate)
+      tickers: whitelistTickers(h.tickers, tradedSyms).slice(0, 8),
     }))
     .slice(0, 7);
 

@@ -7,6 +7,7 @@
  */
 import type { ResearchDoc } from "./types";
 import { chatJSON } from "../llm";
+import { coerceEnum, isoDateOnly } from "../llmValidate";
 
 // Read env lazily (inside calls) so both the Next runtime and CLI scripts that load
 // .env.local at startup see the key. lib/llm resolves OPENROUTER_API_KEY on its own;
@@ -74,15 +75,15 @@ export async function extractResearch(text: string): Promise<ResearchDoc | null>
     if (ticker && !text.slice(0, 30_000).toUpperCase().includes(ticker)) {
       console.warn(`research/extract: ticker "${ticker}" does not appear in the report text — verify the doc filed under the right company.`);
     }
-    const DOC_TYPES = new Set(["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "idea", "note", "other"]);
-    // normalise to the canonical shape with safe defaults
+    const DOC_TYPES = ["rating-change", "initiation", "preview", "earnings-review", "event-reaction", "industry-research", "idea", "note", "other"] as const;
+    // normalise to the canonical shape with safe defaults (validators: lib/llmValidate)
     return {
       ticker,
       company: d.company || "",
       source: d.source || "Unknown",
       analysts: Array.isArray(d.analysts) ? d.analysts : [],
-      publishDate: typeof d.publishDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(d.publishDate) ? d.publishDate.slice(0, 10) : "",
-      docType: DOC_TYPES.has(d.docType) ? d.docType : "other",
+      publishDate: isoDateOnly(d.publishDate) ?? "", // real-calendar-date check, not just a bare regex
+      docType: coerceEnum(d.docType, DOC_TYPES, "other"),
       title: d.title || "",
       rating: d.rating ?? null,
       ratingPrior: d.ratingPrior ?? null,
