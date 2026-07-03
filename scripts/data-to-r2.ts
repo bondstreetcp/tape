@@ -1,0 +1,32 @@
+/**
+ * Upload the operational data/ tree to R2 as ONE compressed tarball (build-time hydration). Runs in
+ * the nightly job after the data refreshes. Pairs with scripts/data-from-r2.ts, which the Vercel build
+ * runs to download + extract it — so the site's data can live in R2 instead of being committed to git
+ * (the repo-bloat fix). One object per push = trivial R2 ops, atomic, well within the free tier.
+ *
+ * Inert without the LAKE_S3_* creds. During the migration's safety phase we ALSO still commit data/,
+ * so R2 and git carry the same data until the Vercel cutover is proven. See docs/DATA-ON-R2.md.
+ */
+import { execFileSync } from "child_process";
+import { readFileSync, mkdirSync, rmSync } from "fs";
+import path from "path";
+import { putObject, r2Configured } from "../lib/r2";
+
+const KEY_TAR = "site-data/data.tar.gz";
+const KEY_MANIFEST = "site-data/manifest.json";
+
+async function main() {
+  if (!r2Configured()) { console.log("data-to-r2: R2 not configured (LAKE_S3_*) — skipping."); return; }
+  const tmp = path.join("lake", ".tmp");
+  mkdirSync(tmp, { recursive: true });
+  const tarPath = path.join(tmp, "site-data.tar.gz");
+  // The operational tree the app reads. Exclude the licensed research corpus + the lake scratch dir.
+  execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
+  const buf = readFileSync(tarPath);
+  await putObject(KEY_TAR, buf, "application/gzip");
+  await putObject(KEY_MANIFEST, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length })), "application/json");
+  rmSync(tarPath, { force: true });
+  console.log(`data-to-r2: uploaded ${KEY_TAR} (${(buf.length / 1e6).toFixed(1)} MB) + manifest to R2`);
+}
+
+main().catch((e) => { console.error("data-to-r2:", String(e?.message || e)); process.exit(1); });
