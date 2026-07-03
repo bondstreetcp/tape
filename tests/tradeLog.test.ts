@@ -1,0 +1,93 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { netCredit, settleLegs, payoffBounds, summarize, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+
+// The settlement math IS the track record's scorecard — a sign error here silently reports losing
+// plays as winners. Pin every structure the card actually suggests.
+
+const shortPut = (k: number, prem: number): TradeLeg => ({ type: "P", side: "short", strike: k, premium: prem });
+const longPut = (k: number, prem: number): TradeLeg => ({ type: "P", side: "long", strike: k, premium: prem });
+const longCall = (k: number, prem: number): TradeLeg => ({ type: "C", side: "long", strike: k, premium: prem });
+const shortCall = (k: number, prem: number): TradeLeg => ({ type: "C", side: "short", strike: k, premium: prem });
+
+test("netCredit: short collects, long pays", () => {
+  assert.equal(netCredit([shortPut(100, 2)]), 2);
+  assert.equal(netCredit([longCall(100, 3)]), -3);
+  assert.equal(netCredit([shortPut(100, 2), longPut(95, 1)]), 1); // bull put spread: +2 − 1
+});
+
+test("settleLegs: cash-secured short put", () => {
+  assert.equal(settleLegs([shortPut(100, 2)], 105), 2); // expires worthless → keep the credit
+  assert.equal(settleLegs([shortPut(100, 2)], 95), -3); // assigned: owe 5 intrinsic, net −3
+});
+
+test("settleLegs: long call", () => {
+  assert.equal(settleLegs([longCall(100, 3)], 110), 7); // −3 paid + 10 intrinsic
+  assert.equal(settleLegs([longCall(100, 3)], 95), -3); // expires worthless → lose the premium
+});
+
+test("settleLegs: bull put spread caps both ends", () => {
+  const spread = [shortPut(100, 2), longPut(95, 1)]; // net credit 1, width 5
+  assert.equal(settleLegs(spread, 105), 1); // both OTM → max profit = credit
+  assert.equal(settleLegs(spread, 90), -4); // both ITM → max loss = −(width − credit)
+  assert.equal(settleLegs(spread, 98), -1); // short 2 ITM, long OTM → 1 − 2
+});
+
+test("payoffBounds: bull put spread is bounded both ways", () => {
+  const b = payoffBounds([shortPut(100, 2), longPut(95, 1)]);
+  assert.equal(b.maxProfit, 1);
+  assert.equal(b.maxLoss, -4);
+});
+test("payoffBounds: long call has unbounded upside, capped loss", () => {
+  const b = payoffBounds([longCall(100, 3)]);
+  assert.equal(b.maxProfit, null); // unbounded up
+  assert.equal(b.maxLoss, -3); // can only lose the premium
+});
+test("payoffBounds: naked short call has unbounded loss, capped profit", () => {
+  const b = payoffBounds([shortCall(100, 3)]);
+  assert.equal(b.maxLoss, null); // unbounded up
+  assert.equal(b.maxProfit, 3); // keep the credit at best
+});
+test("payoffBounds: long put is bounded (downside floored at S=0)", () => {
+  const b = payoffBounds([longPut(100, 3)]);
+  assert.equal(b.maxProfit, 97); // S=0 → 100 intrinsic − 3
+  assert.equal(b.maxLoss, -3);
+});
+
+// summarize aggregates the scorecard: win rate over settled, split by rich/cheap, plus how often the
+// realized move cleared the implied.
+test("summarize: counts, win rate, verdict split, cleared", () => {
+  const base = {
+    name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "", dte: 7,
+    spotAtRec: 100, impliedMovePct: 8, avgRealizedPct: 6, richnessRatio: 1.3, legs: [], entryCredit: 0, maxProfit: null, maxLoss: null,
+  };
+  const recs: TradeRec[] = [
+    { ...base, id: "A", symbol: "A", verdict: "rich", status: "settled", pnl: 1.5, outcome: "win", moveCleared: false },
+    { ...base, id: "B", symbol: "B", verdict: "rich", status: "settled", pnl: -2.0, outcome: "loss", moveCleared: true },
+    { ...base, id: "C", symbol: "C", verdict: "cheap", status: "settled", pnl: 0.0, outcome: "scratch", moveCleared: true },
+    { ...base, id: "D", symbol: "D", verdict: "cheap", status: "settled", pnl: 3.0, outcome: "win", moveCleared: true },
+    { ...base, id: "E", symbol: "E", verdict: "rich", status: "awaiting_print" }, // open — excluded from settled stats
+  ];
+  const s = summarize(recs);
+  assert.equal(s.settledN, 4);
+  assert.equal(s.wins, 2);
+  assert.equal(s.losses, 1);
+  assert.equal(s.scratches, 1);
+  assert.equal(s.winRate, 2 / 3); // wins / (wins + losses); scratches excluded
+  assert.equal(s.openN, 1);
+  assert.ok(Math.abs(s.totalPnl - 2.5) < 1e-9); // 1.5 − 2 + 0 + 3
+  assert.equal(s.clearedN, 4); // recs with moveCleared != null (A false, B/C/D true) — false still counts
+  assert.equal(s.cleared, 3); // of those, moveCleared === true (B, C, D)
+  assert.equal(s.byVerdict.rich.n, 2);
+  assert.equal(s.byVerdict.rich.wins, 1);
+  assert.equal(s.byVerdict.cheap.n, 2);
+  assert.equal(s.byVerdict.cheap.wins, 1);
+});
+
+test("summarize: empty input yields null rates, not NaN or a throw", () => {
+  const s = summarize([]);
+  assert.equal(s.settledN, 0);
+  assert.equal(s.winRate, null);
+  assert.equal(s.avgPnl, null);
+  assert.equal(s.totalPnl, 0);
+});

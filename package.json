@@ -9,6 +9,7 @@
     "refresh-data": "tsx scripts/build-data.ts",
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "check-freshness": "tsx scripts/check-freshness.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "eval-alerts": "tsx scripts/eval-alerts.ts",
     "refresh-spinoffs": "tsx scripts/refresh-spinoffs.ts",
     "refresh-sss": "tsx scripts/refresh-sss.ts",
