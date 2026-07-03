@@ -1,12 +1,12 @@
 {
   "since": "2026-07-02T17:13:47.943Z",
-  "updatedAt": "2026-07-03T02:21:23.092Z",
+  "updatedAt": "2026-07-03T02:24:15.604Z",
   "note": "Token counts are exact; estUsd is a BALLPARK from lib/llmUsage.ts PRICES (edit to match your dashboards). Delete this file to reset the meter.",
   "totals": {
-    "calls": 653,
-    "inTok": 5877043,
-    "outTok": 415822,
-    "estUsd": 7.1035132
+    "calls": 658,
+    "inTok": 5889831,
+    "outTok": 432319,
+    "estUsd": 7.3270532
   },
   "byModel": {
     "z-ai/glm-5.2": {
@@ -16,10 +16,10 @@
       "estUsd": 2.1752812
     },
     "google/gemini-3.1-pro-preview": {
-      "calls": 330,
-      "inTok": 1378152,
-      "outTok": 180994,
-      "estUsd": 4.928232
+      "calls": 335,
+      "inTok": 1390940,
+      "outTok": 197491,
+      "estUsd": 5.151772
     }
   },
   "byJob": {
@@ -54,28 +54,28 @@
       "estUsd": 0.28368200000000005
     },
     "refresh-confluence": {
-      "calls": 1,
-      "inTok": 2188,
-      "outTok": 2520,
-      "estUsd": 0.034616
+      "calls": 2,
+      "inTok": 4372,
+      "outTok": 4986,
+      "estUsd": 0.068576
     },
     "refresh-valuation-explain": {
-      "calls": 2,
-      "inTok": 8050,
-      "outTok": 9842,
-      "estUsd": 0.134204
+      "calls": 4,
+      "inTok": 16058,
+      "outTok": 19814,
+      "estUsd": 0.26988399999999996
     },
     "refresh-13f-story": {
-      "calls": 1,
-      "inTok": 831,
-      "outTok": 1952,
-      "estUsd": 0.025086
+      "calls": 2,
+      "inTok": 1670,
+      "outTok": 3669,
+      "estUsd": 0.047368
     },
     "refresh-congress-summary": {
-      "calls": 1,
-      "inTok": 1757,
-      "outTok": 2200,
-      "estUsd": 0.029914
+      "calls": 2,
+      "inTok": 3514,
+      "outTok": 4542,
+      "estUsd": 0.061532
     }
   },
   "byDay": {
@@ -86,10 +86,10 @@
       "estUsd": 3.6624240000000006
     },
     "2026-07-03": {
-      "calls": 332,
-      "inTok": 3165961,
-      "outTok": 204770,
-      "estUsd": 3.441089199999999
+      "calls": 337,
+      "inTok": 3178749,
+      "outTok": 221267,
+      "estUsd": 3.664629199999999
     }
   }
 }
