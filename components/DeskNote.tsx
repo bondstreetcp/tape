@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DeskNote } from "@/lib/deskNote";
+import { fmtFresh } from "@/lib/format";
 
 // Development-type tag → chip palette.
 const TAG_CLS: Record<string, string> = {
@@ -29,11 +30,14 @@ function Tickers({ tickers, universe }: { tickers: string[]; universe: string })
 // Morning Desk Note — the night's GLM-authored two-layer overnight brief.
 export default function DeskNote({ note, universe }: { note: DeskNote | null; universe: string }) {
   if (!note || !note.sections.length) return null;
+  // Stamp the note's OWN recency (generatedAt), not note.asOf — asOf is the overnight-filings *window*
+  // start ("since Jul 1"), which froze on a stale-looking date even when the brief was rebuilt nightly.
+  const fresh = fmtFresh(note.generatedAt);
   return (
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-sm font-semibold">
-          Morning Desk Note <span className="font-normal text-[var(--text-4)]">· {note.asOf}</span>
+          Morning Desk Note{fresh && <span className="font-normal text-[var(--text-4)]"> · as of {fresh}</span>}
         </h2>
         <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">AI brief · research, not advice</span>
       </div>

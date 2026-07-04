@@ -77,3 +77,20 @@ export function fmtDateTime(iso: string): string {
     return iso;
   }
 }
+
+/**
+ * Freshness stamp for a nightly-generated feed: the GENERATION date (pass an ISO `generatedAt`),
+ * rendered in US-Eastern (the market day). Use for an "as of <date>" on feeds that rebuild nightly so
+ * a fresh feed shows a CURRENT date — instead of printing a lookback-window start (e.g. the Morning
+ * Desk Note's overnight "since Jul 1"), which reads as stale even right after a rebuild. ET, not UTC,
+ * so a note written ~6–8pm ET doesn't render as "tomorrow" to a US reader. Returns "" on a bad value.
+ */
+export function fmtFresh(isoGeneratedAt: string): string {
+  try {
+    const dt = new Date(isoGeneratedAt);
+    if (Number.isNaN(dt.getTime())) return "";
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+  } catch {
+    return "";
+  }
+}
