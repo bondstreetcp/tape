@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtMarketCap, fmtDateTime } from "@/lib/format";
 import { useWatchlist } from "@/lib/watchlist";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -88,11 +89,11 @@ export default function EarningsMoveView({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
-        <span><b className="text-[var(--text-2)]">Implied move</b> = ATM straddle ÷ price (the priced ± move)</span>
-        <span><b className="text-[var(--text-2)]">Hist</b> = avg of the last several 1-day post-earnings reactions</span>
-        <span><b className="text-[var(--text-2)]">Richness</b> = implied ÷ historical · <span className="text-[#f59e0b]">&gt;1 rich</span> (sell premium) · <span className="text-[#2dd4bf]">&lt;1 cheap</span> (buy)</span>
-        <span><b className="text-[var(--text-2)]">Cleared</b> = how often the realized move beat the implied (long-premium win rate) · <span className="text-[#2dd4bf]">high</span> = buying paid</span>
-        <span><b className="text-[var(--text-2)]">Beat→up</b> = of past EPS beats, how often the stock rose · <span className="text-[#ef4444]">≤50% ⚠</span> = sell-the-news</span>
+        <span><b className="text-[var(--text-2)]">Implied move</b><InfoDot term="Implied move" /> = ATM straddle ÷ price (the priced ± move)</span>
+        <span><b className="text-[var(--text-2)]">Hist</b><InfoDot text="The average of the stock's recent one-day post-earnings price reactions." /> = avg of the last several 1-day post-earnings reactions</span>
+        <span><b className="text-[var(--text-2)]">Richness</b><InfoDot text="Implied move ÷ historical move — above 1 = options rich (sell premium); below 1 = cheap (buy)." /> = implied ÷ historical · <span className="text-[#f59e0b]">&gt;1 rich</span> (sell premium) · <span className="text-[#2dd4bf]">&lt;1 cheap</span> (buy)</span>
+        <span><b className="text-[var(--text-2)]">Cleared</b><InfoDot text="How often the realized move beat the implied move — the long-premium (straddle) win rate." /> = how often the realized move beat the implied (long-premium win rate) · <span className="text-[#2dd4bf]">high</span> = buying paid</span>
+        <span><b className="text-[var(--text-2)]">Beat→up</b><InfoDot text="Of past EPS beats, how often the stock rose. Low = sell-the-news reaction." /> = of past EPS beats, how often the stock rose · <span className="text-[#ef4444]">≤50% ⚠</span> = sell-the-news</span>
       </div>
 
       {/* filters */}
@@ -130,13 +131,13 @@ export default function EarningsMoveView({
                   <SortTh k="soon" cls="text-right">Reports</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Exp</th>
                   <SortTh k="implied" cls="text-right">Implied move</SortTh>
-                  <SortTh k="iv" cls="text-right">Implied IV</SortTh>
+                  <SortTh k="iv" cls="text-right">Implied IV<InfoDot text="The implied volatility backed out of the straddle (≈ straddle ÷ 0.798·S·√T)." /></SortTh>
                   <SortTh k="hist" cls="text-right">Hist avg</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">Hist max</th>
+                  <th className="px-2 py-2 text-right font-medium">Hist max<InfoDot text="The single largest past one-day post-earnings move in the sample." /></th>
                   <SortTh k="rich" cls="text-right">Richness</SortTh>
                   <SortTh k="clear" cls="text-right">Cleared</SortTh>
                   <SortTh k="react" cls="text-right">Beat→up</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">Implied range</th>
+                  <th className="px-2 py-2 text-right font-medium">Implied range<InfoDot text="The share-price band the options imply by the report — price ± the implied move." /></th>
                 </tr>
               </thead>
               <tbody>

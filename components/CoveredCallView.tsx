@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtMarketCap, fmtDateTime } from "@/lib/format";
 import { useWatchlist } from "@/lib/watchlist";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
 const pctFrac = (v: number | null | undefined, d = 0) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
@@ -124,11 +125,12 @@ export default function CoveredCallView({
   }, [candidates, minStatic, minCap, elevatedOnly, clearEarnings, watchOnly, q, sort, tenor, has]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
-  const SortTh = ({ k, children, cls = "" }: { k: SortKey; children: React.ReactNode; cls?: string }) => (
+  const SortTh = ({ k, children, cls = "", info, infoText }: { k: SortKey; children: React.ReactNode; cls?: string; info?: string; infoText?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
         {children}{sort === k && <span className="text-[9px]">▼</span>}
       </button>
+      {(info || infoText) && <InfoDot term={info} text={infoText} className="ml-1" />}
     </th>
   );
 
@@ -164,7 +166,7 @@ export default function CoveredCallView({
 
       {/* strategy primer */}
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
-        <span><b className="text-[var(--text-2)]">Strike</b> {tab.deltaLabel} OTM call {tenor === "m3" ? "(~more room)" : "(~30% chance called)"}</span>
+        <span><b className="text-[var(--text-2)]">Strike</b> <InfoDot term="OTM" /> {tab.deltaLabel} OTM call {tenor === "m3" ? "(~more room)" : "(~30% chance called)"}</span>
         <span><b className="text-[var(--text-2)]">Static yield</b> = premium income if the stock stays below the strike</span>
         <span><b className="text-[var(--text-2)]">If-called</b> = total return if assigned (premium + gain to the strike)</span>
         <span><b className="text-[var(--text-2)]">Cap</b> = upside room before your shares are called away</span>
@@ -214,17 +216,17 @@ export default function CoveredCallView({
                   <th className="px-2 py-2 font-medium">Company</th>
                   <SortTh k="price" cls="text-right">Price</SortTh>
                   <SortTh k="mktcap" cls="text-right">Mkt cap</SortTh>
-                  <SortTh k="roe" cls="text-right">ROE</SortTh>
-                  <SortTh k="pe" cls="text-right">P/E</SortTh>
-                  <SortTh k="vol" cls="text-right">Vol rank</SortTh>
-                  <SortTh k="iv" cls="text-right">ATM IV</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} call</th>
-                  <th className="px-2 py-2 text-right font-medium">Exp</th>
-                  <SortTh k="earn" cls="text-right">Earnings</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">Premium</th>
-                  <SortTh k="static" cls="text-right">Income yield</SortTh>
-                  <SortTh k="ifcalled" cls="text-right">If-called</SortTh>
-                  <SortTh k="cap" cls="text-right">Upside cap</SortTh>
+                  <SortTh k="roe" cls="text-right" info="ROE">ROE</SortTh>
+                  <SortTh k="pe" cls="text-right" info="P/E">P/E</SortTh>
+                  <SortTh k="vol" cls="text-right" info="Vol rank">Vol rank</SortTh>
+                  <SortTh k="iv" cls="text-right" info="IV">ATM IV</SortTh>
+                  <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} call <InfoDot term="Delta" /></th>
+                  <th className="px-2 py-2 text-right font-medium">Exp <InfoDot term="DTE" /></th>
+                  <SortTh k="earn" cls="text-right" info="BMO / AMC">Earnings</SortTh>
+                  <th className="px-2 py-2 text-right font-medium">Premium <InfoDot term="Premium" /></th>
+                  <SortTh k="static" cls="text-right" info="Annualized yield">Income yield</SortTh>
+                  <SortTh k="ifcalled" cls="text-right" info="Covered call">If-called</SortTh>
+                  <SortTh k="cap" cls="text-right" infoText="How far the stock can rise before your shares are called away.">Upside cap</SortTh>
                 </tr>
               </thead>
               <tbody>

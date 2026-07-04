@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { fmtMoney } from "@/lib/format";
+import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import OptionsStrategy from "./OptionsStrategy";
 import IvSurface from "./IvSurface";
+import InfoDot from "./InfoDot";
 import { LoadingState } from "./Spinner";
 
 const isHot = (o: Opt | null | undefined) => !!o && o.vol != null && o.oi != null && o.vol > Math.max(o.oi, 300);
@@ -39,6 +41,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
   const [expiry, setExpiry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [allStrikes, setAllStrikes] = useState(false);
+  const [greekView, setGreekView] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [term, setTerm] = useState<{ date: string; dte: number; atmIV: number | null }[] | null>(null);
 
@@ -124,6 +127,27 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
     );
   }
 
+  // Per-strike Greeks, computed on the fly from Black-Scholes. We solve IV off the mid (bid/ask, else
+  // last) rather than trust vendor iv — same doctrine as the rest of the app — then fall back to vendor
+  // iv only if the quote is un-invertible. T from the selected expiry; r defaults to 4%.
+  const S = data.underlying;
+  const T = dte != null && dte > 0 ? dte / 365 : null;
+  const gk = (o: Opt | null | undefined, kind: "call" | "put") => {
+    if (!o || S == null || T == null) return null;
+    const mid = o.bid != null && o.ask != null && o.bid > 0 && o.ask > 0 ? (o.bid + o.ask) / 2 : o.last;
+    let sig = mid != null && mid > 0 ? ivFromPrice(kind, S, o.strike, T, mid) : null;
+    if (sig == null || sig <= 0) sig = o.iv != null && o.iv > 0 ? o.iv : null;
+    if (sig == null) return null;
+    const g = bsGreeks(kind, S, o.strike, T, sig);
+    return g ? { ...g, iv: sig } : null;
+  };
+  const g2 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(2)); // Δ / Θ / V
+  const g3 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(3)); // Γ
+  const gp = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`); // prob ITM
+  const QH = ["OI", "Vol", "IV", "Bid", "Ask", "Last"];
+  const GH = ["Δ", "Γ", "Θ", "V", "IV", "P.ITM"];
+  const heads = greekView ? GH : QH;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -143,8 +167,11 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
         {data.underlying != null && (
           <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">{fmtMoney(data.underlying, currency)}</span></span>
         )}
-        {atmIv != null && <span className="text-[var(--text-2)]">ATM IV <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
-        <button onClick={() => setAllStrikes((v) => !v)} className="ml-auto text-xs text-[var(--accent)] hover:underline">
+        {atmIv != null && <span className="text-[var(--text-2)]">ATM<InfoDot term="ATM" /> IV<InfoDot term="IV" /> <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
+        <button onClick={() => setGreekView((v) => !v)} className="ml-auto text-xs text-[var(--accent)] hover:underline">
+          {greekView ? "Show quotes" : "Show Greeks"}
+        </button>
+        <button onClick={() => setAllStrikes((v) => !v)} className="text-xs text-[var(--accent)] hover:underline">
           {allStrikes ? "Show near-the-money" : "Show all strikes"}
         </button>
       </div>
@@ -154,7 +181,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="mb-1 flex items-center justify-between text-[13px]">
-            <span className="font-semibold text-[var(--text-2)]">IV skew · {expiry ?? ""}</span>
+            <span className="font-semibold text-[var(--text-2)]">IV skew<InfoDot term="Skew" /> · {expiry ?? ""}</span>
             <span className="flex gap-2 text-[11px]">
               <span style={{ color: "#60a5fa" }}>● calls</span>
               <span style={{ color: "#f472b6" }}>● puts</span>
@@ -163,7 +190,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
           <SkewChart calls={data.calls} puts={data.puts} underlying={data.underlying} />
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="mb-1 text-[13px] font-semibold text-[var(--text-2)]">IV term structure · ATM by expiry</div>
+          <div className="mb-1 text-[13px] font-semibold text-[var(--text-2)]">IV term structure<InfoDot term="Term structure" /> · ATM<InfoDot term="ATM" /> by expiry</div>
           <TermChart term={term} />
         </div>
       </div>
@@ -179,39 +206,91 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
               <th colSpan={6} className="bg-[#2a1414]/30 px-2 py-1.5 text-center font-semibold text-[#ef4444]">PUTS</th>
             </tr>
             <tr className="border-b border-[var(--border)] text-[10px] text-[var(--text-4)]">
-              {["OI", "Vol", "IV", "Bid", "Ask", "Last"].map((h) => <th key={"c" + h} className="px-2 py-1 text-right font-medium">{h}</th>)}
+              {heads.map((h) => <th key={"c" + h} className="px-2 py-1 text-right font-medium">{h}<HeadDot h={h} /></th>)}
               <th className="px-2 py-1 text-center font-medium"></th>
-              {["Last", "Bid", "Ask", "IV", "Vol", "OI"].map((h) => <th key={"p" + h} className="px-2 py-1 text-right font-medium">{h}</th>)}
+              {[...heads].reverse().map((h) => <th key={"p" + h} className="px-2 py-1 text-right font-medium">{h}<HeadDot h={h} /></th>)}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r) => {
+              const cg = greekView ? gk(r.call, "call") : null;
+              const pg = greekView ? gk(r.put, "put") : null;
+              return (
               <tr key={r.strike} className={"border-b border-[var(--divider)] " + (r.isAtm ? "bg-[var(--surface-3)]" : "")}>
-                <Cell v={big(r.call?.oi ?? null)} itm={r.call?.itm} />
-                <Cell v={big(r.call?.vol ?? null)} itm={r.call?.itm} hot={isHot(r.call)} />
-                <Cell v={iv(r.call?.iv ?? null)} itm={r.call?.itm} />
-                <Cell v={px(r.call?.bid ?? null)} itm={r.call?.itm} />
-                <Cell v={px(r.call?.ask ?? null)} itm={r.call?.itm} />
-                <Cell v={px(r.call?.last ?? null)} itm={r.call?.itm} bold />
+                {greekView ? (
+                  <>
+                    <Cell v={g2(cg?.delta)} itm={r.call?.itm} />
+                    <Cell v={g3(cg?.gamma)} itm={r.call?.itm} />
+                    <Cell v={g2(cg?.theta)} itm={r.call?.itm} />
+                    <Cell v={g2(cg?.vega)} itm={r.call?.itm} />
+                    <Cell v={iv(cg?.iv ?? null)} itm={r.call?.itm} />
+                    <Cell v={gp(cg?.probItm)} itm={r.call?.itm} />
+                  </>
+                ) : (
+                  <>
+                    <Cell v={big(r.call?.oi ?? null)} itm={r.call?.itm} />
+                    <Cell v={big(r.call?.vol ?? null)} itm={r.call?.itm} hot={isHot(r.call)} />
+                    <Cell v={iv(r.call?.iv ?? null)} itm={r.call?.itm} />
+                    <Cell v={px(r.call?.bid ?? null)} itm={r.call?.itm} />
+                    <Cell v={px(r.call?.ask ?? null)} itm={r.call?.itm} />
+                    <Cell v={px(r.call?.last ?? null)} itm={r.call?.itm} bold />
+                  </>
+                )}
                 <td className={"px-2 py-1 text-center font-mono font-semibold tabular-nums " + (r.isAtm ? "text-[#93c5fd]" : "text-[var(--text)]")}>
                   {r.strike}
                 </td>
-                <Cell v={px(r.put?.last ?? null)} itm={r.put?.itm} bold />
-                <Cell v={px(r.put?.bid ?? null)} itm={r.put?.itm} />
-                <Cell v={px(r.put?.ask ?? null)} itm={r.put?.itm} />
-                <Cell v={iv(r.put?.iv ?? null)} itm={r.put?.itm} />
-                <Cell v={big(r.put?.vol ?? null)} itm={r.put?.itm} hot={isHot(r.put)} />
-                <Cell v={big(r.put?.oi ?? null)} itm={r.put?.itm} />
+                {greekView ? (
+                  <>
+                    <Cell v={gp(pg?.probItm)} itm={r.put?.itm} />
+                    <Cell v={iv(pg?.iv ?? null)} itm={r.put?.itm} />
+                    <Cell v={g2(pg?.vega)} itm={r.put?.itm} />
+                    <Cell v={g2(pg?.theta)} itm={r.put?.itm} />
+                    <Cell v={g3(pg?.gamma)} itm={r.put?.itm} />
+                    <Cell v={g2(pg?.delta)} itm={r.put?.itm} />
+                  </>
+                ) : (
+                  <>
+                    <Cell v={px(r.put?.last ?? null)} itm={r.put?.itm} bold />
+                    <Cell v={px(r.put?.bid ?? null)} itm={r.put?.itm} />
+                    <Cell v={px(r.put?.ask ?? null)} itm={r.put?.itm} />
+                    <Cell v={iv(r.put?.iv ?? null)} itm={r.put?.itm} />
+                    <Cell v={big(r.put?.vol ?? null)} itm={r.put?.itm} hot={isHot(r.put)} />
+                    <Cell v={big(r.put?.oi ?? null)} itm={r.put?.itm} />
+                  </>
+                )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
       <p className="text-[11px] text-[var(--text-4)]">
-        In-the-money contracts shaded · ATM row highlighted · <span className="font-semibold text-[#f59e0b]">amber volume</span> = unusual (today&apos;s volume &gt; open interest) · OI = open interest · IV = implied volatility. Quotes via Yahoo (may be delayed).
+        {greekView ? (
+          <>Greeks from IV solved off the mid (r = 4%): <b>Δ</b> delta · <b>Γ</b> gamma · <b>Θ</b> theta (per day, $/share) · <b>V</b> vega (per 1 vol pt, $/share) · <b>P.ITM</b> = risk-neutral prob. of expiring in-the-money. ATM row highlighted.</>
+        ) : (
+          <>In-the-money contracts shaded · ATM row highlighted · <span className="font-semibold text-[#f59e0b]">amber volume</span> = unusual (today&apos;s volume &gt; open interest) · OI = open interest · IV = implied volatility. Quotes via Yahoo (may be delayed).</>
+        )}
       </p>
     </div>
   );
+}
+
+// Maps a column-header abbreviation to its glossary term (or a plain-English def where no key fits).
+function HeadDot({ h }: { h: string }) {
+  switch (h) {
+    case "OI": return <InfoDot term="Open interest" />;
+    case "Vol": return <InfoDot text="Contracts traded today — the day's activity at this strike." />;
+    case "IV": return <InfoDot term="IV" />;
+    case "Bid": return <InfoDot text="The highest price a buyer will pay right now." />;
+    case "Ask": return <InfoDot text="The lowest price a seller will accept right now." />;
+    case "Last": return <InfoDot text="The price of the most recent trade at this strike." />;
+    case "Δ": return <InfoDot term="Delta" />;
+    case "Γ": return <InfoDot term="Gamma" />;
+    case "Θ": return <InfoDot term="Theta" />;
+    case "V": return <InfoDot term="Vega" />;
+    case "P.ITM": return <InfoDot text="Risk-neutral probability the option expires in-the-money — N(d₂), distinct from delta." />;
+    default: return null;
+  }
 }
 
 function Cell({ v, itm, bold, hot }: { v: string; itm?: boolean; bold?: boolean; hot?: boolean }) {

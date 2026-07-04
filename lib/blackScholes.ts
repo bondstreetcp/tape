@@ -46,6 +46,39 @@ export function ivFromPrice(kind: "call" | "put", S: number, K: number, T: numbe
   return (lo + hi) / 2;
 }
 
+// Per-strike option Greeks (for the interactive chain). Conventions match the pricers above:
+//   delta  — ∂price/∂S, in [0,1] for calls, [−1,0] for puts (≈ risk-neutral prob ITM).
+//   gamma  — ∂delta/∂S (same for call & put).
+//   vega   — price change per +1 VOL POINT (÷100), per share.
+//   theta  — price change per CALENDAR DAY (÷365), per share (negative = decay).
+//   probItm— risk-neutral P(expires ITM) = N(d2) call / N(−d2) put (distinct from delta).
+export interface Greeks {
+  delta: number;
+  gamma: number;
+  vega: number;
+  theta: number;
+  probItm: number;
+}
+export function bsGreeks(kind: "call" | "put", S: number, K: number, T: number, sigma: number, r = 0.04): Greeks | null {
+  if (!(S > 0) || !(K > 0) || !(T > 0) || !(sigma > 0)) return null;
+  const sqrtT = Math.sqrt(T);
+  const v = sigma * sqrtT;
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / v;
+  const d2 = d1 - v;
+  const pdf = 0.3989422804014327 * Math.exp((-d1 * d1) / 2); // φ(d1)
+  const disc = K * Math.exp(-r * T);
+  const delta = kind === "call" ? normCdf(d1) : normCdf(d1) - 1;
+  const gamma = pdf / (S * v);
+  const vega = (S * pdf * sqrtT) / 100;
+  const thetaYr =
+    kind === "call"
+      ? -(S * pdf * sigma) / (2 * sqrtT) - r * disc * normCdf(d2)
+      : -(S * pdf * sigma) / (2 * sqrtT) + r * disc * normCdf(-d2);
+  const theta = thetaYr / 365;
+  const probItm = kind === "call" ? normCdf(d2) : normCdf(-d2);
+  return { delta, gamma, vega, theta, probItm };
+}
+
 // Implied vol from a STRADDLE price (one sigma for both legs) — for the long-straddle scenario.
 export function straddleIvFromPrice(S: number, K: number, T: number, price: number, r = 0.04): number | null {
   if (!(price > 0) || T <= 0 || S <= 0 || K <= 0) return null;

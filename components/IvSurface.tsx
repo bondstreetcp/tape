@@ -107,7 +107,7 @@ export default function IvSurface({ symbol }: { symbol: string }) {
         </svg>
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--text-4)]">
-        <span>expiry (dte) ↕ · moneyness K/spot−1 (%) ↔ · dashed = ATM</span>
+        <span>expiry (dte) ↕ · moneyness K/spot−1 (%) ↔ · dashed = ATM<InfoDot term="ATM" /></span>
         <span className="flex items-center gap-1">
           {lo.toFixed(0)}%
           <span className="inline-block h-2 w-24 rounded" style={{ background: `linear-gradient(to right, ${ivColor(0)}, ${ivColor(0.5)}, ${ivColor(1)})` }} />
@@ -118,7 +118,7 @@ export default function IvSurface({ symbol }: { symbol: string }) {
       {d.richCheap.length > 0 && (
         <div className="mt-3 border-t border-[var(--divider)] pt-2">
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title="Listed strikes furthest from their expiry's fitted smile — the per-strike pricing dislocations. This is a code-detected statistical signal: a rich strike may simply be pricing a real catalyst, so pair it with the news/filings read before trading it.">
-            Richest / cheapest listed strikes vs the fitted smile
+            Richest / cheapest<InfoDot term="Rich / cheap" /> listed strikes vs the fitted smile
           </div>
           <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
             {d.richCheap.map((r, i) => (

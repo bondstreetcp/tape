@@ -73,9 +73,9 @@ export default function CatalystVolView({ universe, data }: { universe: string; 
                 <th className="px-3 py-2 font-medium">Ticker</th>
                 <th className="px-2 py-2 font-medium">Event</th>
                 <th className="px-2 py-2 font-medium">Date</th>
-                <th className="px-2 py-2 text-right font-medium">Implied ±</th>
-                <th className="px-2 py-2 text-right font-medium">Baseline ±</th>
-                <th className="px-2 py-2 text-right font-medium" title="implied ÷ baseline — below 1 = options underpricing the event">Ratio</th>
+                <th className="px-2 py-2 text-right font-medium">Implied ±<InfoDot term="Implied move" /></th>
+                <th className="px-2 py-2 text-right font-medium">Baseline ±<InfoDot text="The stock's own realized-vol move projected over the event window — the no-catalyst yardstick." /></th>
+                <th className="px-2 py-2 text-right font-medium" title="implied ÷ baseline — below 1 = options underpricing the event">Ratio<InfoDot text="Implied move ÷ baseline move — below 1 = options are underpricing the event." /></th>
                 <th className="px-2 py-2 text-right font-medium">Expiry</th>
                 <th className="px-2 py-2 font-medium"></th>
               </tr>

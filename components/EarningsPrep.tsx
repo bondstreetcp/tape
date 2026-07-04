@@ -6,6 +6,7 @@ import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
+import InfoDot from "./InfoDot";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -211,11 +212,11 @@ function PayoffDiagram({ legs, spot, movePct }: { legs: { type: "C" | "P"; side:
 }
 
 // A big lead metric (value + small label) for the top of a bento.
-function Big({ value, label, color }: { value: string; label: string; color?: string }) {
+function Big({ value, label, color, info }: { value: string; label: string; color?: string; info?: React.ReactNode }) {
   return (
     <div>
       <div className="font-mono text-2xl font-bold leading-none tabular-nums" style={color ? { color } : undefined}>{value}</div>
-      <div className="mt-1 text-[12px] text-[var(--text-4)]">{label}</div>
+      <div className="mt-1 text-[12px] text-[var(--text-4)]">{label}{info}</div>
     </div>
   );
 }
@@ -370,7 +371,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     <div className="mb-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-base font-semibold text-[var(--text)]">Earnings prep</h3>
-        {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d{earningsEstimate ? <span className="ml-1 rounded bg-[#f59e0b]/15 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#f59e0b]" title="This report date is an ESTIMATE (Yahoo), not company-confirmed — the option expiry the play brackets could be off. Treat the timing as approximate until the company confirms.">est</span> : null}</> : `next/last report ${dateLabel}`}</span>}
+        {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d{earningsEstimate ? <><span className="ml-1 rounded bg-[#f59e0b]/15 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#f59e0b]" title="This report date is an ESTIMATE (Yahoo), not company-confirmed — the option expiry the play brackets could be off. Treat the timing as approximate until the company confirms.">est</span><InfoDot text="This earnings date is an estimate (Yahoo), not company-confirmed — treat the timing as approximate." /></> : null}</> : `next/last report ${dateLabel}`}</span>}
       </div>
 
       {/* Expected-move HERO — the headline options read (full-width, top of the card) */}
@@ -379,17 +380,17 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1.5">
             <div className="flex items-end gap-2.5">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move<InfoDot term="Expected move" /> · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
                 <div className="font-mono text-4xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-2xl">%</span></div>
-                {d?.eventMove != null && <div className="mt-0.5 text-[11px] leading-none text-[var(--text-4)]" title="The move priced for the PRINT ITSELF — the front straddle with the ~N days of ordinary (non-event) vol stripped out via the back-cycle IV. The ±% above is the raw straddle and includes both.">event <b className="text-[var(--text-3)]">±{d.eventMove.toFixed(1)}%</b></div>}
+                {d?.eventMove != null && <div className="mt-0.5 text-[11px] leading-none text-[var(--text-4)]" title="The move priced for the PRINT ITSELF — the front straddle with the ~N days of ordinary (non-event) vol stripped out via the back-cycle IV. The ±% above is the raw straddle and includes both.">event<InfoDot term="Event move" /> <b className="text-[var(--text-3)]">±{d.eventMove.toFixed(1)}%</b></div>}
               </div>
-              {d?.straddle && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}{d.straddle.live && d.straddle.widthPct != null ? <><br /><span className="text-[var(--text-4)]" title="Execution read on the ATM straddle: the bid/ask spread as a % of the straddle (what you pay to get in AND out) + open interest / volume for depth. A wide or thin market can quietly erase a paper edge.">{d.straddle.bid != null && d.straddle.ask != null ? `$${d.straddle.bid.toFixed(2)}–$${d.straddle.ask.toFixed(2)} · ` : ""}<b style={{ color: d.straddle.widthPct > 6 ? "#f59e0b" : "var(--text-3)" }}>{d.straddle.widthPct > 6 ? "⚠ " : ""}{d.straddle.widthPct.toFixed(0)}% wide</b>{d.straddle.oi ? ` · OI ${compact(d.straddle.oi)}` : ""}{d.straddle.vol ? ` · vol ${compact(d.straddle.vol)}` : ""}</span></> : null}</div>}
+              {d?.straddle && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}{d.straddle.live && d.straddle.widthPct != null ? <><br /><span className="text-[var(--text-4)]" title="Execution read on the ATM straddle: the bid/ask spread as a % of the straddle (what you pay to get in AND out) + open interest / volume for depth. A wide or thin market can quietly erase a paper edge.">{d.straddle.bid != null && d.straddle.ask != null ? `$${d.straddle.bid.toFixed(2)}–$${d.straddle.ask.toFixed(2)} · ` : ""}<b style={{ color: d.straddle.widthPct > 6 ? "#f59e0b" : "var(--text-3)" }}>{d.straddle.widthPct > 6 ? "⚠ " : ""}{d.straddle.widthPct.toFixed(0)}% wide</b><InfoDot term="Bid/ask width" />{d.straddle.oi ? <>{" · OI "}{compact(d.straddle.oi)}<InfoDot term="Open interest" /></> : ""}{d.straddle.vol ? ` · vol ${compact(d.straddle.vol)}` : ""}</span></> : null}</div>}
               {d?.reaction && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
             </div>
             {d?.richness && (() => {
               const v = d.richness.verdict, vc = v === "rich" ? "#ef4444" : v === "cheap" ? "#22c55e" : "var(--text-2)";
               return <div className="rounded-lg px-3 py-1.5 text-right" style={{ background: v === "fair" ? "var(--surface-2)" : `${vc}1a` }} title="Implied move vs the average realized move on past prints">
-                <div className="text-base font-bold" style={{ color: vc }}>{v === "rich" ? "Options RICH" : v === "cheap" ? "Options CHEAP" : "Fairly priced"}</div>
+                <div className="text-base font-bold" style={{ color: vc }}>{v === "rich" ? "Options RICH" : v === "cheap" ? "Options CHEAP" : "Fairly priced"}<InfoDot term="Rich / cheap" /></div>
                 <div className="text-[12px] text-[var(--text-4)]">{d.richness.ratio.toFixed(2)}× realized{v === "rich" ? " · sell premium" : v === "cheap" ? " · buy the move" : ""}</div>
               </div>;
             })()}
@@ -436,16 +437,16 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           )}
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border)] pt-2.5 text-[13px] text-[var(--text-3)]">
-            {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
-            {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
-            {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
+            {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b><InfoDot text="How often the actual post-earnings move exceeded the priced-in implied move. Low = the straddle has been a sell." /> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}
+            {d?.term && d.term.crushRatio >= 1.04 && <span title="Front (event) cycle ATM IV vs a later cycle — the event premium that collapses after the print"><b className="text-[var(--text-2)]">Vol crush</b><InfoDot term="Vol crush" /> {(d.term.frontIV * 100).toFixed(0)}%→{(d.term.backIV * 100).toFixed(0)}% <span style={{ color: d.term.crushRatio >= 1.15 ? "#ef4444" : "var(--text-4)" }}>{d.term.crushRatio.toFixed(2)}×</span></span>}
+            {reactionDay != null && timingShort && <span title="Before-open reporters move that same session; after-close reporters move the next session"><b className="text-[var(--text-2)]">Move lands</b><InfoDot term="BMO / AMC" /> {new Date(reactionDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} <span className="text-[var(--text-4)]">({timingShort})</span></span>}
           </div>
 
           {d?.trade && (
             <div className="mt-2.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
-              <span className="font-semibold text-[var(--text)]">Play </span>
+              <span className="font-semibold text-[var(--text)]">Play</span><InfoDot text="A suggested options structure consistent with the rich/cheap + skew read. Decision-support, not advice." />{" "}
               <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
-              {d.trade.lean && <span className={"ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold " + (d.trade.lean === "bullish" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#ef4444]/15 text-[#ef4444]")} title="Positioning lean from the options — skew (which side's bid), the max-pain pull, and OI-wall placement. A soft read, not a directional call.">{d.trade.lean === "bullish" ? "▲ leans bull" : "▼ leans bear"}</span>}
+              {d.trade.lean && <span className={"ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold " + (d.trade.lean === "bullish" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#ef4444]/15 text-[#ef4444]")} title="Positioning lean from the options — skew (which side's bid), the max-pain pull, and OI-wall placement. A soft read, not a directional call.">{d.trade.lean === "bullish" ? "▲ leans bull" : "▼ leans bear"}</span>}{d.trade.lean && <InfoDot text="A soft directional lean read from the options — skew, the max-pain pull, and OI-wall placement. Not a directional call." />}
               {d.trade.expiry && (
                 <span className="ml-1 rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-3)]" title="The option expiry these legs are priced on — the first one after the earnings date, so it captures the event.">
                   exp {d.trade.expiry}{d.trade.dte != null ? ` · ${d.trade.dte}d` : ""}
@@ -460,7 +461,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
               )}
               {d.trade.alt && (
                 <div className="mt-2 border-t border-[var(--divider)] pt-1.5" title="An alternative way to express the same read — a directional vertical when positioning leans one way, or a calendar when the term-structure crush is steep enough to sell the front against the back.">
-                  <span className="font-semibold text-[var(--text-3)]">Alt </span>
+                  <span className="font-semibold text-[var(--text-3)]">Alt</span><InfoDot text="An alternative way to express the same read — a directional vertical when it leans one way, or a calendar when the front-vs-back crush is steep." />{" "}
                   <span className="rounded bg-[var(--surface)] px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--text-4)]">{d.trade.alt.kind}</span>
                   <b className="ml-1 text-[var(--text-2)]">{d.trade.alt.structure}</b>
                   <span className="text-[var(--text-2)]"> · {d.trade.alt.legs}</span>
@@ -477,7 +478,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
               : "roughly a coin-flip vs the priced move";
             return (
               <div className="mt-2 rounded-lg px-3 py-2 text-[13px]" style={{ background: lp.verdict === "neutral" ? "var(--surface-2)" : `${vc}14` }} title="Whether BUYING premium (calls/puts/straddle) into the print is favorable. The trap: you're right on the beat, but the stock moves less than the priced move and the post-earnings IV crush bleeds the option.">
-                <b style={{ color: vc }}>Buying premium: {lp.verdict === "favorable" ? "FAVORABLE" : lp.verdict === "unfavorable" ? "UNFAVORABLE" : "NEUTRAL"}</b>
+                <b style={{ color: vc }}>Buying premium: {lp.verdict === "favorable" ? "FAVORABLE" : lp.verdict === "unfavorable" ? "UNFAVORABLE" : "NEUTRAL"}</b><InfoDot text="Whether buying calls/puts/a straddle into the print pays. The trap: right on the beat, but the move is smaller than priced and the IV crush bleeds it." />
                 {lp.beatN >= 3 && d.impliedMove != null && <span className="text-[var(--text-3)]"> · on past beats it cleared the ±{d.impliedMove.toFixed(1)}% move <b style={{ color: lp.beatClear / lp.beatN >= 0.5 ? "#22c55e" : "#ef4444" }}>{lp.beatClear}/{lp.beatN}</b></span>}
                 <span className="text-[var(--text-4)]"> — {msg}</span>
               </div>
@@ -624,7 +625,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
             })()}
             {d?.pead && (
               <div className="mt-1 text-[13px] text-[var(--text-3)]" title="Post-earnings drift over the 5 sessions AFTER the initial reaction — does the move continue or fade?">
-                <b className="text-[var(--text-2)]">Drift 5d</b>{" "}
+                <b className="text-[var(--text-2)]">Drift 5d</b><InfoDot term="PEAD" />{" "}
                 {d.pead.avgBeatDrift5 != null && <>beats <b style={{ color: col(d.pead.avgBeatDrift5) }}>{pp(d.pead.avgBeatDrift5)}</b></>}
                 {d.pead.avgMissDrift5 != null && <> · misses <b style={{ color: col(d.pead.avgMissDrift5) }}>{pp(d.pead.avgMissDrift5)}</b></>}
                 <span className="text-[var(--text-4)]"> · follows {Math.round(d.pead.followThrough * 100)}%</span>
@@ -638,21 +639,21 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           <Bento title="Options & volatility">
             {d.volRegime ? (
               <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-                <Big value={`${(d.volRegime.atmIV * 100).toFixed(0)}%`} label="implied vol" />
-                <Big value={`${(d.volRegime.hv20 * 100).toFixed(0)}%`} label="realized HV20" />
-                <div><div className="font-mono text-2xl font-bold leading-none tabular-nums" style={{ color: d.volRegime.ivHvRatio >= 1.3 ? "#ef4444" : d.volRegime.ivHvRatio <= 1 ? "#22c55e" : "var(--text-2)" }}>{d.volRegime.ivHvRatio.toFixed(1)}×</div><div className="mt-1 text-[12px] text-[var(--text-4)]">HV {d.volRegime.hvPctile?.toFixed(0) ?? "?"}ᵗʰ %ile</div></div>
+                <Big value={`${(d.volRegime.atmIV * 100).toFixed(0)}%`} label="implied vol" info={<InfoDot term="Implied volatility" />} />
+                <Big value={`${(d.volRegime.hv20 * 100).toFixed(0)}%`} label="realized HV20" info={<InfoDot term="Realized volatility" />} />
+                <div><div className="font-mono text-2xl font-bold leading-none tabular-nums" style={{ color: d.volRegime.ivHvRatio >= 1.3 ? "#ef4444" : d.volRegime.ivHvRatio <= 1 ? "#22c55e" : "var(--text-2)" }}>{d.volRegime.ivHvRatio.toFixed(1)}×</div><div className="mt-1 text-[12px] text-[var(--text-4)]">IV vs HV<InfoDot term="IV vs HV" /> · HV {d.volRegime.hvPctile?.toFixed(0) ?? "?"}ᵗʰ %ile</div></div>
               </div>
-            ) : d.options.atmIV != null ? <Big value={`${(d.options.atmIV * 100).toFixed(0)}%`} label="ATM IV" /> : null}
+            ) : d.options.atmIV != null ? <Big value={`${(d.options.atmIV * 100).toFixed(0)}%`} label="ATM IV" info={<InfoDot term="ATM" />} /> : null}
             <div className={"flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-3)] " + ((d.volRegime || d.options.atmIV != null) ? "mt-2.5" : "")}>
-              {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
-              {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)})` : ""}</span>}
-              {d.options.callWall && <span title="Heaviest call open interest above spot — a level dealer gamma can cap / pin"><b className="text-[var(--text-2)]">Call wall</b> ${d.options.callWall.strike.toFixed(0)}</span>}
-              {d.options.putWall && <span title="Heaviest put open interest below spot — support / magnet"><b className="text-[var(--text-2)]">Put wall</b> ${d.options.putWall.strike.toFixed(0)}</span>}
+              {d.options.skew != null && <span title="ATM put IV minus call IV — positive = downside hedging bid"><b className="text-[var(--text-2)]">Skew</b><InfoDot term="Skew" /> <span style={{ color: d.options.skew > 0 ? "#ef4444" : "#22c55e" }}>{d.options.skew > 0 ? "puts bid" : "calls bid"} {(Math.abs(d.options.skew) * 100).toFixed(1)}pt</span></span>}
+              {d.options.maxPain != null && <span title="Strike that minimizes total option payout at expiry"><b className="text-[var(--text-2)]">Max pain</b><InfoDot term="Max pain" /> ${d.options.maxPain.toFixed(0)}{d.options.maxPainVsSpot != null ? ` (${pp(d.options.maxPainVsSpot, 0)})` : ""}</span>}
+              {d.options.callWall && <span title="Heaviest call open interest above spot — a level dealer gamma can cap / pin"><b className="text-[var(--text-2)]">Call wall</b><InfoDot term="Call wall" /> ${d.options.callWall.strike.toFixed(0)}</span>}
+              {d.options.putWall && <span title="Heaviest put open interest below spot — support / magnet"><b className="text-[var(--text-2)]">Put wall</b><InfoDot term="Put wall" /> ${d.options.putWall.strike.toFixed(0)}</span>}
             </div>
             {ivs && (
               <div className="mt-2 border-t border-[var(--divider)] pt-2 text-[13px] text-[var(--text-3)]" title="From this name's own IV history (accrues over earnings cycles). IV-rank = where the current event IV sits vs its past. Realized crush = avg drop in ATM IV the session AFTER past prints — the vol decay a long-premium buyer pays.">
-                {ivs.ivRank != null && <span><b className="text-[var(--text-2)]">IV-rank</b> {ivs.ivRank.toFixed(0)}<span className="text-[var(--text-4)]">ᵗʰ %ile</span></span>}
-                {ivs.avgCrushPct != null && <span> · <b className="text-[var(--text-2)]">realized crush</b> <b style={{ color: ivs.avgCrushPct >= 15 ? "#ef4444" : "var(--text-2)" }}>−{ivs.avgCrushPct.toFixed(0)}%</b> <span className="text-[var(--text-4)]">avg after prints ({ivs.crushN})</span></span>}
+                {ivs.ivRank != null && <span><b className="text-[var(--text-2)]">IV-rank</b><InfoDot term="IV rank" /> {ivs.ivRank.toFixed(0)}<span className="text-[var(--text-4)]">ᵗʰ %ile</span></span>}
+                {ivs.avgCrushPct != null && <span> · <b className="text-[var(--text-2)]">realized crush</b><InfoDot text="Avg drop in ATM implied vol the session after past prints — the vol decay a long-premium buyer pays." /> <b style={{ color: ivs.avgCrushPct >= 15 ? "#ef4444" : "var(--text-2)" }}>−{ivs.avgCrushPct.toFixed(0)}%</b> <span className="text-[var(--text-4)]">avg after prints ({ivs.crushN})</span></span>}
               </div>
             )}
           </Bento>
@@ -666,8 +667,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           </div>
           <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-3)]">
             {buys != null && sells != null && <span><b className="text-[var(--text-2)]">Ratings</b> {buys}B / {r!.hold}H / {sells}S</span>}
-            {stats.shortPercentOfFloat != null && <span><b className="text-[var(--text-2)]">Short</b> {(stats.shortPercentOfFloat * 100).toFixed(1)}%{shortMoM != null ? ` ${shortMoM >= 0 ? "↑" : "↓"}${Math.abs(shortMoM * 100).toFixed(0)}%` : ""}{stats.shortRatio != null ? ` · ${stats.shortRatio.toFixed(1)}d cover` : ""}</span>}
-            {stats.forwardPE != null && <span><b className="text-[var(--text-2)]">Fwd P/E</b> {stats.forwardPE.toFixed(0)}</span>}
+            {stats.shortPercentOfFloat != null && <span><b className="text-[var(--text-2)]">Short</b><InfoDot term="Short interest" /> {(stats.shortPercentOfFloat * 100).toFixed(1)}%{shortMoM != null ? ` ${shortMoM >= 0 ? "↑" : "↓"}${Math.abs(shortMoM * 100).toFixed(0)}%` : ""}{stats.shortRatio != null ? ` · ${stats.shortRatio.toFixed(1)}d cover` : ""}</span>}
+            {stats.forwardPE != null && <span><b className="text-[var(--text-2)]">Fwd P/E</b><InfoDot term="Fwd P/E" /> {stats.forwardPE.toFixed(0)}</span>}
             {avgSurprise != null && <span><b className="text-[var(--text-2)]">Avg surprise</b> {pp(avgSurprise, 1)}</span>}
           </div>
           {moves.length > 0 && (

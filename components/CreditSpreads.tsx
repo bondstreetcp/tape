@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import InfoDot from "@/components/InfoDot";
 
 export interface CreditSeries { hy: [string, number][]; ig: [string, number][]; baa?: [string, number][] }
 
@@ -17,7 +18,7 @@ export default function CreditSpreads({ creditSeries, defaultDays = 365 }: { cre
   return (
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-[var(--text-2)]">Credit spreads</h2>
+        <h2 className="text-sm font-semibold text-[var(--text-2)]">Credit spreads <InfoDot text="Extra yield corporate bonds pay over Treasuries — wider means the market is pricing more default risk." /></h2>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {TFS.map(([lab, d]) => (
             <button key={lab} onClick={() => setDays(d)} className={"rounded-md px-2 py-1 text-xs transition-colors " + (days === d ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{lab}</button>
@@ -59,7 +60,7 @@ function OasCard({ label, hint, note, color, series, days }: { label: string; hi
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold text-[var(--text-2)]">{label}{note && <span className="ml-2 text-[10px] font-normal text-[var(--text-4)]">{note}</span>}</span>
+        <span className="text-sm font-semibold text-[var(--text-2)]">{label} <InfoDot text={hint} />{note && <span className="ml-2 text-[10px] font-normal text-[var(--text-4)]">{note}</span>}</span>
         <span className="font-mono text-lg font-bold tabular-nums text-[var(--text)]">{cur == null ? "—" : `${cur.toFixed(2)}%`}</span>
       </div>
       <OasChart series={windowed} color={color} />

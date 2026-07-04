@@ -169,8 +169,8 @@ export default function PutWriteView({
 
       {/* strategy primer — reflects the selected tenor */}
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
-        <span><b className="text-[var(--text-2)]">Strike</b> {tab.deltaLabel} {tenor === "m3" ? "(~15%+ OTM)" : "(~16% chance assigned)"}</span>
-        <span><b className="text-[var(--text-2)]">Tenor</b> {tenor === "m1" ? "30–45 DTE" : "~3 months"}</span>
+        <span><b className="text-[var(--text-2)]">Strike</b> <InfoDot text="The price at which the put obligates you to buy the shares." /> {tab.deltaLabel} {tenor === "m3" ? "(~15%+ OTM)" : "(~16% chance assigned)"}</span>
+        <span><b className="text-[var(--text-2)]">Tenor</b> <InfoDot text="Time until the option expires." /> {tenor === "m1" ? "30–45 DTE" : "~3 months"}</span>
         <span><b className="text-[var(--text-2)]">Style</b> {tenor === "m1" ? "standard cash-secured put" : "lower-delta, longer-dated — less market-beta risk"}</span>
         <span><b className="text-[var(--text-2)]">Vol rank</b> = where current vol sits in its 1-yr range; ≥50 = rich</span>
         <span><b className="text-[var(--text-2)]">Cushion</b> = how far it can fall before assignment</span>
@@ -225,12 +225,12 @@ export default function PutWriteView({
                   <SortTh k="vol" cls="text-right" info="Vol rank">Vol rank</SortTh>
                   <SortTh k="iv" cls="text-right" info="IV">ATM IV</SortTh>
                   <th className="px-2 py-2 text-right font-medium">{tab.deltaLabel} put <InfoDot term="Delta" /></th>
-                  <th className="px-2 py-2 text-right font-medium">Exp</th>
-                  <SortTh k="earn" cls="text-right">Earnings</SortTh>
+                  <th className="px-2 py-2 text-right font-medium">Exp <InfoDot term="DTE" /></th>
+                  <SortTh k="earn" cls="text-right" info="BMO / AMC">Earnings</SortTh>
                   <th className="px-2 py-2 text-right font-medium">Premium <InfoDot term="Premium" /></th>
-                  <SortTh k="ann" cls="text-right">Ann. yield</SortTh>
-                  <SortTh k="cushion" cls="text-right">Cushion</SortTh>
-                  <th className="px-2 py-2 text-right font-medium">Breakeven</th>
+                  <SortTh k="ann" cls="text-right" info="Annualized yield">Ann. yield</SortTh>
+                  <SortTh k="cushion" cls="text-right" info="Cushion">Cushion</SortTh>
+                  <th className="px-2 py-2 text-right font-medium">Breakeven <InfoDot term="Breakeven" /></th>
                 </tr>
               </thead>
               <tbody>

@@ -69,13 +69,13 @@ export default function VolDislocationView({ universe, data }: { universe: strin
             <tr>
               <th className="px-3 py-2 font-medium">Ticker</th>
               <th className="px-2 py-2 font-medium">Sector</th>
-              <th className="px-2 py-2 text-right font-medium">ATM IV</th>
-              <th className="px-2 py-2 text-right font-medium">Realized</th>
-              <th className="px-2 py-2 text-right font-medium" title="ATM IV ÷ realized vol — the variance premium">IV / RV</th>
-              <th className="px-2 py-2 text-right font-medium" title="how much richer (+) or cheaper (−) this name's variance premium is than its SECTOR's median — peer-relative vol">vs sector</th>
-              <th className="px-2 py-2 text-right font-medium" title="front-tenor IV ÷ back-tenor IV — >1 = backwardated (event-loaded)">Term</th>
-              <th className="px-2 py-2 text-right font-medium" title="front put IV − call IV, vol points — >0 = downside richer">Skew</th>
-              <th className="px-2 py-2 text-right font-medium" title="IV percentile vs its own recent history (accrues over time)">IV-rk</th>
+              <th className="px-2 py-2 text-right font-medium">ATM<InfoDot term="ATM" /> IV<InfoDot term="Implied volatility" /></th>
+              <th className="px-2 py-2 text-right font-medium">Realized<InfoDot term="Realized volatility" /></th>
+              <th className="px-2 py-2 text-right font-medium" title="ATM IV ÷ realized vol — the variance premium">IV / RV<InfoDot term="IV / RV" /></th>
+              <th className="px-2 py-2 text-right font-medium" title="how much richer (+) or cheaper (−) this name's variance premium is than its SECTOR's median — peer-relative vol">vs sector<InfoDot text="How much richer (+) or cheaper (−) this name's variance premium is than its sector's median." /></th>
+              <th className="px-2 py-2 text-right font-medium" title="front-tenor IV ÷ back-tenor IV — >1 = backwardated (event-loaded)">Term<InfoDot term="Term crush" /></th>
+              <th className="px-2 py-2 text-right font-medium" title="front put IV − call IV, vol points — >0 = downside richer">Skew<InfoDot term="Skew" /></th>
+              <th className="px-2 py-2 text-right font-medium" title="IV percentile vs its own recent history (accrues over time)">IV-rk<InfoDot term="IV rank" /></th>
               <th className="px-2 py-2 font-medium"></th>
             </tr>
           </thead>

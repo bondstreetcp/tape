@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { currencyPrefix } from "@/lib/format";
+import InfoDot from "@/components/InfoDot";
 
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
 // dte/iv let a leg be valued before expiry (the scenario grid) and let a calendar hold a longer-dated leg.
@@ -269,19 +270,19 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <Metric label={netCost >= 0 ? "Net debit" : "Net credit"} value={dollars(Math.abs(netCost))} sub={netCost >= 0 ? "you pay" : "you collect"} />
-        <Metric label="Max profit" value={maxProfit == null ? "Unlimited" : dollars(maxProfit)} color="#22c55e" />
-        <Metric label="Max loss" value={maxLoss == null ? "Unlimited" : dollars(maxLoss)} color="#ef4444" />
-        <Metric label="Break-even" value={breakevens.length ? breakevens.map(price2).join(" / ") : "—"} />
-        <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} />
+        <Metric label={netCost >= 0 ? "Net debit" : "Net credit"} value={dollars(Math.abs(netCost))} sub={netCost >= 0 ? "you pay" : "you collect"} info={<InfoDot text={netCost >= 0 ? "Net premium you pay upfront to open the position (per contract, ×100)." : "Net premium you collect upfront for opening the position (per contract, ×100)."} />} />
+        <Metric label="Max profit" value={maxProfit == null ? "Unlimited" : dollars(maxProfit)} color="#22c55e" info={<InfoDot text="The most the position can make at expiry." />} />
+        <Metric label="Max loss" value={maxLoss == null ? "Unlimited" : dollars(maxLoss)} color="#ef4444" info={<InfoDot text="The most the position can lose at expiry." />} />
+        <Metric label="Break-even" value={breakevens.length ? breakevens.map(price2).join(" / ") : "—"} info={<InfoDot term="Breakeven" />} />
+        <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} info={<InfoDot term="POP" />} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
         <span className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Net Greeks</span>
-        <GreekStat label="Δ" value={(greeks.delta >= 0 ? "+" : "") + greeks.delta.toFixed(0)} sub="≈ shares" color={greeks.delta >= 0 ? "#22c55e" : "#ef4444"} title="Delta — share-equivalent: the position moves like this many shares for a $1 stock move." />
-        <GreekStat label="Γ" value={(greeks.gamma >= 0 ? "+" : "") + greeks.gamma.toFixed(1)} sub="Δ/$1" title="Gamma — how much the net delta itself changes per $1 move in the stock." />
-        <GreekStat label="Θ" value={dollars(greeks.theta)} sub="per day" color={greeks.theta >= 0 ? "#22c55e" : "#ef4444"} title="Theta — P/L from one day of time passing, all else equal. Negative = you pay decay; positive = you collect it." />
-        <GreekStat label="V" value={dollars(greeks.vega)} sub="per +1% IV" color={greeks.vega >= 0 ? "#22c55e" : "#ef4444"} title="Vega — P/L for a 1-point rise in implied vol. Long vega gains when IV rises; short vega gains when it falls." />
+        <GreekStat label="Δ" value={(greeks.delta >= 0 ? "+" : "") + greeks.delta.toFixed(0)} sub="≈ shares" color={greeks.delta >= 0 ? "#22c55e" : "#ef4444"} title="Delta — share-equivalent: the position moves like this many shares for a $1 stock move." info={<InfoDot term="Delta" />} />
+        <GreekStat label="Γ" value={(greeks.gamma >= 0 ? "+" : "") + greeks.gamma.toFixed(1)} sub="Δ/$1" title="Gamma — how much the net delta itself changes per $1 move in the stock." info={<InfoDot term="Gamma" />} />
+        <GreekStat label="Θ" value={dollars(greeks.theta)} sub="per day" color={greeks.theta >= 0 ? "#22c55e" : "#ef4444"} title="Theta — P/L from one day of time passing, all else equal. Negative = you pay decay; positive = you collect it." info={<InfoDot term="Theta" />} />
+        <GreekStat label="V" value={dollars(greeks.vega)} sub="per +1% IV" color={greeks.vega >= 0 ? "#22c55e" : "#ef4444"} title="Vega — P/L for a 1-point rise in implied vol. Long vega gains when IV rises; short vega gains when it falls." info={<InfoDot term="Vega" />} />
         <span className="ml-auto text-[11px] text-[var(--text-4)]">at spot {price2(u)} · {stratDte}d · ATM IV {Math.round(atmIV * 100)}%</span>
       </div>
 
@@ -389,20 +390,20 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   );
 }
 
-function GreekStat({ label, value, sub, color, title }: { label: string; value: string; sub?: string; color?: string; title?: string }) {
+function GreekStat({ label, value, sub, color, title, info }: { label: string; value: string; sub?: string; color?: string; title?: string; info?: React.ReactNode }) {
   return (
     <span className="inline-flex items-baseline gap-1" title={title}>
-      <span className="font-mono text-[var(--text-4)]">{label}</span>
+      <span className="font-mono text-[var(--text-4)]">{label}</span>{info}
       <span className="font-mono font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</span>
       {sub && <span className="text-[11px] text-[var(--text-4)]">{sub}</span>}
     </span>
   );
 }
 
-function Metric({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function Metric({ label, value, sub, color, info }: { label: string; value: string; sub?: string; color?: string; info?: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">{label}{info}</div>
       <div className="font-mono text-sm font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</div>
       {sub && <div className="text-[11px] text-[var(--text-4)]">{sub}</div>}
     </div>
