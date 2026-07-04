@@ -48,6 +48,8 @@ async function main() {
       rvolRank: c.rvolRank ?? null,
       daysToEarnings: de,
       earningsDriven,
+      sectorPremium: null,
+      vsSector: null,
       pctile: 0,
     });
   }
@@ -55,6 +57,27 @@ async function main() {
   const byPrem = [...rows].sort((a, b) => a.ivPremium - b.ivPremium);
   const n = byPrem.length;
   byPrem.forEach((r, i) => (r.pctile = Math.round((i / Math.max(1, n - 1)) * 100)));
+  // peer-relative: each name's variance premium vs its SECTOR's median (the peer baseline). A name at
+  // 1.5x in a sector where everyone's at 1.5x isn't special; at 1.5x where the sector's at 1.1x, it is.
+  const bySector = new Map<string, number[]>();
+  for (const r of rows) {
+    if (!r.sector) continue;
+    const a = bySector.get(r.sector);
+    if (a) a.push(r.ivPremium);
+    else bySector.set(r.sector, [r.ivPremium]);
+  }
+  const sectorMed = new Map<string, number>();
+  for (const [s, arr] of bySector) {
+    if (arr.length >= 3) {
+      const srt = [...arr].sort((a, b) => a - b);
+      sectorMed.set(s, srt[Math.floor(srt.length / 2)]);
+    }
+  }
+  for (const r of rows) {
+    const med = r.sector ? sectorMed.get(r.sector) : undefined;
+    r.sectorPremium = med != null ? +med.toFixed(2) : null;
+    r.vsSector = med != null ? +(r.ivPremium - med).toFixed(2) : null;
+  }
   rows.sort((a, b) => b.ivPremium - a.ivPremium); // richest vol first
 
   const out: VolDisData = {

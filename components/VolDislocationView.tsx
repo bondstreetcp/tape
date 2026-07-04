@@ -64,7 +64,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <table className="w-full min-w-[820px] text-left text-[13px]">
+        <table className="w-full min-w-[900px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
             <tr>
               <th className="px-3 py-2 font-medium">Ticker</th>
@@ -72,6 +72,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
               <th className="px-2 py-2 text-right font-medium">ATM IV</th>
               <th className="px-2 py-2 text-right font-medium">Realized</th>
               <th className="px-2 py-2 text-right font-medium" title="ATM IV ÷ realized vol — the variance premium">IV / RV</th>
+              <th className="px-2 py-2 text-right font-medium" title="how much richer (+) or cheaper (−) this name's variance premium is than its SECTOR's median — peer-relative vol">vs sector</th>
               <th className="px-2 py-2 text-right font-medium" title="front-tenor IV ÷ back-tenor IV — >1 = backwardated (event-loaded)">Term</th>
               <th className="px-2 py-2 text-right font-medium" title="front put IV − call IV, vol points — >0 = downside richer">Skew</th>
               <th className="px-2 py-2 text-right font-medium" title="IV percentile vs its own recent history (accrues over time)">IV-rk</th>
@@ -94,6 +95,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{pct(r.atmIV)}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-4)]">{pct(r.rvol)}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: premColor(r.ivPremium) }} title={premVerdict(r.ivPremium)}>{r.ivPremium.toFixed(2)}×</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.vsSector != null ? (r.vsSector >= 0.25 ? "#f59e0b" : r.vsSector <= -0.25 ? "#14b8a6" : "var(--text-3)") : "var(--text-4)" }} title={r.sectorPremium != null ? `sector median ${r.sectorPremium}× — this name is ${r.vsSector! >= 0 ? "richer" : "cheaper"} than its peers` : "sector too small to compare"}>{r.vsSector != null ? `${r.vsSector > 0 ? "+" : ""}${r.vsSector.toFixed(2)}` : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.termCrush != null && r.termCrush >= 1.1 ? "#f59e0b" : "var(--text-3)" }}>{r.termCrush != null ? r.termCrush.toFixed(2) : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{r.skew != null ? `${r.skew > 0 ? "+" : ""}${(r.skew * 100).toFixed(0)}` : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-4)]">{r.ivRank != null ? r.ivRank.toFixed(0) : "—"}</td>

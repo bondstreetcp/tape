@@ -23,6 +23,8 @@ export interface VolDisRow {
   rvolRank: number | null;
   daysToEarnings: number | null;
   earningsDriven: boolean; // earnings land inside the front expiry → the rich vol is EXPECTED, not a dislocation
+  sectorPremium: number | null; // the median IV/RV across this name's sector — the peer baseline
+  vsSector: number | null; // ivPremium − sector median; >0 = richer vol than its sector (peer-relative)
   pctile: number; // cross-sectional ivPremium percentile (0–100)
   catalyst?: { text: string; kind: "event" | "unclear"; confidence: number }; // LLM "why the vol is rich", grounded in recent headlines (phase 2)
 }
