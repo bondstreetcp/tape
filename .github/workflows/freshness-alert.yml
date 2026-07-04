@@ -1,8 +1,12 @@
-name: Freshness alert
+name: Ops alerts
 
-# Pings you when the R2 data pipeline goes stale, so you know to re-run refresh-data manually.
-# Reads site-data/full-heartbeat.json (written ONLY by the FULL nightly run) and alerts if the last
-# FULL refresh is older than FRESH_MAX_HOURS (default 28h). See scripts/alert-freshness.ts.
+# Two independent morning health checks that ping you (webhook + failed-run email) when the nightly
+# pipeline would silently degrade:
+#   1. data freshness — reads site-data/full-heartbeat.json (written ONLY by the FULL nightly); alerts
+#      if the last FULL is older than FRESH_MAX_HOURS (default 28h). See scripts/alert-freshness.ts.
+#   2. LLM credits — reads the OpenRouter balance; alerts if below LLM_CREDIT_MIN (default $10), before
+#      an empty account 402s every AI feature into a silent blank. See scripts/alert-llm-credits.ts.
+# Separate jobs so one failing doesn't mask the other, and the red job names which check tripped.
 on:
   schedule:
     # 03:30 UTC Tue-Sat — the mornings AFTER each Mon-Fri 22:47 UTC FULL run has had its full timeout
@@ -12,11 +16,11 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: freshness-alert
+  group: ops-alerts
   cancel-in-progress: false
 
 jobs:
-  check:
+  data-freshness:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -34,4 +38,21 @@ jobs:
           LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
           # Optional. Slack / Discord / ntfy.sh webhook. Without it, a stale run still fails → GitHub
           # emails you the "scheduled workflow failed" notice for free.
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+
+  llm-credits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Check OpenRouter LLM credits
+        run: npm run alert-llm-credits
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional override of the $10 low-balance floor.
+          LLM_CREDIT_MIN: ${{ secrets.LLM_CREDIT_MIN }}
           ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}

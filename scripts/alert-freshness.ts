@@ -16,33 +16,14 @@
  * optional belt-and-suspenders. Inert (exit 0) without the LAKE_S3_* creds or before the first FULL run.
  */
 import { getObject, r2Configured } from "../lib/r2";
+import { notifyAlert } from "../lib/alertNotify";
 
 const KEY_HEARTBEAT = "site-data/full-heartbeat.json";
 // Healthy: the last FULL ran ~5h before this 03:30 check. A miss means the previous FULL is ~29h back.
 // 28h cleanly separates the two and tolerates a slow FULL run. Override via FRESH_MAX_HOURS.
 const MAX_HOURS = Number(process.env.FRESH_MAX_HOURS || 28);
 
-async function notify(msg: string): Promise<void> {
-  const url = process.env.ALERT_WEBHOOK_URL;
-  if (!url) {
-    console.log("(no ALERT_WEBHOOK_URL set — relying on GitHub's failed-run email)");
-    return;
-  }
-  const isNtfy = /(^|\/\/)ntfy\.sh\//.test(url) || /\/\/ntfy\./.test(url);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: isNtfy
-        ? { Title: "Tape data is stale", Priority: "high", Tags: "warning" }
-        : { "Content-Type": "application/json" },
-      // Slack wants {text}, Discord wants {content}; ntfy wants the raw string. Send all shapes at once.
-      body: isNtfy ? msg : JSON.stringify({ text: msg, content: msg }),
-    });
-    console.log(res.ok ? "alert-freshness: webhook notified." : `alert-freshness: webhook HTTP ${res.status}`);
-  } catch (e) {
-    console.error("alert-freshness: webhook POST failed:", String((e as Error)?.message || e));
-  }
-}
+const notify = (msg: string) => notifyAlert(msg, "Tape data is stale");
 
 async function main(): Promise<void> {
   if (!r2Configured()) {

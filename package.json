@@ -10,6 +10,7 @@
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "check-freshness": "tsx scripts/check-freshness.ts",
     "alert-freshness": "tsx scripts/alert-freshness.ts",
+    "alert-llm-credits": "tsx scripts/alert-llm-credits.ts",
     "build-lake": "tsx scripts/build-lake.ts",
     "backfill-prices": "tsx scripts/build-lake.ts --backfill",
     "q": "tsx scripts/q.ts",
