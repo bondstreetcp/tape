@@ -187,8 +187,8 @@ export default function AppHeader({
         <div
           ref={dropRef}
           role="menu"
-          style={{ position: "fixed", left: pos.left, top: pos.top }}
-          className="z-50 w-[320px] max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
+          style={{ position: "fixed", left: pos.left, top: pos.top, maxHeight: `calc(100vh - ${pos.top}px - 12px)` }}
+          className="z-50 w-[320px] max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-md)]"
         >
           {(() => {
             // Break a long menu into sub-groups by job-to-be-done (so e.g. Research splits into
