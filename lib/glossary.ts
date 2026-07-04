@@ -61,6 +61,7 @@ export const GLOSSARY: Record<string, string> = {
   "Breakeven": "The share price where an option trade starts making money at expiry (strike ± the premium paid or collected).",
   "Vol surface": "Implied vol mapped across every strike AND expiry at once — the full picture of how a name's options are priced.",
   "Implied distribution": "The full probability distribution of where the stock could land at expiry, backed out of option prices (Breeden–Litzenberger). Not one number — the market's whole picture: the odds of finishing up vs down, and where it prices fat tails.",
+  "Catalyst vol": "Options that look cheap into a KNOWN scheduled event (an investor day, capital-markets day) — the straddle isn't pricing the move the stock tends to make around such events.",
   // Options — structures & greeks
   "Strangle": "A call + put at different out-of-the-money strikes — a cheaper bet on a big move than a straddle.",
   "Iron condor": "Sell a put spread AND a call spread — collect premium if the stock stays inside a range; defined risk.",

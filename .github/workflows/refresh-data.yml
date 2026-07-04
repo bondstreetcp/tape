@@ -418,6 +418,17 @@ jobs:
         run: npm run refresh-catalyst-vol
         continue-on-error: true
 
+      # Trade Desk — assembles the week's top code-detected options mispricings (earnings-move +
+      # vol-dislocation + catalyst-vol) and asks ONE LLM call to select + narrate the best. Runs LAST of
+      # the options feeds so all three inputs exist. Needs OPENROUTER_API_KEY (falls back to a code-only
+      # shortlist without it, so the page never empties).
+      - name: Refresh trade desk
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-trade-ideas
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Corporate Events — SEC 8-K full-text (buybacks, strategic-alts, spin-offs, splits, CEO changes)
       # → GLM extract. Free EDGAR; needs OPENROUTER_API_KEY; forward-accumulating.
       - name: Refresh corporate events
