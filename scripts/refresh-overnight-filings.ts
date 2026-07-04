@@ -29,7 +29,7 @@ import { tickerToCik, getSubmissions, getFilingText, HEADERS, pool } from "../li
 import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
-import { chatJSON, llmConfigured } from "../lib/llm";
+import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
 
 const DATA = path.join(process.cwd(), "data");
 const WINDOW_HOURS = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : 36;
@@ -260,7 +260,7 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
     priorBlock +
     rfLine;
 
-  const digest = await chatJSON<Digest>(SYSTEM, user, { maxTokens: 2000 });
+  const digest = await chatJSON<Digest>(SYSTEM, user, { model: FLASH_MODEL, maxTokens: 2000 });
   if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
   if (typeof digest.headline !== "string") return null;
   const headline = digest.headline.trim();

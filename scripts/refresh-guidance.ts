@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getFilings, getFilingText } from "../lib/edgar";
-import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { loadSnapshot } from "../lib/data";
 import type { GuidanceData, GuidancePeriod, GuidanceTicker, GuidanceAction } from "../lib/guidance";
 
@@ -70,8 +70,13 @@ const ACTIONS = new Set<GuidanceAction>(["raise", "reaffirm", "cut", "initiate",
 
 interface Extracted { reportedEps: number | null; nextQEpsLow: number | null; nextQEpsHigh: number | null; guides: GuidancePeriod[] }
 
+// Guidance extraction is mechanical (fill the schema from the filing text), so it runs on the CHEAP
+// FLASH tier — NOT the premium Pro model it used to (that was ~5x the nightly's whole LLM bill for one
+// job). Override per-run with GUIDANCE_MODEL for A/B testing.
+const GUIDANCE_MODEL = process.env.GUIDANCE_MODEL || FLASH_MODEL;
+
 async function extract(sym: string, text: string, ctx: { mktcapM: number | null; consEps: number | null }): Promise<Extracted | null> {
-  const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: PRO_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
+  const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: GUIDANCE_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
   if (raw == null) return null; // LLM transport failure ≠ "no guidance" — caller must not store [] or advance the gate
   const root = Array.isArray(raw) ? raw[0] : raw;
   const arr: any[] = Array.isArray(root?.guides) ? root.guides : Array.isArray(raw) ? raw : root && typeof root === "object" && root.period ? [root] : [];

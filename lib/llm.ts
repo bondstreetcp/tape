@@ -28,6 +28,12 @@ const DEFAULT_MODEL = "z-ai/glm-5.2";
 // work (overnight-filings scan) stays on DEFAULT_MODEL. Override with LLM_PRO_MODEL.
 export const PRO_MODEL = process.env.LLM_PRO_MODEL || "google/gemini-3.1-pro-preview";
 
+// The CHEAP high-volume tier for MECHANICAL, schema-driven extraction (pull guidance numbers from a
+// filing, summarize an overnight 8-K). ~20x cheaper than PRO_MODEL and ~4x cheaper than GLM for the
+// same "fill this JSON from this text" work — the two bulk-extraction jobs (guidance, overnight-filings)
+// dominate the nightly LLM bill, so they run here, not on Pro/GLM. Override with LLM_FLASH_MODEL.
+export const FLASH_MODEL = process.env.LLM_FLASH_MODEL || "google/gemini-2.5-flash-lite";
+
 let _key: string | null = null;
 
 /** Resolve the API key from env, or (for local tsx runs) from .env.local. */
