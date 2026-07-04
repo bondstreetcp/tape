@@ -303,6 +303,13 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Guidance board — joins guidance.json with the R3000 snapshot into the cross-sectional credibility
+      # board (sandbagger / over-promiser tags). Pure transform, NO fetches; runs AFTER refresh-guidance.
+      - name: Refresh guidance board
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-guidance-board
+        continue-on-error: true
+
       # IV / pre-earnings-straddle history — a DAILY snapshot around each earnings window, so over time we
       # can compute the realized IV crush, IV-rank, and a long-premium backtest. Pure forward accumulation.
       - name: Refresh IV history

@@ -43,7 +43,7 @@ export interface GuidanceTicker {
  *  earlier (consecutive ~quarterly filings). Returns beats/total + avg actual-vs-guide. null if < 2 pairs. */
 export function beatGuide(history: GuidanceHistoryPoint[] | undefined): { beats: number; total: number; avgVsGuide: number | null } | null {
   if (!history || history.length < 2) return null;
-  let beats = 0, total = 0, sumPct = 0;
+  let beats = 0, total = 0, sumPct = 0, pctN = 0;
   for (let i = 0; i < history.length - 1; i++) {
     const gap = (Date.parse(history[i].date) - Date.parse(history[i + 1].date)) / 86_400_000;
     if (!(gap >= 60 && gap <= 130)) continue; // require consecutive quarters (~3 months apart)
@@ -53,9 +53,11 @@ export function beatGuide(history: GuidanceHistoryPoint[] | undefined): { beats:
     if (actual == null || gMid == null || gMid === 0) continue;
     total++;
     if (actual >= gMid) beats++;
-    sumPct += actual / gMid - 1;
+    // vs-guide % only over POSITIVE guide midpoints: a loss guide (gMid<0) inverts the ratio's sign —
+    // a SMALLER loss is a beat, but actual/gMid−1 goes negative — which would flip the credibility tag.
+    if (gMid > 0) { sumPct += actual / gMid - 1; pctN++; }
   }
-  return total >= 2 ? { beats, total, avgVsGuide: sumPct / total } : null;
+  return total >= 2 ? { beats, total, avgVsGuide: pctN ? sumPct / pctN : null } : null;
 }
 
 export interface GuidanceData {
