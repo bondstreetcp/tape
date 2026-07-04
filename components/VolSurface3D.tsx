@@ -70,15 +70,33 @@ export default function VolSurface3D({ moneyness, expiries, grid }: Props) {
     // verticals
     [[-1, -1, -1], [-1, 1, -1]], [[1, -1, -1], [1, 1, -1]], [[1, -1, 1], [1, 1, 1]], [[-1, -1, 1], [-1, 1, 1]],
   ];
-  // Axis labels — offset so the two ends that share the far corner (moneyness-max vs expiry-far) don't
-  // collide: moneyness drops BELOW its edge, expiry pushes RIGHT of its edge, IV sits LEFT of its edge.
+  // Axis ticks + named titles. Each axis gets min/mid/max value ticks pushed OUTSIDE its box edge, plus a
+  // named title, all haloed (paint-order stroke) so they stay legible over the mesh. moneyness runs along
+  // the front-bottom edge (below), expiry along the right-bottom edge (right), IV up the back-left edge.
   const lbl = (p: P3, dx = 0, dy = 0) => { const s = P(p); return { x: s.sx + dx, y: s.sy + dy }; };
-  const mMin = lbl({ x: -1, y: baseY, z: 1 }, 0, 14);
-  const mMax = lbl({ x: 1, y: baseY, z: 1 }, 0, 14);
-  const eNear = lbl({ x: 1, y: baseY, z: -1 }, 10, 4);
-  const eFar = lbl({ x: 1, y: baseY, z: 1 }, 10, 4);
-  const ivLo = lbl({ x: -1, y: baseY, z: -1 }, -6, 0);
-  const ivHi = lbl({ x: -1, y: HEIGHT / 2, z: -1 }, -6, 0); // (x=-1, top, z=-1)
+  const mLast = moneyness[moneyness.length - 1];
+  const midIdx = Math.round((expiries.length - 1) / 2);
+  const zMid = expiries.length > 1 ? (midIdx / (expiries.length - 1)) * 2 - 1 : 0;
+  const ivMid = (ivMin + ivMax) / 2;
+  const mTicks = [
+    { p: lbl({ x: -1, y: baseY, z: 1 }, 0, 15), t: `${moneyness[0]}%` },
+    { p: lbl({ x: 0, y: baseY, z: 1 }, 0, 15), t: "0%" },
+    { p: lbl({ x: 1, y: baseY, z: 1 }, 0, 15), t: `+${mLast}%` },
+  ];
+  const mTitle = lbl({ x: 0, y: baseY, z: 1 }, 0, 30);
+  const eTicks = [
+    { p: lbl({ x: 1, y: baseY, z: -1 }, 12, 4), t: `${expiries[0]?.dte}d` },
+    { p: lbl({ x: 1, y: baseY, z: zMid }, 12, 4), t: `${expiries[midIdx]?.dte}d` },
+    { p: lbl({ x: 1, y: baseY, z: 1 }, 12, 4), t: `${expiries[expiries.length - 1]?.dte}d` },
+  ];
+  const eTitle = lbl({ x: 1, y: baseY, z: zMid }, 14, 19);
+  const ivTicks = [
+    { p: lbl({ x: -1, y: baseY, z: -1 }, -8, 3), t: `${ivMin.toFixed(0)}%` },
+    { p: lbl({ x: -1, y: 0, z: -1 }, -8, 3), t: `${ivMid.toFixed(0)}%` },
+    { p: lbl({ x: -1, y: HEIGHT / 2, z: -1 }, -8, 3), t: `${ivMax.toFixed(0)}%` },
+  ];
+  const ivTitle = lbl({ x: -1, y: HEIGHT / 2, z: -1 }, -8, -10);
+  const halo = { stroke: "var(--surface)", strokeWidth: 2.6, strokeLinejoin: "round" as const, paintOrder: "stroke" as const };
 
   const onDown = (e: React.PointerEvent<SVGSVGElement>) => {
     drag.current = { x: e.clientX, y: e.clientY, yaw, pitch };
@@ -116,13 +134,19 @@ export default function VolSurface3D({ moneyness, expiries, grid }: Props) {
         {quads.map((q, i) => (
           <polygon key={i} points={q.pts} fill={ivColor((q.iv - ivMin) / span)} fillOpacity={0.92} stroke="rgba(15,23,42,0.28)" strokeWidth={0.4} strokeLinejoin="round" />
         ))}
-        {/* axis labels (rotate with the box) */}
-        <text x={mMin.x} y={mMin.y} fontSize={9} textAnchor="middle" fill="var(--text-4)" className="tabular-nums">{moneyness[0]}%</text>
-        <text x={mMax.x} y={mMax.y} fontSize={9} textAnchor="middle" fill="var(--text-4)" className="tabular-nums">+{moneyness[moneyness.length - 1]}%</text>
-        <text x={eNear.x} y={eNear.y} fontSize={9} textAnchor="start" fill="var(--text-4)" className="tabular-nums">{expiries[0]?.dte}d</text>
-        <text x={eFar.x} y={eFar.y} fontSize={9} textAnchor="start" fill="var(--text-4)" className="tabular-nums">{expiries[expiries.length - 1]?.dte}d</text>
-        <text x={ivLo.x} y={ivLo.y} fontSize={9} textAnchor="end" fill="var(--text-4)" className="tabular-nums">{ivMin.toFixed(0)}%</text>
-        <text x={ivHi.x} y={ivHi.y} fontSize={9} textAnchor="end" fill="var(--text-4)" className="tabular-nums">{ivMax.toFixed(0)}%</text>
+        {/* axis ticks + named titles (rotate with the box; haloed for legibility over the mesh) */}
+        {mTicks.map((k, i) => (
+          <text key={`m${i}`} x={k.p.x} y={k.p.y} fontSize={10} textAnchor="middle" fill="var(--text-2)" className="tabular-nums" {...halo}>{k.t}</text>
+        ))}
+        {eTicks.map((k, i) => (
+          <text key={`e${i}`} x={k.p.x} y={k.p.y} fontSize={10} textAnchor="start" fill="var(--text-2)" className="tabular-nums" {...halo}>{k.t}</text>
+        ))}
+        {ivTicks.map((k, i) => (
+          <text key={`v${i}`} x={k.p.x} y={k.p.y} fontSize={10} textAnchor="end" fill="var(--text-2)" className="tabular-nums" {...halo}>{k.t}</text>
+        ))}
+        <text x={mTitle.x} y={mTitle.y} fontSize={11.5} fontWeight={700} textAnchor="middle" fill="var(--text)" {...halo}>moneyness</text>
+        <text x={eTitle.x} y={eTitle.y} fontSize={11.5} fontWeight={700} textAnchor="start" fill="var(--text)" {...halo}>expiry</text>
+        <text x={ivTitle.x} y={ivTitle.y} fontSize={11.5} fontWeight={700} textAnchor="end" fill="var(--text)" {...halo}>IV</text>
       </svg>
     </div>
   );
