@@ -1,11 +1,12 @@
 "use client";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
 import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
+import ImpliedDistribution, { type DistExp } from "./ImpliedDistribution";
 import InfoDot from "./InfoDot";
 
 interface DataPart {
@@ -226,6 +227,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
   const [why, setWhy] = useState<Record<string, WhyState>>({}); // per-print "why it moved" recap, by date
+  const [dist, setDist] = useState<DistExp[] | null>(null); // implied distribution per expiry (Breeden–Litzenberger)
   // Cone lookback — persisted so it sticks across visits (its own key; the site-wide "screener.tf" can
   // hold values this chart doesn't support). Fallback first, adopt stored in an effect to stay hydration-safe.
   const [coneTf, setConeTf] = useState<ConeTf>("3m");
@@ -259,6 +261,18 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     return () => { a = false; };
   }, [symbol, earningsDate]);
 
+  // Implied distribution (risk-neutral density) — reuses the vol-surface route; degrades silently for
+  // names with no liquid chain (intl / thin options). Picked to the event expiry below.
+  useEffect(() => {
+    let a = true;
+    setDist(null);
+    fetch(`/api/iv-surface/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((j) => a && setDist(Array.isArray(j?.dist) && j.dist.length ? (j.dist as DistExp[]) : null))
+      .catch(() => a && setDist(null));
+    return () => { a = false; };
+  }, [symbol]);
+
   const runAi = () => {
     setAi("loading");
     // The QUANT SIGNALS the preview grounds on are recomputed SERVER-SIDE from the same sources as
@@ -291,6 +305,14 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
   const compEps = stats.surprises.length ? stats.surprises[0].actual : null;
 
   const d = typeof data === "object" ? data : null;
+  // The implied-distribution slice whose expiry is nearest the event (straddle) expiry — the print itself.
+  const eventDist = useMemo(() => {
+    const exp = d?.straddle?.expiry;
+    if (!dist?.length || !exp) return null;
+    const target = Date.parse(exp + "T00:00:00Z");
+    if (Number.isNaN(target)) return dist[0];
+    return [...dist].sort((x, y) => Math.abs(Date.parse(x.date + "T00:00:00Z") - target) - Math.abs(Date.parse(y.date + "T00:00:00Z") - target))[0];
+  }, [dist, d]);
   // #4 conditional reaction (beats vs misses) from the event history
   const ev = d?.events || [];
   const beatMoves = ev.filter((e) => e.surprise != null && e.surprise > 0 && e.move != null).map((e) => e.move as number);
@@ -420,6 +442,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
                   <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
                     <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} pastMoves={d.events} />
                   </div>
+                  {eventDist && (
+                    <div title="The market-implied probability distribution of the stock AT the earnings expiry — the skew / P(up) asymmetry the symmetric cone above can't show.">
+                      <ImpliedDistribution dist={[eventDist]} spot={d.straddle.price} />
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
