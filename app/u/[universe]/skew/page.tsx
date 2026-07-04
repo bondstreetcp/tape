@@ -4,6 +4,7 @@ import path from "path";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { VolDisData } from "@/lib/volDislocation";
 import SkewView from "@/components/SkewView";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ function loadVolDis(): Promise<VolDisData | null> {
 export default async function SkewPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Skew Screener" relPath="/skew" />;
   const data = await loadVolDis();
   return <SkewView universe={universe} data={data ?? { generatedAt: new Date().toISOString(), universe: "—", scanned: 0, rows: [] }} />;
 }

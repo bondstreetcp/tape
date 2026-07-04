@@ -4,6 +4,7 @@ import path from "path";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { TradeDeskData } from "@/lib/tradeIdeas";
 import TradeDeskView from "@/components/TradeDeskView";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ function loadDesk(): Promise<TradeDeskData | null> {
 export default async function TradeDeskPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Trade Desk" relPath="/trade-desk" />;
   const data = await loadDesk();
   return <TradeDeskView universe={universe} data={data ?? { generatedAt: new Date().toISOString(), weekOf: "", pool: 0, ideas: [] }} />;
 }

@@ -3,6 +3,7 @@ import { loadSnapshot } from "@/lib/data";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import EarningsMoveView from "@/components/EarningsMoveView";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function EarningsMovePage({
   const { universe } = await params;
   const meta = UNIVERSE_BY_ID[universe];
   if (!meta) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Move" relPath="/earnings-move" />;
 
   const data = await loadEarningsMove();
   const intl = !!meta.international;

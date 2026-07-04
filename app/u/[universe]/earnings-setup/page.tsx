@@ -3,6 +3,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadEarningsMove } from "@/lib/earningsMove";
 import EarningsSetupView from "@/components/EarningsSetupView";
 import EmptyState from "@/components/EmptyState";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function EarningsSetupPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Setup Cards" relPath="/earnings-setup" />;
 
   const data = await loadEarningsMove();
   if (!data || !data.rows.length) {

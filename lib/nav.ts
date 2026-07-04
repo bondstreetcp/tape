@@ -111,6 +111,18 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
 };
 
+// US-only features: they live under /u/[universe]/ but read a GLOBAL feed built from US single-stock
+// options / US earnings (vol-dislocation, earnings-move, dispersion, pead, seasonality, guidance-board,
+// trade-ideas, catalyst-vol). The data is the same US set regardless of universe, so on an INTERNATIONAL
+// universe they'd show US tickers under an intl index header. The nav hides them on intl universes and
+// the pages show a "US options only" notice on direct navigation. This IS the "Earnings & Events" hub.
+export const US_ONLY_PATHS: ReadonlySet<string> = new Set(
+  GROUP_HUBS.Strategies?.find((h) => h.label === "Earnings & Events")?.paths ?? [],
+);
+/** True if a relative path (e.g. "/skew" or "/skew/AAPL") is one of the US-only feature routes. */
+export const isUsOnlyPath = (relPath: string): boolean =>
+  [...US_ONLY_PATHS].some((p) => relPath === p || relPath.startsWith(p + "/"));
+
 const _allHubs: NavHub[] = [GROUP_HUBS.Markets, GROUP_HUBS.Strategies, GROUP_HUBS.Research].flatMap((h) => h ?? []);
 const _featByPath = new Map(FEATURES.map((f) => [f.path, f] as const));
 /** The hub a relative path (e.g. "/cef") belongs to + its member NavItems — for the sub-nav bar.

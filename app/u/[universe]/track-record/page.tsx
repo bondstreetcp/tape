@@ -3,6 +3,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { loadSnapshot } from "@/lib/data";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { TradeLogData } from "@/lib/tradeLog";
 import TradeRecordView from "@/components/TradeRecordView";
 
@@ -19,6 +20,7 @@ export default async function TrackRecordPage({ params }: { params: Promise<{ un
   const { universe } = await params;
   const meta = UNIVERSE_BY_ID[universe];
   if (!meta) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Play Track Record" relPath="/track-record" />;
 
   const data = await loadTradeLog();
   let recs = data?.recs ?? [];

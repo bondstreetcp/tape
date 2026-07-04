@@ -3,6 +3,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 import { fmtDateTime } from "@/lib/format";
 import type { VolDisData } from "@/lib/volDislocation";
 import type { TradeDeskData } from "@/lib/tradeIdeas";
@@ -46,6 +47,7 @@ const Empty = ({ t }: { t: string }) => <div className="py-4 text-center text-[1
 export default async function EarningsDeskPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Season Desk" relPath="/earnings-desk" />;
   const u = (p: string) => `/u/${universe}${p}`;
 
   const [em, ti, vd, pead, gb, cv] = await Promise.all([

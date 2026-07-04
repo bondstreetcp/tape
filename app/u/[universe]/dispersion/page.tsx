@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { promises as fsp } from "fs";
 import path from "path";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { DispersionData } from "@/lib/dispersion";
 import DispersionView from "@/components/DispersionView";
 
@@ -17,6 +18,7 @@ function loadDisp(): Promise<DispersionData | null> {
 export default async function DispersionPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Dispersion" relPath="/dispersion" />;
   const data = await loadDisp();
   return <DispersionView universe={universe} data={data} />;
 }

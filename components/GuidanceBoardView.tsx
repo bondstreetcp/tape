@@ -118,6 +118,15 @@ export default function GuidanceBoardView({ universe, data }: { universe: string
                 </td>
               </tr>
             ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-3 py-10 text-center text-sm text-[var(--text-3)]">
+                  {data.rows.length === 0
+                    ? "Guidance board isn't available yet — it builds on the nightly refresh. Check back after the next run."
+                    : "No names match this filter."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

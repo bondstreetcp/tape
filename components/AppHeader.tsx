@@ -9,7 +9,8 @@ import InstallPWA from "./InstallPWA";
 import AccountMenu from "./AccountMenu";
 import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
-import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath } from "@/lib/nav";
+import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath, US_ONLY_PATHS } from "@/lib/nav";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
 
 interface Item { href: string; label: string; desc?: string; job?: string }
 interface Group { label: string; items: Item[] }
@@ -31,11 +32,17 @@ export default function AppHeader({
   const navRef = useRef<HTMLElement | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
 
+  // International universes lack US single-stock options / earnings feeds, so the US-only screeners
+  // (the "Earnings & Events" hub) are hidden from the nav here — otherwise they'd show US tickers under
+  // an intl index header. The pages themselves show a "US options only" notice on direct navigation.
+  const intl = !!UNIVERSE_BY_ID[universe]?.international;
+  const navHidden = (path: string) => intl && US_ONLY_PATHS.has(path);
+
   // Dropdown groups are derived from the shared feature registry (lib/nav.ts), so the
   // nav, the ⌘K palette, and the Start-here map never drift apart.
   const groups: Group[] = NAV_GROUPS.map((label) => ({
     label,
-    items: FEATURES.filter((f) => f.group === label).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job })),
+    items: FEATURES.filter((f) => f.group === label && !navHidden(f.path)).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job })),
   }));
 
   // Close the dropdown + mobile drawer on navigation.
@@ -89,6 +96,7 @@ export default function AppHeader({
   // Secondary sub-nav: when on a Research hub page, show that hub's sibling tools as sub-tabs.
   const relPath = pathname.startsWith(base) ? pathname.slice(base.length) || "/" : pathname;
   const hub = hubForPath(relPath);
+  const hubItems = hub ? hub.items.filter((it) => !navHidden(it.path)) : [];
 
   return (
     <>
@@ -169,12 +177,12 @@ export default function AppHeader({
         </div>
       </div>
 
-      {/* Secondary sub-nav — sub-tabs within the active Research hub. */}
-      {hub && (
+      {/* Secondary sub-nav — sub-tabs within the active hub (US-only tools filtered out on intl). */}
+      {hub && hubItems.length > 0 && (
         <div className="border-t border-[var(--divider)] bg-[var(--surface)]/50">
           <div className="mx-auto flex max-w-7xl items-center gap-0.5 overflow-x-auto px-4 py-1.5 text-[13px] sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <span className="shrink-0 pr-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{hub.label}</span>
-            {hub.items.map((it) => {
+            {hubItems.map((it) => {
               const href = `${base}${it.path}`;
               return <Link key={it.path} href={href} className={linkCls(isActive(href))}>{it.label}</Link>;
             })}
@@ -195,8 +203,11 @@ export default function AppHeader({
             // "Find ideas" vs "Research a name"). One group → no header.
             // Research & Strategies are consolidated into HUBS (those menus got busy) — each opens a
             // page whose sub-nav bar reveals the rest. Other groups split by job-to-be-done.
-            const hubs = GROUP_HUBS[active.label as keyof typeof GROUP_HUBS];
-            if (hubs) {
+            // Drop a wholly US-only hub (e.g. Earnings & Events) from the dropdown on intl universes.
+            const hubs = GROUP_HUBS[active.label as keyof typeof GROUP_HUBS]?.filter(
+              (h) => !(intl && h.paths.every((p) => US_ONLY_PATHS.has(p))),
+            );
+            if (hubs && hubs.length) {
               return hubs.map((h) => {
                 const href = `${base}${h.paths[0]}`;
                 const act = h.paths.some((p) => isActive(`${base}${p}`));
