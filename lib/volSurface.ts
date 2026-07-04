@@ -62,8 +62,9 @@ function solve3(A: number[][], b: number[]): [number, number, number] | null {
 }
 
 /** Weighted quadratic-in-log-moneyness fit of total variance for one expiry, with one Huber reweight
- * pass so a single junk OTM quote can't tilt the whole smile. T in years. */
-export function fitSmile(points: SmilePoint[], T: number): SmileFit | null {
+ * pass so a single junk OTM quote can't tilt the whole smile. T in years. The robust fallback for the
+ * public fitSmile() when SVI degenerates; also fine on its own for interpolation inside the strike band. */
+export function fitQuad(points: SmilePoint[], T: number): SmileFit | null {
   const base = points.filter((p) => p.iv > 0 && p.weight > 0 && Number.isFinite(p.k));
   if (base.length < 3 || T <= 0) return null;
   const fitOnce = (rows: { k: number; iv: number; w: number }[]): [number, number, number] | null => {
@@ -133,4 +134,117 @@ export function fitSmile(points: SmilePoint[], T: number): SmileFit | null {
     return { strike: p.strike, moneyness: p.moneyness, observedIV: p.iv, fittedIV: f, residual: p.iv - f };
   });
   return { c0, c1, c2, T, atmVol, skewPer10, rmse, n: base.length, strikes, ivAt };
+}
+
+// ---- SVI (Gatheral RAW parametrization) ----------------------------------------------------------
+// Total-variance slice  w(k) = a + b·( ρ·(k−m) + √((k−m)² + σ²) ).  Unlike the quadratic, its wings are
+// LINEAR in k (the correct asymptotic behaviour), so EXTRAPOLATION beyond the quoted strikes is sane and
+// the slice is arb-aware. Fitted with Zeliade's QUASI-EXPLICIT method: for a FIXED (m, σ) the slice is
+// LINEAR in (a, d = b·σ·ρ, c = b·σ) — w = a + d·y + c·√(y²+1), y = (k−m)/σ — so the inner fit is a 3×3
+// weighted least-squares, clamped to the no-arb feasible box (b≥0, |ρ|≤1, wing slopes ≤ 2). The outer
+// (m, σ) is a coarse grid search. See fitSmile() for the SVI-preferred-with-quadratic-fallback dispatcher.
+
+export interface SviParams { a: number; b: number; rho: number; m: number; sig: number }
+const sviW = (p: SviParams, k: number): number => {
+  const km = k - p.m;
+  return p.a + p.b * (p.rho * km + Math.sqrt(km * km + p.sig * p.sig));
+};
+
+// Inner solve for fixed (m, σ): weighted LSQ of w = a + d·y + c·z, then clamp to the feasible set.
+function sviInner(rows: { k: number; w: number; wt: number }[], m: number, sig: number): SviParams | null {
+  const A = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const B = [0, 0, 0];
+  for (const r of rows) {
+    const y = (r.k - m) / sig,
+      z = Math.sqrt(y * y + 1),
+      X = [1, y, z];
+    for (let i = 0; i < 3; i++) {
+      B[i] += r.wt * X[i] * r.w;
+      for (let j = 0; j < 3; j++) A[i][j] += r.wt * X[i] * X[j];
+    }
+  }
+  const sol = solve3(A, B);
+  if (!sol) return null;
+  let [a, d, c] = sol;
+  const s4 = 4 * sig;
+  c = Math.max(0, Math.min(c, s4)); // b ≥ 0, wing-slope bound
+  const dlim = Math.min(c, s4 - c); // |ρ| ≤ 1 and the far-wing no-arb bound
+  d = Math.max(-dlim, Math.min(dlim, d));
+  a = Math.max(0, a); // total variance floor ≥ 0
+  return { a, b: c / sig, rho: c > 1e-9 ? d / c : 0, m, sig };
+}
+
+/** Fit a single expiry's smile with raw SVI (Zeliade quasi-explicit). T in years. */
+export function fitSVI(points: SmilePoint[], T: number): SmileFit | null {
+  const src = points.filter((p) => p.iv > 0 && p.weight > 0 && Number.isFinite(p.k));
+  if (src.length < 4 || T <= 0) return null; // SVI needs a few points to pin 5 params
+  const rows = src.map((p) => ({ k: p.k, w: p.iv * p.iv * T, wt: p.weight }));
+  const ks = rows.map((r) => r.k),
+    kmin = Math.min(...ks),
+    kmax = Math.max(...ks);
+  const wRmse = (p: SviParams) => {
+    let se = 0,
+      sw = 0;
+    for (const r of rows) {
+      const e = sviW(p, r.k) - r.w;
+      se += r.wt * e * e;
+      sw += r.wt;
+    }
+    return sw > 0 ? Math.sqrt(se / sw) : Infinity;
+  };
+  let best: SviParams | null = null,
+    bestErr = Infinity;
+  for (let i = 0; i < 9; i++) {
+    const m = kmin + (kmax - kmin) * (i / 8);
+    for (let j = 0; j < 8; j++) {
+      const sig = 0.02 * Math.pow(1.8, j); // ~0.02 … ~1.2
+      const p = sviInner(rows, m, sig);
+      if (!p) continue;
+      const e = wRmse(p);
+      if (e < bestErr) {
+        bestErr = e;
+        best = p;
+      }
+    }
+  }
+  if (!best) return null;
+  const p = best;
+  const ivAt = (k: number) => {
+    const w = sviW(p, k);
+    return w > 0 ? Math.sqrt(w / T) : 0;
+  };
+  let se = 0,
+    sw = 0;
+  for (const q of src) {
+    const dd = ivAt(q.k) - q.iv;
+    se += q.weight * dd * dd;
+    sw += q.weight;
+  }
+  const rmse = sw > 0 ? Math.sqrt(se / sw) : 0;
+  const atm = ivAt(0),
+    atmVol = atm > 0 ? atm : null;
+  // dσ/dk at 0 = w'(0) / (2·T·σ_atm); w'(k) = b(ρ + (k−m)/√((k−m)²+σ²)).
+  const km0 = -p.m,
+    wp0 = p.b * (p.rho + km0 / Math.sqrt(km0 * km0 + p.sig * p.sig));
+  const skewPer10 = atmVol ? (wp0 / (2 * T * atmVol)) * Math.log(1.1) : null;
+  const strikes: FittedStrike[] = src.map((q) => {
+    const f = ivAt(q.k);
+    return { strike: q.strike, moneyness: q.moneyness, observedIV: q.iv, fittedIV: f, residual: q.iv - f };
+  });
+  // c0/c1/c2 carry the SVI (a, b, ρ) here — consumers only use ivAt + the derived metrics.
+  return { c0: p.a, c1: p.b, c2: p.rho, T, atmVol, skewPer10, rmse, n: src.length, strikes, ivAt };
+}
+
+/** Public smile fit: prefer arb-aware SVI (linear wings → sane extrapolation) but fall back to the robust
+ * quadratic when SVI is unavailable or fits materially worse (a degenerate calibration on sparse quotes). */
+export function fitSmile(points: SmilePoint[], T: number): SmileFit | null {
+  const svi = fitSVI(points, T);
+  const quad = fitQuad(points, T);
+  if (!svi) return quad;
+  if (!quad) return svi;
+  return svi.rmse <= quad.rmse * 1.15 ? svi : quad; // SVI wins unless >15% worse than the quadratic
 }
