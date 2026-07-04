@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import InfoDot from "./InfoDot";
 
 interface SurfaceData {
   symbol: string;
@@ -67,7 +68,7 @@ export default function IvSurface({ symbol }: { symbol: string }) {
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3">
         <h3 className="text-sm font-semibold text-[var(--text)]">
-          Implied-vol surface <span className="font-normal text-[var(--text-4)]">· fitted IV % by moneyness × expiry</span>
+          Implied-vol surface <InfoDot term="Vol surface" /> <span className="font-normal text-[var(--text-4)]">· fitted IV % by moneyness <InfoDot term="Moneyness" /> × expiry</span>
         </h3>
         <span className="text-[11px] text-[var(--text-4)]" title="Each expiry's smile is a liquidity-weighted quadratic fit of total variance in log-moneyness (robust to junk OTM quotes). Cells = the fitted IV; the list below is each listed strike's rich/cheap vs that fitted smile.">
           spot ${d.spot.toFixed(2)}

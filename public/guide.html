@@ -181,6 +181,44 @@
     <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/compare-stocks" target="_blank" rel="noreferrer">Open Compare →</a>
   </div>
 
+  <h2 class="sec">Options &amp; volatility <span class="lead">Read the vol, then trade the mispricing.</span></h2>
+
+  <div class="card">
+    <h3><span class="emo">📈</span> How to read the options data — a primer</h3>
+    <p class="muted">Options pricing looks like alphabet soup at first. Here's the whole vocabulary in plain English — and every term below also has a hover-<span class="kbd">?</span> wherever it shows up in the app.</p>
+    <div class="strat"><div class="name">Implied vs realized vol — the one that matters</div><div class="what">What the options market EXPECTS vs what the stock actually DOES.</div><p class="how"><b>Implied volatility (IV)</b> is the movement options are pricing in. <b>Realized volatility</b> is how much the stock actually moved. Their ratio — <b>IV ÷ RV</b>, the "variance premium" — is the core edge: IV well above RV = options are <b>rich</b> (a seller's setup); IV near or below RV = <b>cheap</b> (a buyer's setup).</p></div>
+    <div class="strat"><div class="name">The expected move &amp; the straddle</div><div class="what">The range the market is pricing by an expiry.</div><p class="how">The at-the-money call + put (a <b>straddle</b>) costs a certain amount; that ÷ the share price is the <b>expected move</b> — e.g. ±7%. The <b>breakevens</b> are spot ± that move. Into earnings we also strip out the ordinary day-to-day vol to show the clean <b>event move</b> — what's priced for the print itself.</p></div>
+    <div class="strat"><div class="name">Skew — puts vs calls</div><div class="what">Which side of the trade is more expensive.</div><p class="how">Downside puts usually cost more than upside calls (people pay up for crash insurance) — that's <b>skew</b>. A steep put skew says the market fears a drop more than a pop, and it changes which structure is cheapest to put on.</p></div>
+    <div class="strat"><div class="name">Term structure &amp; vol crush</div><div class="what">How vol differs across expiries — and why it collapses after an event.</div><p class="how">Compare a near expiry's IV to a later one (the <b>term structure</b>). When the front is much richer (<b>backwardation</b>), the market is pricing an event; the moment it passes, front IV collapses — <b>vol crush</b>. That's the premium a straddle buyer pays and a seller collects.</p></div>
+    <div class="strat"><div class="name">IV rank, max pain &amp; the walls</div><div class="what">Context on the level and the pinning.</div><p class="how"><b>IV rank</b> = where today's IV sits vs its own past year (high = expensive now). <b>Max pain</b> is the strike where the most options expire worthless — price can drift toward it near expiry. Heavy <b>call / put walls</b> (big open interest) can cap or support the stock as dealers hedge.</p></div>
+    <div class="strat"><div class="name">The Greeks — your exposures</div><div class="what">What actually moves your P&amp;L.</div><p class="how"><b>Delta</b> ≈ the odds of finishing in-the-money (and ~how many shares the option behaves like). <b>Vega</b> = exposure to vol changes. <b>Theta</b> = daily time decay (a seller's friend, a buyer's tax). <b>Gamma</b> = how fast delta changes — biggest near expiry and at-the-money.</p></div>
+    <div class="tip"><b>The whole idea:</b> the CODE finds where vol is mispriced — that's math, not opinion. An AI only tells you WHY a name is rich (a real pending catalyst = a trap, or nothing obvious = a possible dislocation). It never prices anything itself.</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">🎯</span> Earnings Prep — the pre-print workup</h3>
+    <p>On any stock's <b>Earnings</b> tab: the expected move vs the average realized move (rich/cheap), the clean <b>event move</b> (baseline vol stripped out), a straddle-liquidity read, vol crush &amp; the IV/HV regime, skew, max pain &amp; OI walls, PEAD drift, a suggested <b>Play</b> (with a positioning lean + a directional or calendar alternative), a payoff diagram, and an interactive <b>IV-crush scenario</b> that reprices your trade the morning after the print. Every past reaction is clickable for an AI "why it moved."</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/stock/AAPL?tab=earnings" target="_blank" rel="noreferrer">Open an Earnings workup →</a>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">📊</span> Vol Dislocation <span class="new">New</span></h3>
+    <p>Where option vol is rich or cheap across the whole quality universe, ranked by the <b>variance premium</b> (IV ÷ realized). High = the market's paying up for vol (a premium-seller's list); low = vol looks underpriced. Term crush + skew add context, near-earnings names are flagged (their rich vol is <i>expected</i>), and an AI tags the top names with the real catalyst (⚡ pending deal, FDA, litigation) — so a rich name that's just a trap is obvious.</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/vol-dislocation" target="_blank" rel="noreferrer">Open Vol Dislocation →</a>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">🗺️</span> Vol Surface <span class="new">New</span></h3>
+    <p>On a stock's <b>Options</b> tab: the fitted implied-vol surface as a heatmap (IV by moneyness × expiry), with the per-strike <b>rich/cheap residuals</b> — the listed strikes furthest from their own fitted smile, i.e. the individual pricing dislocations. Plus the classic IV-skew and term-structure curves and the full chain.</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/stock/AAPL?tab=options" target="_blank" rel="noreferrer">Open the Options tab →</a>
+  </div>
+
+  <div class="card">
+    <h3><span class="emo">⚡</span> Catalyst Vol &amp; Earnings Move</h3>
+    <p><b>Catalyst Vol</b> finds names with a scheduled investor / analyst / capital-markets day where the straddle <i>isn't</i> pricing the event — cheap optionality into a known catalyst. <b>Earnings Move</b> ranks upcoming reporters by how their implied move compares to their own history (sell the rich straddle, buy the cheap one).</p>
+    <a class="try" href="https://stock-chart-screener-woad.vercel.app/u/sp500/catalyst-vol" target="_blank" rel="noreferrer">Open Catalyst Vol →</a>
+  </div>
+
   <h2 class="sec">Income strategies <span class="lead">Options &amp; fund screens for yield.</span></h2>
 
   <div class="card">

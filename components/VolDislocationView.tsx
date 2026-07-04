@@ -39,7 +39,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Vol Dislocation — where option vol is rich or cheap</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Cross-sectional read on the variance premium — <b>ATM implied vol ÷ realized vol</b> <InfoDot term="Implied volatility" /> — across {data.scanned} quality names. <b style={{ color: premColor(1.6) }}>High</b> = the market's paying up for vol (a premium-seller&apos;s list); <b style={{ color: premColor(0.9) }}>low</b> = vol looks underpriced. Term crush + skew add context; near-earnings names are flagged (their rich vol is <i>expected</i>). {richN} rich · {cheapN} cheap · {fmtDateTime(data.generatedAt)}
+            Cross-sectional read on the variance premium <InfoDot term="Variance premium" /> — <b>ATM implied vol ÷ realized vol</b> <InfoDot term="Implied volatility" /> — across {data.scanned} quality names. <b style={{ color: premColor(1.6) }}>High</b> = the market's paying up for vol (a premium-seller&apos;s list); <b style={{ color: premColor(0.9) }}>low</b> = vol looks underpriced. Term crush + skew add context; near-earnings names are flagged (their rich vol is <i>expected</i>). {richN} rich · {cheapN} cheap · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
