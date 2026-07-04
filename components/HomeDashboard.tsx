@@ -119,7 +119,7 @@ export default function HomeDashboard({
 
       {/* Headline index chart — now shown for EVERY universe (US + international). */}
       <div className="flex flex-col gap-3">
-        {meta?.indexSymbol && <IndexChart symbol={meta.indexSymbol} name={meta.name} />}
+        {meta?.indexSymbol && <IndexChart symbol={meta.indexSymbol} name={meta.name} tf={tf} />}
         {intl ? (
           // International indices: a constituent heatmap grouped by sector NAME, not US-GICS buckets.
           <>
