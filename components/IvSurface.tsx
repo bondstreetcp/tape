@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import InfoDot from "./InfoDot";
 import ImpliedDistribution, { type DistExp } from "./ImpliedDistribution";
+import VolSurface3D from "./VolSurface3D";
+import { ivColor } from "@/lib/ivColor";
 
 interface SurfaceData {
   symbol: string;
@@ -15,28 +17,12 @@ interface SurfaceData {
   error?: string;
 }
 
-const clampByte = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
-const hex = (r: number, g: number, b: number) => "#" + [r, g, b].map((x) => clampByte(x).toString(16).padStart(2, "0")).join("");
-// sequential cool→warm IV scale: blue-200 → amber-200 → red-600
-const STOPS = [
-  [191, 219, 254],
-  [253, 230, 138],
-  [220, 38, 38],
-];
-function ivColor(t: number): string {
-  const tt = Math.max(0, Math.min(1, t));
-  const seg = tt < 0.5 ? 0 : 1;
-  const lt = tt < 0.5 ? tt / 0.5 : (tt - 0.5) / 0.5;
-  const a = STOPS[seg],
-    b = STOPS[seg + 1];
-  return hex(a[0] + (b[0] - a[0]) * lt, a[1] + (b[1] - a[1]) * lt, a[2] + (b[2] - a[2]) * lt);
-}
-
 // The per-name implied-vol SURFACE: a smile fitted to each expiry's chain, shown as a fitted-IV heatmap
 // (moneyness × expiry) + each listed strike's rich/cheap residual vs its own fitted smile. Generalizes the
 // one-off skew/term charts into the whole structure, and surfaces per-strike pricing dislocations.
 export default function IvSurface({ symbol, currency }: { symbol: string; currency?: string }) {
   const [d, setD] = useState<SurfaceData | "loading" | "error">("loading");
+  const [view3d, setView3d] = useState(false);
   useEffect(() => {
     let alive = true;
     setD("loading");
@@ -72,10 +58,20 @@ export default function IvSurface({ symbol, currency }: { symbol: string; curren
         <h3 className="text-sm font-semibold text-[var(--text)]">
           Implied-vol surface <InfoDot term="Vol surface" /> <span className="font-normal text-[var(--text-4)]">· fitted IV % by moneyness <InfoDot term="Moneyness" /> × expiry</span>
         </h3>
-        <span className="text-[11px] text-[var(--text-4)]" title="Each expiry's smile is a liquidity-weighted quadratic fit of total variance in log-moneyness (robust to junk OTM quotes). Cells = the fitted IV; the list below is each listed strike's rich/cheap vs that fitted smile.">
-          spot ${d.spot.toFixed(2)}
-        </span>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-[var(--border)] p-0.5" title="Switch between the 2D heatmap and a rotatable 3D surface">
+            <button onClick={() => setView3d(false)} className={"rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors " + (!view3d ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>2D</button>
+            <button onClick={() => setView3d(true)} className={"rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors " + (view3d ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>3D</button>
+          </div>
+          <span className="text-[11px] text-[var(--text-4)]" title="Each expiry's smile is a liquidity-weighted quadratic fit of total variance in log-moneyness (robust to junk OTM quotes). Cells = the fitted IV; the list below is each listed strike's rich/cheap vs that fitted smile.">
+            spot ${d.spot.toFixed(2)}
+          </span>
+        </div>
       </div>
+      {view3d ? (
+        <VolSurface3D moneyness={d.moneyness} expiries={d.expiries} grid={d.grid} />
+      ) : (
+        <>
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[520px]" style={{ height: "auto" }}>
           {d.grid.map((rowVals, i) =>
@@ -116,6 +112,8 @@ export default function IvSurface({ symbol, currency }: { symbol: string; curren
           {hi.toFixed(0)}% IV
         </span>
       </div>
+        </>
+      )}
 
       {d.richCheap.length > 0 && (
         <div className="mt-3 border-t border-[var(--divider)] pt-2">
