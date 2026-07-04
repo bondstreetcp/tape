@@ -16,19 +16,23 @@ export interface UniverseMeta {
 }
 
 export const UNIVERSES: UniverseMeta[] = [
-  { id: "sp500", name: "S&P 500", short: "S&P 500", intraday: true },
-  { id: "nasdaq100", name: "Nasdaq 100", short: "Nasdaq 100", intraday: true },
+  { id: "sp500", name: "S&P 500", short: "S&P 500", intraday: true, indexSymbol: "^GSPC" },
+  { id: "nasdaq100", name: "Nasdaq 100", short: "Nasdaq 100", intraday: true, indexSymbol: "^NDX" },
   {
     id: "russell1000",
     name: "Russell 1000",
     short: "Russell 1000",
     intraday: false,
+    indexSymbol: "^RUI",
   },
   {
     id: "sp1500",
     name: "Broad 1500 (S&P 1500)",
     short: "Broad 1500",
     intraday: false,
+    // Yahoo's raw ^SP1500 index only serves a stale single point — the headline chart tracks the
+    // S&P Composite 1500 via SPTM (SPDR Portfolio S&P 1500 Composite ETF), same ETF-proxy trick as TOPIX.
+    indexSymbol: "SPTM",
     note: "S&P 500 + 400 + 600 — a broad large/mid/small-cap universe.",
   },
   {
@@ -36,6 +40,7 @@ export const UNIVERSES: UniverseMeta[] = [
     name: "Russell 3000",
     short: "Russell 3000",
     intraday: false,
+    indexSymbol: "^RUA",
     note: "The full Russell 3000 (~2,900 names), sourced from the iShares IWV holdings file — the broadest U.S. equity universe here.",
   },
   {
