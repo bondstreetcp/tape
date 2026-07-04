@@ -4,6 +4,7 @@ import { fmtMoney } from "@/lib/format";
 import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import OptionsStrategy from "./OptionsStrategy";
 import IvSurface from "./IvSurface";
+import GammaExposure from "./GammaExposure";
 import InfoDot from "./InfoDot";
 import { LoadingState } from "./Spinner";
 
@@ -196,6 +197,8 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
       </div>
 
       <IvSurface symbol={symbol} currency={currency} />
+
+      <GammaExposure symbol={symbol} />
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[760px] text-[13px]">
