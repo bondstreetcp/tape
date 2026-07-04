@@ -1,0 +1,91 @@
+name: Refresh AI narration
+
+# A CHEAP, on-demand "button" (Actions → this workflow → Run workflow) that restores just the AI-written
+# parts of the site — the Trade Desk thesis, Morning Desk Note, Confluence, valuation verdicts, guidance
+# board, and the 13F/Congress write-ups — when they've gone blank (e.g. after an OpenRouter 402).
+#
+# It reuses the ALREADY-fresh data from R2 (hydrate → run only the LLM GENERATION steps → re-upload →
+# redeploy), so it skips the expensive bulk EXTRACTION (guidance-from-filings ~$4, overnight-filings ~$2)
+# and the ~2h data fetch. Net: ~$0.70 in tokens and ~10 min vs the full nightly's ~$5 / ~2h.
+#
+# Manual-only (workflow_dispatch). Needs the same secrets as the nightly: OPENROUTER_API_KEY, the four
+# LAKE_S3_* (R2), and VERCEL_DEPLOY_HOOK. Each generation step is continue-on-error so one hiccup doesn't
+# block the rest or the re-upload.
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: refresh-narration
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Job-level so every generation step inherits it (mirrors the nightly).
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Pull the current (fresh) data tree from R2 so the generation steps read real feeds and the
+      # re-upload below carries the FULL tree (never a partial overwrite).
+      - name: Hydrate data/ from R2
+        run: npm run data-from-r2
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+
+      # ── The cheap LLM generation steps (read existing feeds → a few calls each). ──────────────────
+      - name: Trade Desk thesis
+        run: npm run refresh-trade-ideas
+        continue-on-error: true
+      - name: Guidance board
+        run: npm run refresh-guidance-board
+        continue-on-error: true
+      - name: Morning Desk Note
+        run: npm run refresh-desk-note
+        continue-on-error: true
+      - name: Confluence Engine
+        run: npm run refresh-confluence
+        continue-on-error: true
+      - name: Valuation-discount verdicts
+        run: npm run refresh-valuation-explain
+        continue-on-error: true
+      - name: 13F quarter story
+        run: npm run refresh-13f-story
+        continue-on-error: true
+      - name: Congress summary
+        run: npm run refresh-congress-summary
+        continue-on-error: true
+
+      # Re-upload the full tree (hydrated + freshly narrated). NOT continue-on-error: a failed upload
+      # must skip the deploy so we never publish a half-written tree.
+      - name: Upload site data to R2
+        run: npm run data-to-r2
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+
+      - name: Trigger Vercel deploy (Deploy Hook)
+        run: |
+          if [ -n "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "Triggering Vercel deploy…"
+            curl -sS -X POST "$VERCEL_DEPLOY_HOOK" | head -c 300; echo
+          else
+            echo "VERCEL_DEPLOY_HOOK not set — skipping (relying on Vercel's git integration)."
+          fi
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
