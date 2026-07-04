@@ -195,7 +195,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
         </div>
       </div>
 
-      <IvSurface symbol={symbol} />
+      <IvSurface symbol={symbol} currency={currency} />
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[760px] text-[13px]">

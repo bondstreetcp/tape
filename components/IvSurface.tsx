@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import InfoDot from "./InfoDot";
+import ImpliedDistribution, { type DistExp } from "./ImpliedDistribution";
 
 interface SurfaceData {
   symbol: string;
@@ -10,6 +11,7 @@ interface SurfaceData {
   expiries: { date: string; dte: number; atmVol: number | null; skewPer10: number | null; rmse: number; n: number }[];
   grid: number[][]; // expiries × moneyness → fitted IV %
   richCheap: { expiry: string; dte: number; strike: number; moneyness: number; observedIV: number; fittedIV: number; residPts: number }[];
+  dist?: DistExp[]; // per-expiry risk-neutral density (Breeden–Litzenberger)
   error?: string;
 }
 
@@ -33,7 +35,7 @@ function ivColor(t: number): string {
 // The per-name implied-vol SURFACE: a smile fitted to each expiry's chain, shown as a fitted-IV heatmap
 // (moneyness × expiry) + each listed strike's rich/cheap residual vs its own fitted smile. Generalizes the
 // one-off skew/term charts into the whole structure, and surfaces per-strike pricing dislocations.
-export default function IvSurface({ symbol }: { symbol: string }) {
+export default function IvSurface({ symbol, currency }: { symbol: string; currency?: string }) {
   const [d, setD] = useState<SurfaceData | "loading" | "error">("loading");
   useEffect(() => {
     let alive = true;
@@ -133,6 +135,8 @@ export default function IvSurface({ symbol }: { symbol: string }) {
           </div>
         </div>
       )}
+
+      {d.dist && d.dist.length > 0 && <ImpliedDistribution dist={d.dist} spot={d.spot} currency={currency} />}
     </div>
   );
 }

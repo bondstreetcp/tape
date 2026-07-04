@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOptions } from "@/lib/options";
 import { ivFromPrice } from "@/lib/blackScholes";
 import { fitSmile, type SmileFit, type SmilePoint } from "@/lib/volSurface";
+import { riskNeutralDensity } from "@/lib/riskNeutral";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -55,6 +56,27 @@ async function buildSurface(sym: string) {
   }
   if (!perExp.length) return null;
 
+  // Risk-neutral (Breeden–Litzenberger) density per expiry — the market's implied price distribution at
+  // expiry, read off each fitted smile. Compact [price, density] pairs + the implied percentiles/skew.
+  const dist = perExp
+    .map((pe) => {
+      const rnd = riskNeutralDensity(pe.fit.ivAt, S, pe.fit.T, 0.04, 81, 3.5);
+      if (!rnd) return null;
+      return {
+        date: pe.date,
+        dte: pe.dte,
+        pts: rnd.points.map((p) => [+p.price.toFixed(2), +p.density.toFixed(6)] as [number, number]),
+        p05: +rnd.p05.toFixed(2),
+        p16: +rnd.p16.toFixed(2),
+        p50: +rnd.p50.toFixed(2),
+        p84: +rnd.p84.toFixed(2),
+        p95: +rnd.p95.toFixed(2),
+        pUp: +rnd.pUp.toFixed(3),
+        skew: +rnd.skew.toFixed(3),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+
   const grid = perExp.map((pe) => MONEYNESS.map((m) => +(pe.fit.ivAt(Math.log(1 + m)) * 100).toFixed(1)));
   const richCheap = perExp
     .flatMap((pe) => pe.fit.strikes.map((s) => ({ expiry: pe.date, dte: pe.dte, ...s })))
@@ -78,6 +100,7 @@ async function buildSurface(sym: string) {
     })),
     grid, // expiries × moneyness → fitted IV %
     richCheap,
+    dist, // per-expiry risk-neutral density (Breeden–Litzenberger)
   };
 }
 
