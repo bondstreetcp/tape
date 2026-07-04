@@ -6,8 +6,6 @@ import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
-import TimeframeSelector from "@/components/TimeframeSelector";
-import { LOOKBACK_TRADING_DAYS, type TimeframeKey } from "@/lib/timeframes";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -74,17 +72,26 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
-// Lookbacks the expected-move cone offers. Only what the ~14-month daily priceSeries can honestly show —
-// no 1D/1W (no intraday) and no 3Y/5Y (beyond the ~2yr fetch). Windowed client-side, no refetch.
-const CONE_TFS: TimeframeKey[] = ["3m", "6m", "ytd", "1y"];
-// Window a daily [t,price] series to a timeframe: count-based for fixed lookbacks, calendar for YTD.
-function windowByTf(series: [number, number][], tf: TimeframeKey): [number, number][] {
+// The expected-move cone's OWN lookback set. It includes 1M — which the site-wide selector deliberately
+// skips between 1W and 3M — and stops at 1Y, since that's all the ~14-month daily priceSeries can honestly
+// show (no intraday for 1D/1W, nothing beyond the ~2yr fetch). Kept local so it doesn't alter other charts.
+const CONE_PERIODS = [
+  { k: "1m", label: "1M", days: 21 },
+  { k: "3m", label: "3M", days: 63 },
+  { k: "6m", label: "6M", days: 126 },
+  { k: "ytd", label: "YTD", days: 0 },
+  { k: "1y", label: "1Y", days: 252 },
+] as const;
+type ConeTf = (typeof CONE_PERIODS)[number]["k"];
+const CONE_KEYS = CONE_PERIODS.map((p) => p.k as ConeTf);
+// Window a daily [t,price] series to a cone timeframe: trailing trading-day count, or calendar YTD.
+function windowByTf(series: [number, number][], tf: ConeTf): [number, number][] {
   if (tf === "ytd") {
     const jan1 = Date.UTC(new Date().getUTCFullYear(), 0, 1);
     const w = series.filter((s) => s[0] >= jan1);
     return w.length >= 2 ? w : series;
   }
-  const n = LOOKBACK_TRADING_DAYS[tf as keyof typeof LOOKBACK_TRADING_DAYS];
+  const n = CONE_PERIODS.find((p) => p.k === tf)?.days ?? 0;
   return n && series.length > n ? series.slice(-n) : series;
 }
 
@@ -206,7 +213,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
   const [why, setWhy] = useState<Record<string, WhyState>>({}); // per-print "why it moved" recap, by date
-  const [coneTf, setConeTf] = useState<TimeframeKey>("3m"); // expected-move cone price-history lookback
+  // Cone lookback — persisted so it sticks across visits (its own key; the site-wide "screener.tf" can
+  // hold values this chart doesn't support). Fallback first, adopt stored in an effect to stay hydration-safe.
+  const [coneTf, setConeTf] = useState<ConeTf>("3m");
+  useEffect(() => { try { const s = localStorage.getItem("tape.coneTf"); if (s && (CONE_KEYS as string[]).includes(s)) setConeTf(s as ConeTf); } catch { /* no localStorage */ } }, []);
+  const pickCone = (t: ConeTf) => { setConeTf(t); try { localStorage.setItem("tape.coneTf", t); } catch { /* ignore */ } };
 
   const loadWhy = (dateISO: string) => {
     if (why[dateISO]) return; // cached
@@ -377,7 +388,20 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                 <>
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <span className="text-[11px] font-medium text-[var(--text-4)]">Price history</span>
-                    <TimeframeSelector value={coneTf} onChange={setConeTf} keys={CONE_TFS} />
+                    <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
+                      {CONE_PERIODS.map((p) => (
+                        <button
+                          key={p.k}
+                          onClick={() => pickCone(p.k)}
+                          className={
+                            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
+                            (coneTf === p.k ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")
+                          }
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
                     <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
