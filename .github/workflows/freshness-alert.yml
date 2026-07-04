@@ -1,0 +1,37 @@
+name: Freshness alert
+
+# Pings you when the R2 data pipeline goes stale, so you know to re-run refresh-data manually.
+# Reads site-data/full-heartbeat.json (written ONLY by the FULL nightly run) and alerts if the last
+# FULL refresh is older than FRESH_MAX_HOURS (default 28h). See scripts/alert-freshness.ts.
+on:
+  schedule:
+    # 03:30 UTC Tue-Sat — the mornings AFTER each Mon-Fri 22:47 UTC FULL run has had its full timeout
+    # window (~3.5h) to finish. Never runs on a morning not preceded by a scheduled FULL (no weekend
+    # false alarms): Sun/Mon mornings follow a no-cron weekend, so they're skipped.
+    - cron: "30 3 * * 2-6"
+  workflow_dispatch: {}
+
+concurrency:
+  group: freshness-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Check R2 data freshness
+        run: npm run alert-freshness
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+          # Optional. Slack / Discord / ntfy.sh webhook. Without it, a stale run still fails → GitHub
+          # emails you the "scheduled workflow failed" notice for free.
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
