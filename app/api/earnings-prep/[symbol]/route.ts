@@ -292,8 +292,9 @@ async function computeQuant(sym: string, earningsISO: string | null) {
     else if (richV === "rich" || (clearRate != null && clearRate <= 0.4)) verdict = "unfavorable";
     return { verdict, beatClear, beatN: beats.length, crushRatio: term?.crushRatio ?? null };
   })();
-  // Recent price series (compact [t,c] tuples) for the expected-move cone visual.
-  const priceSeries = closes.slice(-55).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
+  // Daily price series (compact [t,c] tuples) for the expected-move cone. ~14 months (well past the
+  // longest 1Y lookback) so the cone's client-side timeframe selector can window it down to 3M/6M/YTD/1Y.
+  const priceSeries = closes.slice(-300).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
   return { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, surpriseReaction, priceSeries, longPremium, ivScenario, closes };
 }

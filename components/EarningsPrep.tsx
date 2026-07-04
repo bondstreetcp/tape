@@ -6,6 +6,8 @@ import type { SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
+import TimeframeSelector from "@/components/TimeframeSelector";
+import { LOOKBACK_TRADING_DAYS, type TimeframeKey } from "@/lib/timeframes";
 
 interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
@@ -70,6 +72,20 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   const out: number[] = [];
   for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(v);
   return out;
+}
+
+// Lookbacks the expected-move cone offers. Only what the ~14-month daily priceSeries can honestly show —
+// no 1D/1W (no intraday) and no 3Y/5Y (beyond the ~2yr fetch). Windowed client-side, no refetch.
+const CONE_TFS: TimeframeKey[] = ["3m", "6m", "ytd", "1y"];
+// Window a daily [t,price] series to a timeframe: count-based for fixed lookbacks, calendar for YTD.
+function windowByTf(series: [number, number][], tf: TimeframeKey): [number, number][] {
+  if (tf === "ytd") {
+    const jan1 = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+    const w = series.filter((s) => s[0] >= jan1);
+    return w.length >= 2 ? w : series;
+  }
+  const n = LOOKBACK_TRADING_DAYS[tf as keyof typeof LOOKBACK_TRADING_DAYS];
+  return n && series.length > n ? series.slice(-n) : series;
 }
 
 // Expected-move CONE — recent price line + the ±straddle range fanned out to the event expiry (1σ band
@@ -188,6 +204,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
   const [why, setWhy] = useState<Record<string, WhyState>>({}); // per-print "why it moved" recap, by date
+  const [coneTf, setConeTf] = useState<TimeframeKey>("3m"); // expected-move cone price-history lookback
 
   const loadWhy = (dateISO: string) => {
     if (why[dateISO]) return; // cached
@@ -355,9 +372,15 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
           {d?.straddle && (
             <div className="mt-2.5">
               {d.priceSeries && d.priceSeries.length >= 5 && d.straddle.expiry ? (
-                <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
-                  <ExpectedMoveCone series={d.priceSeries} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
-                </div>
+                <>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium text-[var(--text-4)]">Price history</span>
+                    <TimeframeSelector value={coneTf} onChange={setConeTf} keys={CONE_TFS} />
+                  </div>
+                  <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
+                    <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="relative h-2 rounded-full bg-gradient-to-r from-[#ef4444] via-[var(--surface-2)] to-[#22c55e]">
