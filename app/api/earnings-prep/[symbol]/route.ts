@@ -230,6 +230,10 @@ async function computeQuant(sym: string, earningsISO: string | null) {
   // comparison is gated on that. The precomputed-file fallback (sm==null) is already an ≤16d event move.
   const nearTerm = !sm ? true : sm.isEvent && (sm.dte == null || sm.dte <= 21);
   const options = optionsRead(chain);
+  // Isolated EVENT move: strip the baseline (non-event) vol out of the front straddle using the back-cycle
+  // IV. Both straddles scale ~linearly with IV over the same horizon, so eventMove = impliedMove·√(1−1/crush²)
+  // — the variance decomposition of the front move into event + calendar vol. Only when the front is elevated.
+  const eventMove = nearTerm && impliedMove != null && term && term.crushRatio > 1 ? impliedMove * Math.sqrt(1 - 1 / (term.crushRatio * term.crushRatio)) : null;
 
   const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
   // Straddle "win-rate": of past prints, how often the realized move EXCEEDED what options price now.
@@ -267,14 +271,14 @@ async function computeQuant(sym: string, earningsISO: string | null) {
   // Straddle breakevens + cost: the REAL straddle when we have the live chain (with its expiry/DTE),
   // else derived from the implied-move % and spot.
   const straddle = sm
-    ? { cost: sm.cost, upperBE: sm.upperBE, lowerBE: sm.lowerBE, price: sm.price, expiry: sm.expiry, dte: sm.dte, live: true }
+    ? { cost: sm.cost, upperBE: sm.upperBE, lowerBE: sm.lowerBE, price: sm.price, expiry: sm.expiry, dte: sm.dte, live: true, bid: sm.liq.bid, ask: sm.liq.ask, widthPct: sm.liq.widthPct, oi: sm.liq.oi, vol: sm.liq.vol }
     : impliedMove != null && price
-      ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false }
+      ? { cost: (price * impliedMove) / 100, upperBE: price * (1 + impliedMove / 100), lowerBE: price * (1 - impliedMove / 100), price, expiry: null, dte: null, live: false, bid: null, ask: null, widthPct: null, oi: null, vol: null }
       : null;
   const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
   // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
   // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
-  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove);
+  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove, term);
   // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
   const ivScenario = ivScenarioFrom(sm, chain, term);
   // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
@@ -296,7 +300,7 @@ async function computeQuant(sym: string, earningsISO: string | null) {
   // longest 1Y lookback) so the cone's client-side timeframe selector can window it down to 3M/6M/YTD/1Y.
   const priceSeries = closes.slice(-300).map((x) => [x.t, Math.round(x.c * 100) / 100] as [number, number]);
 
-  return { reaction, events, impliedMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, surpriseReaction, priceSeries, longPremium, ivScenario, closes };
+  return { reaction, events, impliedMove, eventMove, options, richness, straddle, straddleWinRate, pead, term, nextTiming, volRegime, trade, surpriseReaction, priceSeries, longPremium, ivScenario, closes };
 }
 
 // Server-side rebuild of the card's quant-signal line for the AI preview. The LLM's "QUANT SIGNALS"

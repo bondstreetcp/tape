@@ -11,15 +11,16 @@ interface DataPart {
   reaction: { avgAbsMove: number; maxAbsMove: number; upRate: number; n: number } | null;
   events: { date: string; surprise: number | null; move: number | null; drift5: number | null; timing: "bmo" | "amc" }[];
   impliedMove: number | null; // percent (e.g. 7.8)
+  eventMove?: number | null; // isolated earnings move — the front straddle with the baseline (non-event) vol stripped, %
   options: { expiry: string | null; atmIV: number | null; skew: number | null; maxPain: number | null; maxPainVsSpot: number | null; callWall: { strike: number; oi: number } | null; putWall: { strike: number; oi: number } | null } | null;
   richness: { ratio: number; verdict: "rich" | "cheap" | "fair"; avgRealized: number } | null;
-  straddle: { cost: number; upperBE: number; lowerBE: number; price: number; expiry?: string | null; dte?: number | null; live?: boolean } | null;
+  straddle: { cost: number; upperBE: number; lowerBE: number; price: number; expiry?: string | null; dte?: number | null; live?: boolean; bid?: number | null; ask?: number | null; widthPct?: number | null; oi?: number | null; vol?: number | null } | null;
   straddleWinRate: { exceeded: number; total: number } | null;
   pead: { avgBeatDrift5: number | null; avgMissDrift5: number | null; followThrough: number; n: number } | null;
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
-  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[] } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; lean?: "bullish" | "bearish" | null; alt?: { structure: string; legs: string; rationale: string; kind: string } | null } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
@@ -72,6 +73,7 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
+const compact = (n: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 // The expected-move cone's OWN lookback set. It includes 1M — which the site-wide selector deliberately
 // skips between 1W and 3M — and stops at 1Y, since that's all the ~14-month daily priceSeries can honestly
 // show (no intraday for 1D/1W, nothing beyond the ~2yr fetch). Kept local so it doesn't alter other charts.
@@ -98,7 +100,7 @@ function windowByTf(series: [number, number][], tf: ConeTf): [number, number][] 
 // Expected-move CONE — recent price line + the ±straddle range fanned out to the event expiry (1σ band
 // in accent, a lighter 2σ band behind), so "where could it be after the print" is visual, not just a %.
 // Framed with a price (y) axis on the left and a date (x) axis along the bottom.
-function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: [number, number][]; lowerBE: number; upperBE: number; spot: number; expiry: string }) {
+function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry, pastMoves }: { series: [number, number][]; lowerBE: number; upperBE: number; spot: number; expiry: string; pastMoves?: { date: string; move: number | null; surprise: number | null }[] }) {
   const expT = Date.parse(expiry + "T00:00:00Z");
   if (series.length < 5 || Number.isNaN(expT)) return null;
   const W = 600, H = 150, ML = 34, MR = 46, MT = 10, MB = 22; // ML/MB leave room for the axis labels
@@ -152,6 +154,16 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: 
       <text x={xE + 3} y={y(upperBE) + 3} fontSize={10} fill="#22c55e" className="tabular-nums">${upperBE.toFixed(0)}</text>
       <text x={xE + 3} y={y(spot) + 3} fontSize={10} fill="var(--text-4)" className="tabular-nums">${spot.toFixed(0)}</text>
       <text x={xE + 3} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
+      {/* past post-earnings outcomes at the expiry mouth — where the stock actually landed vs the priced cone (green=beat, red=miss) */}
+      {(pastMoves || []).filter((m) => m.move != null).slice(0, 8).map((m, i) => {
+        const col = m.surprise != null && m.surprise > 0 ? "#22c55e" : m.surprise != null && m.surprise < 0 ? "#ef4444" : "var(--text-3)";
+        const cy = Math.max(MT + 2, Math.min(H - MB - 2, y(spot * (1 + (m.move as number)))));
+        return (
+          <circle key={`pm${i}`} cx={xE - 3 - (i % 3) * 3} cy={cy} r={2.1} fill={col} fillOpacity={0.8} stroke="var(--surface)" strokeWidth={0.5}>
+            <title>{`${m.date}: ${(m.move as number) >= 0 ? "+" : ""}${((m.move as number) * 100).toFixed(1)}% on the print`}</title>
+          </circle>
+        );
+      })}
     </svg>
   );
 }
@@ -208,7 +220,7 @@ function Big({ value, label, color }: { value: string; label: string; color?: st
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
@@ -358,7 +370,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
     <div className="mb-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-base font-semibold text-[var(--text)]">Earnings prep</h3>
-        {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d</> : `next/last report ${dateLabel}`}</span>}
+        {dateLabel && <span className="text-sm text-[var(--text-3)]">{days != null && days >= 0 ? <>reports <b className="text-[var(--text-2)]">{dateLabel}</b>{timingShort ? ` ${timingShort}` : ""} · in {days}d{earningsEstimate ? <span className="ml-1 rounded bg-[#f59e0b]/15 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#f59e0b]" title="This report date is an ESTIMATE (Yahoo), not company-confirmed — the option expiry the play brackets could be off. Treat the timing as approximate until the company confirms.">est</span> : null}</> : `next/last report ${dateLabel}`}</span>}
       </div>
 
       {/* Expected-move HERO — the headline options read (full-width, top of the card) */}
@@ -369,8 +381,9 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title={d?.straddle?.live ? "The ATM straddle (call + put) for the expiry bracketing earnings, as a % of spot — what the options market is actually pricing for the move by that expiry." : "Implied move from the options market."}>Expected move · {d?.straddle?.live ? "ATM straddle" : "options-implied"}</div>
                 <div className="font-mono text-4xl font-bold leading-none tabular-nums text-[var(--text)]">±{d?.impliedMove != null ? d.impliedMove.toFixed(1) : "—"}<span className="text-2xl">%</span></div>
+                {d?.eventMove != null && <div className="mt-0.5 text-[11px] leading-none text-[var(--text-4)]" title="The move priced for the PRINT ITSELF — the front straddle with the ~N days of ordinary (non-event) vol stripped out via the back-cycle IV. The ±% above is the raw straddle and includes both.">event <b className="text-[var(--text-3)]">±{d.eventMove.toFixed(1)}%</b></div>}
               </div>
-              {d?.straddle && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}</div>}
+              {d?.straddle && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-3)]">≈ ${d.straddle.cost.toFixed(2)} straddle{d.straddle.dte != null && d.straddle.expiry ? <><br /><span className="text-[var(--text-4)]">{d.straddle.dte}d · exp {d.straddle.expiry.slice(5)}</span></> : null}{d.straddle.live && d.straddle.widthPct != null ? <><br /><span className="text-[var(--text-4)]" title="Execution read on the ATM straddle: the bid/ask spread as a % of the straddle (what you pay to get in AND out) + open interest / volume for depth. A wide or thin market can quietly erase a paper edge.">{d.straddle.bid != null && d.straddle.ask != null ? `$${d.straddle.bid.toFixed(2)}–$${d.straddle.ask.toFixed(2)} · ` : ""}<b style={{ color: d.straddle.widthPct > 6 ? "#f59e0b" : "var(--text-3)" }}>{d.straddle.widthPct > 6 ? "⚠ " : ""}{d.straddle.widthPct.toFixed(0)}% wide</b>{d.straddle.oi ? ` · OI ${compact(d.straddle.oi)}` : ""}{d.straddle.vol ? ` · vol ${compact(d.straddle.vol)}` : ""}</span></> : null}</div>}
               {d?.reaction && <div className="pb-0.5 text-[13px] leading-tight text-[var(--text-4)]">vs ±{(d.reaction.avgAbsMove * 100).toFixed(1)}%<br />avg realized ({d.reaction.n})</div>}
             </div>
             {d?.richness && (() => {
@@ -404,7 +417,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
                     </div>
                   </div>
                   <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
-                    <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} />
+                    <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} pastMoves={d.events} />
                   </div>
                 </>
               ) : (
@@ -432,6 +445,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
             <div className="mt-2.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
               <span className="font-semibold text-[var(--text)]">Play </span>
               <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              {d.trade.lean && <span className={"ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold " + (d.trade.lean === "bullish" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#ef4444]/15 text-[#ef4444]")} title="Positioning lean from the options — skew (which side's bid), the max-pain pull, and OI-wall placement. A soft read, not a directional call.">{d.trade.lean === "bullish" ? "▲ leans bull" : "▼ leans bear"}</span>}
               {d.trade.expiry && (
                 <span className="ml-1 rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-3)]" title="The option expiry these legs are priced on — the first one after the earnings date, so it captures the event.">
                   exp {d.trade.expiry}{d.trade.dte != null ? ` · ${d.trade.dte}d` : ""}
@@ -442,6 +456,15 @@ export default function EarningsPrep({ symbol, stats, earningsDate, row, peers, 
               {d.trade.legsData && d.straddle && d.impliedMove != null && (
                 <div className="mt-1.5" title="P&L at expiry vs the stock price. Green = profit, red = loss; the shaded band is the ±expected move, dots on the zero line are the breakevens.">
                   <PayoffDiagram legs={d.trade.legsData} spot={d.straddle.price} movePct={d.impliedMove} />
+                </div>
+              )}
+              {d.trade.alt && (
+                <div className="mt-2 border-t border-[var(--divider)] pt-1.5" title="An alternative way to express the same read — a directional vertical when positioning leans one way, or a calendar when the term-structure crush is steep enough to sell the front against the back.">
+                  <span className="font-semibold text-[var(--text-3)]">Alt </span>
+                  <span className="rounded bg-[var(--surface)] px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--text-4)]">{d.trade.alt.kind}</span>
+                  <b className="ml-1 text-[var(--text-2)]">{d.trade.alt.structure}</b>
+                  <span className="text-[var(--text-2)]"> · {d.trade.alt.legs}</span>
+                  <span className="text-[var(--text-4)]"> — {d.trade.alt.rationale}</span>
                 </div>
               )}
             </div>
