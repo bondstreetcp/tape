@@ -84,6 +84,36 @@ a {
   background: #2563eb55;
 }
 
+/* Always-on build stamp (components/VersionBadge.tsx). Subtle, theme-aware, out of the way in the
+   bottom-right; brightens on hover. Respects the PWA safe-area so it clears the iOS home indicator. */
+.version-badge {
+  position: fixed;
+  right: max(6px, env(safe-area-inset-right));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  z-index: 40;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text-4);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--border);
+  opacity: 0.55;
+  user-select: all;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.version-badge:hover {
+  opacity: 1;
+  color: var(--text-2);
+}
+@media print {
+  .version-badge {
+    display: none;
+  }
+}
+
 /* thin scrollbars */
 ::-webkit-scrollbar {
   width: 10px;
