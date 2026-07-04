@@ -45,6 +45,7 @@
     "ingest-slack": "tsx scripts/ingest-slack.ts",
     "refresh-congress": "tsx scripts/refresh-congress.ts",
     "refresh-putwrite": "tsx scripts/refresh-putwrite.ts",
+    "refresh-vol-dislocation": "tsx scripts/refresh-vol-dislocation.ts",
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
     "refresh-trade-log": "tsx scripts/refresh-trade-log.ts",
     "refresh-trump": "tsx scripts/refresh-trump.ts",
