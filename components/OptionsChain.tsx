@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtMoney } from "@/lib/format";
 import OptionsStrategy from "./OptionsStrategy";
+import IvSurface from "./IvSurface";
 import { LoadingState } from "./Spinner";
 
 const isHot = (o: Opt | null | undefined) => !!o && o.vol != null && o.oi != null && o.vol > Math.max(o.oi, 300);
@@ -166,6 +167,8 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
           <TermChart term={term} />
         </div>
       </div>
+
+      <IvSurface symbol={symbol} />
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[760px] text-[13px]">
