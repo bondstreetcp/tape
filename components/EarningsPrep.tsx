@@ -105,15 +105,17 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry }: { series: 
   const y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
   const path = series.map((s, i) => `${i ? "L" : "M"}${x(s[0]).toFixed(1)} ${y(s[1]).toFixed(1)}`).join("");
   const xN = x(now), xE = x(expT), yAxisX = ML, xAxisY = H - MB;
-  const yTicks = niceTicks(yMin + pad * 0.5, yMax - pad * 0.5, 4);
-  // x date ticks: start → a couple through history → now → expiry
+  const yTicks = niceTicks(yMin + pad * 0.5, yMax - pad * 0.5, 6);
+  // x date ticks: evenly across the history (t0→now) + "now" + the expiry. More divisions than before so
+  // longer lookbacks (up to 1Y) stay readable; endpoints anchor start/end so the labels don't clip.
   const dLabel = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
-  const xTicks = [
-    { t: t0, label: dLabel(t0), anchor: "start" as const },
-    { t: t0 + (now - t0) * 0.5, label: dLabel(t0 + (now - t0) * 0.5), anchor: "middle" as const },
-    { t: now, label: "now", anchor: "middle" as const },
-    { t: expT, label: dLabel(expT), anchor: "end" as const },
-  ];
+  const HIST_DIVS = 4; // → t0, 3 interior dates, "now", then the expiry = 6 ticks
+  const xTicks: { t: number; label: string; anchor: "start" | "middle" | "end" }[] = [];
+  for (let i = 0; i <= HIST_DIVS; i++) {
+    const t = t0 + ((now - t0) * i) / HIST_DIVS;
+    xTicks.push({ t, label: i === HIST_DIVS ? "now" : dLabel(t), anchor: i === 0 ? "start" : "middle" });
+  }
+  xTicks.push({ t: expT, label: dLabel(expT), anchor: "end" });
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
       {/* y gridlines + price labels */}
