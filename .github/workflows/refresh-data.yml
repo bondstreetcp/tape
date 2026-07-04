@@ -82,6 +82,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Hydrate data/ from R2 (the FULL prior tree) BEFORE any refresh. data/ is no longer committed to git
+      # (it lives in R2), so a fresh checkout has an EMPTY data/. Without this, a refresh that only rewrites
+      # PART of the tree (an intraday tick = ~15 snapshots; even a FULL run = most feeds but NOT the deep
+      # per-symbol price history, nor any skip-write brief that legitimately produced nothing) leaves the
+      # rest missing — and "Upload site data to R2" below would then overwrite R2 with that PARTIAL tree,
+      # silently dropping thousands of files (this exact bug shrank R2 35 MB → 8 MB on 2026-07-03). It also
+      # restores the forward-accumulating / skip-write feeds' prior state (campaigns, corp-events, congress,
+      # trump, iv-history, trade-log, desk-note, valuation-explain, …) so they append instead of resetting.
+      # Deliberately NOT continue-on-error: if R2 can't be read we must NOT proceed to upload a partial tree
+      # over it — a hard failure here skips the upload (its default success() gate) and preserves R2.
+      - name: Hydrate data/ from R2 (prior tree)
+        run: npm run data-from-r2
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+
       # Decide which regional markets to re-quote from the ACTUAL wall-clock UTC hour, not from
       # github.event.schedule. GitHub frequently delays a scheduled run 1-2h or re-fires a backlogged
       # one, so the cron string lies: on 2026-06-29 the 08:09 European tick ran at 09:11 carrying the
@@ -399,29 +417,9 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
-      # SAFETY COMMIT — push the Morning Desk Note + all data refreshed so far BEFORE the slow LLM
-      # write-up tail (Confluence / valuation verdicts / 13F story / Congress summary). Previously the
-      # single commit lived only at the very end, so when the job ran long the desk-note (and the whole
-      # night's data) was generated but never committed. This guarantees the brief lands every run.
-      - name: Commit Morning Desk Note + data so far (safety)
-        if: ${{ env.FULL == 'true' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data
-          if git diff --cached --quiet; then
-            echo "No data changes yet — nothing to commit."
-            exit 0
-          fi
-          git commit -m "chore: morning desk + overnight data ($(date -u +%Y-%m-%dT%H:%MZ))"
-          for i in 1 2 3 4 5; do
-            if git push; then echo "Pushed."; exit 0; fi
-            echo "Push rejected — syncing with origin/main and retrying ($i/5)…"
-            git fetch origin main || true
-            if ! git rebase -X theirs origin/main; then git rebase --abort || true; fi
-            sleep 5
-          done
-        continue-on-error: true
+      # (The old mid-run "safety commit" of the desk note + data is gone: data/ is no longer tracked in
+      # git — it's uploaded to R2 once, at the end of the run, by "Upload site data to R2". See
+      # docs/DATA-ON-R2.md.)
 
       # Confluence Engine — fuses the night's INDEPENDENT bullish signals (valuation discount,
       # 13F adds, Congress buys, analyst upgrades, call-heavy flow, catalysts) into one ranked
@@ -509,47 +507,11 @@ jobs:
           LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
         continue-on-error: true
 
-      - name: Commit & push if data changed
-        env:
-          SCHED: ${{ github.event.schedule }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit."
-            exit 0
-          fi
-          if [ "$SCHED" = "0 22 * * 1-5" ] || [ -z "$SCHED" ]; then
-            MSG="chore: daily data refresh ($(date -u +%Y-%m-%d))"
-          elif [ "$SCHED" = "0 10 * * 1-5" ]; then
-            MSG="chore: intl refresh after Asian close ($(date -u +%Y-%m-%d))"
-          else
-            MSG="chore: intraday quotes ($(date -u +%Y-%m-%dT%H:%MZ))"
-          fi
-          git commit -m "$MSG"
-          # The fetch takes a while; if other commits landed meanwhile, the push is
-          # rejected (non-fast-forward). Replay our data-only commit on top of the latest
-          # main and retry. This refresh just regenerated every data file, so if the remote
-          # ALSO touched data/ (a feature commit, an overlapping run), our freshly-pulled
-          # copy is authoritative — keep it on conflict. During a rebase "theirs" is the
-          # commit being replayed, i.e. ours. A stuck rebase is aborted before retrying so
-          # the loop never spins on a half-finished rebase.
-          for i in 1 2 3 4 5; do
-            if git push; then
-              echo "Pushed."
-              exit 0
-            fi
-            echo "Push rejected — syncing with origin/main and retrying ($i/5)…"
-            git fetch origin main || true
-            if ! git rebase -X theirs origin/main; then
-              echo "Rebase could not auto-resolve — aborting and retrying."
-              git rebase --abort || true
-            fi
-            sleep 5
-          done
-          echo "Push failed after retries"
-          exit 1
+      # (The end-of-run "commit & push data" step is gone — data/ is gitignored and lives in R2, uploaded
+      # by the step above. Post-cutover `git add -A data` matched only ignored paths and EXITED 1, which
+      # (this step lacking continue-on-error) failed the job and cascaded to SKIP the freshness gate and
+      # the Deploy Hook below — so no production deploy ever fired. Removing it lets the run flow straight
+      # from the R2 upload → freshness gate → deploy.)
 
       # Data-freshness gate — the ONE step deliberately allowed to fail the job. EVERY refresh step
       # above is continue-on-error (a single source hiccup must not abort the whole night), so a

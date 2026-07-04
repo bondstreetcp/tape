@@ -135,7 +135,12 @@ async function main() {
     return;
   }
 
-  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 9000, model: PRO_MODEL, reasoningEffort: "high" });
+  // The brief is a LARGE structured output (tldr + up to 5 sections × bullets + watch list). GLM-5.2 at
+  // reasoningEffort:"high" spends a big share of the token budget on reasoning, and at maxTokens:9000 that
+  // starved the JSON — the model burned ~14k output across a retry and still returned no parseable brief,
+  // so the skip-write guard froze the note for a day+. Give it real output headroom and dial reasoning to
+  // "medium" (this is synthesis/writing, not a hard judgment call) so the JSON reliably completes.
+  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 16000, model: PRO_MODEL, reasoningEffort: "medium" });
   if (!out || !Array.isArray(out.sections)) {
     console.warn("desk-note: LLM returned no usable brief — skipping write.");
     return;

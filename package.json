@@ -13,6 +13,7 @@
     "backfill-prices": "tsx scripts/build-lake.ts --backfill",
     "q": "tsx scripts/q.ts",
     "data-to-r2": "tsx scripts/data-to-r2.ts",
+    "data-from-r2": "tsx scripts/data-from-r2.ts",
     "vercel-build": "tsx scripts/data-from-r2.ts && next build",
     "test": "node --import tsx --test tests/*.test.ts",
     "eval-alerts": "tsx scripts/eval-alerts.ts",
