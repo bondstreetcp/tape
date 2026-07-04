@@ -429,6 +429,26 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Dispersion — VIX (macro.json) vs the cap-weighted ATM IV of the top ~100 S&P names BY CAP (fetched
+      # fresh — the mega-caps the quality screen excludes). Rate-limited options fetch.
+      - name: Refresh dispersion
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-dispersion
+        continue-on-error: true
+
+      # Post-earnings drift — recent reporters (guidance 8-K dates) × the LOCAL series (gap + drift). No fetch.
+      - name: Refresh post-earnings drift
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-pead
+        continue-on-error: true
+
+      # Earnings seasonality — the earnings amplifier (avg |move| vs a normal day) over the quality set.
+      # Fetches earnings reactions (EDGAR + Yahoo) per name; rate-limited. Approximate (no historical IV).
+      - name: Refresh earnings seasonality
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-seasonality
+        continue-on-error: true
+
       # Corporate Events — SEC 8-K full-text (buybacks, strategic-alts, spin-offs, splits, CEO changes)
       # → GLM extract. Free EDGAR; needs OPENROUTER_API_KEY; forward-accumulating.
       - name: Refresh corporate events

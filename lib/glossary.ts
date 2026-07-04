@@ -62,6 +62,7 @@ export const GLOSSARY: Record<string, string> = {
   "Vol surface": "Implied vol mapped across every strike AND expiry at once — the full picture of how a name's options are priced.",
   "Implied distribution": "The full probability distribution of where the stock could land at expiry, backed out of option prices (Breeden–Litzenberger). Not one number — the market's whole picture: the odds of finishing up vs down, and where it prices fat tails.",
   "Catalyst vol": "Options that look cheap into a KNOWN scheduled event (an investor day, capital-markets day) — the straddle isn't pricing the move the stock tends to make around such events.",
+  "Implied correlation": "How tightly an index's stocks are expected to move together, backed out of index vs single-name option prices. Low = lots of idiosyncratic movement (dispersion richly priced — sell index vol, buy the components); high = index-like.",
   // Options — structures & greeks
   "Strangle": "A call + put at different out-of-the-money strikes — a cheaper bet on a big move than a straddle.",
   "Iron condor": "Sell a put spread AND a call spread — collect premium if the stock stays inside a range; defined risk.",
