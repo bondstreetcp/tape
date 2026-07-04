@@ -325,8 +325,17 @@ jobs:
         run: npm run refresh-putwrite
         continue-on-error: true
 
-      # Vol Dislocation — a pure transform of putwrite.json (variance premium + term crush + skew per name),
-      # NO option fetches; must run AFTER refresh-putwrite so the input exists.
+      # Broad vol probe — widens Vol Dislocation beyond the ~380 quality put-writing names to the Russell
+      # 1000 (cap-floored, excluding names putwrite already covers). Realized vol from the LOCAL series (no
+      # fetch); one option pull per name for ATM IV + skew + term crush. Rate-limited like put-writing.
+      # Set VOL_UNIVERSE=russell3000 to go wider (~3x the runtime).
+      - name: Refresh broad vol-universe probe
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-vol-universe
+        continue-on-error: true
+
+      # Vol Dislocation — merges putwrite.json + vol-universe.json (variance premium + term crush + skew per
+      # name), preferring the richer put-writing rows. NO option fetches of its own; runs AFTER both inputs.
       - name: Refresh vol-dislocation screen
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-vol-dislocation

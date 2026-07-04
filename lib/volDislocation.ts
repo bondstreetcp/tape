@@ -26,7 +26,36 @@ export interface VolDisRow {
   sectorPremium: number | null; // the median IV/RV across this name's sector — the peer baseline
   vsSector: number | null; // ivPremium − sector median; >0 = richer vol than its sector (peer-relative)
   pctile: number; // cross-sectional ivPremium percentile (0–100)
+  illiquid?: boolean; // broad-universe name with thin options — treat its vol read with caution
+  broad?: boolean; // sourced from the wide R1000/R3000 probe (vs the curated put-writing quality set)
   catalyst?: { text: string; kind: "event" | "unclear"; confidence: number }; // LLM "why the vol is rich", grounded in recent headlines (phase 2)
+}
+
+// One row of the BROAD vol probe (scripts/refresh-vol-universe.ts). Same per-name fields the dislocation
+// transform needs, computed directly from a wide-universe option pull — merged in by refresh-vol-dislocation
+// (which prefers the richer put-writing rows where a name appears in both).
+export interface VolUniRow {
+  symbol: string;
+  name: string;
+  sector: string;
+  price: number;
+  marketCap: number;
+  atmIV: number;
+  rvol: number;
+  ivPremium: number;
+  termCrush: number | null;
+  skew: number | null;
+  ivRank: number | null;
+  rvolRank: number | null;
+  daysToEarnings: number | null;
+  earningsDriven: boolean;
+  illiquid: boolean;
+}
+export interface VolUniData {
+  generatedAt: string;
+  universe: string;
+  scanned: number;
+  rows: VolUniRow[];
 }
 
 export interface VolDisData {

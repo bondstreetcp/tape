@@ -51,8 +51,47 @@ async function main() {
       sectorPremium: null,
       vsSector: null,
       pctile: 0,
+      illiquid: false,
+      broad: false,
     });
   }
+
+  // Merge in the BROAD vol-universe probe (R1000/R3000 — scripts/refresh-vol-universe.ts), preferring the
+  // richer put-writing rows where a name is in both. This widens coverage well beyond the ~380 quality
+  // names; small/thin-option names carry an `illiquid` flag so the view can down-weight or hide them.
+  const have = new Set(rows.map((r) => r.symbol));
+  let broadN = 0;
+  try {
+    const vu = JSON.parse(await fs.readFile(path.join(process.cwd(), "data", "vol-universe.json"), "utf8")) as { rows?: any[] };
+    for (const r of vu.rows || []) {
+      if (!r || have.has(r.symbol)) continue;
+      if (!(r.atmIV >= 0.08) || !(r.rvol >= 0.08) || r.ivPremium == null) continue;
+      have.add(r.symbol);
+      broadN++;
+      rows.push({
+        symbol: r.symbol,
+        name: r.name,
+        sector: r.sector || "—",
+        price: r.price,
+        marketCap: r.marketCap,
+        atmIV: r.atmIV,
+        rvol: r.rvol,
+        ivPremium: r.ivPremium,
+        termCrush: r.termCrush ?? null,
+        skew: r.skew ?? null,
+        ivRank: r.ivRank ?? null,
+        rvolRank: r.rvolRank ?? null,
+        daysToEarnings: r.daysToEarnings ?? null,
+        earningsDriven: !!r.earningsDriven,
+        sectorPremium: null,
+        vsSector: null,
+        pctile: 0,
+        illiquid: !!r.illiquid,
+        broad: true,
+      });
+    }
+  } catch { /* missing OR corrupt vol-universe.json → screener runs on the putwrite quality set alone */ }
+
   // cross-sectional percentile of the variance premium
   const byPrem = [...rows].sort((a, b) => a.ivPremium - b.ivPremium);
   const n = byPrem.length;
@@ -61,7 +100,7 @@ async function main() {
   // 1.5x in a sector where everyone's at 1.5x isn't special; at 1.5x where the sector's at 1.1x, it is.
   const bySector = new Map<string, number[]>();
   for (const r of rows) {
-    if (!r.sector) continue;
+    if (!r.sector || r.illiquid) continue; // thin-option names carry junk IV — keep them out of the peer baseline
     const a = bySector.get(r.sector);
     if (a) a.push(r.ivPremium);
     else bySector.set(r.sector, [r.ivPremium]);
@@ -82,14 +121,14 @@ async function main() {
 
   const out: VolDisData = {
     generatedAt: new Date().toISOString(),
-    universe: "US quality large/mid-caps (put-writing set)",
+    universe: broadN > 0 ? "US large/mid-caps (put-writing quality set + broad R1000/R3000 probe)" : "US quality large/mid-caps (put-writing set)",
     scanned: rows.length,
     rows,
   };
   await fs.writeFile(path.join(process.cwd(), "data", "vol-dislocation.json"), JSON.stringify(out));
   const rich = rows.filter((r) => r.ivPremium >= 1.4).length,
     cheap = rows.filter((r) => r.ivPremium <= 1.1).length;
-  console.log(`vol-dislocation: ${rows.length} names · rich (IV/RV≥1.4): ${rich} · cheap (≤1.1): ${cheap}`);
+  console.log(`vol-dislocation: ${rows.length} names (${broadN} from the broad probe) · rich (IV/RV≥1.4): ${rich} · cheap (≤1.1): ${cheap}`);
 }
 
 main().catch((e) => {

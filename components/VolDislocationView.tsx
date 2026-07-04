@@ -13,19 +13,22 @@ type F = "rich" | "cheap" | "all";
 export default function VolDislocationView({ universe, data }: { universe: string; data: VolDisData }) {
   const [f, setF] = useState<F>("rich");
   const [hideEarn, setHideEarn] = useState(false);
+  const [hideIlliquid, setHideIlliquid] = useState(true);
   const [q, setQ] = useState("");
 
+  const hasBroad = useMemo(() => data.rows.some((r) => r.broad), [data.rows]);
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     const rs = data.rows.filter((r) => {
       if (f === "rich" && r.ivPremium < 1.4) return false;
       if (f === "cheap" && r.ivPremium > 1.1) return false;
       if (hideEarn && r.earningsDriven) return false;
+      if (hideIlliquid && r.illiquid) return false;
       if (ql && !r.symbol.toLowerCase().includes(ql) && !r.name.toLowerCase().includes(ql)) return false;
       return true;
     });
     return f === "cheap" ? [...rs].sort((a, b) => a.ivPremium - b.ivPremium) : rs; // cheapest-first when on the cheap tab
-  }, [data.rows, f, hideEarn, q]);
+  }, [data.rows, f, hideEarn, hideIlliquid, q]);
 
   const richN = data.rows.filter((r) => r.ivPremium >= 1.4).length;
   const cheapN = data.rows.filter((r) => r.ivPremium <= 1.1).length;
@@ -39,7 +42,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Vol Dislocation — where option vol is rich or cheap</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Cross-sectional read on the variance premium <InfoDot term="Variance premium" /> — <b>ATM implied vol ÷ realized vol</b> <InfoDot term="Implied volatility" /> — across {data.scanned} quality names. <b style={{ color: premColor(1.6) }}>High</b> = the market's paying up for vol (a premium-seller&apos;s list); <b style={{ color: premColor(0.9) }}>low</b> = vol looks underpriced. Term crush + skew add context; near-earnings names are flagged (their rich vol is <i>expected</i>). {richN} rich · {cheapN} cheap · {fmtDateTime(data.generatedAt)}
+            Cross-sectional read on the variance premium <InfoDot term="Variance premium" /> — <b>ATM implied vol ÷ realized vol</b> <InfoDot term="Implied volatility" /> — across {data.scanned} names{hasBroad ? " (quality set + broad R1000/R3000 probe)" : ""}. <b style={{ color: premColor(1.6) }}>High</b> = the market's paying up for vol (a premium-seller&apos;s list); <b style={{ color: premColor(0.9) }}>low</b> = vol looks underpriced. Term crush + skew add context; near-earnings names are flagged (their rich vol is <i>expected</i>). {richN} rich · {cheapN} cheap · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -54,13 +57,18 @@ export default function VolDislocationView({ universe, data }: { universe: strin
         <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]" title="Hide names reporting inside the front expiry — their rich vol is expected event premium, not a dislocation">
           <input type="checkbox" checked={hideEarn} onChange={(e) => setHideEarn(e.target.checked)} /> hide earnings
         </label>
+        {hasBroad && (
+          <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]" title="Hide thin-option names from the broad R1000/R3000 probe (low OI / few strikes) — their IV read is less reliable">
+            <input type="checkbox" checked={hideIlliquid} onChange={(e) => setHideIlliquid(e.target.checked)} /> hide illiquid
+          </label>
+        )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or company…" className="w-48 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
         <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} names</span>
       </div>
 
       <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
-        A code-detected read, not a call: rich vol may simply be pricing a real catalyst — earnings are flagged, and the <span style={{ color: "#f59e0b" }}>⚡</span> tag is an AI read of the name&apos;s recent headlines (a code-detected signal, contextualized — pair with the filings before trading). IV + realized vol are solved nightly from the options chain (vendor IV treated as junk). Quality large/mid-cap universe. Decision support, not advice.
+        A code-detected read, not a call: rich vol may simply be pricing a real catalyst — earnings are flagged, and the <span style={{ color: "#f59e0b" }}>⚡</span> tag is an AI read of the name&apos;s recent headlines (a code-detected signal, contextualized — pair with the filings before trading). IV + realized vol are solved nightly from the options chain (vendor IV treated as junk). Spans the curated put-writing quality set plus a broad R1000/R3000 probe — thin-option names carry a <span className="rounded bg-[var(--surface-2)] px-1 text-[var(--text-4)]">thin</span> flag (hidden by default). Decision support, not advice.
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -101,6 +109,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-4)]">{r.ivRank != null ? r.ivRank.toFixed(0) : "—"}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-[11px]">
                   {r.earningsDriven && <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[var(--text-4)]" title={`Reports in ~${r.daysToEarnings}d — inside the front expiry, so the rich vol is expected event premium`}>earnings {r.daysToEarnings}d</span>}
+                  {r.illiquid && <span className="ml-1 rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[var(--text-4)]" title="Thin options (low open interest / few strikes) from the broad probe — treat this IV read with extra caution">thin</span>}
                 </td>
               </tr>
             ))}
