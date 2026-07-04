@@ -332,6 +332,15 @@ jobs:
         run: npm run refresh-vol-dislocation
         continue-on-error: true
 
+      # Vol-tags — the LLM "why" (real catalyst vs genuine dislocation) on the top rich, non-earnings
+      # names, grounded in recent headlines. Runs AFTER refresh-vol-dislocation. Needs OPENROUTER_API_KEY.
+      - name: Refresh vol-dislocation catalyst tags
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-vol-tags
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       - name: Refresh earnings expected-move screen
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-earnings-move

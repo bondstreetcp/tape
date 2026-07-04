@@ -60,7 +60,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
       </div>
 
       <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
-        A code-detected read, not a call: rich vol may simply be pricing a real catalyst (earnings are flagged; other events aren&apos;t yet — pair with the name&apos;s news/filings before trading). IV + realized vol are solved nightly from the options chain (vendor IV treated as junk). Quality large/mid-cap universe. Decision support, not advice.
+        A code-detected read, not a call: rich vol may simply be pricing a real catalyst — earnings are flagged, and the <span style={{ color: "#f59e0b" }}>⚡</span> tag is an AI read of the name&apos;s recent headlines (a code-detected signal, contextualized — pair with the filings before trading). IV + realized vol are solved nightly from the options chain (vendor IV treated as junk). Quality large/mid-cap universe. Decision support, not advice.
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -83,7 +83,12 @@ export default function VolDislocationView({ universe, data }: { universe: strin
               <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2">
                   <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
-                  <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
+                  <div className="max-w-[160px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
+                  {r.catalyst && (
+                    <div className="mt-0.5 max-w-[180px] truncate text-[11px]" style={{ color: r.catalyst.kind === "event" ? "#f59e0b" : "var(--text-4)" }} title={`AI read of recent headlines (${Math.round(r.catalyst.confidence * 100)}% conf) — the rich vol may be pricing this, not a free dislocation`}>
+                      ⚡ {r.catalyst.text}
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-2 text-[12px] text-[var(--text-3)]">{r.sector}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{pct(r.atmIV)}</td>
