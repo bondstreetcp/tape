@@ -85,3 +85,34 @@ export function guideVsConsensus(
 
 export const guideMidRevM = (g: GuidancePeriod) => mid(g.revLowM, g.revHighM);
 export const guideMidEps = (g: GuidancePeriod) => mid(g.epsLow, g.epsHigh);
+
+/**
+ * Deterministic keyword classifier for the guidance ACTION (raise/cut/reaffirm/initiate/mixed) from the
+ * filing's OWN directional language. The LLM is inconsistent on this soft field; this reads the words —
+ * grounded, testable, free — and returns a CONFIDENT action, or null to DEFER to the model. High
+ * precision by design: a raise/cut stem must sit within ~50 chars of an explicit guidance noun (so
+ * "raised $500M of notes" or "net sales increased 10%" don't read as a guidance change), plus a few
+ * self-evident phrases ("to the low/high end", "higher than prior"). Both a raise AND a cut cue → 'mixed'.
+ */
+export function classifyGuidanceAction(text: string): GuidanceAction | null {
+  const t = " " + String(text ?? "").toLowerCase().replace(/\s+/g, " ") + " ";
+  const NOUN = /(guidance|outlook|forecast|guide|guiding)/;
+  const nearGuide = (stem: RegExp): boolean => {
+    const re = new RegExp(stem.source, "g");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(t))) {
+      if (NOUN.test(t.slice(Math.max(0, m.index - 50), m.index + m[0].length + 50))) return true;
+    }
+    return false;
+  };
+  const higherThanPrior = /\b(higher|above|greater|increased|up)\b[^.]{0,30}\b(than|vs\.?|versus|from)\b[^.]{0,20}(prior|previous|last|earlier)/.test(t);
+  const lowerThanPrior = /\b(lower|below|less|reduced|down)\b[^.]{0,30}\b(than|vs\.?|versus|from)\b[^.]{0,20}(prior|previous|last|earlier)/.test(t);
+  const raise = nearGuide(/\b(rais|increas|boost|lift|hik|improv)/) || /to the (high|upper|top) end/.test(t) || higherThanPrior;
+  const cut = nearGuide(/\b(lower|reduc|cut|trim|moderat|decreas|weaken|soften)/) || /(to|at|near|toward) the (low|lower|bottom) end/.test(t) || lowerThanPrior;
+  if (raise && cut) return "mixed";
+  if (raise) return "raise";
+  if (cut) return "cut";
+  if (nearGuide(/\b(reaffirm|reiterat|maintain|confirm|unchang|reconfirm)/) || /\b(on track|continues? to (expect|anticipate|see))\b/.test(t)) return "reaffirm";
+  if (nearGuide(/\b(initiat|introduc)/) || /for the first time/.test(t) || /initial (guidance|outlook|guide)/.test(t)) return "initiate";
+  return null;
+}

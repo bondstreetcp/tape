@@ -16,6 +16,7 @@ import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { numberGroundedIn } from "../lib/llmValidate";
 import { loadSnapshot } from "../lib/data";
 import type { GuidanceData, GuidancePeriod, GuidanceTicker, GuidanceAction } from "../lib/guidance";
+import { classifyGuidanceAction } from "../lib/guidance";
 
 try {
   const env = readFileSync(join(process.cwd(), ".env.local"), "utf8");
@@ -117,12 +118,19 @@ async function extract(sym: string, text: string, ctx: { mktcapM: number | null;
     const metricLabel = typeof o.metricLabel === "string" ? o.metricLabel.slice(0, 60) : undefined;
     // Keep a period only if it carries a usable dollar/EPS range OR a described metric (metricLabel/quote).
     if (revLowM == null && epsLow == null && revHighM == null && epsHigh == null && !metricLabel && !o.quote) continue;
+    const quote = groundedQuote(o.quote);
+    const llmAction: GuidanceAction = ACTIONS.has(o.action) ? o.action : "none";
+    // ACTION: prefer a deterministic read of the guide's OWN grounded quote (e.g. "at the low end of $X
+    // to $Y" → cut, "higher than the prior range" → raise) so a clear directional quote overrides an
+    // inconsistent model tag; otherwise keep the LLM's action (it read the whole filing). Deliberately
+    // NOT a filing-level keyword read — that mis-tagged bare neutral ranges (DAL "$1.00-$1.50" → false raise).
+    const action: GuidanceAction = classifyGuidanceAction(quote || "") ?? llmAction;
     out.push({
       period: o.period.slice(0, 16),
       metricLabel,
       revLowM, revHighM, epsLow, epsHigh,
-      action: ACTIONS.has(o.action) ? o.action : "none",
-      quote: groundedQuote(o.quote),
+      action,
+      quote,
       confidence: ["high", "medium", "low"].includes(o.confidence) ? o.confidence : "medium",
     });
   }

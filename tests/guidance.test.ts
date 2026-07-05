@@ -1,6 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { beatGuide, guideVsConsensus, type GuidanceHistoryPoint, type GuidancePeriod } from "../lib/guidance";
+import { beatGuide, guideVsConsensus, classifyGuidanceAction, type GuidanceHistoryPoint, type GuidancePeriod } from "../lib/guidance";
+
+// classifyGuidanceAction is the deterministic action-tag classifier (raise/cut/reaffirm/initiate/mixed)
+// from the filing's own directional language — overrides the LLM only when confident, else null.
+test("classifyGuidanceAction: reads directional language, defers (null) when unclear", () => {
+  assert.equal(classifyGuidanceAction("The company raised its full-year guidance."), "raise");
+  assert.equal(classifyGuidanceAction("We are lowering our fiscal 2026 outlook."), "cut");
+  assert.equal(classifyGuidanceAction("Management reaffirmed its prior guidance."), "reaffirm");
+  assert.equal(classifyGuidanceAction("Oracle is initiating fiscal 2027 revenue guidance."), "initiate");
+  // Self-evident phrases (no guidance noun needed).
+  assert.equal(classifyGuidanceAction("Adjusted EPS at the low end of its $1.70 to $1.85 range."), "cut"); // CAG
+  assert.equal(classifyGuidanceAction("Net sales growth around 4%, two percentage points higher than the prior range."), "raise"); // TGT
+  assert.equal(classifyGuidanceAction("raised its revenue guide but lowered its margin outlook"), "mixed");
+  // Precision: directional words NOT about guidance must NOT trigger a tag.
+  assert.equal(classifyGuidanceAction("The company raised $500M in senior notes."), null);
+  assert.equal(classifyGuidanceAction("Full-year net sales increased 10% to $5.2B."), null); // reported result
+  assert.equal(classifyGuidanceAction("We expect Q3 EPS of $1.00 to $1.50."), null); // guidance but no comparison
+  assert.equal(classifyGuidanceAction(""), null);
+});
 
 // beatGuide is the sandbagger stat — "how often does this company beat its own guide". It aligns each
 // quarter's actual EPS to the next-quarter guide given ONE filing earlier, but only for consecutive
