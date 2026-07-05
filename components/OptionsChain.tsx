@@ -4,6 +4,7 @@ import { fmtMoney } from "@/lib/format";
 import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import OptionsStrategy from "./OptionsStrategy";
 import IvSurface from "./IvSurface";
+import VolConeChart from "./VolConeChart";
 import GammaExposure from "./GammaExposure";
 import InfoDot from "./InfoDot";
 import { LoadingState } from "./Spinner";
@@ -197,6 +198,8 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
       </div>
 
       <IvSurface symbol={symbol} currency={currency} />
+
+      <VolConeChart symbol={symbol} ivTerm={term} />
 
       <GammaExposure symbol={symbol} />
 
