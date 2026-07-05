@@ -188,8 +188,8 @@ export default function AppHeader({
       {/* Secondary sub-nav — sub-tabs within the active hub (US-only tools filtered out on intl). */}
       {hub && hubItems.length > 0 && (
         <div className="border-t border-[var(--divider)] bg-[var(--surface)]/50">
-          {/* Wrap to multiple rows rather than scroll-clip: a busy hub (e.g. Earnings & Events has ~15
-              tools) overflowed to the right behind a hidden scrollbar, so the last tabs were unreachable. */}
+          {/* Wrap to multiple rows rather than scroll-clip: a busy hub's sub-tabs overflowed to the right
+              behind a hidden scrollbar, so the last tabs were unreachable. Wrapping shows them all. */}
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-0.5 gap-y-1 px-4 py-1.5 text-[13px] sm:px-6">
             <span className="shrink-0 pr-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{hub.label}</span>
             {hubItems.map((it) => {
