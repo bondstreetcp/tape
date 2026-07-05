@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, type NameData } from "@/lib/portfolio";
+import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
@@ -82,6 +83,40 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const hasBook = stats.holdings.length > 0;
   const effN = stats.concentration.hhi > 0 ? 1 / stats.concentration.hhi : 0; // effective # of names
   const netPctGross = stats.gross ? (stats.net / stats.gross) * 100 : 0;
+
+  // --- Risk decomposition (factor tilts + correlation) — a heavier, separately-fetched read. ---
+  // Send priced names ordered by |exposure| desc (holdings are pre-sorted) so if the server caps the
+  // list it keeps the most material positions; fall back to the raw symbol set before prices load.
+  const riskSymbolsKey = useMemo(
+    () => (stats.holdings.length ? stats.holdings.map((h) => h.symbol).join(",") : symbolsKey),
+    [stats.holdings, symbolsKey],
+  );
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; cappedFrom: number | null; cap: number | null }>({ factors: {}, corr: [], cappedFrom: null, cap: null });
+  const [riskLoading, setRiskLoading] = useState(false);
+  useEffect(() => {
+    if (!riskSymbolsKey) { setRisk({ factors: {}, corr: [], cappedFrom: null, cap: null }); return; }
+    let cancelled = false;
+    setRiskLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/portfolio/risk?symbols=${encodeURIComponent(riskSymbolsKey)}`).then((x) => x.json());
+        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
+      } catch { if (!cancelled) setRisk({ factors: {}, corr: [], cappedFrom: null, cap: null }); }
+      if (!cancelled) setRiskLoading(false);
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [riskSymbolsKey]);
+
+  const tilts = useMemo(
+    () => computeFactorTilts(stats.holdings.map((h) => ({ value: h.value, factors: risk.factors[h.symbol] }))),
+    [stats.holdings, risk.factors],
+  );
+  const crowding = useMemo(
+    () => computeCrowding(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.corr),
+    [stats.holdings, risk.corr],
+  );
+  const hedgeNotional = stats.beta == null ? null : stats.beta * stats.gross; // Σ value·β = $ SPY to short to flatten
+  const anyFactor = tilts.some((t) => t.coverage > 0);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -221,6 +256,95 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-4)]">
                     &ldquo;Effective # names&rdquo; = 1/HHI — a book this concentrated behaves like {effN ? effN.toFixed(1) : "—"} equal-weight positions. Fractions of gross exposure.
                   </p>
+                </div>
+              </div>
+
+              {/* Risk decomposition: factor tilts + crowding + hedge */}
+              {risk.cappedFrom && (
+                <p className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-3 py-2 text-[12px] text-[#f59e0b]">
+                  Factor tilts &amp; crowding cover your {risk.cap} largest positions — your book has {risk.cappedFrom} names. (Exposure, beta &amp; the shock scenario above still cover the whole book.)
+                </p>
+              )}
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Factor tilts */}
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Factor tilts <InfoDot term="Factor tilt" /></span>
+                    <span className="text-[11px] text-[var(--text-4)]">{riskLoading ? "scoring…" : "σ vs Russell 1000"}</span>
+                  </div>
+                  {!anyFactor ? (
+                    <p className="py-6 text-center text-[12px] text-[var(--text-4)]">{riskLoading ? "Scoring the book against the universe…" : "No US names to score — factor tilts cover US holdings only."}</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {tilts.map((t) => {
+                        const meta = FACTOR_META.find((f) => f.key === t.key)!;
+                        const w = Math.min(50, (Math.abs(t.tilt) / 2.5) * 50); // ±2.5σ = full half-width
+                        const c = t.tilt >= 0 ? "var(--accent)" : "#f59e0b";
+                        const faded = t.coverage < 0.001;
+                        return (
+                          <div key={t.key} className={`flex items-center gap-2 text-[12px] ${faded ? "opacity-40" : ""}`} title={meta.hint + (t.coverage < 0.999 && t.coverage > 0 ? ` · ${Math.round(t.coverage * 100)}% covered` : "")}>
+                            <span className="w-20 shrink-0 text-[var(--text-3)]">{t.label}</span>
+                            <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
+                              <div className="absolute top-0 h-4 rounded" style={{ background: c, opacity: 0.75, width: `${w}%`, left: t.tilt >= 0 ? "50%" : `${50 - w}%` }} />
+                              <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
+                            </div>
+                            <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: faded ? "var(--text-4)" : c }}>{faded ? "—" : `${t.tilt >= 0 ? "+" : ""}${t.tilt.toFixed(2)}`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                    Gross-weighted, short-aware exposure of the book to each factor, in standard deviations vs the Russell 1000. +σ = tilted toward that factor; a long/short book nets. Bars fade when a factor isn&apos;t covered.
+                  </p>
+                </div>
+
+                {/* Crowding / correlation + hedge */}
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold">Crowding <InfoDot term="Crowding" /></span>
+                      <span className="text-[11px] text-[var(--text-4)]">daily-return correlation</span>
+                    </div>
+                    {crowding.avgCorr == null ? (
+                      <p className="py-4 text-center text-[12px] text-[var(--text-4)]">{riskLoading ? "Correlating holdings…" : "Need ≥2 US names with price history to read crowding."}</p>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: crowding.avgCorr >= 0.6 ? "#ef4444" : crowding.avgCorr >= 0.35 ? "#f59e0b" : "#22c55e" }}>{crowding.avgCorr.toFixed(2)}</span>
+                          <span className="text-[12px] text-[var(--text-3)]">avg pairwise ρ — {crowding.avgCorr >= 0.6 ? "names move together (hidden concentration)" : crowding.avgCorr >= 0.35 ? "moderately correlated" : "well diversified"}</span>
+                        </div>
+                        {crowding.topPairs.length > 0 && (
+                          <div className="mt-2.5">
+                            <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Most-correlated pairs</div>
+                            <div className="space-y-1">
+                              {crowding.topPairs.slice(0, 5).map((p) => (
+                                <div key={p.a + p.b} className="flex items-center gap-2 text-[12px]">
+                                  <span className="w-24 shrink-0 font-mono text-[var(--text-2)]">{p.a}·{p.b}</span>
+                                  <div className="relative h-2.5 flex-1 rounded bg-[var(--bg)]">
+                                    <div className="absolute left-0 top-0 h-2.5 rounded" style={{ width: `${Math.max(0, Math.min(100, p.r * 100))}%`, background: p.r >= 0.6 ? "#ef4444" : "#f59e0b", opacity: 0.8 }} />
+                                  </div>
+                                  <span className="w-10 shrink-0 text-right font-mono tabular-nums text-[var(--text-3)]">{p.r.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <div className="mb-1 text-[13px] font-semibold">Beta-neutral hedge <InfoDot term="Beta-neutral hedge" /></div>
+                    {hedgeNotional == null || Math.abs(hedgeNotional) < 1 ? (
+                      <p className="text-[12px] text-[var(--text-4)]">{stats.beta == null ? "No betas available for this book." : "Book is already ≈ market-neutral."}</p>
+                    ) : (
+                      <p className="text-[13px] leading-relaxed text-[var(--text-2)]">
+                        {hedgeNotional >= 0 ? "Short" : "Buy"} <span className="font-mono font-semibold">{money(Math.abs(hedgeNotional))}</span> of <span className="font-semibold">SPY</span> to flatten market risk
+                        <span className="text-[var(--text-4)]"> — nets out the book&apos;s {stats.beta!.toFixed(2)}β on {money(stats.gross)} gross.</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -101,6 +101,27 @@ export function halfLife(spread: number[]): number | null {
   return Number.isFinite(hl) && hl > 0 ? hl : null;
 }
 
+const DAY_MS = 86_400_000;
+/** Collapse a [ts,price] series to one point per calendar day (last close wins), sorted ascending. The
+ *  stored series carry intraday timestamps, so two names rarely share an exact ts — bucket before aligning. */
+export function bucketByDay(d: Daily): Daily {
+  const m = new Map<number, number>();
+  for (const [t, p] of d) if (p > 0) m.set(Math.floor(t / DAY_MS) * DAY_MS, p);
+  return [...m.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+/** Correlation of two names' daily log-returns over their shared history. Day-buckets both series first
+ *  (else intraday-timestamp mismatch yields ~zero overlap). null if fewer than `minOverlap` shared days. */
+export function corrOf(a: Daily, b: Daily, minOverlap = 120): number | null {
+  const { logA, logB } = alignLogPrices(bucketByDay(a), bucketByDay(b));
+  const n = Math.min(logA.length, logB.length);
+  if (n < minOverlap) return null;
+  const rA: number[] = [], rB: number[] = [];
+  for (let i = 1; i < n; i++) { rA.push(logA[i] - logA[i - 1]); rB.push(logB[i] - logB[i - 1]); }
+  const c = correlation(rA, rB);
+  return Number.isFinite(c) ? c : null;
+}
+
 /** Align two daily [ts,px] series on shared timestamps (positive prices only) → parallel log-price arrays. */
 export function alignLogPrices(a: Daily, b: Daily): { logA: number[]; logB: number[] } {
   const mb = new Map<number, number>();

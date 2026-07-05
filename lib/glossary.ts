@@ -21,6 +21,9 @@ export const GLOSSARY: Record<string, string> = {
   "Market cap": "Total value of all shares = share price × shares outstanding.",
   "Gross exposure": "Long value + short value (both counted positive) — the total market you're exposed to.",
   "HHI concentration": "Sum of each position's squared weight. Higher = more concentrated; 1/HHI ≈ how many equal-weight names it acts like.",
+  "Factor tilt": "How far your book leans toward a style (value, momentum, quality…) vs the market, in standard deviations. +σ = tilted toward it.",
+  "Crowding": "How much your holdings move together (average return correlation). High correlation = hidden concentration even across sectors.",
+  "Beta-neutral hedge": "The dollar amount of index (SPY) to short (or buy) so the book's market beta nets to zero — leaving only stock-picking risk.",
   // Options
   "IV": "Implied volatility — how much movement the options market is pricing in. Higher = pricier options.",
   "IV rank": "Where today's implied volatility sits vs. its own past year (0–100%). High = options are expensive now.",

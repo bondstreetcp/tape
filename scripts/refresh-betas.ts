@@ -14,18 +14,11 @@
 import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { computeBeta, type Daily } from "../lib/pairs";
+import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const DAY = 86_400_000;
-
-/** Collapse a [ts,price] series to one point per calendar day (last close wins), sorted ascending. */
-function bucketByDay(d: Daily): Daily {
-  const m = new Map<number, number>();
-  for (const [t, p] of d) if (p > 0) m.set(Math.floor(t / DAY) * DAY, p);
-  return [...m.entries()].sort((a, b) => a[0] - b[0]);
-}
 
 async function loadSeries(sym: string): Promise<Daily | null> {
   try {
