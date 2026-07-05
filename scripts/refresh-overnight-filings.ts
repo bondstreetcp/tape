@@ -29,13 +29,17 @@ import { tickerToCik, getSubmissions, getFilingText, HEADERS, pool } from "../li
 import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
-import { chatJSON, llmConfigured } from "../lib/llm";
+import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
 
 const DATA = path.join(process.cwd(), "data");
 const WINDOW_HOURS = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : 36;
 const SCAN_BROAD = process.env.SCAN_BROAD === "1";
 const scanErrors: string[] = []; // symbols whose EDGAR submissions fetch failed (after retries) → silently skipped
 const TEST_SYMBOLS = (process.env.TEST_SYMBOLS || "").trim();
+// Digest model: FLASH_MODEL (validated 2026-07-04 — an 8-name A/B vs GLM on earnings 8-Ks/10-Qs showed
+// the numbers Flash cites MATCH GLM exactly, no fabrication, ~4x cheaper; the prompt's "never compute a
+// figure / only explicitly-stated numbers" rubric keeps it grounded). Override with OVERNIGHT_MODEL.
+const OVERNIGHT_MODEL = process.env.OVERNIGHT_MODEL || FLASH_MODEL;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // 8-K items we treat as candidate-material. Cast a wide net here and let the LLM's
@@ -260,7 +264,7 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
     priorBlock +
     rfLine;
 
-  const digest = await chatJSON<Digest>(SYSTEM, user, { maxTokens: 2000 });
+  const digest = await chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000 });
   if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
   if (typeof digest.headline !== "string") return null;
   const headline = digest.headline.trim();
