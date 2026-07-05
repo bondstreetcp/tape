@@ -463,6 +463,13 @@ jobs:
         run: npm run refresh-corp-events
         continue-on-error: true
 
+      # Merger-arb monitor — SEC merger proxies (DEFM14A/PREM14A) → LLM-extract deal terms (cheap Flash,
+      # cash prices number-grounded) → arb spread off snapshot/live prices. Free EDGAR + ~$0.06 LLM.
+      - name: Refresh merger-arb monitor
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-merger-arb
+        continue-on-error: true
+
       # IPOs & Lockups — SEC 424B4 (recent IPOs + ~180d lockup calendar) → GLM extract. Free EDGAR.
       - name: Refresh IPO & lockup monitor
         if: ${{ env.FULL == 'true' }}

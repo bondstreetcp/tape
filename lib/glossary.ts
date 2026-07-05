@@ -94,6 +94,7 @@ export const GLOSSARY: Record<string, string> = {
   "Z-score": "How many standard deviations from normal — e.g. −2 is unusually cheap vs. its own history.",
   "Half-life": "How fast a stretched spread snaps back — the days for it to close half the gap to its mean. Shorter = quicker reversion.",
   "Hedge ratio": "How many shares of B to short per share of A so the pair is market-neutral (β from a regression of the two log-prices).",
+  "Merger arb spread": "How far a takeover target trades BELOW the agreed deal value — the return you capture if the deal closes. A wide spread signals the market's doubt the deal completes.",
   "Sharpe": "Return earned per unit of risk taken. Higher is a better risk-adjusted result.",
   "Max drawdown": "The worst peak-to-trough drop over the period — the deepest loss you'd have sat through.",
 };

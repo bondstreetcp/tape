@@ -84,6 +84,7 @@ export const FEATURES: NavItem[] = [
   { label: "Trump's Stock Calls", path: "/trump-stocks", desc: "Just the Truth Social posts where Trump names a public company — with how the stock did since", group: "Research", job: "Find ideas", kw: "trump truth social stock calls recommendations mentions dell intel nvidia tariffs bullish bearish president politician social" },
   { label: "Activism & Shorts", path: "/campaigns", desc: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", group: "Research", job: "Find ideas", kw: "activist 13d proxy fight short seller muddy waters campaign icahn elliott saba radoff dissident board seats hindenburg allegation event driven" },
   { label: "Corporate Events", path: "/corp-events", desc: "Buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes — from SEC 8-Ks", group: "Research", job: "Find ideas", kw: "buyback repurchase spin-off spinoff carve-out strategic alternatives sale merger stock split reverse split ceo cfo change leadership 8-k corporate event driven kedm monitor" },
+  { label: "Merger Arb", path: "/merger-arb", desc: "Pending US acquisitions with the live arb spread + annualized return — cash & stock deals from SEC merger proxies", group: "Research", job: "Find ideas", kw: "merger arbitrage arb pending deal acquisition takeover spread annualized return definitive agreement per share cash stock exchange ratio cvr break price deal close regulatory antitrust event driven risk arb m&a target acquirer" },
   { label: "IPOs & Lockups", path: "/ipos", desc: "Recent IPOs + the lockup-expiry calendar (IPO + ~180d) — when insider supply first hits the stock", group: "Research", job: "Find ideas", kw: "ipo initial public offering lockup unlock expiry 180 days insider supply 424b4 new listing nasdaq nyse event driven kedm" },
   { label: "Biotech Catalysts", path: "/biotech-catalysts", desc: "Clinical binary events — Phase 2/3 readouts, enrollment done, failures — mapped to the sponsor's ticker", group: "Research", job: "Find ideas", kw: "biotech pharma clinical trial phase 3 phase 2 readout pdufa fda catalyst binary event clinicaltrials topline data sponsor drug" },
   { label: "Policy & Contracts", path: "/policy", desc: "New federal rules (tariffs, EPA, FAA, drug-pricing) + big government contract wins, mapped to tickers", group: "Research", job: "Find ideas", kw: "policy federal register rule tariff epa fda cms drug pricing faa ftc government contract award defense usaspending lockheed boeing raytheon revenue signal regulation" },
@@ -105,7 +106,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Research: [
     { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
-    { label: "Event-Driven", blurb: "Catalyst monitors — activism & shorts, corporate events, spinoff turnover, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/campaigns", "/corp-events", "/spinoffs", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
+    { label: "Event-Driven", blurb: "Catalyst monitors — merger-arb spreads, activism & shorts, corporate events, spinoff turnover, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/merger-arb", "/campaigns", "/corp-events", "/spinoffs", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
     { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
     { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, relative-value pairs, sector compare", paths: ["/compare-stocks", "/ratio", "/pairs", "/compare"] },
@@ -121,6 +122,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
 export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   ...(GROUP_HUBS.Strategies?.find((h) => h.label === "Earnings & Events")?.paths ?? []),
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only) — lives in the Research "Charts & Compare" hub
+  "/merger-arb", // US merger-arb (SEC merger proxies) — lives in the Research "Event-Driven" hub
 ]);
 /** True if a relative path (e.g. "/skew" or "/skew/AAPL") is one of the US-only feature routes. */
 export const isUsOnlyPath = (relPath: string): boolean =>
