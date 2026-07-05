@@ -74,6 +74,7 @@ const FEEDS: FeedSpec[] = [
   { file: "catalysts.json", label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
   { file: "options-flow.json", label: "Options flow", tier: "core", maxAgeHours: CORE },
   { file: "gamma-board.json", label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
+  { file: "vol-cone.json", label: "Realized-vol cone", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
   { file: "macro.json", label: "Macro (FRED)", tier: "core", maxAgeHours: CORE, stampKeys: ["asOf", "generatedAt"] },
   { file: "cef.json", label: "Closed-end funds", tier: "core", maxAgeHours: CORE },
   { file: "holdco-nav.json", label: "Holdco NAV", tier: "core", maxAgeHours: CORE },

@@ -228,6 +228,13 @@ jobs:
         run: npm run refresh-betas
         continue-on-error: true
 
+      # Realized-vol cone screener — annualized RV cone (10/21/63/126/252d) + where current RV sits in each
+      # name's own history, across EVERY universe. Pure local math off the stored series; no fetch, no LLM.
+      - name: Refresh realized-vol cone
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-vol-cone
+        continue-on-error: true
+
       # Index valuation history — synthesizes the S&P 500 median-multiple series from the per-name
       # valuation history (must run AFTER it) for the "valuation vs index over time" view.
       - name: Refresh index valuation
