@@ -47,6 +47,7 @@ export const GLOSSARY: Record<string, string> = {
   "Rich / cheap": "Options priced HIGH (rich → sell premium) or LOW (cheap → buy the move) versus how much the stock actually tends to move.",
   "Skew": "The gap between put and call implied vol. Positive = downside puts cost more — the market pays up for crash protection.",
   "Realized vol cone": "The historical min-to-max range of a stock's realized volatility at each horizon. Where today sits inside it: low = unusually quiet (coiled), high = unusually wild.",
+  "Coiled spring": "A stock that's unusually quiet (realized vol near the bottom of its own range, so options are cheap) AND positioned for dealers to amplify the next move — a setup for an outsized break.",
   "Term structure": "How implied vol differs across expiry dates. Front richer than back (backwardation) usually means an event is coming.",
   "Vol crush": "Implied vol collapsing the instant an event (like earnings) passes — the premium a straddle buyer pays and a seller collects.",
   "Term crush": "Front-expiry IV ÷ a later expiry's IV. Above 1 = the near-term is event-inflated and set to crush after the print.",
