@@ -60,7 +60,15 @@ export default function AppHeader({
       const t = e.target as Node;
       if (!navRef.current?.contains(t) && !dropRef.current?.contains(t)) setOpen(null);
     };
-    const onScroll = () => setOpen(null);
+    // Dismiss on a real PAGE scroll/resize (the anchored position would otherwise go stale) — but the
+    // capture-phase listener ALSO receives the dropdown's own overflow-y-auto scroll, which would slam the
+    // menu shut the instant you scroll toward its bottom items (they read as permanently "cut off"). Ignore
+    // scrolls that originate inside the menu so a long menu stays scrollable.
+    const onScroll = (e: Event) => {
+      const t = e.target;
+      if (e.type === "scroll" && t instanceof Node && dropRef.current?.contains(t)) return;
+      setOpen(null);
+    };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onScroll);
