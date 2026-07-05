@@ -5,6 +5,7 @@ import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import OptionsStrategy from "./OptionsStrategy";
 import IvSurface from "./IvSurface";
 import VolConeChart from "./VolConeChart";
+import VolGammaSetup from "./VolGammaSetup";
 import GammaExposure from "./GammaExposure";
 import InfoDot from "./InfoDot";
 import { LoadingState } from "./Spinner";
@@ -177,6 +178,8 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
           {allStrikes ? "Show near-the-money" : "Show all strikes"}
         </button>
       </div>
+
+      <VolGammaSetup symbol={symbol} />
 
       <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} nextExpiry={nextExpiry} nextIV={nextIV} />
 
