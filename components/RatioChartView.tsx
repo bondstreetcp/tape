@@ -40,14 +40,18 @@ async function fetchDaily(sym: string): Promise<Bar[]> {
   return (r?.daily || []).filter((b: any) => b && b.c != null).map((b: any) => ({ t: b.t, c: b.c }));
 }
 
-export default function RatioChartView({ universe }: { universe: string }) {
-  const [a, setA] = useState("NVDA");
-  const [b, setB] = useState("SPY");
-  const [aIn, setAIn] = useState("NVDA");
-  const [bIn, setBIn] = useState("SPY");
+export default function RatioChartView({ universe, initialA, initialB }: { universe: string; initialA?: string; initialB?: string }) {
+  // Seed the two legs from ?a=&b= when deep-linked (e.g. from the Pairs screener); default NVDA/SPY.
+  const seedA = clean(initialA || "") || "NVDA";
+  const seedB = clean(initialB || "") || "SPY";
+  const hasPair = !!(initialA && initialB);
+  const [a, setA] = useState(seedA);
+  const [b, setB] = useState(seedB);
+  const [aIn, setAIn] = useState(seedA);
+  const [bIn, setBIn] = useState(seedB);
   const [formula, setFormula] = useState("MDT - 0.19 MMED");
   const [formulaIn, setFormulaIn] = useState("MDT - 0.19 MMED");
-  const [mode, setMode] = useState<Mode>("rebased");
+  const [mode, setMode] = useState<Mode>(hasPair ? "ratio" : "rebased");
   const [years, setYears] = useState(1);
   const [data, setData] = useState<Record<string, Bar[] | "err">>({});
   const [hi, setHi] = useState<number | null>(null);

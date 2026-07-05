@@ -92,6 +92,8 @@ export const GLOSSARY: Record<string, string> = {
   "Short interest": "The % of shares sold short — a gauge of how many are betting the stock falls.",
   "Borrow fee": "The annual % cost to borrow a stock in order to short it. High = hard to short.",
   "Z-score": "How many standard deviations from normal — e.g. −2 is unusually cheap vs. its own history.",
+  "Half-life": "How fast a stretched spread snaps back — the days for it to close half the gap to its mean. Shorter = quicker reversion.",
+  "Hedge ratio": "How many shares of B to short per share of A so the pair is market-neutral (β from a regression of the two log-prices).",
   "Sharpe": "Return earned per unit of risk taken. Higher is a better risk-adjusted result.",
   "Max drawdown": "The worst peak-to-trough drop over the period — the deepest loss you'd have sat through.",
 };

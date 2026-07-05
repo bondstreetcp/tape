@@ -214,6 +214,13 @@ jobs:
         run: npm run refresh-valuation-history
         continue-on-error: true
 
+      # Relative-value pairs (stat-arb) — same-sector S&P 500 pairs whose spread is stretched + mean-reverts.
+      # Pure local math off the stored price series (no fetch/LLM), so it's fast + free.
+      - name: Refresh pairs (stat-arb)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-pairs
+        continue-on-error: true
+
       # Index valuation history — synthesizes the S&P 500 median-multiple series from the per-name
       # valuation history (must run AFTER it) for the "valuation vs index over time" view.
       - name: Refresh index valuation

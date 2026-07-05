@@ -77,6 +77,7 @@ export const FEATURES: NavItem[] = [
   { label: "Expectations (Reverse-DCF)", path: "/expectations", desc: "What growth the price implies vs what the business delivers — cheap vs priced-for-perfection", group: "Research", job: "Find ideas", kw: "reverse dcf implied growth expectations investing fcf mauboussin priced for perfection" },
   { label: "Compare Stocks", path: "/compare-stocks", desc: "Two+ stocks side by side, with an AI verdict", group: "Research", job: "Research a name", kw: "compare versus head to head" },
   { label: "Ratio & Formula", path: "/ratio", desc: "Plot one security against another — A÷B, spread, rebased, or a custom formula (e.g. MDT − 0.19 MMED stub)", group: "Research", job: "Research a name", kw: "ratio spread relative strength pairs rebased rs chart divided by versus formula stub spinoff implied value linear combination basket" },
+  { label: "Pairs (Relative Value)", path: "/pairs", desc: "Same-sector S&P 500 pairs whose spread is stretched and mean-reverts — the classic stat-arb setup, ranked by z-score", group: "Research", job: "Find ideas", kw: "pairs trading relative value stat arb statistical arbitrage cointegration spread z-score mean reversion hedge ratio long short market neutral convergence divergence half life correlation pair trade" },
   { label: "Sector Compare", path: "/compare", desc: "Compare the industries inside a sector", group: "Research", job: "Research a name", kw: "industry compare sector" },
   { label: "Super-Investors", path: "/superinvestors", desc: "Famous-investor 13F holdings and quarter-over-quarter changes", group: "Research", job: "Find ideas", kw: "13f buffett hedge funds holdings managers" },
   { label: "Congress Trades", path: "/congress", desc: "Members of Congress' stock trades (STOCK Act)", group: "Research", job: "Find ideas", kw: "congress senate house pelosi trades politicians" },
@@ -107,7 +108,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     { label: "Event-Driven", blurb: "Catalyst monitors — activism & shorts, corporate events, spinoff turnover, IPO lockups, biotech readouts, policy, and Trump's stock calls", paths: ["/campaigns", "/corp-events", "/spinoffs", "/ipos", "/biotech-catalysts", "/policy", "/trump-stocks"] },
     { label: "Valuation", blurb: "Cheap vs history, reverse-DCF expectations, holdco discounts", paths: ["/valuation-history", "/expectations", "/holdco-nav"] },
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
-    { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, sector compare", paths: ["/compare-stocks", "/ratio", "/compare"] },
+    { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, relative-value pairs, sector compare", paths: ["/compare-stocks", "/ratio", "/pairs", "/compare"] },
     { label: "Documents", blurb: "SEC filings, overnight desk notes, your research corpus", paths: ["/research-desk", "/research", "/overnight"] },
   ],
 };
@@ -117,9 +118,10 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
 // trade-ideas, catalyst-vol). The data is the same US set regardless of universe, so on an INTERNATIONAL
 // universe they'd show US tickers under an intl index header. The nav hides them on intl universes and
 // the pages show a "US options only" notice on direct navigation. This IS the "Earnings & Events" hub.
-export const US_ONLY_PATHS: ReadonlySet<string> = new Set(
-  GROUP_HUBS.Strategies?.find((h) => h.label === "Earnings & Events")?.paths ?? [],
-);
+export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
+  ...(GROUP_HUBS.Strategies?.find((h) => h.label === "Earnings & Events")?.paths ?? []),
+  "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only) — lives in the Research "Charts & Compare" hub
+]);
 /** True if a relative path (e.g. "/skew" or "/skew/AAPL") is one of the US-only feature routes. */
 export const isUsOnlyPath = (relPath: string): boolean =>
   [...US_ONLY_PATHS].some((p) => relPath === p || relPath.startsWith(p + "/"));
