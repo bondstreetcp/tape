@@ -90,6 +90,7 @@ export const FEATURES: NavItem[] = [
   { label: "Policy & Contracts", path: "/policy", desc: "New federal rules (tariffs, EPA, FAA, drug-pricing) + big government contract wins, mapped to tickers", group: "Research", job: "Find ideas", kw: "policy federal register rule tariff epa fda cms drug pricing faa ftc government contract award defense usaspending lockheed boeing raytheon revenue signal regulation" },
   { label: "Filings & Docs", path: "/research", desc: "Browse and AI-summarize a company's SEC filings", group: "Research", job: "Research a name", kw: "filings documents sec edgar summary" },
   { label: "Research Desk", path: "/research-desk", desc: "Upload sell-side PDFs → searchable, cross-broker synthesis", group: "Research", job: "Research a name", kw: "research pdf upload broker analyst report" },
+  { label: "Portfolio Cockpit", path: "/portfolio", desc: "Paste your book → live gross/net exposure, sector tilts, concentration, beta & a market-shock P&L", group: "Research", job: "Track the market", kw: "portfolio book positions holdings risk exposure gross net long short beta market shock scenario stress test concentration hhi sector tilt cockpit blotter my positions var drawdown hedge" },
 ];
 
 // Sub-hubs — the Research and Strategies menus grew long, so cluster each into a few hubs that act as
@@ -111,6 +112,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     { label: "Ownership", blurb: "Super-investor 13F holdings + Congress trades", paths: ["/superinvestors", "/congress"] },
     { label: "Charts & Compare", blurb: "Head-to-head, ratio/spread charts, relative-value pairs, sector compare", paths: ["/compare-stocks", "/ratio", "/pairs", "/compare"] },
     { label: "Documents", blurb: "SEC filings, overnight desk notes, your research corpus", paths: ["/research-desk", "/research", "/overnight"] },
+    { label: "Portfolio", blurb: "Your book's exposure, sector tilts, concentration, beta & market-shock P&L", paths: ["/portfolio"] },
   ],
 };
 

@@ -114,6 +114,20 @@ export function alignLogPrices(a: Daily, b: Daily): { logA: number[]; logB: numb
   return { logA: pairsTP.map((x) => Math.log(x[1])), logB: pairsTP.map((x) => Math.log(x[2])) };
 }
 
+/** Market beta = slope of the name's daily log-returns regressed on the market's, over the aligned
+ *  trailing window (default ~2y). null if too little overlapping history. */
+export function computeBeta(name: Daily, market: Daily, lookback = 504): number | null {
+  const { logA, logB } = alignLogPrices(name, market); // A = name, B = market
+  const n = Math.min(logA.length, logB.length);
+  if (n < 60) return null;
+  const s = Math.max(0, n - lookback);
+  const rName: number[] = [], rMkt: number[] = [];
+  for (let i = s + 1; i < n; i++) { rName.push(logA[i] - logA[i - 1]); rMkt.push(logB[i] - logB[i - 1]); }
+  if (rMkt.length < 40) return null;
+  const b = ols(rMkt, rName).slope;
+  return Number.isFinite(b) ? b : null;
+}
+
 export interface PairOpts {
   lookback?: number; // trailing observations for the spread stats (default 252 ≈ 1y)
   minOverlap?: number; // min shared obs to consider a pair (default 120)

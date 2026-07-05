@@ -32,7 +32,10 @@ export default function IndexProfile({
         </div>
       </header>
 
-      <IndexChart symbol={meta.symbol} name={meta.name} />
+      <div className="mb-2 flex items-center justify-end">
+        <TimeframeSelector value={tf} onChange={setTf} />
+      </div>
+      <IndexChart symbol={meta.symbol} name={meta.name} tf={tf} />
 
       {meta.about && (
         <section className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -54,7 +57,6 @@ export default function IndexProfile({
         <section className="mt-5">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-2)]">Constituents · {constituents.length} names</h2>
-            <TimeframeSelector value={tf} onChange={setTf} />
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2">
             <Treemap

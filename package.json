@@ -11,6 +11,7 @@
     "check-freshness": "tsx scripts/check-freshness.ts",
     "refresh-pairs": "tsx scripts/refresh-pairs.ts",
     "refresh-merger-arb": "tsx scripts/refresh-merger-arb.ts",
+    "refresh-betas": "tsx scripts/refresh-betas.ts",
     "alert-freshness": "tsx scripts/alert-freshness.ts",
     "alert-llm-credits": "tsx scripts/alert-llm-credits.ts",
     "build-lake": "tsx scripts/build-lake.ts",

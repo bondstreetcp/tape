@@ -221,6 +221,13 @@ jobs:
         run: npm run refresh-pairs
         continue-on-error: true
 
+      # Market betas (5y vs ^GSPC) → data/betas.json for the Portfolio Risk Cockpit. Pure local math off
+      # the stored price series + one ^GSPC fetch; fast + free. Must run after the series are up to date.
+      - name: Refresh betas (portfolio cockpit)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-betas
+        continue-on-error: true
+
       # Index valuation history — synthesizes the S&P 500 median-multiple series from the per-name
       # valuation history (must run AFTER it) for the "valuation vs index over time" view.
       - name: Refresh index valuation

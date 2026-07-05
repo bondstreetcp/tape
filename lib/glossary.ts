@@ -19,6 +19,8 @@ export const GLOSSARY: Record<string, string> = {
   "Operating margin": "Profit from core operations as a % of sales, before interest and tax.",
   "Beta": "How much the stock moves vs. the market. 1 = moves with it; >1 = more volatile.",
   "Market cap": "Total value of all shares = share price × shares outstanding.",
+  "Gross exposure": "Long value + short value (both counted positive) — the total market you're exposed to.",
+  "HHI concentration": "Sum of each position's squared weight. Higher = more concentrated; 1/HHI ≈ how many equal-weight names it acts like.",
   // Options
   "IV": "Implied volatility — how much movement the options market is pricing in. Higher = pricier options.",
   "IV rank": "Where today's implied volatility sits vs. its own past year (0–100%). High = options are expensive now.",
