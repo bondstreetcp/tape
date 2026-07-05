@@ -40,7 +40,7 @@ export default function CommandPalette({ universe }: { universe: string }) {
   const results: Result[] = useMemo(() => {
     const s = q.trim().toLowerCase();
     const feats = ALL_NAV.filter((n) => !s || `${n.label} ${n.desc} ${n.kw || ""}`.toLowerCase().includes(s))
-      .map((n): Result => ({ type: "feature", label: n.label, sub: n.desc, href: `/u/${universe}${n.path}` }));
+      .map((n): Result => ({ type: "feature", label: n.label, sub: n.desc, href: n.external ?? `/u/${universe}${n.path}` }));
     const cos = !s ? [] : companies
       .filter((c) => c.symbol.toLowerCase().includes(s) || c.name.toLowerCase().includes(s))
       .slice(0, 8)
@@ -50,7 +50,8 @@ export default function CommandPalette({ universe }: { universe: string }) {
 
   useEffect(() => { setActive(0); }, [q]);
 
-  const go = (href: string) => { setOpen(false); router.push(href); };
+  // An external (http[s]) target opens in a new tab; in-app routes push normally.
+  const go = (href: string) => { setOpen(false); if (/^https?:\/\//.test(href)) window.open(href, "_blank", "noopener,noreferrer"); else router.push(href); };
   const browsing = q.trim() === "";
 
   if (!open) return null;
@@ -83,7 +84,7 @@ export default function CommandPalette({ universe }: { universe: string }) {
                 <div key={job} className="mb-2">
                   <div className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{job}</div>
                   {items.map((n) => (
-                    <button key={n.path + n.label} onMouseDown={(e) => { e.preventDefault(); go(`/u/${universe}${n.path}`); }}
+                    <button key={n.path + n.label} onMouseDown={(e) => { e.preventDefault(); go(n.external ?? `/u/${universe}${n.path}`); }}
                       className="flex w-full items-baseline gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-[var(--surface-hover)]">
                       <span className="text-sm font-medium text-[var(--text)]">{n.label}</span>
                       <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-3)]">{n.desc}</span>

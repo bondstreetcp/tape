@@ -7,11 +7,12 @@ export type Job = "Track the market" | "Find ideas" | "Research a name" | "Incom
 
 export interface NavItem {
   label: string;
-  path: string; // appended to /u/[universe]; "" = the universe home
+  path: string; // appended to /u/[universe]; "" = the universe home. Also the identity key even for external items.
   desc: string; // one-line, plain-English (assume the reader isn't a finance pro)
   group?: NavGroup; // dropdown group; omitted for the always-visible top links
   job: Job; // job-to-be-done bucket for the Start-here map
   kw?: string; // extra search keywords for the palette
+  external?: string; // a full URL — renders as an <a target="_blank"> out to another site instead of an in-app route
 }
 
 // Always-visible top-level links.
@@ -87,7 +88,7 @@ export const FEATURES: NavItem[] = [
   { label: "Trump's Stock Calls", path: "/trump-stocks", desc: "Just the Truth Social posts where Trump names a public company — with how the stock did since", group: "Research", job: "Find ideas", kw: "trump truth social stock calls recommendations mentions dell intel nvidia tariffs bullish bearish president politician social" },
   { label: "Activism & Shorts", path: "/campaigns", desc: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", group: "Event-Driven", job: "Find ideas", kw: "activist 13d proxy fight short seller muddy waters campaign icahn elliott saba radoff dissident board seats hindenburg allegation event driven" },
   { label: "Corporate Events", path: "/corp-events", desc: "Buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes — from SEC 8-Ks", group: "Event-Driven", job: "Find ideas", kw: "buyback repurchase spin-off spinoff carve-out strategic alternatives sale merger stock split reverse split ceo cfo change leadership 8-k corporate event driven kedm monitor" },
-  { label: "Merger Arb", path: "/merger-arb", desc: "Pending US acquisitions with the live arb spread + annualized return — cash & stock deals from SEC merger proxies", group: "Event-Driven", job: "Find ideas", kw: "merger arbitrage arb pending deal acquisition takeover spread annualized return definitive agreement per share cash stock exchange ratio cvr break price deal close regulatory antitrust event driven risk arb m&a target acquirer" },
+  { label: "Merger Arb", path: "/merger-arb", desc: "Pending-deal spreads on the dedicated arb desk ↗", group: "Event-Driven", job: "Find ideas", external: "https://arb.bondstreetcp.com/", kw: "merger arbitrage arb pending deal acquisition takeover spread annualized return definitive agreement per share cash stock exchange ratio cvr break price deal close regulatory antitrust event driven risk arb m&a target acquirer" },
   { label: "IPOs & Lockups", path: "/ipos", desc: "Recent IPOs + the lockup-expiry calendar (IPO + ~180d) — when insider supply first hits the stock", group: "Event-Driven", job: "Find ideas", kw: "ipo initial public offering lockup unlock expiry 180 days insider supply 424b4 new listing nasdaq nyse event driven kedm" },
   { label: "Biotech Catalysts", path: "/biotech-catalysts", desc: "Clinical binary events — Phase 2/3 readouts, enrollment done, failures — mapped to the sponsor's ticker", group: "Event-Driven", job: "Find ideas", kw: "biotech pharma clinical trial phase 3 phase 2 readout pdufa fda catalyst binary event clinicaltrials topline data sponsor drug" },
   { label: "Policy & Contracts", path: "/policy", desc: "New federal rules (tariffs, EPA, FAA, drug-pricing) + big government contract wins, mapped to tickers", group: "Event-Driven", job: "Find ideas", kw: "policy federal register rule tariff epa fda cms drug pricing faa ftc government contract award defense usaspending lockheed boeing raytheon revenue signal regulation" },
@@ -138,9 +139,9 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/earnings-desk", "/catalyst-calendar", "/trade-desk", "/earnings-week", "/earnings-move",
   "/earnings-setup", "/track-record", "/guidance", "/pead", "/seasonality",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/coiled", "/catalyst-vol",
-  // US relative-value / event-driven feeds
+  // US relative-value feed
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)
-  "/merger-arb", // US merger-arb (SEC merger proxies)
+  // (merger-arb is an external link to arb.bondstreetcp.com — not gated)
 ]);
 /** True if a relative path (e.g. "/skew" or "/skew/AAPL") is one of the US-only feature routes. */
 export const isUsOnlyPath = (relPath: string): boolean =>

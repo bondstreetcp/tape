@@ -12,7 +12,7 @@ import CommandPalette from "./CommandPalette";
 import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath, US_ONLY_PATHS } from "@/lib/nav";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
-interface Item { href: string; label: string; desc?: string; job?: string }
+interface Item { href: string; label: string; desc?: string; job?: string; external?: string }
 interface Group { label: string; items: Item[] }
 
 export default function AppHeader({
@@ -42,7 +42,7 @@ export default function AppHeader({
   // nav, the ⌘K palette, and the Start-here map never drift apart.
   const groups: Group[] = NAV_GROUPS.map((label) => ({
     label,
-    items: FEATURES.filter((f) => f.group === label && !navHidden(f.path)).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job })),
+    items: FEATURES.filter((f) => f.group === label && !navHidden(f.path)).map((f) => ({ href: `${base}${f.path}`, label: f.label, desc: f.desc, job: f.job, external: f.external })),
   }));
 
   // Close the dropdown + mobile drawer on navigation.
@@ -231,21 +231,21 @@ export default function AppHeader({
               });
             }
             const jobs = [...new Set(active.items.map((it) => it.job))];
-            const renderItem = (it: Item) => (
-              <Link
-                key={it.href}
-                href={it.href}
-                role="menuitem"
-                onClick={() => setOpen(null)}
-                className={
-                  "block rounded-md px-2.5 py-1.5 transition-colors " +
-                  (isActive(it.href) ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")
-                }
-              >
-                <div className={"text-sm font-medium " + (isActive(it.href) ? "text-[var(--accent)]" : "text-[var(--text)]")}>{it.label}</div>
-                {it.desc && <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{it.desc}</div>}
-              </Link>
-            );
+            const renderItem = (it: Item) => {
+              const cls = "block rounded-md px-2.5 py-1.5 transition-colors " + (isActive(it.href) ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]");
+              const inner = (
+                <>
+                  <div className={"text-sm font-medium " + (isActive(it.href) ? "text-[var(--accent)]" : "text-[var(--text)]")}>{it.label}</div>
+                  {it.desc && <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{it.desc}</div>}
+                </>
+              );
+              // An external item (e.g. the dedicated arb desk) opens in a new tab instead of routing in-app.
+              return it.external ? (
+                <a key={it.href} href={it.external} target="_blank" rel="noreferrer" role="menuitem" onClick={() => setOpen(null)} className={cls}>{inner}</a>
+              ) : (
+                <Link key={it.href} href={it.href} role="menuitem" onClick={() => setOpen(null)} className={cls}>{inner}</Link>
+              );
+            };
             if (jobs.length <= 1) return active.items.map(renderItem);
             return jobs.map((job) => (
               <div key={job}>
@@ -289,7 +289,9 @@ export default function AppHeader({
           {groups.map((g) => (
             <div key={g.label} className="mt-3">
               <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{g.label}</div>
-              {g.items.map((it) => <Link key={it.href} href={it.href} className={drawerLink(isActive(it.href))}>{it.label}</Link>)}
+              {g.items.map((it) => it.external
+                ? <a key={it.href} href={it.external} target="_blank" rel="noreferrer" onClick={() => setDrawerOpen(false)} className={drawerLink(false)}>{it.label} ↗</a>
+                : <Link key={it.href} href={it.href} className={drawerLink(isActive(it.href))}>{it.label}</Link>)}
             </div>
           ))}
           <a href="/guide.html" target="_blank" rel="noreferrer" className="mt-4 block rounded-md px-3 py-2 text-[15px] text-[var(--text-3)] hover:bg-[var(--surface-hover)]">📖 Guide</a>

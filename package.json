@@ -10,7 +10,6 @@
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "check-freshness": "tsx scripts/check-freshness.ts",
     "refresh-pairs": "tsx scripts/refresh-pairs.ts",
-    "refresh-merger-arb": "tsx scripts/refresh-merger-arb.ts",
     "refresh-betas": "tsx scripts/refresh-betas.ts",
     "refresh-gamma-board": "tsx scripts/refresh-gamma-board.ts",
     "refresh-vol-cone": "tsx scripts/refresh-vol-cone.ts",
