@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getFilings, getFilingText } from "../lib/edgar";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { numberGroundedIn } from "../lib/llmValidate";
 import { loadSnapshot } from "../lib/data";
 import type { GuidanceData, GuidancePeriod, GuidanceTicker, GuidanceAction } from "../lib/guidance";
 
@@ -75,6 +76,7 @@ interface Extracted { reportedEps: number | null; nextQEpsLow: number | null; ne
 // FLASH tier — NOT the premium Pro model it used to (that was ~5x the nightly's whole LLM bill for one
 // job). Override per-run with GUIDANCE_MODEL for A/B testing.
 const GUIDANCE_MODEL = process.env.GUIDANCE_MODEL || FLASH_MODEL;
+let GROUND_DROPS = 0; // $ figures dropped by the number-grounding guard (a model computed/inferred them)
 
 async function extract(sym: string, text: string, ctx: { mktcapM: number | null; consEps: number | null }): Promise<Extracted | null> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: GUIDANCE_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
@@ -97,12 +99,21 @@ async function extract(sym: string, text: string, ctx: { mktcapM: number | null;
     if (ctx.mktcapM != null) return v >= ctx.mktcapM * 0.001 && v <= ctx.mktcapM * 10 ? v : null;
     return v >= 1 && v <= 1_000_000 ? v : null; // no mktcap known → absolute $1M-$1T band
   };
+  // Number grounding — the code-level anti-fabrication guard: a $ figure survives ONLY if it literally
+  // appears in the filing text. Kills a COMPUTED number the quote-check misses (e.g. LEN revenue = homes
+  // × price). Doctrine: code verifies, models propose. Model-agnostic — protects Flash, GLM, and Pro alike.
+  const grounded = (v: number | null): number | null => {
+    if (v == null) return null;
+    if (numberGroundedIn(v, text)) return v;
+    GROUND_DROPS++;
+    return null;
+  };
   const out: GuidancePeriod[] = [];
   for (const o of arr) {
     if (!o || typeof o !== "object" || typeof o.period !== "string") continue;
-    let revLowM = revOk(num(o.revLowM)), revHighM = revOk(num(o.revHighM));
+    let revLowM = grounded(revOk(num(o.revLowM))), revHighM = grounded(revOk(num(o.revHighM)));
     if (revLowM != null && revHighM != null && revLowM > revHighM) [revLowM, revHighM] = [revHighM, revLowM]; // enforce low ≤ high
-    const epsLow = num(o.epsLow), epsHigh = num(o.epsHigh);
+    const epsLow = grounded(num(o.epsLow)), epsHigh = grounded(num(o.epsHigh));
     const metricLabel = typeof o.metricLabel === "string" ? o.metricLabel.slice(0, 60) : undefined;
     // Keep a period only if it carries a usable dollar/EPS range OR a described metric (metricLabel/quote).
     if (revLowM == null && epsLow == null && revHighM == null && epsHigh == null && !metricLabel && !o.quote) continue;
@@ -128,9 +139,9 @@ async function extract(sym: string, text: string, ctx: { mktcapM: number | null;
     return true;
   };
   return {
-    reportedEps: epsOk(num(root?.reportedEps)) ? num(root?.reportedEps) : null,
-    nextQEpsLow: epsOk(num(root?.nextQuarterEpsLow)) ? num(root?.nextQuarterEpsLow) : null,
-    nextQEpsHigh: epsOk(num(root?.nextQuarterEpsHigh)) ? num(root?.nextQuarterEpsHigh) : null,
+    reportedEps: grounded(epsOk(num(root?.reportedEps)) ? num(root?.reportedEps) : null),
+    nextQEpsLow: grounded(epsOk(num(root?.nextQuarterEpsLow)) ? num(root?.nextQuarterEpsLow) : null),
+    nextQEpsHigh: grounded(epsOk(num(root?.nextQuarterEpsHigh)) ? num(root?.nextQuarterEpsHigh) : null),
     guides: [...byPeriod.values()].slice(0, 3),
   };
 }
@@ -210,5 +221,5 @@ function loadConsensus(): Map<string, number> {
   }
   data.generatedAt = new Date().toISOString();
   writeFileSync(OUT, JSON.stringify(data));
-  console.log(`\nWrote ${OUT} · ${touched} with guidance · ${calls} LLM calls · ${Object.keys(data.byTicker).length} total in file`);
+  console.log(`\nWrote ${OUT} · ${touched} with guidance · ${calls} LLM calls · ${GROUND_DROPS} ungrounded $ dropped · ${Object.keys(data.byTicker).length} total in file`);
 })();

@@ -43,6 +43,34 @@ export function boundedNumber(v: unknown, opts: { min?: number; max?: number; ab
   return n;
 }
 
+/**
+ * True if a numeric value literally appears in `source` — the number-level analogue of groundedQuote.
+ * Closes the "the model COMPUTED a figure" hole a quote-check misses: the cited quote can be real while
+ * the number was derived (e.g. revenue = 20,500 homes × price → $7.7B, which is nowhere in the filing).
+ * Tolerant of filing formats: strips thousands-commas, ignores sign, allows trailing zeros ($7.50 grounds
+ * 7.5), and — for values ≥100 (revenue in $M) — also checks the billions form (40100 grounds "$40.1 billion").
+ * Numeric boundaries prevent a substring hit (7.5 does NOT ground inside "17.55"). Use to null an
+ * ungrounded $ field so a fabricated number never reaches the UI. Returns false for 0 / non-finite.
+ */
+export function numberGroundedIn(value: unknown, source: string): boolean {
+  const v = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(v) || v === 0) return false;
+  const t = String(source ?? "").replace(/,/g, "").toLowerCase(); // drop thousands separators
+  const bases = [Math.abs(v)];
+  if (Math.abs(v) >= 100) bases.push(Math.abs(v) / 1000); // a $-in-millions value may be written in billions
+  const cands = new Set<string>();
+  for (const b of bases) {
+    if (!Number.isFinite(b) || b === 0) continue;
+    cands.add(String(b));
+    for (const dp of [1, 2, 3]) cands.add(b.toFixed(dp)); // $7.50 / $40.10 trailing-zero forms
+  }
+  for (const c of cands) {
+    if (!/^\d*\.?\d+$/.test(c) || c.length > 20) continue;
+    if (new RegExp("(?<![\\d.])" + c.replace(/\./g, "\\.") + "(?![\\d])").test(t)) return true;
+  }
+  return false;
+}
+
 /** Validate an ISO date string → 'YYYY-MM-DD' (must be a REAL calendar date) — else null. Catches an
  *  LLM date like '2026-13-45' that passes a bare regex but is NaN, and a non-string / empty value. */
 export function isoDateOnly(v: unknown): string | null {

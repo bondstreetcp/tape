@@ -1,6 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normText, groundedQuote, boundedNumber, isoDateOnly, coerceEnum, cleanTicker, whitelistTickers, str } from "../lib/llmValidate";
+import { normText, groundedQuote, boundedNumber, numberGroundedIn, isoDateOnly, coerceEnum, cleanTicker, whitelistTickers, str } from "../lib/llmValidate";
+
+test("numberGroundedIn: grounds numbers that appear (any common filing form), drops fabricated ones", () => {
+  const eps = "GAAP and Adjusted EPS in the range of $7.50 to $8.50.";
+  assert.equal(numberGroundedIn(7.5, eps), true); // $7.50 grounds 7.5 (trailing-zero form)
+  assert.equal(numberGroundedIn(8.5, eps), true);
+  assert.equal(numberGroundedIn(1.7, "Adjusted EPS of approximately $1.70"), true);
+  const rev = "We expect revenue of $40.1 to $40.9 billion.";
+  assert.equal(numberGroundedIn(40100, rev), true); // stored in $M, written in $B
+  assert.equal(numberGroundedIn(40900, rev), true);
+  // The LEN fabrication: revenue computed from 20,500-21,500 homes × price — never in the text.
+  const homes = "we expect to deliver approximately 20,500 to 21,500 homes with gross margin near 16%.";
+  assert.equal(numberGroundedIn(7687.5, homes), false); // computed $M — NOT grounded
+  assert.equal(numberGroundedIn(21500, homes), true); // the unit count IS in the text
+  // Boundaries + edge cases.
+  assert.equal(numberGroundedIn(7.5, "the multiple is 17.55x"), false); // not a substring of a bigger number
+  assert.equal(numberGroundedIn(0, "guidance of 0"), false); // 0 / non-finite never grounds
+  assert.equal(numberGroundedIn(-0.5, "a loss of $(0.50) per share"), true); // sign-agnostic
+});
 
 test("normText: collapses whitespace, drops $ and commas, lowercases, trims", () => {
   assert.equal(normText("  Hello,  $1,234   WORLD "), "hello 1234 world");
