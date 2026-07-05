@@ -11,6 +11,9 @@ import { sideColor, sideLabel } from "@/lib/tradeIdeas";
 import type { PeadData } from "@/lib/pead";
 import type { GuidanceBoardData } from "@/lib/guidanceBoard";
 import type { EmData, EmRow } from "@/components/EarningsWeekView";
+import type { GammaBoardData } from "@/lib/gammaBoard";
+import type { VolConeData } from "@/lib/volCone";
+import { fuseVolGamma, nearFlipPct } from "@/lib/volGamma";
 
 export const dynamic = "force-dynamic";
 
@@ -50,13 +53,15 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
   if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Season Desk" relPath="/earnings-desk" />;
   const u = (p: string) => `/u/${universe}${p}`;
 
-  const [em, ti, vd, pead, gb, cv] = await Promise.all([
+  const [em, ti, vd, pead, gb, cv, gam, cone] = await Promise.all([
     read<EmData>("earnings-move.json"),
     read<TradeDeskData>("trade-ideas.json"),
     read<VolDisData>("vol-dislocation.json"),
     read<PeadData>("pead.json"),
     read<GuidanceBoardData>("guidance-board.json"),
     read<{ generatedAt?: string; rows?: any[] }>("catalyst-vol.json"),
+    read<GammaBoardData>("gamma-board.json"),
+    read<VolConeData>("vol-cone.json"),
   ]);
 
   const asOf = [em, ti, vd, pead, gb, cv].map((d) => (d as any)?.generatedAt).filter(Boolean).sort()[0] as string | undefined;
@@ -88,6 +93,12 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
   const cutsCount = (gb?.rows ?? []).filter((r) => r.action === "cut").length;
   // priced rows only — the feed keeps unpriced calendar placeholders (mirrors CatalystVolView).
   const catRows = (cv?.rows ?? []).filter((r: any) => r.ratio != null && r.impliedMovePct != null && r.baselineMovePct != null).sort((a: any, b: any) => a.ratio - b.ratio).slice(0, 4);
+  // Coiled springs (vol cone × dealer gamma) — coiled (cheap vol + accelerant) first, then blown (amplified),
+  // ranked by spring score. The fused feed is US options names; skip 'pinned'/'none' for this setups strip.
+  const springs = fuseVolGamma(gam?.rows ?? [], cone?.rows ?? [])
+    .filter((r) => r.setup === "coiled" || r.setup === "blown")
+    .sort((a, b) => (b.springScore ?? 0) - (a.springScore ?? 0))
+    .slice(0, 6);
   const mv = (x: number | null | undefined) => (x == null ? "—" : `${x > 0 ? "+" : ""}${x.toFixed(1)}%`);
   const mvColor = (x: number) => (x > 0 ? GREEN : x < 0 ? RED : ZINC);
 
@@ -158,6 +169,25 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
               ))}
             </div>
           ) : <Empty t="AI ideas populate on the nightly refresh." />}
+        </Widget>
+
+        {/* Coiled springs — vol cone × dealer gamma */}
+        <Widget title="Coiled springs — cheap vol + a γ accelerant" links={[{ label: "see all", href: u("/coiled") }]}>
+          {springs.length ? (
+            <table className="w-full text-left text-[12px]">
+              <tbody>
+                {springs.map((r) => (
+                  <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
+                    <td className="py-1"><Link href={u(`/stock/${r.symbol}?tab=options`)} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link></td>
+                    <td className="py-1 pl-2"><Pill t={r.setup === "coiled" ? "COILED" : "BLOWN"} c={r.setup === "coiled" ? GREEN : AMBER} /></td>
+                    <td className="py-1 text-right font-mono tabular-nums" title="realized-vol percentile in own history" style={{ color: r.pct20 != null && r.pct20 <= 25 ? GREEN : r.pct20 != null && r.pct20 >= 75 ? RED : "var(--text-3)" }}>{r.pct20 == null ? "—" : `${r.pct20.toFixed(0)}th`}</td>
+                    <td className="py-1 pl-2 text-right text-[11px]" style={{ color: r.regime === "short" ? AMBER : GREEN }} title="dealer gamma">{r.regime === "short" ? "short γ" : "long γ"}</td>
+                    <td className="py-1 pl-1 text-right font-mono tabular-nums text-[11px]" style={{ color: nearFlipPct(r.distToFlipPct, 3) ? AMBER : "var(--text-4)" }} title="distance to the gamma flip">{r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <Empty t="No coiled/amplified setups right now — needs the gamma board + vol cone." />}
         </Widget>
 
         {/* Vol Dislocation (IV/RV + skew + term merged) */}
