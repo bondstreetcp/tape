@@ -450,6 +450,13 @@ jobs:
         run: npm run refresh-dispersion
         continue-on-error: true
 
+      # Dealer Gamma Board — universe-wide GEX (net/gross dealer gamma, flip, walls) across the top S&P
+      # names + index ETFs. Live option chains (rate-limited), same model as /api/gamma. No LLM.
+      - name: Refresh dealer gamma board
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-gamma-board
+        continue-on-error: true
+
       # Post-earnings drift — recent reporters (guidance 8-K dates) × the LOCAL series (gap + drift). No fetch.
       - name: Refresh post-earnings drift
         if: ${{ env.FULL == 'true' }}
