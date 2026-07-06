@@ -9,6 +9,7 @@ import InstallPWA from "./InstallPWA";
 import AccountMenu from "./AccountMenu";
 import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
+import TapeLogo from "./Logo";
 import { FEATURES, NAV_GROUPS, GROUP_HUBS, hubForPath, US_ONLY_PATHS } from "@/lib/nav";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
@@ -122,9 +123,8 @@ export default function AppHeader({
           >
             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </button>
-          <Link href={base} className="mr-1 flex shrink-0 items-center gap-1.5 font-semibold text-[var(--text)]">
-            <span className="text-[var(--accent)]">▦</span>
-            <span className="font-bold tracking-tight">Tape</span>
+          <Link href={base} className="mr-1 flex shrink-0 items-center">
+            <TapeLogo />
           </Link>
           <nav ref={navRef} className="hidden min-w-0 items-center gap-0.5 overflow-x-auto text-sm lg:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Link href={base} className={linkCls(isActive(base, true))}>Home</Link>
@@ -269,7 +269,7 @@ export default function AppHeader({
         style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex items-center justify-between border-b border-[var(--divider)] px-4 py-3">
-          <Link href={base} onClick={() => setDrawerOpen(false)} className="flex items-center gap-1.5 font-bold text-[var(--text)]"><span className="text-[var(--accent)]">▦</span> Tape</Link>
+          <Link href={base} onClick={() => setDrawerOpen(false)} className="flex items-center"><TapeLogo /></Link>
           <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" className="rounded-md p-1.5 text-[var(--text-3)] hover:bg-[var(--surface-hover)]">
             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </button>

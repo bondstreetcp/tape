@@ -12,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "any",
-    background_color: "#0b0e14",
-    theme_color: "#0b0e14",
+    background_color: "#0d1117", // matches the logo tile (breakout-tick mark, gen-icons.ts)
+    theme_color: "#0d1117",
     categories: ["finance", "business", "productivity"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
