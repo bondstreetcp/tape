@@ -113,7 +113,7 @@ export default function AppHeader({
       // Clear the iOS status bar / notch when running as an installed PWA (0 in a normal browser).
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+      <div className="mx-auto flex max-w-[92rem] items-center justify-between gap-3 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <button
             onClick={() => setDrawerOpen(true)}
@@ -163,10 +163,10 @@ export default function AppHeader({
           <button
             onClick={() => window.dispatchEvent(new Event("open-cmdk"))}
             title="Jump to any feature or company (⌘K / Ctrl-K)"
-            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-sm text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] sm:inline-flex"
+            className="hidden shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-sm text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] sm:inline-flex"
           >
             <span aria-hidden>⌘</span>K
-            <span className="text-[var(--text-4)]">· Jump to…</span>
+            <span className="hidden text-[var(--text-4)] 2xl:inline">· Jump to…</span>
           </button>
           <SearchBox universe={universe} stocks={stocks} />
           <a
