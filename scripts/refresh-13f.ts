@@ -20,8 +20,18 @@ const DATA = path.join(process.cwd(), "data");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const numf = (s: string) => { const n = parseFloat(String(s).replace(/,/g, "")); return Number.isFinite(n) ? n : 0; };
 
-async function getJson(u: string): Promise<any> { const r = await fetch(u, { headers: HEADERS }); if (!r.ok) throw new Error(`${u} -> ${r.status}`); return r.json(); }
-async function getText(u: string): Promise<string> { const r = await fetch(u, { headers: HEADERS }); if (!r.ok) throw new Error(`${u} -> ${r.status}`); return r.text(); }
+// SEC throttles sustained bursts (429) — one flaky response shouldn't cost a manager the whole
+// night (it did: the last 3 roster adds all 429'd on their first fetch). Retry with backoff.
+async function getRes(u: string): Promise<Response> {
+  for (let i = 0; ; i++) {
+    const r = await fetch(u, { headers: HEADERS });
+    if ((r.status === 429 || r.status === 403 || r.status >= 500) && i < 4) { await sleep(2000 * (i + 1)); continue; }
+    if (!r.ok) throw new Error(`${u} -> ${r.status}`);
+    return r;
+  }
+}
+async function getJson(u: string): Promise<any> { return (await getRes(u)).json(); }
+async function getText(u: string): Promise<string> { return (await getRes(u)).text(); }
 
 interface RawHolding { name: string; cusip: string; cls: string; value: number; shares: number }
 interface Filing13F { acc: string; filedAt: string; period: string }
@@ -159,6 +169,7 @@ async function main() {
       rawCurrent.push({ inv, cur, f: latest, prior, pf: priorF });
       console.log(`✓ ${inv.name}: ${cur.length} holdings (${latest.period})${prior ? ` vs ${priorF!.period}` : ""}`);
     } catch (e: any) { console.log(`✗ ${inv.name}: ${e.message}`); }
+    await sleep(500); // courtesy gap between managers — keeps the sustained rate under SEC's throttle
   }
 
   // map every CUSIP we touched (current + prior) once, then build
