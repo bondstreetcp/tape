@@ -130,7 +130,6 @@ export default function AppHeader({
             <Link href={base} className={linkCls(isActive(base, true))}>Home</Link>
             <Link href={`${base}/morning-desk`} className={linkCls(isActive(`${base}/morning-desk`))}>Morning Desk</Link>
             <Link href={`${base}/briefing`} className={linkCls(isActive(`${base}/briefing`))}>Daily Briefing</Link>
-            <Link href={`${base}/screener`} className={linkCls(isActive(`${base}/screener`))}>Screener</Link>
             {groups.map((g) => (
               <button
                 key={g.label}
@@ -280,7 +279,6 @@ export default function AppHeader({
             { path: "", label: "Home", exact: true },
             { path: "/morning-desk", label: "Morning Desk" },
             { path: "/briefing", label: "Daily Briefing" },
-            { path: "/screener", label: "Screener" },
             { path: "/watchlist", label: "★ Watchlist" },
           ].map((m) => {
             const href = `${base}${m.path}`;

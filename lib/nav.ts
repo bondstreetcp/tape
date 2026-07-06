@@ -20,7 +20,6 @@ export const TOP_LINKS: NavItem[] = [
   { label: "Home", path: "", desc: "Market overview — the index, sectors, and biggest movers", job: "Track the market", kw: "dashboard overview" },
   { label: "Morning Desk", path: "/morning-desk", desc: "AI overnight brief — what moved overnight and why", job: "Track the market", kw: "ai brief notes overnight" },
   { label: "Daily Briefing", path: "/briefing", desc: "The day's market news wire", job: "Track the market", kw: "news reuters wire" },
-  { label: "Screener", path: "/screener", desc: "Filter the whole universe by return, valuation, and quality", job: "Find ideas", kw: "filter screen factors" },
   { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Research a name", kw: "saved favorites star" },
   // NOTE: when auth activates (docs/SETUP-auth.md), add an "Alerts" entry here — the page exists at
   // /alerts but is a dead-end ("accounts aren't configured") until then, so it stays out of the nav.
@@ -66,6 +65,8 @@ export const FEATURES: NavItem[] = [
   { label: "CEF Screener", path: "/cef", desc: "Closed-end funds trading at a discount to their NAV", group: "Research", job: "Income strategies", kw: "closed end funds discount nav yield" },
   { label: "CEF Discount Hunter", path: "/cef-hunter", desc: "The scored shortlist of the most stretched closed-end-fund discounts", group: "Research", job: "Income strategies", kw: "cef closed end fund discount hunter stretched z-score yield" },
   { label: "Holdco NAV Tracker", path: "/holdco-nav", desc: "Holding companies vs their look-through NAV — discount/premium (Prosus, Exor, GBL…)", group: "Research", job: "Find ideas", kw: "holdco holding company nav discount premium look-through prosus exor gbl arbitrage sum of the parts sotp" },
+  // ── Screens (the build-your-own Screener is the hero; the rest are pre-built scanner/value boards)
+  { label: "Screener", path: "/screener", desc: "Build your own filter — screen the whole universe by return, valuation, and quality", group: "Screens", job: "Find ideas", kw: "filter screen factors build custom criteria universe scan quality valuation return momentum growth" },
   { label: "Backtest", path: "/backtest", desc: "Test factor screens and strategies against history", group: "Screens", job: "Find ideas", kw: "backtest strategy momentum factor" },
   // ── Research
   { label: "Confluence Engine", path: "/confluence", desc: "Names where several independent bullish signals stack up — the flagship idea scanner", group: "Screens", job: "Find ideas", kw: "confluence signals ideas opportunities value smart money setups" },
@@ -118,6 +119,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   // Event-Driven has no hubs — its 7 monitors show as a flat, scannable dropdown.
   Screens: [
+    { label: "Screener", blurb: "Build your own filter — screen the whole universe by return, valuation & quality", paths: ["/screener"] },
     { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish signals stack up", paths: ["/confluence", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
     { label: "Value & Backtest", blurb: "Cheap vs. its own history, reverse-DCF expectations, and factor-screen backtesting", paths: ["/valuation-history", "/expectations", "/backtest"] },
   ],
