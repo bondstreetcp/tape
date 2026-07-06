@@ -12,20 +12,25 @@ test("buildCatalystCalendar: merges feeds, drops past/beyond-horizon, sorts by s
         { symbol: "OLD", name: "Old Co", earningsDate: "2026-07-01" }, // past → drop
       ] },
       investorDays: { rows: [{ ticker: "NVDA", company: "Nvidia", eventType: "Analyst day", eventDate: "2026-08-01", impliedMovePct: 4 }] }, // ~28d
-      biotech: { rows: [{ ticker: "SRPT", company: "Sarepta", drug: "SRP-9001", condition: "DMD", phase: "Phase 3", primaryCompletion: "2026-09-01" }] }, // ~59d
+      biotech: { rows: [
+        { ticker: "SRPT", company: "Sarepta", drug: "SRP-9001", condition: "DMD", phase: "Phase 3", primaryCompletion: "2026-09-01" }, // ~59d
+        { ticker: "AXSM", company: "Axsome", drug: "AXS-14", condition: "fibromyalgia", phase: "NDA", statusKind: "pdufa", primaryCompletion: "2026-10-15" }, // ~103d — PDUFA row
+      ] },
       lockups: { events: [{ ticker: "FAR", company: "Far Out", lockupDate: "2027-02-01", ipoDate: "2026-08-05", sizeUsdM: 120 }] }, // ~212d → drop (>120)
     },
     NOW,
     { horizonDays: 120 },
   );
   const syms = events.map((e) => e.ticker);
-  assert.deepEqual(syms, ["AAPL", "NVDA", "SRPT"]); // OLD (past) + FAR (beyond horizon) dropped, sorted soonest-first
+  assert.deepEqual(syms, ["AAPL", "NVDA", "SRPT", "AXSM"]); // OLD (past) + FAR (beyond horizon) dropped, sorted soonest-first
   const aapl = events[0] as CatalystEvent;
   assert.equal(aapl.kind, "earnings");
   assert.equal(aapl.daysTo, 5);
   assert.equal(aapl.detail, "implied ±5.2%");
   assert.equal(events[2].label, "Phase 3 readout");
   assert.equal(events[2].detail, "SRP-9001 · DMD");
+  assert.equal(events[3].label, "FDA decision (PDUFA)"); // pdufa row's phase (NDA) must NOT render as "NDA readout"
+  assert.equal(events[3].detail, "AXS-14 · fibromyalgia");
 });
 
 test("buildCatalystCalendar: honors horizon + tolerates missing/empty feeds", () => {

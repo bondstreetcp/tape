@@ -78,7 +78,8 @@ export function buildCatalystCalendar(
     const bits = [r.drug, r.condition].filter((x) => typeof x === "string" && x.trim());
     push({
       date: isoDate(r.primaryCompletion), kind: "biotech", ticker: String(r.ticker ?? ""), company: String(r.company ?? r.ticker ?? ""),
-      label: r.phase ? `${r.phase} readout` : "Clinical readout", url: r.url,
+      // a PDUFA row's `phase` holds the application type (NDA/BLA), not a trial phase
+      label: r.statusKind === "pdufa" ? "FDA decision (PDUFA)" : r.phase ? `${r.phase} readout` : "Clinical readout", url: r.url,
       detail: bits.length ? bits.join(" · ") : (typeof r.catalyst === "string" ? r.catalyst : undefined),
     });
   }

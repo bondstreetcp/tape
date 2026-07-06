@@ -41,7 +41,7 @@ export default function BiotechView({ universe, data }: { universe: string; data
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Biotech Catalysts</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            A binary-event radar from ClinicalTrials.gov — recent status changes on Phase 2/3 industry trials (enrollment done, completed, terminated), mapped to the sponsor&apos;s public ticker, with the readout clock. {data.items.length} catalysts · {data.scanned} trials scanned · {fmtDateTime(data.generatedAt)}
+            A binary-event radar — recent status changes on Phase 2/3 industry trials from ClinicalTrials.gov (enrollment done, completed, terminated), plus announced FDA action dates (PDUFA) from company 8-Ks, mapped to the public ticker with the event clock. {data.items.length} catalysts · {data.scanned} trials scanned · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -53,6 +53,7 @@ export default function BiotechView({ universe, data }: { universe: string; data
           <button onClick={() => setKindF("enrolling-done")} className={TB(kindF === "enrolling-done")} title="Enrollment complete — readout ahead">Readout ahead</button>
           <button onClick={() => setKindF("readout")} className={TB(kindF === "readout")} title="Trial completed — topline pending">Completed</button>
           <button onClick={() => setKindF("failed")} className={TB(kindF === "failed")} title="Terminated / suspended">Failed</button>
+          <button onClick={() => setKindF("pdufa")} className={TB(kindF === "pdufa")} title="Announced FDA action dates (PDUFA)">PDUFA</button>
         </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setSort("readout")} className={TB(sort === "readout")}>Soonest readout</button>
@@ -86,13 +87,13 @@ function BioCard({ i, universe }: { i: BioCatalyst; universe: string }) {
         <span className="text-[13px] text-[var(--text-2)]">{i.company}</span>
         <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)]">{i.phase}</span>
         <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `color-mix(in oklab, ${statusColor(i.statusKind)} 16%, transparent)`, color: statusColor(i.statusKind) }}>{statusLabel(i.statusKind)}</span>
-        {i.primaryCompletion && <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)]" title="estimated primary-endpoint (readout) date">readout {dateLabel(i.primaryCompletion)} {clock && <b style={{ color: d != null && d >= 0 && d < 90 ? "#f59e0b" : "var(--text-4)" }}>· {clock}</b>}</span>}
+        {i.primaryCompletion && <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)]" title={i.statusKind === "pdufa" ? "FDA target action date (from the company's 8-K)" : "estimated primary-endpoint (readout) date"}>{i.statusKind === "pdufa" ? "PDUFA" : "readout"} {dateLabel(i.primaryCompletion)} {clock && <b style={{ color: d != null && d >= 0 && d < 90 ? "#f59e0b" : "var(--text-4)" }}>· {clock}</b>}</span>}
         <span className="ml-auto text-[11px] text-[var(--text-4)]">updated {dateLabel(i.lastUpdate)}</span>
       </div>
       <p className="text-[13px] text-[var(--text)]">{i.catalyst}</p>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-[var(--text-4)]">
         {i.condition && <span>{i.condition}</span>}
-        {i.url && <a href={i.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">ClinicalTrials.gov ↗</a>}
+        {i.url && <a href={i.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{i.statusKind === "pdufa" ? "SEC 8-K ↗" : "ClinicalTrials.gov ↗"}</a>}
       </div>
     </div>
   );

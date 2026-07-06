@@ -101,6 +101,11 @@ export const INVESTORS: Investor[] = [
   { slug: "mantleridge", name: "Mantle Ridge", manager: "Paul Hilal", cik: "1695459", blurb: "Concentrated activist; long, hands-on engagements one or two names at a time (CSX, Aramark, Dollar Tree)." },
   { slug: "soroban", name: "Soroban Capital", manager: "Eric Mandelblatt", cik: "1517857", blurb: "Concentrated fundamental bets in large-cap growth, energy & infrastructure." },
   { slug: "kynam", name: "Kynam Capital", manager: "Derrick Tang", cik: "1907884", blurb: "Biotech & healthcare long/short; concentrated, catalyst-driven." },
+  // Tiger cubs (added 2026-07: the single-CIO stock-picking books; pod shops like Citadel/Millennium
+  // deliberately excluded — a multi-strat 13F is thousands of hedged pod positions with no thesis signal).
+  { slug: "maverick", name: "Maverick Capital", manager: "Lee Ainslie", cik: "934639", blurb: "Tiger cub long/short; deep-fundamental stock selection across sectors." },
+  { slug: "viking", name: "Viking Global", manager: "Andreas Halvorsen", cik: "1103804", blurb: "Tiger cub long/short; concentrated fundamental growth at scale." },
+  { slug: "lonepine", name: "Lone Pine Capital", manager: "David Craver & Kelly Granat", cik: "1061165", blurb: "Mandel's Tiger cub; concentrated long/short growth compounders." },
 ];
 
 export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
