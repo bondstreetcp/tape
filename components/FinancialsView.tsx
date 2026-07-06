@@ -408,7 +408,7 @@ export default function FinancialsView({
         </div>
       ) : view === "profile" ? (
         <div className="space-y-4">
-          <ProfilePanel profile={profile} currency={currency} />
+          <ProfilePanel profile={profile} symbol={symbol} currency={currency} />
           <SupplyChain symbol={symbol} name={name} universe={universe} />
         </div>
       ) : !hasData ? (

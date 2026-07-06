@@ -1,6 +1,7 @@
 "use client";
 import type { CompanyProfile, Holder } from "@/lib/companyProfile";
 import { currencyPrefix } from "@/lib/format";
+import ExecBios from "./ExecBios";
 import InsiderActivity from "./InsiderActivity";
 
 function big(v: number | null, currency?: string): string {
@@ -170,7 +171,7 @@ export function OwnershipPanel({ profile, symbol, currency }: { profile: Company
   );
 }
 
-export function ProfilePanel({ profile, currency }: { profile: CompanyProfile | null; currency?: string }) {
+export function ProfilePanel({ profile, symbol, currency }: { profile: CompanyProfile | null; symbol: string; currency?: string }) {
   if (!profile) return <Empty />;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -220,27 +221,7 @@ export function ProfilePanel({ profile, currency }: { profile: CompanyProfile | 
       </Card>
 
       <Card title="Key Executives" wide>
-        <p className="mb-2 text-[11px] text-[var(--text-4)]">
-          Dollar figures are each executive&apos;s most recently disclosed <span className="text-[var(--text-3)]">total annual compensation</span> (salary
-          + bonus + stock/option awards), where reported.
-        </p>
-        {profile.officers.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-            {profile.officers.map((o, i) => (
-              <div key={i} className="flex items-baseline justify-between border-b border-[var(--divider)] py-1">
-                <span className="text-sm">
-                  <span className="text-[var(--text)]">{o.name}</span>{" "}
-                  <span className="text-xs text-[var(--text-3)]">· {o.title}</span>
-                </span>
-                <span className="shrink-0 pl-2 text-sm tabular-nums text-[var(--text-2)]">
-                  {o.pay ? big(o.pay, currency) : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <ExecBios symbol={symbol} officers={profile.officers} currency={currency} />
       </Card>
     </div>
   );
