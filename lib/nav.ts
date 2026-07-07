@@ -20,6 +20,7 @@ export const TOP_LINKS: NavItem[] = [
   { label: "Home", path: "", desc: "Market overview — the index, sectors, and biggest movers", job: "Track the market", kw: "dashboard overview" },
   { label: "Daily Desk", path: "/morning-desk", desc: "The AI desk brief (morning + evening runs), with the day's Reuters news wire on its own tab", job: "Track the market", kw: "ai brief notes overnight morning desk daily briefing news reuters wire evening tab" },
   { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Research a name", kw: "saved favorites star" },
+  { label: "Guide", path: "/guide", desc: "What every board does and what each number means — a plain-English manual", job: "Track the market", kw: "guide help manual learn glossary how to read explained tutorial docs what does this mean finance 101 onboarding start here concepts metrics definitions" },
   // NOTE: when auth activates (docs/SETUP-auth.md), add an "Alerts" entry here — the page exists at
   // /alerts but is a dead-end ("accounts aren't configured") until then, so it stays out of the nav.
 ];
