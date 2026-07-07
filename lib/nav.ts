@@ -52,6 +52,7 @@ export const FEATURES: NavItem[] = [
   { label: "Guidance", path: "/guidance", desc: "Each company's standing guide + who sandbags (guides low, beats) vs over-promises its own outlook", group: "Options", job: "Find ideas", kw: "guidance outlook forecast raised reaffirmed cut lowered eps revenue range sandbagger sandbag beats own guide track record forward guide management credibility conservative aggressive earnings" },
   { label: "Earnings Season Desk", path: "/earnings-desk", desc: "The one-page hub — this week's prints, where options are mispriced into them, who's drifting, and the standing setups, all collated", group: "Options", job: "Find ideas", kw: "earnings season desk hub dashboard overview home landing collate everything one place calendar this week options mispriced drift sandbaggers vol summary digest command center" },
   { label: "Catalyst Calendar", path: "/catalyst-calendar", desc: "Every upcoming dated catalyst on one timeline — earnings, investor days, biotech readouts, and IPO lockup expiries", group: "Options", job: "Find ideas", kw: "catalyst calendar upcoming events timeline earnings investor day analyst day biotech readout clinical pdufa fda ipo lockup expiry unlock forward schedule diary whats coming next event driven prep dates" },
+  { label: "Binary Events This Week", path: "/binary-week", desc: "The near-term dated catalysts that can move a stock hard — FDA decisions, readouts, earnings, investor days — ranked by the options-implied move", group: "Options", job: "Find ideas", kw: "binary events this week digest near term catalysts fda pdufa decision clinical phase 3 readout earnings implied move investor day lockup ranked impact biggest mover event driven what to watch calendar week ahead high conviction" },
   { label: "Trade Desk", path: "/trade-desk", desc: "This week's best code-detected option mispricings, with an AI thesis + key risk on each", group: "Options", job: "Find ideas", kw: "trade ideas desk note weekly best trades options mispricing straddle buy sell vol premium ai llm thesis conviction top picks actionable setups this week rich cheap variance premium catalyst mispriced shortlist" },
   { label: "Skew Screener", path: "/skew", desc: "Where the options market leans up or down — call-skew flags takeover/squeeze bids, put-skew flags crash-hedging", group: "Options", job: "Find ideas", kw: "skew risk reversal put call iv volatility smile takeover squeeze buyout upside downside crash hedge 25 delta rr options leans" },
   { label: "Term Structure", path: "/term-structure", desc: "Front vs back IV — backwardated (event-loaded) names for calendar-spread setups", group: "Options", job: "Find ideas", kw: "term structure calendar spread backwardation contango front back iv time spread vol curve options event loaded near dated" },
@@ -109,7 +110,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     { label: "Movers & Buzz", blurb: "Relative-strength leaders, unusual options flow, retail buzz, the earnings calendar", paths: ["/leaders", "/flow", "/reddit-buzz", "/earnings"] },
   ],
   Options: [
-    { label: "Desks", blurb: "The collated hubs — the Earnings Season Desk, the weekly AI Trade Desk, and the forward Catalyst Calendar", paths: ["/earnings-desk", "/trade-desk", "/catalyst-calendar"] },
+    { label: "Desks", blurb: "The collated hubs — the Earnings Season Desk, the weekly AI Trade Desk, the forward Catalyst Calendar, and this week's ranked binary events", paths: ["/earnings-desk", "/trade-desk", "/catalyst-calendar", "/binary-week"] },
     { label: "Earnings Vol", blurb: "Trade the print — this week's reporters, implied vs. historical move, setup cards, post-earnings drift, guidance, and the live track record", paths: ["/earnings-week", "/earnings-move", "/earnings-setup", "/pead", "/guidance", "/track-record"] },
     // /vol-cone is FIRST so this hub lands on the one universe-agnostic tool — on an intl universe the
     // US-only members are hidden and clicking the hub still reaches a working page (the realized-vol cone).
@@ -137,7 +138,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
 // the realized-vol cone is pure price-series math, so it works for every universe.
 export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   // Options → Desks + Earnings Vol + Vol & Positioning (US single-stock options / earnings feeds)
-  "/earnings-desk", "/catalyst-calendar", "/trade-desk", "/earnings-week", "/earnings-move",
+  "/earnings-desk", "/catalyst-calendar", "/binary-week", "/trade-desk", "/earnings-week", "/earnings-move",
   "/earnings-setup", "/track-record", "/guidance", "/pead",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/coiled", "/catalyst-vol", "/biotech-vol",
   // US relative-value feed
