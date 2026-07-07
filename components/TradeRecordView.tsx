@@ -12,7 +12,7 @@ const money = (v: number | null | undefined, d = 2) => (v == null ? "—" : `${v
 const signPct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(d)}%`);
 const GREEN = "#22c55e", RED = "#ef4444";
 
-type StatusF = "all" | "open" | "settled";
+type StatusF = "all" | "preprint" | "settled";
 type VerdictF = "all" | "rich" | "cheap";
 type SortKey = "recent" | "pnl" | "implied" | "realized";
 
@@ -42,7 +42,7 @@ export default function TradeRecordView({
     };
     return allRecs
       .filter((r) => {
-        if (statusF === "open" && r.status === "settled") return false;
+        if (statusF === "preprint" && r.status !== "awaiting_print") return false;
         if (statusF === "settled" && r.status !== "settled") return false;
         if (verdictF !== "all" && r.verdict !== verdictF) return false;
         if (ql && !r.symbol.toLowerCase().includes(ql) && !r.name.toLowerCase().includes(ql)) return false;
@@ -78,7 +78,7 @@ export default function TradeRecordView({
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Earnings Play — Track Record</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Every night we log the exact option structure the Earnings-prep card would suggest for names about to report — with its expiry and entry premiums — then settle it after the print and again at expiry. This is the honest scorecard of those suggestions. {allRecs.length} plays tracked · as of {fmtDateTime(generatedAt)}
+            Every night we log the exact option structure the Earnings-prep card would suggest for names about to report — with its expiry and entry premiums — then <b>grade it at the print</b>: the structure is repriced the morning after with the event vol removed, because an earnings play is a bet on the print, not on where the stock drifts weeks later. The honest scorecard of those suggestions. {allRecs.length} plays tracked · as of {fmtDateTime(generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -87,7 +87,7 @@ export default function TradeRecordView({
       {/* aggregate scorecard */}
       {stats.settledN > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="Settled" value={`${stats.settledN}`} sub={`${stats.openN} still open`} />
+          <Stat label="Graded" value={`${stats.settledN}`} sub={`${stats.preprintN} pre-print queued`} />
           <Stat label="Win rate" value={wr == null ? "—" : `${(wr * 100).toFixed(0)}%`} color={wr == null ? undefined : wr >= 0.5 ? GREEN : RED} sub={`${stats.wins}W · ${stats.losses}L · ${stats.scratches} scratch`} />
           <Stat label="Avg P&L" value={money(stats.avgPnl)} color={stats.avgPnl == null ? undefined : stats.avgPnl >= 0 ? GREEN : RED} sub="per share (×100 / contract)" />
           <Stat label="Total P&L" value={money(stats.totalPnl)} color={stats.totalPnl >= 0 ? GREEN : RED} sub="1 lot each, per share" />
@@ -98,17 +98,17 @@ export default function TradeRecordView({
 
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
         <span><b className="text-[var(--text-2)]">Entry</b> = net premium at the logged mid · <span style={{ color: GREEN }}>+ credit</span> (sell) · <span style={{ color: RED }}>− debit</span> (buy)</span>
-        <span><b className="text-[var(--text-2)]">P&L</b> = per share held to expiry (options settle to intrinsic) · ×100 per contract</span>
+        <span><b className="text-[var(--text-2)]">P&L</b> = graded at the post-print — the structure repriced the morning after, event vol stripped out · per share, ×100 per contract</span>
         <span><b className="text-[var(--text-2)]">Cleared ✓</b> = the realized move exceeded what options priced (a premium-buyer&apos;s win)</span>
-        <span>Provisional marks (open plays past the print) are dimmed.</span>
+        <span><b className="text-[var(--text-2)]">Pre-print</b> plays are logged &amp; awaiting their report — the live queue, shown with entry premiums.</span>
       </div>
 
       {/* filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setStatusF("all")} className={TB(statusF === "all")}>All</button>
-          <button onClick={() => setStatusF("open")} className={TB(statusF === "open")} title="Logged but not yet settled at expiry">Open</button>
-          <button onClick={() => setStatusF("settled")} className={TB(statusF === "settled")} title="Held to expiry and scored">Settled</button>
+          <button onClick={() => setStatusF("preprint")} className={TB(statusF === "preprint")} title="Logged and awaiting the print — the live pre-print queue">Pre-print</button>
+          <button onClick={() => setStatusF("settled")} className={TB(statusF === "settled")} title="Graded at the post-print">Graded</button>
         </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setVerdictF("all")} className={TB(verdictF === "all")}>Both</button>
@@ -172,16 +172,22 @@ export default function TradeRecordView({
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: pnlColor, opacity: r.status === "settled" ? 1 : 0.6 }} title={r.status === "settled" ? "P&L held to expiry" : prov != null ? "provisional mark at the current price (intrinsic only)" : ""}>
+                    <td
+                      className="px-2 py-2 text-right font-mono tabular-nums"
+                      style={{ color: pnlColor, opacity: r.status === "settled" ? 1 : 0.6 }}
+                      title={r.status === "settled"
+                        ? `${r.settleBasis === "post-print" ? "graded at the post-print" : "graded at expiry"}${r.pnlToExpiry != null && r.settleBasis === "post-print" ? ` · held to expiry: ${money(r.pnlToExpiry)}` : ""}`
+                        : prov != null ? "provisional mark at the current price (intrinsic only)" : "logged — awaiting the print"}
+                    >
                       {pnl == null ? "—" : `${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}`}
                     </td>
                     <td className="px-2 py-2 text-center whitespace-nowrap">
                       {r.status === "settled" && r.outcome ? (
-                        <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: r.outcome === "win" ? "color-mix(in oklab, #22c55e 20%, transparent)" : r.outcome === "loss" ? "color-mix(in oklab, #ef4444 20%, transparent)" : "var(--surface-2)", color: r.outcome === "win" ? GREEN : r.outcome === "loss" ? RED : "var(--text-3)" }}>
+                        <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: r.outcome === "win" ? "color-mix(in oklab, #22c55e 20%, transparent)" : r.outcome === "loss" ? "color-mix(in oklab, #ef4444 20%, transparent)" : "var(--surface-2)", color: r.outcome === "win" ? GREEN : r.outcome === "loss" ? RED : "var(--text-3)" }} title={r.settleBasis === "post-print" ? "graded at the post-print" : "graded at expiry (legacy)"}>
                           {r.outcome.toUpperCase()}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-[var(--text-4)]">{r.status === "awaiting_print" ? "awaiting print" : "awaiting expiry"}</span>
+                        <span className="rounded bg-[color-mix(in_oklab,#f59e0b_18%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[#f59e0b]">{r.status === "awaiting_print" ? "PRE-PRINT" : "awaiting"}</span>
                       )}
                     </td>
                   </tr>

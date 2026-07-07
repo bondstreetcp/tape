@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { netCredit, settleLegs, payoffBounds, summarize, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+import { bsPrice } from "../lib/blackScholes";
 
 // The settlement math IS the track record's scorecard — a sign error here silently reports losing
 // plays as winners. Pin every structure the card actually suggests.
@@ -90,4 +91,51 @@ test("summarize: empty input yields null rates, not NaN or a throw", () => {
   assert.equal(s.winRate, null);
   assert.equal(s.avgPnl, null);
   assert.equal(s.totalPnl, 0);
+  assert.equal(s.preprintN, 0);
+});
+
+// settlePostPrint is the new HEADLINE grade — reprice the structure the morning after the print with
+// the event vol stripped out. The earnings thesis must fall out correctly: a bought straddle wins on a
+// big move and loses when the print is quiet; a sold straddle is the mirror image.
+const recBase = {
+  name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "",
+  sector: undefined, verdict: "cheap" as const, status: "awaiting_print" as const,
+  avgRealizedPct: 6, richnessRatio: 1.3, maxProfit: null, maxLoss: null,
+};
+// An ATM straddle whose leg premiums come from Black-Scholes at an elevated pre-earnings vol, so the
+// implied move is internally consistent (ivFromPrice recovers the same vol).
+function straddleRec(side: "long" | "short"): TradeRec {
+  const S = 100, K = 100, Tentry = 10 / 365, sig = 0.8;
+  const call = +bsPrice("call", S, K, Tentry, sig).toFixed(2);
+  const put = +bsPrice("put", S, K, Tentry, sig).toFixed(2);
+  const legs: TradeLeg[] = [
+    { type: "C", side, strike: K, premium: call },
+    { type: "P", side, strike: K, premium: put },
+  ];
+  return {
+    ...recBase, id: side, symbol: side, dte: 10, spotAtRec: S,
+    impliedMovePct: +(((call + put) / S) * 100).toFixed(2), legs, entryCredit: +netCredit(legs).toFixed(2),
+  };
+}
+
+test("settlePostPrint: bought straddle wins on a big move, loses on a quiet print", () => {
+  const long = straddleRec("long");
+  const big = settlePostPrint(long, 115, 8)!; // stock jumped +15%, well past the ~10.5% implied
+  const quiet = settlePostPrint(long, 100.5, 8)!; // print was a dud — the straddle got vol-crushed
+  assert.ok(big > 0, `big move should pay the long straddle, got ${big}`);
+  assert.ok(quiet < 0, `quiet print should lose for the long straddle, got ${quiet}`);
+  assert.ok(big > quiet);
+});
+
+test("settlePostPrint: sold straddle is the mirror image of the bought one", () => {
+  const short = straddleRec("short");
+  const big = settlePostPrint(short, 115, 8)!;
+  const quiet = settlePostPrint(short, 100.5, 8)!;
+  assert.ok(big < 0, "a big move hurts the premium seller");
+  assert.ok(quiet > 0, "a quiet print pays the premium seller (vol crush)");
+});
+
+test("settlePostPrint: null on a degenerate spot", () => {
+  assert.equal(settlePostPrint(straddleRec("long"), 0, 8), null);
+  assert.equal(settlePostPrint(straddleRec("long"), -5, 8), null);
 });

@@ -8,6 +8,7 @@
  * lib/earningsTrade.ts (server) and the JSON is read server-side in the page. NEVER add fs here — the
  * track-record view value-imports settleLegs/summarize, which would drag fs into the client bundle.
  */
+import { bsPrice, ivFromPrice } from "./blackScholes";
 
 export interface TradeLeg {
   type: "C" | "P";
@@ -48,8 +49,10 @@ export interface TradeRec {
   moveCleared?: boolean | null; // did |realized| exceed the implied move (a long-premium buyer's win)?
   spotAtExpiry?: number | null; // underlying at/after expiry
   settledAt?: string | null; // ISO datetime settled
-  pnl?: number | null; // per-share P&L held to expiry (options settle to intrinsic)
+  pnl?: number | null; // per-share P&L — the PRIMARY grade (post-print for new recs; see settleBasis)
   outcome?: Outcome | null;
+  settleBasis?: "post-print" | "expiry"; // how pnl was graded (older recs: expiry; new: the print)
+  pnlToExpiry?: number | null; // secondary, informational: what it would have been if held to expiry
 }
 
 export interface TradeLogData {
@@ -97,6 +100,34 @@ export function markToIntrinsic(rec: TradeRec, spotNow: number): number {
   return settleLegs(rec.legs, spotNow);
 }
 
+// Value the structure THE MORNING AFTER THE PRINT — the honest grade for an earnings play, which is a
+// bet on the print itself, not on where the stock drifts to weeks later at expiry. We strip the EVENT's
+// variance (the one-shot jump the straddle priced at entry) out of each leg's implied variance, then
+// reprice with Black-Scholes at the post-print spot + remaining time. There's no magic crush constant:
+// the event variance is exactly what the implied move priced (straddle/S ≈ 0.8·σ·√T ⇒ the event's 1σ
+// jump ≈ impliedMove/0.8, variance = that squared). Returns per-share P&L from our side, or null.
+export function settlePostPrint(rec: TradeRec, reactionSpot: number, daysToExpiryAfter: number): number | null {
+  if (!(reactionSpot > 0) || !rec.legs.length) return null;
+  const Tentry = Math.max(rec.dte, 1) / 365;
+  const Tpost = Math.max(daysToExpiryAfter, 0) / 365;
+  const eventVar = Math.pow(rec.impliedMovePct / 100 / 0.8, 2); // the variance the print resolved
+  let pnl = 0;
+  for (const l of rec.legs) {
+    const kind = l.type === "C" ? "call" : "put";
+    let mark: number;
+    if (Tpost <= 0) {
+      mark = kind === "call" ? Math.max(reactionSpot - l.strike, 0) : Math.max(l.strike - reactionSpot, 0);
+    } else {
+      const sigEntry = ivFromPrice(kind, rec.spotAtRec, l.strike, Tentry, l.premium);
+      if (sigEntry == null) return null;
+      const remVar = Math.max(sigEntry * sigEntry * Tentry - eventVar, 0); // implied variance minus the spent event
+      mark = bsPrice(kind, reactionSpot, l.strike, Tpost, Math.sqrt(remVar / Tpost));
+    }
+    pnl += l.side === "long" ? mark - l.premium : l.premium - mark; // our side: long gains the mark, short buys it back
+  }
+  return pnl;
+}
+
 export interface TradeStats {
   settledN: number;
   wins: number;
@@ -109,6 +140,7 @@ export interface TradeStats {
   cleared: number; // of those, how often the move EXCEEDED implied (long-premium would have paid)
   byVerdict: Record<"rich" | "cheap", { n: number; wins: number; avgPnl: number | null }>;
   openN: number;
+  preprintN: number; // logged, still awaiting their print (the live pre-print queue)
 }
 
 // Aggregate the track record: win rate + avg P&L across SETTLED recs, split by rich (sell-premium) vs
@@ -137,5 +169,6 @@ export function summarize(recs: TradeRec[]): TradeStats {
     cleared: withMove.filter((r) => r.moveCleared).length,
     byVerdict: { rich: mk("rich"), cheap: mk("cheap") },
     openN: recs.filter((r) => r.status !== "settled").length,
+    preprintN: recs.filter((r) => r.status === "awaiting_print").length,
   };
 }

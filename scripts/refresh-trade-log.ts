@@ -5,9 +5,11 @@
  *  1. LOG new plays. For US names reporting within ~12 days, reproduce EXACTLY the structure the card
  *     would suggest (lib/earningsTrade.buildEarningsTrade — same rich/cheap read, same strikes, same
  *     leg premiums) and record it with its expiry + entry premiums. One rec per name per print.
- *  2. SETTLE matured plays. Once a logged name has reported, record the realized 1-day move (did it
- *     clear what options priced?). Once its expiry passes, mark the underlying to that close, compute
- *     the structure's P&L held to expiry (options settle to intrinsic), and score win/loss/scratch.
+ *  2. SETTLE at the POST-PRINT. Once a logged name has reported, record the realized 1-day move AND grade
+ *     the play right there — the structure is repriced the morning after with the event vol removed
+ *     (lib/tradeLog.settlePostPrint), because an earnings play is a bet on the print, not on where the
+ *     stock drifts to weeks later. A secondary held-to-expiry P&L is still filled in once expiry passes,
+ *     for reference — but the headline grade is the print.
  *
  * We can only track plays FORWARD — the entry premiums have to be captured live, before the print. A
  * play the user saw on the card yesterday can't be reconstructed unless it was logged that night.
@@ -18,9 +20,8 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
-import { getEarningsReactions } from "../lib/earningsReaction";
 import { buildEarningsTrade } from "../lib/earningsTrade";
-import { netCredit, payoffBounds, settleLegs, type TradeLogData, type TradeRec } from "../lib/tradeLog";
+import { netCredit, payoffBounds, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -69,7 +70,8 @@ async function closeOn(sym: string, iso: string): Promise<number | null> {
 // The post-print reaction straight from the chart: prior close → the first COMPLETED session after
 // the print. AMC prints (≥20:00 UTC ≈ after the 4pm ET close) react the NEXT day; BMO react same-day.
 // Returns null while the reaction session is still trading, so a partial-day move is never frozen in.
-async function reactionFromChart(sym: string, eT: number): Promise<number | null> {
+// Returns the signed move AND the reaction-day close + date (the close is what we settle the play at).
+async function reactionFromChart(sym: string, eT: number): Promise<{ move: number; close: number; day: string } | null> {
   await throttle();
   const ch: any = await yf.chart(sym, { period1: new Date(eT - 10 * DAY), period2: new Date(eT + 6 * DAY), interval: "1d" } as any, { validateResult: false }).catch(() => null);
   const q = (ch?.quotes || [])
@@ -81,12 +83,20 @@ async function reactionFromChart(sym: string, eT: number): Promise<number | null
   const idx = q.findIndex((b: { day: string }) => (amc ? b.day > eDay : b.day >= eDay));
   if (idx <= 0) return null; // no prior close, or the reaction session hasn't printed yet
   if (Date.now() < Date.parse(q[idx].day + "T21:30:00Z")) return null; // session not complete (~4:30pm ET buffer)
-  return q[idx].close / q[idx - 1].close - 1;
+  return { move: q[idx].close / q[idx - 1].close - 1, close: q[idx].close, day: q[idx].day };
 }
 
 function outcomeOf(pnl: number, entry: number): TradeRec["outcome"] {
   const eps = Math.max(0.03, 0.03 * Math.abs(entry)); // ~3c/share (or 3% of the ticket) counts as a scratch
   return pnl > eps ? "win" : pnl < -eps ? "loss" : "scratch";
+}
+
+// A rec still needs work if it isn't settled yet, OR it's settled (at the post-print) but its
+// secondary held-to-expiry mark hasn't been filled and its expiry has now passed.
+const DAY_MS = 86_400_000;
+function rec_needsExpiry(r: TradeRec): boolean {
+  const expT = Date.parse(r.expiry + "T00:00:00Z");
+  return r.pnlToExpiry == null && Number.isFinite(expT) && Date.now() >= expT + DAY_MS && r.legs.length > 0;
 }
 
 async function main() {
@@ -164,51 +174,55 @@ async function main() {
   });
   console.log(`logged ${logged} new plays`);
 
-  // ── 2. SETTLE matured plays ──
-  const openRecs = [...byId.values()].filter((r) => r.status !== "settled");
-  let printed = 0, settled = 0;
+  // ── 2. SETTLE at the POST-PRINT (primary), then fill held-to-expiry (secondary) ──
+  const openRecs = [...byId.values()].filter((r) => r.status !== "settled" || rec_needsExpiry(r));
+  let settled = 0, expiryFilled = 0;
   await mapPool(openRecs, 5, async (rec) => {
     const eT = Date.parse(rec.earningsDate);
     const expT = Date.parse(rec.expiry + "T00:00:00Z");
 
-    // (a) print has happened → record the realized 1-day reaction if we don't have it yet
-    if (rec.realizedMovePct == null && Number.isFinite(eT) && now >= eT) {
-      await throttle();
-      const rx = await getEarningsReactions(rec.symbol, 8).catch(() => []);
-      let best: (typeof rx)[number] | null = null, bestGap = Infinity;
-      for (const r of rx) {
-        if (r.move == null) continue;
-        const g = Math.abs(Date.parse(r.date) - eT);
-        if (g < bestGap) { bestGap = g; best = r; }
-      }
-      let mv: number | null = best && bestGap <= 7 * DAY && best.move != null ? best.move : null;
-      // Yahoo's earnings-history module LAGS a fresh print by days, so the reaction above often
-      // isn't there yet ("awaiting print" lingered after the report). Fall back to the chart:
-      // close before the print vs the first COMPLETED session after it.
-      if (mv == null) mv = await reactionFromChart(rec.symbol, eT);
-      if (mv != null) {
-        rec.realizedMovePct = +(mv * 100).toFixed(2);
+    // (a) print has happened → get the reaction (move + reaction-day close) and GRADE the play there.
+    // The chart is the source of truth: close before the print vs the first COMPLETED session after it.
+    if (rec.status !== "settled" && Number.isFinite(eT) && now >= eT) {
+      const rx = await reactionFromChart(rec.symbol, eT);
+      if (rx != null) {
+        rec.realizedMovePct = +(rx.move * 100).toFixed(2);
         rec.moveCleared = Math.abs(rec.realizedMovePct) > rec.impliedMovePct;
-        if (rec.status === "awaiting_print") rec.status = "awaiting_expiry";
-        printed++;
+        rec.spotAtEarnings = +rx.close.toFixed(2);
+        // Reprice the structure the morning after — the honest earnings-play grade.
+        const daysToExp = Math.round((expT - Date.parse(rx.day + "T00:00:00Z")) / DAY);
+        const pnl = settlePostPrint(rec, rx.close, daysToExp);
+        if (pnl != null) {
+          rec.pnl = +pnl.toFixed(2);
+          rec.outcome = outcomeOf(pnl, rec.entryCredit);
+          rec.settleBasis = "post-print";
+          rec.settledAt = nowISO;
+          rec.status = "settled";
+          settled++;
+        }
       }
     }
 
-    // (b) expiry has passed (+1 session for the settle print) → mark to that close & score
-    if (Number.isFinite(expT) && now >= expT + DAY) {
+    // (b) once expiry passes, ALSO record what it would have been held to expiry — informational only,
+    // never overrides the post-print grade.
+    if (rec.pnlToExpiry == null && Number.isFinite(expT) && now >= expT + DAY && rec.legs.length) {
       const close = await closeOn(rec.symbol, rec.expiry);
       if (close != null) {
-        const pnl = settleLegs(rec.legs, close);
         rec.spotAtExpiry = +close.toFixed(2);
-        rec.pnl = +pnl.toFixed(2);
-        rec.outcome = outcomeOf(pnl, rec.entryCredit);
-        rec.settledAt = nowISO;
-        rec.status = "settled";
-        settled++;
+        rec.pnlToExpiry = +settleLegs(rec.legs, close).toFixed(2);
+        // Older recs that were only ever graded at expiry keep that as their basis + primary pnl.
+        if (rec.status !== "settled") {
+          rec.pnl = rec.pnlToExpiry;
+          rec.outcome = outcomeOf(rec.pnlToExpiry, rec.entryCredit);
+          rec.settleBasis = "expiry";
+          rec.settledAt = nowISO;
+          rec.status = "settled";
+        }
+        expiryFilled++;
       }
     }
   });
-  console.log(`recorded ${printed} realized moves, settled ${settled} at expiry`);
+  console.log(`settled ${settled} at the post-print, filled ${expiryFilled} held-to-expiry marks`);
 
   // ── prune + write ──
   const all = [...byId.values()].sort((a, b) => Date.parse(b.earningsDate) - Date.parse(a.earningsDate));
