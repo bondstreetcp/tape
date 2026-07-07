@@ -1,0 +1,49 @@
+name: Weekly binary-events digest
+
+# Pushes the impact-ranked "Binary Events This Week" board (FDA PDUFA decisions, clinical readouts,
+# earnings, investor days, lockups — ranked by the options-implied move) as a weekly digest. Hydrates
+# the feeds from R2 (the FULL nightly's output), builds the digest, and delivers it via a webhook and/or
+# email. OPT-IN: with no channel configured it just prints the digest to the run log.
+#
+# Channels (all optional GitHub secrets):
+#   DIGEST_WEBHOOK_URL  — Slack / Discord / ntfy.sh (falls back to ALERT_WEBHOOK_URL). Auto-detected.
+#   RESEND_API_KEY + DIGEST_EMAIL_TO — email via resend.com (optional DIGEST_EMAIL_FROM).
+#   SITE_URL — optional; adds a "full board" link to the digest.
+on:
+  schedule:
+    # ~08:45am ET Monday (pre-market), so you plan the week before the open. GitHub cron is UTC with no
+    # DST → this drifts to ~7:45am ET in winter. Uses the most recent FULL nightly's R2 data (Friday's),
+    # which is fine — the event calendar is stable over a weekend and days-to are recomputed at run time.
+    - cron: "45 12 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: binary-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Hydrate feeds from R2
+        run: npm run data-from-r2
+        env:
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+      - name: Push the weekly binary-events digest
+        run: npm run push-binary-digest
+        env:
+          DIGEST_WEBHOOK_URL: ${{ secrets.DIGEST_WEBHOOK_URL }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_EMAIL_TO: ${{ secrets.DIGEST_EMAIL_TO }}
+          DIGEST_EMAIL_FROM: ${{ secrets.DIGEST_EMAIL_FROM }}
+          SITE_URL: ${{ secrets.SITE_URL }}

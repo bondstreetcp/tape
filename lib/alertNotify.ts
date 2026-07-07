@@ -4,10 +4,10 @@
  * Title/Priority/Tags headers). No-op (just logs) when ALERT_WEBHOOK_URL is unset — the calling
  * script's `process.exit(1)` still yields GitHub's "workflow failed" email as the zero-config baseline.
  */
-export async function notifyAlert(msg: string, title = "Tape alert"): Promise<void> {
-  const url = process.env.ALERT_WEBHOOK_URL;
+export async function notifyAlert(msg: string, title = "Tape alert", urlOverride?: string): Promise<void> {
+  const url = urlOverride || process.env.ALERT_WEBHOOK_URL;
   if (!url) {
-    console.log("(no ALERT_WEBHOOK_URL set — relying on GitHub's failed-run email)");
+    console.log("(no webhook URL set — relying on GitHub's failed-run email)");
     return;
   }
   const isNtfy = /(^|\/\/)ntfy\.sh\//.test(url) || /\/\/ntfy\./.test(url);

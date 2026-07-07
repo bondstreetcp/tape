@@ -14,6 +14,7 @@
     "refresh-gamma-board": "tsx scripts/refresh-gamma-board.ts",
     "refresh-vol-cone": "tsx scripts/refresh-vol-cone.ts",
     "alert-freshness": "tsx scripts/alert-freshness.ts",
+    "push-binary-digest": "tsx scripts/push-binary-digest.ts",
     "alert-llm-credits": "tsx scripts/alert-llm-credits.ts",
     "build-lake": "tsx scripts/build-lake.ts",
     "backfill-prices": "tsx scripts/build-lake.ts --backfill",
