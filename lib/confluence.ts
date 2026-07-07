@@ -47,12 +47,12 @@ export const SIGNAL_ORDER: SignalKind[] = ["value", "smartmoney", "insider", "co
 
 export const SIGNAL_META: Record<SignalKind, { label: string; color: string; blurb: string }> = {
   value: { label: "Value", color: "#22c55e", blurb: "Trading cheap vs its own 10-year valuation" },
-  smartmoney: { label: "Smart money", color: "#a78bfa", blurb: "A super-investor added or initiated it last quarter (13F)" },
+  smartmoney: { label: "Smart money", color: "#a78bfa", blurb: "A super-investor added or initiated it last quarter (13F; 56-manager roster)" },
   insider: { label: "Insider buying", color: "#10b981", blurb: "Insiders bought on the open market (SEC Form 4)" },
   congress: { label: "Congress", color: "#60a5fa", blurb: "A member of Congress bought it recently (net buyer)" },
   revisions: { label: "Estimates rising", color: "#2dd4bf", blurb: "Analysts are raising EPS estimates (revision momentum)" },
   analyst: { label: "Analyst", color: "#38bdf8", blurb: "A recent sell-side upgrade" },
   options: { label: "Call flow", color: "#f59e0b", blurb: "Unusually call-heavy options flow" },
   squeeze: { label: "Squeeze fuel", color: "#fb7185", blurb: "Heavily shorted — squeeze potential if the bull case plays out" },
-  catalyst: { label: "Catalyst", color: "#ec4899", blurb: "A near-term catalyst on file" },
+  catalyst: { label: "Catalyst", color: "#ec4899", blurb: "A dated near-term catalyst — often an FDA PDUFA decision or a clinical trial readout that could unlock the thesis" },
 };

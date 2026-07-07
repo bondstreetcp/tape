@@ -1,10 +1,11 @@
 /**
  * Confluence Engine refresh — fuses the app's INDEPENDENT bullish signals (cheap-vs-own-history,
- * super-investor 13F adds, Congress buys, analyst upgrades, call-heavy options flow, catalysts)
- * and ranks the names where several agree. GLM writes a thesis / risk / what-to-watch for the
- * top names. Decision-support only — no buy/sell/hold. Runs in the nightly FULL rebuild AFTER
+ * super-investor 13F adds, open-market insider buying, Congress buys, rising analyst EPS, upgrades,
+ * call-heavy options flow, squeeze fuel, and a dated catalyst — incl. FDA PDUFA decisions / clinical
+ * readouts) and ranks the names where several agree. GLM writes a thesis / risk / what-to-watch for
+ * the top names. Decision-support only — no buy/sell/hold. Runs in the nightly FULL rebuild AFTER
  * refresh-data / refresh-valuation-history / refresh-13f / refresh-congress / refresh-flow /
- * refresh-catalysts (it reads their artifacts).
+ * refresh-catalysts / refresh-biotech(-vol) / refresh-estimates / refresh-insiders (reads their artifacts).
  *   npm run refresh-confluence
  */
 import { promises as fs } from "fs";
@@ -42,6 +43,9 @@ async function main() {
   // per-name companyStats snapshot (estimates + short interest) and the Form 4 buy scan
   const estimates = await fs.readFile(path.join(DATA, "estimates.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const insiders = await fs.readFile(path.join(DATA, "insiders.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  // Dated clinical binaries (PDUFA / readouts) + their options-implied move — the event-driven catalyst.
+  const biotech = await fs.readFile(path.join(DATA, "biotech-catalysts.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const biotechVol = await fs.readFile(path.join(DATA, "biotech-vol.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
   // ── accumulate signals per ticker ──────────────────────────────────────────
   const sig = new Map<string, ConfluenceSignal[]>();
@@ -126,7 +130,32 @@ async function main() {
     }
   }
 
-  // 6) CATALYST — a near-term catalyst on file (soft signal; the LLM judges direction)
+  // 6) CATALYST — a dated event that could UNLOCK the stacked thesis (only one catalyst per name kept).
+  //    (a) Hard biotech binaries first (a dated FDA decision / clinical readout ≤75d) — specific and
+  //        actionable, with the options-implied move where the biotech-vol board priced it.
+  const DAY = 86_400_000;
+  const volMove = new Map<string, number>();
+  for (const r of biotechVol?.rows || []) if (r?.ticker && r?.eventDate && r?.impliedMovePct != null) volMove.set(`${r.ticker}|${String(r.eventDate).slice(0, 10)}`, r.impliedMovePct);
+  for (const i of biotech?.items || []) {
+    const sk = i?.statusKind;
+    if (sk !== "pdufa" && sk !== "readout" && sk !== "enrolling-done") continue;
+    const d = i?.primaryCompletion ? String(i.primaryCompletion).slice(0, 10) : "";
+    if (!d) continue;
+    const days = Math.round((Date.parse(d + "T00:00:00Z") - Date.now()) / DAY);
+    if (days < 0 || days > 75) continue;
+    const im = volMove.get(`${i.ticker}|${d}`);
+    const dateH = new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    add(i.ticker, {
+      kind: "catalyst",
+      label: sk === "pdufa" ? "FDA decision" : "Trial readout",
+      detail: `${sk === "pdufa" ? "PDUFA" : i.phase || "Clinical"} ${dateH} (in ${days}d) · ${[i.drug, i.condition].filter(Boolean).join(" / ")}${im != null ? ` · options ±${Math.round(im)}%` : ""}`.slice(0, 160),
+      // A dated FDA decision / clinical readout is a strong, specific, ACTIONABLE catalyst — weight it
+      // like the other high-conviction signals (value/smart-money/insider), not the vague generic one.
+      // It surfaces a biotech name only when it ALSO stacks other bull signals (the confluence bar).
+      weight: 2,
+    });
+  }
+  //    (b) then the generic catalyst store, for names without a dated binary (dedup keeps one per name).
   for (const [sym, c] of Object.entries(cats || {})) {
     if (c?.why) add(sym, { kind: "catalyst", label: "Catalyst", detail: c.why.slice(0, 120), weight: 0.5 });
   }
@@ -193,7 +222,7 @@ async function main() {
   if (await llmConfigured()) {
     const toExplain = board.slice(0, TOP_EXPLAIN);
     const SYSTEM =
-      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, a catalyst). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
+      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, and a dated catalyst — which may be a specific FDA PDUFA decision or a clinical trial readout that could UNLOCK the thesis on a known date). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
       "Ground every claim in the supplied signals + context — never invent a number or a reason. Two to three crisp sentences total across the three fields each. Be specific to the company, not generic. " +
       NO_ADVICE;
     const SCHEMA = 'Return ONLY JSON: {"reads":[{"symbol": string, "thesis": string, "risk": string, "watch": string}]}';
