@@ -39,3 +39,20 @@ test("buildCatalystPath: dedupes a same-day same-kind collision", () => {
   });
   assert.equal(path.length, 1);
 });
+
+test("buildCatalystPath: mid-session NOW keeps today's catalyst at daysTo=0 (no off-by-one drop)", () => {
+  // The API route passes Date.now(); at 15:00 UTC (mid US session) an event dated today must be
+  // daysTo=0, not -1 (which `daysTo < 0` would drop). Regression for the floor-to-UTC-midnight fix.
+  const midSession = Date.parse("2026-07-07T15:00:00Z");
+  const path = buildCatalystPath({
+    nowMs: midSession,
+    earnings: { date: "2026-07-07", implied: 5, estimate: false }, // today
+    biotech: [{ date: "2026-07-08", kind: "pdufa", label: "FDA decision (PDUFA)" }], // +1d
+    exDiv: { date: "2026-07-10", amount: 0.5 }, // +3d
+  });
+  const earn = path.find((e) => e.kind === "earnings");
+  assert.ok(earn, "today's earnings must not be dropped during market hours");
+  assert.equal(earn!.daysTo, 0);
+  assert.equal(path.find((e) => e.kind === "pdufa")!.daysTo, 1);
+  assert.equal(path.find((e) => e.kind === "ex-div")!.daysTo, 3);
+});

@@ -53,11 +53,15 @@ export function buildBinaryWeek(
   opts: { horizonDays?: number } = {},
 ): BinaryEvent[] {
   const horizon = opts.horizonDays ?? 7;
+  // Floor "now" to its own UTC midnight so the day diff compares calendar dates, not a live
+  // wall-clock instant against event midnight — otherwise, during US market hours (past 12:00
+  // UTC) today's events round to daysTo=-1 and silently drop off the board.
+  const nowMid = Math.floor(nowMs / 86_400_000) * 86_400_000;
   const out: BinaryEvent[] = [];
   const push = (e: Omit<BinaryEvent, "daysTo" | "impact"> & { date: string }) => {
     const date = isoDate(e.date);
     if (!date || !e.ticker) return;
-    const daysTo = Math.round((Date.parse(date + "T00:00:00Z") - nowMs) / 86_400_000);
+    const daysTo = Math.round((Date.parse(date + "T00:00:00Z") - nowMid) / 86_400_000);
     if (!Number.isFinite(daysTo) || daysTo < 0 || daysTo > horizon) return;
     const impact = e.impliedMovePct != null ? e.impliedMovePct : BINARY_META[e.kind].prior;
     out.push({ ...e, date, daysTo, impact });

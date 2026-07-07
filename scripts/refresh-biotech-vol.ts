@@ -88,7 +88,12 @@ async function main() {
   const rows = (priced.filter(Boolean) as BioVolRow[]);
   // Percentile-rank the event premium across the priced cohort (self-calibrating cheap/rich).
   const withRatio = rows.filter((r) => r.ratio != null).sort((a, b) => a.ratio! - b.ratio!);
-  withRatio.forEach((r, idx) => { r.premiumPctile = withRatio.length > 1 ? Math.round((idx / (withRatio.length - 1)) * 100) : 50; });
+  // MIN-RANK on the distinct ratio value — identical event premia (common: one sponsor's whole-company
+  // straddle prices every one of its trials the same) must get the SAME percentile, else array order
+  // alone splits ties across the volTag light/fair/loaded cutoffs and labels the same binary two ways.
+  const firstIdxByRatio = new Map<number, number>();
+  withRatio.forEach((r, idx) => { if (!firstIdxByRatio.has(r.ratio!)) firstIdxByRatio.set(r.ratio!, idx); });
+  withRatio.forEach((r) => { r.premiumPctile = withRatio.length > 1 ? Math.round((firstIdxByRatio.get(r.ratio!)! / (withRatio.length - 1)) * 100) : 50; });
 
   const out = rows.filter((r) => r.impliedMovePct != null).sort((a, b) => a.daysToEvent - b.daysToEvent);
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: events.length, rows: out } satisfies BiotechVolData));

@@ -120,8 +120,12 @@ export function settlePostPrint(rec: TradeRec, reactionSpot: number, daysToExpir
     } else {
       const sigEntry = ivFromPrice(kind, rec.spotAtRec, l.strike, Tentry, l.premium);
       if (sigEntry == null) return null;
-      const remVar = Math.max(sigEntry * sigEntry * Tentry - eventVar, 0); // implied variance minus the spent event
-      mark = bsPrice(kind, reactionSpot, l.strike, Tpost, Math.sqrt(remVar / Tpost));
+      const remVar = Math.max(sigEntry * sigEntry * Tentry - eventVar, 0); // whole-life diffusive variance minus the spent event
+      // remVar is the diffusion budget over the ENTIRE entry→expiry life; the residual annualized
+      // vol is √(remVar / Tentry). Pricing the residual leg over the (shorter) remaining time Tpost
+      // must hold that annualized vol constant — NOT force the whole-life variance into Tpost, which
+      // would over-state residual time value by Tentry/Tpost and corrupt the graded post-print P&L.
+      mark = bsPrice(kind, reactionSpot, l.strike, Tpost, Math.sqrt(remVar / Tentry));
     }
     pnl += l.side === "long" ? mark - l.premium : l.premium - mark; // our side: long gains the mark, short buys it back
   }

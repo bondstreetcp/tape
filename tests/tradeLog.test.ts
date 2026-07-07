@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, type TradeLeg, type TradeRec } from "../lib/tradeLog";
-import { bsPrice } from "../lib/blackScholes";
+import { bsPrice, ivFromPrice } from "../lib/blackScholes";
 
 // The settlement math IS the track record's scorecard — a sign error here silently reports losing
 // plays as winners. Pin every structure the card actually suggests.
@@ -138,4 +138,28 @@ test("settlePostPrint: sold straddle is the mirror image of the bought one", () 
 test("settlePostPrint: null on a degenerate spot", () => {
   assert.equal(settlePostPrint(straddleRec("long"), 0, 8), null);
   assert.equal(settlePostPrint(straddleRec("long"), -5, 8), null);
+});
+
+test("settlePostPrint: residual is scaled to the REMAINING time, not the whole life", () => {
+  // Regression for the variance-scaling fix. The residual leg must be repriced with the annualized
+  // residual vol √(remVar/Tentry) held constant over Tpost — NOT the whole-life variance forced into
+  // Tpost. Use an event that resolves only PART of the 10-day vol so a real residual remains (the
+  // synthetic straddle otherwise has eventVar ≈ whole variance → nothing left to scale).
+  const long = { ...straddleRec("long"), impliedMovePct: 7 };
+  const reactionSpot = 100, daysToExp = 8; // ATM, 8 of the 10 days left
+  const Tentry = long.dte / 365, Tpost = daysToExp / 365;
+  const eventVar = Math.pow(long.impliedMovePct / 100 / 0.8, 2);
+
+  let expected = 0, buggy = 0;
+  for (const l of long.legs) {
+    const kind = l.type === "C" ? "call" : "put";
+    const sigEntry = ivFromPrice(kind, long.spotAtRec, l.strike, Tentry, l.premium)!;
+    const remVar = Math.max(sigEntry * sigEntry * Tentry - eventVar, 0);
+    assert.ok(remVar > 0, "test needs a non-degenerate residual");
+    expected += bsPrice(kind, reactionSpot, l.strike, Tpost, Math.sqrt(remVar / Tentry)) - l.premium; // correct
+    buggy += bsPrice(kind, reactionSpot, l.strike, Tpost, Math.sqrt(remVar / Tpost)) - l.premium; // whole-life bug
+  }
+  const got = settlePostPrint(long, reactionSpot, daysToExp)!;
+  assert.ok(Math.abs(got - expected) < 1e-9, `settlePostPrint must match the remaining-time residual: expected ${expected}, got ${got}`);
+  assert.ok(buggy > got + 0.05, "the old whole-life scaling over-credited the long residual — the fix must not regress");
 });

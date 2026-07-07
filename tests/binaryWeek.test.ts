@@ -43,3 +43,23 @@ test("buildBinaryWeek: a wider horizon lets more through", () => {
   assert.equal(buildBinaryWeek(feeds, NOW, { horizonDays: 7 }).length, 0);
   assert.equal(buildBinaryWeek(feeds, NOW, { horizonDays: 21 }).length, 1);
 });
+
+test("buildBinaryWeek: mid-session NOW keeps today's event at daysTo=0 (no off-by-one drop)", () => {
+  // The page passes Date.now() — a live instant. At 15:00 UTC (mid US session) an event dated today
+  // must still be daysTo=0, not -1 (which the `daysTo < 0` filter would drop). Regression for the
+  // floor-to-UTC-midnight fix.
+  const midSession = Date.parse("2026-07-07T15:00:00Z");
+  const feeds = {
+    earnings: [
+      { symbol: "TODAY", name: "Today Co", earningsDate: "2026-07-07", impliedMovePct: 8 }, // today
+      { symbol: "TMRW", name: "Tomorrow Co", earningsDate: "2026-07-08", impliedMovePct: 6 }, // +1d
+      { symbol: "D3", name: "Three Co", earningsDate: "2026-07-10", impliedMovePct: 4 }, // +3d
+    ],
+  };
+  const ev = buildBinaryWeek(feeds, midSession, { horizonDays: 7 });
+  const today = ev.find((e) => e.ticker === "TODAY");
+  assert.ok(today, "today's event must not be dropped during market hours");
+  assert.equal(today!.daysTo, 0);
+  assert.equal(ev.find((e) => e.ticker === "TMRW")!.daysTo, 1);
+  assert.equal(ev.find((e) => e.ticker === "D3")!.daysTo, 3);
+});

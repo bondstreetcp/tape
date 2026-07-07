@@ -230,8 +230,11 @@ async function main() {
   }
 
   // Backfill structured S-1 financials + a grounded valuation read for recent IPOs. Self-healing:
-  // undefined = never tried; null = tried, no usable XBRL yet (won't retry until it appears).
-  const needFin = merged.filter((e) => e.kind === "ipo" && e.ticker && e.url && e.financials === undefined).slice(0, 30);
+  // retry whenever financials is still missing — undefined = never tried; null = tried but no usable
+  // XBRL YET, which is the norm for a genuinely recent IPO (registration-statement financials aren't
+  // inline-XBRL, so companyfacts is empty until the first 10-Q posts). Retrying on null lets the card
+  // fill once XBRL appears; the .slice(0, 30) cap bounds nightly cost, and a row leaves this bucket ~60d.
+  const needFin = merged.filter((e) => e.kind === "ipo" && e.ticker && e.url && e.financials == null).slice(0, 30);
   if (needFin.length) {
     console.log(`extracting S-1 financials for ${needFin.length} recent IPOs…`);
     await mapPool(needFin, 3, async (e) => {

@@ -47,11 +47,15 @@ export function buildCatalystPath(input: {
   exDiv?: { date?: string | null; amount?: number | null } | null;
 }): StockCatalyst[] {
   const horizon = input.horizonDays ?? 400;
+  // Floor "now" to its own UTC midnight so the countdown is an exact calendar-day diff — a live
+  // intraday instant (Date.now()) against event midnight rounds today's catalyst to -1 during US
+  // trading hours and drops it. Same fix as binaryWeek.ts.
+  const now0 = Math.floor(input.nowMs / 86_400_000) * 86_400_000;
   const out: StockCatalyst[] = [];
   const push = (e: Omit<StockCatalyst, "daysTo"> & { date: string }) => {
     const date = isoDate(e.date);
     if (!date) return;
-    const daysTo = Math.round((Date.parse(date + "T00:00:00Z") - input.nowMs) / 86_400_000);
+    const daysTo = Math.round((Date.parse(date + "T00:00:00Z") - now0) / 86_400_000);
     if (!Number.isFinite(daysTo) || daysTo < 0 || daysTo > horizon) return; // forward + within horizon
     out.push({ ...e, date, daysTo });
   };

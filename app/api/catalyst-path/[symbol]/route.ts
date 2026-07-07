@@ -36,14 +36,33 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sym
   let earnDate: string | null = em?.earningsDate ? iso(em.earningsDate) : null;
   let exDiv: { date?: string | null; amount?: number | null } | null = null;
   try {
-    const qs: any = await yf.quoteSummary(sym, { modules: ["calendarEvents", "summaryDetail"] } as any).catch(() => null);
+    const qs: any = await yf.quoteSummary(sym, { modules: ["calendarEvents"] } as any).catch(() => null);
     const ce = qs?.calendarEvents;
     if (!earnDate) {
       const ed = ce?.earnings?.earningsDate;
       const first = Array.isArray(ed) ? ed[0] : ed;
       if (first) earnDate = iso(first);
     }
-    if (ce?.exDividendDate) exDiv = { date: iso(ce.exDividendDate), amount: qs?.summaryDetail?.dividendRate ? qs.summaryDetail.dividendRate / 4 : null };
+    if (ce?.exDividendDate) {
+      // Per-share amount = the most recent ACTUAL dividend from Yahoo's dividend history, NOT
+      // annualRate/4 — that hard-codes a quarterly cadence and prints ~3x too high for monthly payers
+      // (e.g. O). If history is unavailable, surface the ex-div DATE with no amount rather than a wrong
+      // figure — code grounds facts, it never invents a number.
+      let amount: number | null = null;
+      try {
+        const ch: any = await yf
+          .chart(sym, { period1: new Date(Date.now() - 420 * 86_400_000), interval: "1mo", events: "dividends" } as any, { validateResult: false })
+          .catch(() => null);
+        const d = ch?.events?.dividends;
+        const arr = (Array.isArray(d) ? d : Object.values(d || {})) as any[];
+        const latest = arr
+          .map((x) => ({ t: x?.date instanceof Date ? x.date.getTime() : Date.parse(String(x?.date)), a: Number(x?.amount) }))
+          .filter((x) => Number.isFinite(x.t) && Number.isFinite(x.a) && x.a > 0)
+          .sort((a, b) => b.t - a.t)[0];
+        if (latest) amount = +latest.a.toFixed(4);
+      } catch { /* no dividend history → date only */ }
+      exDiv = { date: iso(ce.exDividendDate), amount };
+    }
   } catch { /* no quote */ }
 
   const path: StockCatalyst[] = buildCatalystPath({
