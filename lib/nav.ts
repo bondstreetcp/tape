@@ -85,6 +85,7 @@ export const FEATURES: NavItem[] = [
   { label: "Pairs (Relative Value)", path: "/pairs", desc: "Same-sector S&P 500 pairs whose spread is stretched and mean-reverts — the classic stat-arb setup, ranked by z-score", group: "Research", job: "Find ideas", kw: "pairs trading relative value stat arb statistical arbitrage cointegration spread z-score mean reversion hedge ratio long short market neutral convergence divergence half life correlation pair trade" },
   { label: "Sector Compare", path: "/compare", desc: "Compare the industries inside a sector", group: "Research", job: "Research a name", kw: "industry compare sector" },
   { label: "Super-Investors", path: "/superinvestors", desc: "Famous-investor 13F holdings and quarter-over-quarter changes", group: "Research", job: "Find ideas", kw: "13f buffett hedge funds holdings managers" },
+  { label: "Smart-Money Distribution", path: "/distribution", desc: "The SELL side of the super-investor 13Fs — names 2+ managers exited or sharply trimmed last quarter", group: "Research", job: "Find ideas", kw: "smart money distribution selling sold out trim exit super investor 13f guru hedge fund reducing dumping capitulation consensus leaving crowded exit ownership" },
   { label: "Congress Trades", path: "/congress", desc: "Members of Congress' stock trades (STOCK Act)", group: "Research", job: "Find ideas", kw: "congress senate house pelosi trades politicians" },
   { label: "Trump's Stock Calls", path: "/trump-stocks", desc: "Just the Truth Social posts where Trump names a public company — with how the stock did since", group: "Research", job: "Find ideas", kw: "trump truth social stock calls recommendations mentions dell intel nvidia tariffs bullish bearish president politician social" },
   { label: "Activism & Shorts", path: "/campaigns", desc: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", group: "Event-Driven", job: "Find ideas", kw: "activist 13d proxy fight short seller muddy waters campaign icahn elliott saba radoff dissident board seats hindenburg allegation event driven" },
@@ -125,7 +126,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Research: [
     { label: "A Name", blurb: "Dig into one company — compare, ratio/spread charts, sector compare, SEC filings, sell-side research, overnight desk notes", paths: ["/compare-stocks", "/ratio", "/compare", "/research", "/research-desk", "/overnight"] },
-    { label: "Ownership", blurb: "Who owns it + who's trading it — super-investor 13F, Congress trades, Trump's stock calls", paths: ["/superinvestors", "/congress", "/trump-stocks"] },
+    { label: "Ownership", blurb: "Who owns it + who's trading it — super-investor 13F holdings + distribution, Congress trades, Trump's stock calls", paths: ["/superinvestors", "/distribution", "/congress", "/trump-stocks"] },
     { label: "Portfolio & Tools", blurb: "Your book's risk cockpit, holdco NAV discounts, relative-value pairs, and closed-end-fund discounts", paths: ["/portfolio", "/holdco-nav", "/pairs", "/cef", "/cef-hunter"] },
   ],
 };

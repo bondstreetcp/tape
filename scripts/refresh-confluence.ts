@@ -83,7 +83,7 @@ async function main() {
   };
   for (const inv of si?.investors || []) {
     for (const b of inv.newBuys || []) pushAdd(b.ticker, inv.manager, `${inv.manager} initiated`);
-    for (const a of inv.topAdds || []) pushAdd(a.ticker, inv.manager, `${inv.manager} added${a.deltaPct ? ` +${Math.round(a.deltaPct)}%` : ""}`);
+    for (const a of inv.topAdds || []) pushAdd(a.ticker, inv.manager, `${inv.manager} added${a.deltaPct ? ` +${Math.round(a.deltaPct * 100)}%` : ""}`);
   }
   for (const [sym, e] of adders) {
     add(sym, {

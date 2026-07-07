@@ -75,7 +75,7 @@ export default function SmartMoneyView({ names, universe, asOf, limit = 80 }: { 
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {n.investors.map((b, i) => (
                   <span key={i} className="rounded-full bg-[rgba(167,139,250,.14)] px-2 py-0.5 text-[11px] font-medium text-[#a78bfa]">
-                    {b.manager} {b.action === "initiated" ? "initiated" : `added${b.deltaPct ? ` +${Math.round(b.deltaPct)}%` : ""}`}
+                    {b.manager} {b.action === "initiated" ? "initiated" : `added${b.deltaPct ? ` +${Math.round(b.deltaPct * 100)}%` : ""}`}
                   </span>
                 ))}
               </div>
