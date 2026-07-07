@@ -433,6 +433,13 @@ jobs:
         run: npm run refresh-biotech
         continue-on-error: true
 
+      # Biotech Event Vol — re-prices the dated PDUFA/readout binaries from biotech-catalysts.json
+      # against the options chain (US options; no LLM). Must run AFTER refresh-biotech.
+      - name: Refresh biotech event vol
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-biotech-vol
+        continue-on-error: true
+
       # Policy & Contracts — Federal Register rules + USAspending contract awards → GLM maps to tickers.
       # Free APIs; needs OPENROUTER_API_KEY; forward-accumulating.
       - name: Refresh policy & contracts

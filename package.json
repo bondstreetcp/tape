@@ -65,6 +65,7 @@
     "refresh-fed": "tsx scripts/refresh-fed.ts",
     "refresh-campaigns": "tsx scripts/refresh-campaigns.ts",
     "refresh-biotech": "tsx scripts/refresh-biotech.ts",
+    "refresh-biotech-vol": "tsx scripts/refresh-biotech-vol.ts",
     "refresh-policy": "tsx scripts/refresh-policy.ts",
     "refresh-catalyst-vol": "tsx scripts/refresh-catalyst-vol.ts",
     "refresh-corp-events": "tsx scripts/refresh-corp-events.ts",
