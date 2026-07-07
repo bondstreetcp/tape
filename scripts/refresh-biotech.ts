@@ -16,7 +16,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { daysToReadout, dateNearAnchor, type BioCatalyst, type BiotechData } from "../lib/biotech";
+import { daysToReadout, dateNearAnchor, phraseNearAnchor, type BioCatalyst, type BiotechData } from "../lib/biotech";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -158,6 +158,60 @@ async function fetchPdufa(knownIds: Set<string>, knownEvents: Set<string>): Prom
   return out;
 }
 
+// ---- CRLs (Complete Response Letters — the FDA declining an application) from fresh 8-Ks -------
+const CRL_CAP = 15;
+
+async function extractCrl(hit: EftsHit, text: string): Promise<BioCatalyst | null> {
+  const SYSTEM =
+    "You read an SEC 8-K press release from a drug company and determine whether the company ANNOUNCED RECEIVING a Complete Response Letter (CRL) from the FDA — i.e. the FDA declined to approve its application in current form. " +
+    'Return ONLY JSON: {"found": boolean, "drug": string, "indication": string, "app": string}. ' +
+    "found:true ONLY for a newly received CRL announced in this release — not a historical mention, not a resubmission after an old CRL, not a risk-factor reference. drug = the product/candidate; indication = the disease; app = the application type (NDA, BLA…). Copy only what the text states — never infer. " +
+    NO_ADVICE;
+  const out = await chatJSON<{ found: boolean; drug: string; indication: string; app: string }>(
+    SYSTEM, `FILING (${hit.issuer}, ${hit.date}):\n${text.slice(0, 14000)}`, { maxTokens: 220 },
+  ).catch(() => null);
+  if (!out?.found || !hit.ticker) return null;
+  const textLower = text.toLowerCase();
+  // Grounding: the drug's name must sit NEAR an occurrence of the phrase itself.
+  const drug = String(out.drug || "").trim().slice(0, 80);
+  if (!drug || !phraseNearAnchor("complete response letter", textLower, [drug, drug.split(/[\s(]/)[0]])) return null;
+  const indication = String(out.indication || "").trim().slice(0, 80);
+  const condition = indication.toLowerCase().split(/[^a-z0-9]+/).some((w) => w.length >= 5 && textLower.includes(w)) ? indication : "";
+  const appRaw = String(out.app || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 14);
+  const app = appRaw && textLower.includes(appRaw.toLowerCase()) ? appRaw : "NDA/BLA";
+  return {
+    id: hit.accession,
+    ticker: hit.ticker,
+    company: hit.issuer,
+    drug,
+    condition,
+    phase: app,
+    status: "CRL received",
+    statusKind: "crl",
+    primaryCompletion: null, // a CRL is the (past) decision itself — no forward clock
+    lastUpdate: hit.date,
+    catalyst: `FDA rejection — ${hit.issuer} received a Complete Response Letter on the ${app} for ${drug}${condition ? ` in ${condition}` : ""}.`,
+    url: hit.ciks[0] ? edgarDocUrl(hit.ciks[0], hit.accession, hit.doc) : "",
+  };
+}
+
+async function fetchCrl(knownIds: Set<string>): Promise<BioCatalyst[]> {
+  const startdt = new Date(Date.now() - PDUFA_WINDOW * DAY).toISOString().slice(0, 10);
+  const enddt = new Date().toISOString().slice(0, 10);
+  const hits = await eftsSearch({ q: '"complete response letter"', forms: "8-K", startdt, enddt });
+  const cand = hits.filter((h) => h.ticker && !knownIds.has(h.accession)).slice(0, CRL_CAP);
+  console.log(`CRL: ${hits.length} 8-K hits, ${cand.length} new to read`);
+  const out: BioCatalyst[] = [];
+  for (const hit of cand) {
+    const text = await fetchFilingBodyText(hit).catch(() => "");
+    if (!/complete response letter/i.test(text)) continue;
+    const item = await extractCrl(hit, text);
+    if (item) out.push(item);
+    await sleep(300);
+  }
+  return out;
+}
+
 async function validTicker(sym: string): Promise<boolean> {
   try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
 }
@@ -201,24 +255,34 @@ async function main() {
   const pdufaNew = pdufaRaw.filter((i) => pdufaOk[i.ticker]);
   console.log(`→ ${pdufaNew.length} new PDUFA dates`);
 
+  // CRLs — the FDA saying no. Same EFTS + grounding machinery, anchored on the phrase itself.
+  const crlRaw = await fetchCrl(known).catch((e) => { console.error("CRL scan failed:", (e as Error).message); return [] as BioCatalyst[]; });
+  const crlOk: Record<string, boolean> = {};
+  await mapPool([...new Set(crlRaw.map((i) => i.ticker))], 6, async (t) => { crlOk[t] = await validTicker(t); });
+  const crlNew = crlRaw.filter((i) => crlOk[i.ticker]);
+  console.log(`→ ${crlNew.length} new CRLs`);
+
   // An FDA extension announces a NEW date for the same drug (e.g. a 3-month CRL-cycle push) — the
   // fresh row supersedes any prior pdufa row for the same ticker+drug, else the stale date lingers.
   // Prefix match on the normalized name so a variant spelling ("PRA-1234a") still supersedes.
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const freshKeys = pdufaNew.map((i) => ({ ticker: i.ticker, dk: norm(i.drug) }));
+  // A new PDUFA date supersedes the old row for the same drug; a CRL RESOLVES a standing PDUFA row
+  // (the decision came — negatively), so it supersedes too.
+  const freshKeys = [...pdufaNew, ...crlNew].map((i) => ({ ticker: i.ticker, dk: norm(i.drug) }));
   const priorKept = prior.items.filter((i) => {
     if (i.statusKind !== "pdufa") return true;
     const dk = norm(i.drug);
     return !freshKeys.some((f) => f.ticker === i.ticker && (f.dk.startsWith(dk) || dk.startsWith(f.dk)));
   });
 
-  const items = [...newItems, ...pdufaNew, ...priorKept]
+  const items = [...newItems, ...pdufaNew, ...crlNew, ...priorKept]
     .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)
     // drop ancient completions (old trials getting an administrative touch, not a fresh catalyst);
     // a PDUFA row dies 30 days after the action date — once the FDA has decided, the event is over
     .filter((v) => {
       const d = daysToReadout(v.primaryCompletion);
       if (v.statusKind === "pdufa") return d != null && d >= -30;
+      if (v.statusKind === "crl") return Date.now() - Date.parse(v.lastUpdate || "0") < 45 * DAY; // news, not a clock — 45d shelf life
       return d == null || d >= -200;
     })
     .sort((a, b) => Date.parse(b.lastUpdate || "0") - Date.parse(a.lastUpdate || "0")) // most-recent status change first

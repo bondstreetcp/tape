@@ -16,7 +16,7 @@ export interface BioCatalyst {
   condition: string;
   phase: string; // "Phase 3" — or the application type for PDUFA rows ("NDA", "BLA", "sNDA"…)
   status: string; // human status
-  statusKind: "readout" | "enrolling-done" | "failed" | "pdufa" | "other";
+  statusKind: "readout" | "enrolling-done" | "failed" | "pdufa" | "crl" | "other";
   primaryCompletion: string | null; // ISO date of the readout (est.) — or the firm PDUFA action date
   lastUpdate: string; // ISO
   catalyst: string; // one-line LLM read: the event + why it matters
@@ -30,9 +30,9 @@ export interface BiotechData {
 }
 
 export const statusColor = (k: BioCatalyst["statusKind"]): string =>
-  k === "failed" ? "#ef4444" : k === "readout" ? "#f59e0b" : k === "enrolling-done" ? "#60a5fa" : k === "pdufa" ? "#a78bfa" : "var(--text-2)";
+  k === "failed" ? "#ef4444" : k === "readout" ? "#f59e0b" : k === "enrolling-done" ? "#60a5fa" : k === "pdufa" ? "#a78bfa" : k === "crl" ? "#fb7185" : "var(--text-2)";
 export const statusLabel = (k: BioCatalyst["statusKind"]): string =>
-  k === "failed" ? "Failed/stopped" : k === "readout" ? "Readout" : k === "enrolling-done" ? "Enrollment done" : k === "pdufa" ? "FDA decision" : "Update";
+  k === "failed" ? "Failed/stopped" : k === "readout" ? "Readout" : k === "enrolling-done" ? "Enrollment done" : k === "pdufa" ? "FDA decision" : k === "crl" ? "CRL (FDA rejection)" : "Update";
 
 // Days until (or since) the primary-endpoint readout — the binary event clock.
 export function daysToReadout(iso: string | null): number | null {
@@ -71,4 +71,18 @@ export function dateNearAnchor(iso: string, textLower: string, anchors: string[]
   const as = anchors.map((a) => a.toLowerCase().trim()).filter((a) => a.length >= 3);
   if (!pos.length || !as.length) return false;
   return pos.some((p) => { const seg = textLower.slice(Math.max(0, p - window), p + window); return as.some((a) => seg.includes(a)); });
+}
+/** Same proximity idea anchored on a PHRASE (e.g. "complete response letter"): some anchor (the
+ *  drug's name) must appear within `window` chars of an occurrence of the phrase. */
+export function phraseNearAnchor(phrase: string, textLower: string, anchors: string[], window = 1500): boolean {
+  const as = anchors.map((a) => a.toLowerCase().trim()).filter((a) => a.length >= 3);
+  if (!as.length) return false;
+  let i = textLower.indexOf(phrase);
+  let n = 0;
+  while (i >= 0 && n++ < 40) {
+    const seg = textLower.slice(Math.max(0, i - window), i + phrase.length + window);
+    if (as.some((a) => seg.includes(a))) return true;
+    i = textLower.indexOf(phrase, i + 1);
+  }
+  return false;
 }

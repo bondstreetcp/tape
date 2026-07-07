@@ -14,8 +14,8 @@ import type { VolDisData } from "../lib/volDislocation";
 import { sideLabel, type TradeIdea, type TradeDeskData, type Conviction } from "../lib/tradeIdeas";
 
 const DATA = path.join(process.cwd(), "data");
-const PICK = Number(process.env.TRADE_PICKS || 6);
-const POOL = 16;
+const PICK = Number(process.env.TRADE_PICKS || 8);
+const POOL = 24; // candidate pool (was 16) — more survivors reach the LLM narrator
 
 const readJSON = async (f: string): Promise<any> => {
   const r = await fs.readFile(path.join(DATA, f), "utf8").catch(() => null);

@@ -6,6 +6,7 @@ import { statusColor, statusLabel, daysToReadout } from "@/lib/biotech";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 const dateLabel = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 type KindF = "all" | BioCatalyst["statusKind"];
@@ -41,7 +42,7 @@ export default function BiotechView({ universe, data }: { universe: string; data
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Biotech Catalysts</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            A binary-event radar — recent status changes on Phase 2/3 industry trials from ClinicalTrials.gov (enrollment done, completed, terminated), plus announced FDA action dates (PDUFA) from company 8-Ks, mapped to the public ticker with the event clock. {data.items.length} catalysts · {data.scanned} trials scanned · {fmtDateTime(data.generatedAt)}
+            A binary-event radar — recent status changes on Phase 2/3 industry trials from ClinicalTrials.gov (enrollment done, completed, terminated), plus announced FDA action dates (PDUFA) <InfoDot term="PDUFA" /> and Complete Response Letters <InfoDot term="CRL" /> from company 8-Ks, mapped to the public ticker with the event clock. {data.items.length} catalysts · {data.scanned} trials scanned · {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -54,6 +55,7 @@ export default function BiotechView({ universe, data }: { universe: string; data
           <button onClick={() => setKindF("readout")} className={TB(kindF === "readout")} title="Trial completed — topline pending">Completed</button>
           <button onClick={() => setKindF("failed")} className={TB(kindF === "failed")} title="Terminated / suspended">Failed</button>
           <button onClick={() => setKindF("pdufa")} className={TB(kindF === "pdufa")} title="Announced FDA action dates (PDUFA)">PDUFA</button>
+          <button onClick={() => setKindF("crl")} className={TB(kindF === "crl")} title="Complete Response Letters — the FDA declining an application">CRL</button>
         </div>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setSort("readout")} className={TB(sort === "readout")}>Soonest readout</button>
@@ -93,7 +95,7 @@ function BioCard({ i, universe }: { i: BioCatalyst; universe: string }) {
       <p className="text-[13px] text-[var(--text)]">{i.catalyst}</p>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-[var(--text-4)]">
         {i.condition && <span>{i.condition}</span>}
-        {i.url && <a href={i.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{i.statusKind === "pdufa" ? "SEC 8-K ↗" : "ClinicalTrials.gov ↗"}</a>}
+        {i.url && <a href={i.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{i.statusKind === "pdufa" || i.statusKind === "crl" ? "SEC 8-K ↗" : "ClinicalTrials.gov ↗"}</a>}
       </div>
     </div>
   );

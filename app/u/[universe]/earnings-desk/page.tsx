@@ -5,6 +5,7 @@ import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 import InfoDot from "@/components/InfoDot";
+import HowToRead from "@/components/HowToRead";
 import { fmtDateTime } from "@/lib/format";
 import type { VolDisData } from "@/lib/volDislocation";
 import type { TradeDeskData } from "@/lib/tradeIdeas";
@@ -117,6 +118,12 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
           {asOf && <div>as of {fmtDateTime(asOf)}</div>}
         </div>
       </div>
+
+      <HowToRead title="New to this desk? What the numbers mean">
+        <p>Every widget here is a digest of a full board (the link in its corner opens it). The core number everywhere is the <b>implied move</b>: the at-the-money straddle price ÷ the stock price at the expiry bracketing the report — the move the options market charges for the print, read from the live chain.</p>
+        <p>That gets compared to the stock&apos;s <b>historical move</b> (its average absolute earnings-day move over past prints). The ratio is the verdict: <b style={{ color: RED }}>rich ≥1.15×</b> (options overpay the typical move — sell premium) or <b style={{ color: GREEN }}>cheap ≤0.85×</b> (the move costs less than the name usually delivers — buy it).</p>
+        <p><b>d-chips</b> = trading days until the report. Hover any ⓘ or column header for the exact formula behind that widget. All signals are computed by code from the chain and filings; the AI Trade Desk only narrates.</p>
+      </HowToRead>
 
       {/* ── HERO ── */}
       <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">

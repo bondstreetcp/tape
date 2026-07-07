@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 const vpct = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
 const COIL = "#22c55e"; // quiet / coiled (RV low in own history)
@@ -90,6 +91,13 @@ export default function VolConeView({ universe, data }: { universe: string; data
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <HowToRead>
+        <p><b>What this measures:</b> each stock&apos;s volatility is compared only to <b>its own history</b> — 10/21/63/126/252-day realized vol vs the full range those horizons have spanned in the past (the &quot;cone&quot;). No cross-stock comparison, so a sleepy utility and a meme name each get judged against themselves.</p>
+        <p><b>The percentile</b> is where today&apos;s 21-day realized vol sits in that history: <b style={{ color: COIL }}>0–25th</b> = about as quiet as this name ever gets (coiled — options tend to be cheap right before regime changes); <b style={{ color: BLOWN }}>75–100th</b> = blown out (vol tends to mean-revert — premium selling territory).</p>
+        <p><b>Default sort is &quot;coiled first&quot;</b> — lowest percentile at the top. The other tabs re-sort by blown-out, vol expanding/contracting (term slope), or highest raw vol.</p>
+        <p><b>The mini-cone graphic:</b> the dot is today, the tick is the median, the band is the historical min→max. A dot hugging the bottom of its band with a rising term slope is the classic pre-breakout compression.</p>
+      </HowToRead>
 
       <div className="mb-2 flex flex-wrap gap-1 text-[12px]">
         {SORTS.map((s) => (

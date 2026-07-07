@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SECTORS } from "@/lib/sectors";
+import HowToRead from "./HowToRead";
 
 const BENCH = "SPY";
 const WINDOW = 60; // trading days for the relative-strength ratio
@@ -81,6 +82,14 @@ export default function SectorRotation({ universe }: { universe: string }) {
         <h1 className="mt-1 text-2xl font-bold">Sector Rotation (RRG)</h1>
         <p className="mt-1 text-xs text-[var(--text-3)]">11 SPDR sectors vs SPY — relative strength (x) and its momentum (y). Sectors rotate clockwise: Improving → Leading → Weakening → Lagging.</p>
       </header>
+
+      <HowToRead>
+        <p>This is a <b>Relative Rotation Graph (RRG)</b> — a map of which S&amp;P sectors are leading or lagging the market, and which way each is heading.</p>
+        <p><b>X-axis (RS-Ratio):</b> the sector&apos;s price relative to SPY over the last ~60 trading days, scaled so <b>100 = moving with the market</b>. Right of center = outperforming; left = lagging.</p>
+        <p><b>Y-axis (RS-Momentum):</b> the 10-day rate of change of that relative strength. Above center = the outperformance is <i>accelerating</i>; below = fading.</p>
+        <p><b>Quadrants:</b> <b style={{ color: "#22c55e" }}>Leading</b> (strong &amp; strengthening) → <b style={{ color: "#f59e0b" }}>Weakening</b> (strong but fading) → <b style={{ color: "#ef4444" }}>Lagging</b> (weak &amp; weakening) → <b style={{ color: "#60a5fa" }}>Improving</b> (weak but turning up). Sectors tend to rotate clockwise; the tail behind each dot is its last ~6 weeks of travel.</p>
+        <p><b>How to use it:</b> favor Leading/Improving sectors, go light on Weakening/Lagging — context for positioning, not a standalone signal. Click a row to open that sector&apos;s constituents.</p>
+      </HowToRead>
 
       {loading ? (
         <div className="py-20 text-center text-sm text-[var(--text-3)]">Computing rotation…</div>

@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 export interface EmRow {
   symbol: string;
@@ -83,6 +84,13 @@ export default function EarningsWeekView({ universe, data }: { universe: string;
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <HowToRead>
+        <p><b>Implied move</b> = the price of the at-the-money straddle (call + put at the strike nearest the stock price, at the expiry that brackets the report) ÷ the stock price. It&apos;s the move, up or down, the options market charges you to own through the print — read straight off the live chain, never a vendor&apos;s number.</p>
+        <p><b>Hist (±%)</b> = the stock&apos;s average absolute one-day move on its own past earnings reports; <b>n</b> = how many prints that average covers (fewer than 3 = low confidence, flagged).</p>
+        <p><b>Rich / cheap</b> = implied ÷ historical. <b style={{ color: "#f59e0b" }}>≥1.15× rich</b>: options price more movement than this name usually delivers — favors premium sellers. <b style={{ color: "#14b8a6" }}>≤0.85× cheap</b>: the straddle costs less than the typical move — favors move buyers.</p>
+        <p><b>Universe:</b> the list is filtered to the index selected in the switcher (top right); the underlying scan covers US names above $1B market cap with listed options.</p>
+      </HowToRead>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">

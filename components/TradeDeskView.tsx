@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 export default function TradeDeskView({ universe, data }: { universe: string; data: TradeDeskData }) {
   const ideas = data.ideas || [];
@@ -23,6 +24,12 @@ export default function TradeDeskView({ universe, data }: { universe: string; da
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <HowToRead>
+        <p><b>Where the ideas come from:</b> every night the code scans three feeds — (1) names reporting earnings in the next <b>16 days</b> whose options price far more or less movement than the stock&apos;s own history of earnings moves, (2) scheduled catalysts (investor days &amp;c.) with cheap straddles, and (3) standing vol dislocations (implied vol ≥1.6× or ≤0.9× what the stock actually moves).</p>
+        <p><b>How the shortlist forms:</b> candidates clearing those thresholds are scored deterministically and pooled (up to ~16, deduped); the AI then narrates the top handful — it writes the thesis and the risk, but <b>every number was computed by code first</b>. That&apos;s why the list is short: it&apos;s the survivors of hard filters, not a ranking of everything.</p>
+        <p><b>The numbers on each card</b> are the triggering stat — e.g. &quot;±6.2% implied vs ±3.1% historical&quot; means options price a 6.2% earnings move where the stock has averaged 3.1%. <b>⚠ trap</b> flags a &quot;cheap&quot; straddle that may just reflect a known binary already priced elsewhere.</p>
+      </HowToRead>
 
       {!ideas.length ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-10 text-center text-sm text-[var(--text-3)]">

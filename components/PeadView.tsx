@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 type F = "cont" | "fade" | "all";
 const sg = (x: number) => `${x > 0 ? "+" : ""}${x.toFixed(1)}%`;
@@ -41,6 +42,13 @@ export default function PeadView({ universe, data }: { universe: string; data: P
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <HowToRead>
+        <p><b>Who&apos;s on the list:</b> names that reported earnings in the last <b>1–12 calendar days</b>. A name appears the day after its print and drops off after day 12 — that&apos;s the window where the drift effect has historically been strongest.</p>
+        <p><b>Day-1 / gap:</b> the stock&apos;s reaction on the earnings session itself (whichever is larger of the report-day or next-morning move, so before-open and after-close prints are treated fairly).</p>
+        <p><b>Drift:</b> the move from the reaction day&apos;s close to the latest close — what the stock has done <i>since</i> the market&apos;s first verdict.</p>
+        <p><b>✓ Continuing vs ✗ fading:</b> a drift in the <i>same direction</i> as the day-1 reaction is the classic post-earnings-drift setup (surprises keep getting priced in for days); a drift the other way means the reaction is being faded.</p>
+      </HowToRead>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">

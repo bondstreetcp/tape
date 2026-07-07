@@ -20,7 +20,7 @@ const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
 const WINDOW = 16; // days ahead to include
 const MIN_MKTCAP = 1e9;
-const CAP = 130; // most names processed (soonest first)
+const CAP = 200; // most names processed (soonest first) — raised from 130 so the desk sees a wider slice of reporters
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
