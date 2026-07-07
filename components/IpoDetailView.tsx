@@ -2,8 +2,10 @@
 import Link from "next/link";
 import type { IpoEvent } from "@/lib/ipoMonitor";
 import { fmtSize, perfColor } from "@/lib/ipoMonitor";
+import { fmtUsd, valueTagColor } from "@/lib/ipoFinancials";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`);
 
 export default function IpoDetailView({ universe, event }: { universe: string; event: IpoEvent }) {
   const e = event;
@@ -53,6 +55,42 @@ export default function IpoDetailView({ universe, event }: { universe: string; e
           </div>
         </div>
       )}
+
+      {/* Structured S-1 financials + valuation — pulled from the SEC XBRL facts, with a grounded AI read. */}
+      {e.financials && (e.financials.revenue != null || e.financials.years.some((y) => y.revenue != null || y.netIncome != null)) && (() => {
+        const f = e.financials!;
+        return (
+          <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Financials &amp; valuation <span className="normal-case text-[var(--text-4)]">· from the S-1 (SEC XBRL)</span></div>
+              {f.valueTag !== "unclear" && <span className="rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ background: `color-mix(in oklab, ${valueTagColor(f.valueTag)} 16%, transparent)`, color: valueTagColor(f.valueTag) }}>{f.valueTag}</span>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[360px] text-left text-[13px]">
+                <thead className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+                  <tr><th className="pb-1 font-medium">Fiscal year</th>{f.years.map((y) => <th key={y.year} className="pb-1 pl-3 text-right font-medium">{y.year}</th>)}</tr>
+                </thead>
+                <tbody className="font-mono tabular-nums text-[var(--text-2)]">
+                  <tr><td className="py-0.5 font-sans text-[var(--text-3)]">Revenue</td>{f.years.map((y) => <td key={y.year} className="py-0.5 pl-3 text-right">{fmtUsd(y.revenue)}</td>)}</tr>
+                  <tr><td className="py-0.5 font-sans text-[var(--text-3)]">Gross profit</td>{f.years.map((y) => <td key={y.year} className="py-0.5 pl-3 text-right">{fmtUsd(y.grossProfit)}</td>)}</tr>
+                  <tr><td className="py-0.5 font-sans text-[var(--text-3)]">Net income</td>{f.years.map((y) => <td key={y.year} className="py-0.5 pl-3 text-right" style={{ color: y.netIncome == null ? undefined : y.netIncome >= 0 ? "#22c55e" : "#ef4444" }}>{fmtUsd(y.netIncome)}</td>)}</tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 border-t border-[var(--divider)] pt-3 sm:grid-cols-4">
+              <Fact label="Rev. growth" value={pctStr(f.revenueGrowthPct)} color={f.revenueGrowthPct == null ? undefined : f.revenueGrowthPct >= 0 ? "#22c55e" : "#ef4444"} />
+              <Fact label="Gross margin" value={f.grossMarginPct == null ? "—" : `${f.grossMarginPct.toFixed(0)}%`} />
+              <Fact label="Net margin" value={f.netMarginPct == null ? "—" : `${f.netMarginPct.toFixed(0)}%`} color={f.netMarginPct == null ? undefined : f.netMarginPct >= 0 ? "#22c55e" : "#ef4444"} />
+              <Fact label="Price / sales" value={f.priceToSales == null ? "—" : `${f.priceToSales.toFixed(1)}×`} />
+              <Fact label="Market cap" value={fmtUsd(f.marketCap)} />
+              <Fact label="Cash" value={fmtUsd(f.cash)} />
+              <Fact label="Debt" value={f.debt ? fmtUsd(f.debt) : "—"} />
+            </div>
+            {f.valueRead && <p className="mt-3 border-t border-[var(--divider)] pt-2.5 text-[13px] leading-relaxed text-[var(--text-2)]"><span className="font-semibold text-[var(--text)]">Value read:</span> {f.valueRead}</p>}
+            <p className="mt-1.5 text-[10px] text-[var(--text-4)]">Figures from the company&apos;s SEC XBRL filings; market cap = shares × current price. The value read is AI-written from these numbers only — a starting point, not advice.</p>
+          </div>
+        );
+      })()}
 
       {s ? (
         <div className="mt-4 space-y-3">

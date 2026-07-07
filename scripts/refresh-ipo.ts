@@ -14,6 +14,7 @@ import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { cleanTicker } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
+import { deriveIpoMetrics, type IpoFinancials, type IpoFiscalYear } from "../lib/ipoFinancials";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -228,10 +229,100 @@ async function main() {
     });
   }
 
+  // Backfill structured S-1 financials + a grounded valuation read for recent IPOs. Self-healing:
+  // undefined = never tried; null = tried, no usable XBRL yet (won't retry until it appears).
+  const needFin = merged.filter((e) => e.kind === "ipo" && e.ticker && e.url && e.financials === undefined).slice(0, 30);
+  if (needFin.length) {
+    console.log(`extracting S-1 financials for ${needFin.length} recent IPOs…`);
+    await mapPool(needFin, 3, async (e) => {
+      const cikM = e.url.match(/edgar\/data\/(\d+)\//);
+      e.financials = cikM ? await fetchIpoFinancials(cikM[1], e.ticker).catch(() => null) : null;
+    });
+  }
+
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData));
   const by = (k: string) => merged.filter((e) => e.kind === k).length;
   console.log(`\nwrote ${merged.length} events (${by("upcoming")} upcoming, ${by("ipo")} recent IPOs, ${by("lockup")} lockups).`);
   for (const e of merged.slice(0, 12)) console.log(`  [${e.kind.padEnd(8)}] ${(e.ticker || "—").padEnd(6)} ${e.company.slice(0, 30).padEnd(30)} ${e.summary ? "✓summary" : ""}`);
+}
+
+// ── S-1 financials + valuation (recent IPOs) ────────────────────────────────────────────────────
+const SEC_UA = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
+const daysApart = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / DAY;
+
+// Pull a newly-public company's annual financials from its SEC XBRL facts, join a market cap from
+// Yahoo (companyfacts rarely tags total shares), compute valuation, and let the LLM narrate ONLY the
+// computed numbers into a grounded value read. Every figure comes from the filing; nothing is invented.
+async function fetchIpoFinancials(cik: string, ticker: string): Promise<IpoFinancials | null> {
+  const facts = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik.padStart(10, "0")}.json`, { headers: SEC_UA })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const gaap = (facts as any)?.facts?.["us-gaap"];
+  if (!gaap) return null;
+  const usd = (tag: string): any[] => gaap[tag]?.units?.USD || [];
+  const flow = (tags: string[]): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const tag of tags) for (const x of usd(tag)) {
+      if (x.fp !== "FY" || !x.start || !x.end) continue;
+      if (Math.abs(daysApart(x.start, x.end) - 365) > 20) continue; // full fiscal year only
+      out[x.end.slice(0, 4)] = x.val; // later filings restate → last write wins
+    }
+    return out;
+  };
+  const instant = (tags: string[]): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const tag of tags) for (const x of usd(tag)) { if (x.fp === "FY" && !x.start && x.end) out[x.end.slice(0, 4)] = x.val; }
+    return out;
+  };
+  const revenue = flow(["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "RevenueFromContractWithCustomerIncludingAssessedTax"]);
+  const gp = flow(["GrossProfit"]);
+  const cogs = flow(["CostOfRevenue", "CostOfGoodsAndServicesSold"]);
+  const ni = flow(["NetIncomeLoss"]);
+  const cashByYr = instant(["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]);
+  const debtLt = instant(["LongTermDebtNoncurrent"]);
+  const debtCur = instant(["LongTermDebtCurrent"]);
+  const yrs = [...new Set([...Object.keys(revenue), ...Object.keys(ni)])].sort();
+  if (!yrs.length) return null;
+  const years: IpoFiscalYear[] = yrs.slice(-3).map((y) => ({
+    year: y,
+    revenue: revenue[y] ?? null,
+    grossProfit: gp[y] ?? (revenue[y] != null && cogs[y] != null ? revenue[y] - cogs[y] : null),
+    netIncome: ni[y] ?? null,
+  }));
+  const ly = yrs[yrs.length - 1];
+  const debt = (debtLt[ly] ?? 0) + (debtCur[ly] ?? 0);
+
+  // Market cap = shares outstanding × current price (Yahoo — the app's usual quote source).
+  let shares: number | null = null, price: number | null = null;
+  try {
+    const qs: any = await yf.quoteSummary(ticker, { modules: ["defaultKeyStatistics", "price"] } as any).catch(() => null);
+    shares = qs?.defaultKeyStatistics?.sharesOutstanding ?? null;
+    price = qs?.price?.regularMarketPrice ?? null;
+  } catch { /* no quote yet */ }
+
+  const m = deriveIpoMetrics({ years, cash: cashByYr[ly] ?? null, debt: debt || null, sharesOutstanding: shares, price });
+  if (m.revenue == null && years.every((y) => y.revenue == null && y.netIncome == null)) return null;
+
+  // Grounded value read — the model may reference ONLY these computed numbers.
+  const facts_str = [
+    m.revenue != null && `latest FY revenue $${(m.revenue / 1e6).toFixed(0)}M`,
+    m.revenueGrowthPct != null && `revenue ${m.revenueGrowthPct >= 0 ? "+" : ""}${m.revenueGrowthPct}% YoY`,
+    m.grossMarginPct != null && `gross margin ${m.grossMarginPct}%`,
+    m.netMarginPct != null && `net margin ${m.netMarginPct}% (${m.profitable ? "profitable" : "loss-making"})`,
+    m.priceToSales != null && `price/sales ${m.priceToSales}×`,
+    m.cash != null && `cash $${(m.cash / 1e6).toFixed(0)}M`,
+    m.debt ? `debt $${(m.debt / 1e6).toFixed(0)}M` : "little/no debt",
+  ].filter(Boolean).join("; ");
+  let valueTag: IpoFinancials["valueTag"] = "unclear", valueRead = "";
+  if (await llmConfigured()) {
+    const SYSTEM = "You are an IPO analyst. Given a newly-public company's COMPUTED financial metrics, write ONE plain-English sentence judging whether the deal looks cheaply, fairly, or richly valued for its growth + profitability profile, and pick a tag. Use ONLY the numbers provided — never invent a figure and never cite a named peer's multiple. If price/sales is missing, comment on growth/margins/profitability but tag 'unclear'. " + NO_ADVICE;
+    const SCHEMA = 'Return ONLY JSON: {"tag":"cheap"|"fair"|"rich"|"unclear","read":string}';
+    const out = await chatJSON<{ tag: string; read: string }>(SYSTEM, `${ticker}: ${facts_str}\n\n${SCHEMA}`, { maxTokens: 160 }).catch(() => null);
+    if (out) {
+      valueTag = (["cheap", "fair", "rich", "unclear"].includes(out.tag) ? out.tag : "unclear") as IpoFinancials["valueTag"];
+      valueRead = String(out.read || "").slice(0, 240);
+    }
+  }
+  return { ...m, valueTag, valueRead, asOf: iso(Date.now()) };
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

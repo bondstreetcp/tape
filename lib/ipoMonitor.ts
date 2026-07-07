@@ -30,6 +30,7 @@ export interface IpoEvent {
   sinceIpoPct: number | null; // return from the IPO price to now (recent/lockup only)
   url: string; // the SEC prospectus
   summary?: IpoSummary | null; // AI recap of the S-1 / prospectus (what the company does)
+  financials?: import("./ipoFinancials").IpoFinancials | null; // structured S-1 fundamentals + valuation (recent IPOs)
 }
 
 export interface IpoData {
