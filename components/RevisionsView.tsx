@@ -11,13 +11,17 @@ const col = (v: number | null) => (v == null ? "var(--text-3)" : v > 0 ? "#22c55
 export default function RevisionsView({ data, universe }: { data: RevisionsData; universe: string }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [sector, setSector] = useState<string | null>(null);
-  const [raisedOnly, setRaisedOnly] = useState(false);
+  const [mode, setMode] = useState<"all" | "up" | "down">("all");
 
   const sectors = useMemo(() => Array.from(new Set(data.rows.map((r) => r.sector).filter(Boolean))).sort(), [data.rows]);
-  const rows = useMemo(
-    () => data.rows.filter((r) => (!sector || r.sector === sector) && (!raisedOnly || (r.drift90 != null && r.drift90 > 0) || r.netUp > 0)).slice(0, 150),
-    [data.rows, sector, raisedOnly],
-  );
+  const rows = useMemo(() => {
+    let r = data.rows.filter((x) => !sector || x.sector === sector);
+    if (mode === "up") r = r.filter((x) => (x.drift90 != null && x.drift90 > 0) || x.netUp > 0);
+    // Downside lens: names the Street is CUTTING — biggest negative drift first (the feed is
+    // sorted by upside momentum, so the cutters need their own sort to surface).
+    if (mode === "down") r = r.filter((x) => (x.drift90 != null && x.drift90 < 0) || x.netUp < 0).sort((a, b) => (a.drift90 ?? 0) - (b.drift90 ?? 0));
+    return r.slice(0, 150);
+  }, [data.rows, sector, mode]);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -53,16 +57,23 @@ export default function RevisionsView({ data, universe }: { data: RevisionsData;
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => setRaisedOnly((v) => !v)}
-          className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (raisedOnly ? "bg-[var(--accent-strong)] text-white" : "border border-[var(--border)] text-[var(--text-2)] hover:border-[var(--border-strong)]")}
+          onClick={() => setMode((v) => (v === "up" ? "all" : "up"))}
+          className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (mode === "up" ? "bg-[var(--accent-strong)] text-white" : "border border-[var(--border)] text-[var(--text-2)] hover:border-[var(--border-strong)]")}
         >
           ↑ Estimates rising
+        </button>
+        <button
+          onClick={() => setMode((v) => (v === "down" ? "all" : "down"))}
+          title="Names the Street is cutting — negative 90-day EPS drift or net-down revisions, biggest cuts first"
+          className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (mode === "down" ? "bg-[#ef4444] text-white" : "border border-[var(--border)] text-[var(--text-2)] hover:border-[var(--border-strong)]")}
+        >
+          ↓ Estimates falling
         </button>
         <select value={sector ?? ""} onChange={(e) => setSector(e.target.value || null)} className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text-2)]">
           <option value="">All sectors</option>
           {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        {(sector || raisedOnly) && <button onClick={() => { setSector(null); setRaisedOnly(false); }} className="text-xs text-[var(--text-3)] underline hover:text-[var(--text)]">clear</button>}
+        {(sector || mode !== "all") && <button onClick={() => { setSector(null); setMode("all"); }} className="text-xs text-[var(--text-3)] underline hover:text-[var(--text)]">clear</button>}
         <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} of {data.coverage} covered · {uname}</span>
       </div>
 

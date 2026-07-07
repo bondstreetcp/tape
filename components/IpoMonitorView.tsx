@@ -64,7 +64,7 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
                 <th className="px-2 py-2 text-right font-medium">{tab === "upcoming" ? "Proposed" : "Offer"}</th>
                 <th className="px-2 py-2 text-right font-medium">Size</th>
                 {tab !== "upcoming" && <th className="px-2 py-2 text-right font-medium">Since IPO</th>}
-                {tab === "lockup" && <th className="px-2 py-2 font-medium">Lockup expiry</th>}
+                {tab !== "upcoming" && <th className="px-2 py-2 font-medium">Lockup expiry</th>}
                 <th className="px-2 py-2 font-medium">Underwriters</th>
                 <th className="px-2 py-2 font-medium"></th>
               </tr>
@@ -82,7 +82,7 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
                   <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{e.priceUsd != null ? `$${e.priceUsd}` : "—"}</td>
                   <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-4)]">{fmtSize(e.sizeUsdM)}</td>
                   {tab !== "upcoming" && <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: perfColor(e.sinceIpoPct) }}>{pctStr(e.sinceIpoPct)}</td>}
-                  {tab === "lockup" && (
+                  {tab !== "upcoming" && (
                     <td className="px-2 py-2 whitespace-nowrap">
                       <span className="text-[var(--text-2)]">{e.lockupDate ? dateLabel(e.lockupDate) : "—"}</span>
                       {e.daysToLockup != null && <b className="ml-1" style={{ color: e.daysToLockup >= 0 && e.daysToLockup < 14 ? "#f59e0b" : "var(--text-4)" }}>{e.daysToLockup >= 0 ? `in ${e.daysToLockup}d` : `${-e.daysToLockup}d ago`}</b>}

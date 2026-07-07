@@ -117,7 +117,7 @@ export async function getMacro(): Promise<Macro> {
     return { v: l?.value ?? null, asOf: l?.date ?? null, history: downsample(o.map((x) => [x.date, x.value] as [string, number])) };
   };
 
-  const [cpi, core, ff, unrate, t102, hy, ig, gdp, corePce, be10, real10, sentiment, nfci, vix, m2] = await Promise.all([
+  const [cpi, core, ff, unrate, t102, hy, ig, gdp, corePce, be10, real10, sentiment, nfci, vix, vxn, rvx, m2] = await Promise.all([
     yoy("CPIAUCSL"),
     yoy("CPILFESL"),
     simple("FEDFUNDS"),
@@ -132,6 +132,8 @@ export async function getMacro(): Promise<Macro> {
     simple("UMCSENT"),     // U. Michigan consumer sentiment
     simple("NFCI"),        // Chicago Fed financial conditions (0 = average; <0 looser)
     simple("VIXCLS"),      // CBOE VIX
+    simple("VXNCLS"),      // CBOE Nasdaq-100 vol (VXN)
+    simple("RVXCLS"),      // CBOE Russell 2000 vol (RVX)
     yoy("M2SL"),           // M2 money supply, YoY growth
   ]);
 
@@ -150,6 +152,8 @@ export async function getMacro(): Promise<Macro> {
     { key: "ig", label: "Inv-Grade OAS", value: ig.v, unit: "%", asOf: ig.asOf, group: "Credit", seriesId: "BAMLC0A0CM", history: ig.history },
     { key: "nfci", label: "Financial Conditions (NFCI)", value: nfci.v, unit: "", asOf: nfci.asOf, group: "Financial Conditions", seriesId: "NFCI", history: nfci.history },
     { key: "vix", label: "VIX (S&P 500 vol)", value: vix.v, unit: "", asOf: vix.asOf, group: "Financial Conditions", seriesId: "VIXCLS", history: vix.history },
+    { key: "vxn", label: "VXN (Nasdaq 100 vol)", value: vxn.v, unit: "", asOf: vxn.asOf, group: "Financial Conditions", seriesId: "VXNCLS", history: vxn.history },
+    { key: "rvx", label: "RVX (Russell 2000 vol)", value: rvx.v, unit: "", asOf: rvx.asOf, group: "Financial Conditions", seriesId: "RVXCLS", history: rvx.history },
     { key: "m2", label: "M2 Money Supply (YoY)", value: m2.v, unit: "%", asOf: m2.asOf, group: "Financial Conditions", seriesId: "M2SL", history: m2.history },
   ];
 

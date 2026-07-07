@@ -61,7 +61,6 @@ export const FEATURES: NavItem[] = [
   { label: "Realized-Vol Cone", path: "/vol-cone", desc: "Where each name's current realized vol sits in its own historical cone — coiled (quiet, breakout risk) vs blown-out (mean-revert)", group: "Options", job: "Find ideas", kw: "realized volatility cone historical vol hv rv percentile burghardt lane coiled quiet compressed blown out spike mean reversion breakout term structure expanding contracting 20 day 60 day annualized standard deviation vol regime cheap gamma" },
   { label: "Coiled Springs", path: "/coiled", desc: "Cheap realized vol + a dealer-gamma accelerant — names set up for an outsized move (vol cone × gamma board)", group: "Options", job: "Find ideas", kw: "coiled spring cheap vol low realized volatility short gamma flip breakout setup pre move optionality buy straddle strangle vol gamma fusion accelerant squeeze compression pinned blown out mispriced options confluence" },
   { label: "Post-Earnings Drift", path: "/pead", desc: "Names still drifting after the print — the earnings-day gap vs the drift since", group: "Options", job: "Find ideas", kw: "pead post earnings drift momentum gap reaction continuation surprise fade reported recently after the print sue" },
-  { label: "Earnings Seasonality", path: "/seasonality", desc: "Which names systematically move big (or quiet) on earnings — the earnings amplifier", group: "Options", job: "Find ideas", kw: "earnings seasonality amplifier systematic move big straddle historical backtest volatility event quiet premium quarterly reaction" },
   { label: "CEF Screener", path: "/cef", desc: "Closed-end funds trading at a discount to their NAV", group: "Research", job: "Income strategies", kw: "closed end funds discount nav yield" },
   { label: "CEF Discount Hunter", path: "/cef-hunter", desc: "The scored shortlist of the most stretched closed-end-fund discounts", group: "Research", job: "Income strategies", kw: "cef closed end fund discount hunter stretched z-score yield" },
   { label: "Holdco NAV Tracker", path: "/holdco-nav", desc: "Holding companies vs their look-through NAV — discount/premium (Prosus, Exor, GBL…)", group: "Research", job: "Find ideas", kw: "holdco holding company nav discount premium look-through prosus exor gbl arbitrage sum of the parts sotp" },
@@ -111,7 +110,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Options: [
     { label: "Desks", blurb: "The collated hubs — the Earnings Season Desk, the weekly AI Trade Desk, and the forward Catalyst Calendar", paths: ["/earnings-desk", "/trade-desk", "/catalyst-calendar"] },
-    { label: "Earnings Vol", blurb: "Trade the print — this week's reporters, implied vs. historical move, setup cards, post-earnings drift, seasonality, guidance, and the live track record", paths: ["/earnings-week", "/earnings-move", "/earnings-setup", "/pead", "/seasonality", "/guidance", "/track-record"] },
+    { label: "Earnings Vol", blurb: "Trade the print — this week's reporters, implied vs. historical move, setup cards, post-earnings drift, guidance, and the live track record", paths: ["/earnings-week", "/earnings-move", "/earnings-setup", "/pead", "/guidance", "/track-record"] },
     // /vol-cone is FIRST so this hub lands on the one universe-agnostic tool — on an intl universe the
     // US-only members are hidden and clicking the hub still reaches a working page (the realized-vol cone).
     { label: "Vol & Positioning", blurb: "The realized-vol cone, where vol is rich/cheap, skew & term structure, dispersion, dealer gamma, coiled springs, and cheap options into a catalyst", paths: ["/vol-cone", "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/coiled", "/catalyst-vol"] },
@@ -139,7 +138,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
 export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   // Options → Desks + Earnings Vol + Vol & Positioning (US single-stock options / earnings feeds)
   "/earnings-desk", "/catalyst-calendar", "/trade-desk", "/earnings-week", "/earnings-move",
-  "/earnings-setup", "/track-record", "/guidance", "/pead", "/seasonality",
+  "/earnings-setup", "/track-record", "/guidance", "/pead",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/coiled", "/catalyst-vol",
   // US relative-value feed
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)

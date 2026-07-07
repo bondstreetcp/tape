@@ -29,6 +29,10 @@ async function main() {
   for (const sym of Object.keys(g.byTicker || {})) {
     const h = g.byTicker[sym].history?.[0];
     if (!h?.date) continue;
+    // A real print reports EPS (or at least guides). A corporate-action 8-K in the guidance feed
+    // (e.g. HON's 2026-06-29 spinoff release: reportedEps null) is NOT an earnings event — without
+    // this gate it puts a name on the drift board that never reported.
+    if (h.reportedEps == null && h.nextQEpsLow == null && h.nextQEpsHigh == null) continue;
     const rd = Date.parse(h.date);
     if (Number.isNaN(rd)) continue;
     const daysSince = Math.round((now - rd) / 86_400_000);

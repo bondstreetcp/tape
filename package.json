@@ -58,7 +58,6 @@
     "refresh-trade-ideas": "tsx scripts/refresh-trade-ideas.ts",
     "refresh-dispersion": "tsx scripts/refresh-dispersion.ts",
     "refresh-pead": "tsx scripts/refresh-pead.ts",
-    "refresh-seasonality": "tsx scripts/refresh-seasonality.ts",
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
     "refresh-trade-log": "tsx scripts/refresh-trade-log.ts",
     "refresh-trump": "tsx scripts/refresh-trump.ts",

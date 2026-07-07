@@ -120,8 +120,16 @@ function indPctile(hist: [string, number][] | undefined, val: number | null | un
 export function buildRegime(macro: Macro): RegimeItem[] {
   const ind = (k: string) => macro.indicators?.find((i) => i.key === k);
   const out: RegimeItem[] = [];
-  const vix = ind("vix"), hy = ind("hy"), t102 = ind("t102"), nfci = ind("nfci");
-  if (vix) out.push({ label: "VIX", value: vix.value, unit: "", pctile: indPctile(vix.history, vix.value), note: vix.value == null ? "" : vix.value < 15 ? "calm" : vix.value < 22 ? "normal" : vix.value < 30 ? "elevated" : "stressed", tone: (vix.value ?? 0) < 20 ? "up" : (vix.value ?? 0) < 28 ? "neutral" : "down" });
+  const vix = ind("vix"), vxn = ind("vxn"), rvx = ind("rvx"), hy = ind("hy"), t102 = ind("t102"), nfci = ind("nfci");
+  // The three index vol gauges — S&P (VIX), Nasdaq (VXN), Russell 2000 (RVX) — same read, per index.
+  const volGauge = (label: string, i: { value: number | null; history?: [string, number][] }): RegimeItem => ({
+    label, value: i.value, unit: "", pctile: indPctile(i.history, i.value),
+    note: i.value == null ? "" : i.value < 15 ? "calm" : i.value < 22 ? "normal" : i.value < 30 ? "elevated" : "stressed",
+    tone: (i.value ?? 0) < 20 ? "up" : (i.value ?? 0) < 28 ? "neutral" : "down",
+  });
+  if (vix) out.push(volGauge("VIX (S&P 500)", vix));
+  if (vxn) out.push(volGauge("VXN (Nasdaq)", vxn));
+  if (rvx) out.push(volGauge("RVX (Russell 2k)", rvx));
   if (hy) out.push({ label: "HY credit (OAS)", value: hy.value, unit: "%", pctile: indPctile(hy.history, hy.value), note: hy.value == null ? "" : hy.value < 3.5 ? "tight" : hy.value < 5 ? "normal" : "widening", tone: (hy.value ?? 0) < 3.5 ? "up" : (hy.value ?? 0) < 5 ? "neutral" : "down" });
   if (t102) out.push({ label: "10Y–2Y curve", value: t102.value, unit: "pp", pctile: indPctile(t102.history, t102.value), note: (t102.value ?? 0) < 0 ? "inverted" : "positive", tone: (t102.value ?? 0) < 0 ? "down" : "up" });
   if (nfci) out.push({ label: "Fin. conditions", value: nfci.value, unit: "", pctile: indPctile(nfci.history, nfci.value), note: (nfci.value ?? 0) < 0 ? "loose" : "tight", tone: (nfci.value ?? 0) < 0 ? "up" : "down" });

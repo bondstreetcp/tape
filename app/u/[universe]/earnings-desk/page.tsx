@@ -4,6 +4,7 @@ import path from "path";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
+import InfoDot from "@/components/InfoDot";
 import { fmtDateTime } from "@/lib/format";
 import type { VolDisData } from "@/lib/volDislocation";
 import type { TradeDeskData } from "@/lib/tradeIdeas";
@@ -11,9 +12,6 @@ import { sideColor, sideLabel } from "@/lib/tradeIdeas";
 import type { PeadData } from "@/lib/pead";
 import type { GuidanceBoardData } from "@/lib/guidanceBoard";
 import type { EmData, EmRow } from "@/components/EarningsWeekView";
-import type { GammaBoardData } from "@/lib/gammaBoard";
-import type { VolConeData } from "@/lib/volCone";
-import { fuseVolGamma, nearFlipPct } from "@/lib/volGamma";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +29,11 @@ function DPill({ d }: { d: number }) {
   const c = d <= 2 ? AMBER : "var(--text-4)";
   return <span className="rounded px-1 py-0.5 text-[10px] font-mono font-semibold tabular-nums" style={{ color: c, background: `color-mix(in oklab, ${c} 14%, transparent)` }}>d{d}</span>;
 }
-function Widget({ title, links, note, children }: { title: string; links: { label: string; href: string }[]; note?: string; children: React.ReactNode }) {
+function Widget({ title, tip, links, note, children }: { title: string; tip?: string; links: { label: string; href: string }[]; note?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="text-[13px] font-bold text-[var(--text)]">{title}</h2>
+        <h2 className="text-[13px] font-bold text-[var(--text)]">{title}{tip && <> <InfoDot text={tip} /></>}</h2>
         <span className="flex shrink-0 gap-2 text-[11px]">
           {links.map((l) => <Link key={l.href} href={l.href} className="text-[var(--accent)] hover:underline">{l.label} →</Link>)}
         </span>
@@ -46,6 +44,18 @@ function Widget({ title, links, note, children }: { title: string; links: { labe
   );
 }
 const Empty = ({ t }: { t: string }) => <div className="py-4 text-center text-[12px] text-[var(--text-4)]">{t}</div>;
+// Column headers for the widget tables — the bare-number rows needed labels to be readable.
+// A "<"-prefixed label left-aligns (for text columns); everything after the first defaults right.
+const TH = ({ cols }: { cols: string[] }) => (
+  <thead>
+    <tr className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+      {cols.map((c, i) => {
+        const left = i === 0 || c.startsWith("<");
+        return <th key={i} className={"pb-1 font-medium " + (i === 0 ? "" : "pl-2 ") + (left ? "text-left" : "text-right")}>{c.replace(/^</, "")}</th>;
+      })}
+    </tr>
+  </thead>
+);
 
 export default async function EarningsDeskPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
@@ -53,15 +63,13 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
   if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings Season Desk" relPath="/earnings-desk" />;
   const u = (p: string) => `/u/${universe}${p}`;
 
-  const [em, ti, vd, pead, gb, cv, gam, cone] = await Promise.all([
+  const [em, ti, vd, pead, gb, cv] = await Promise.all([
     read<EmData>("earnings-move.json"),
     read<TradeDeskData>("trade-ideas.json"),
     read<VolDisData>("vol-dislocation.json"),
     read<PeadData>("pead.json"),
     read<GuidanceBoardData>("guidance-board.json"),
     read<{ generatedAt?: string; rows?: any[] }>("catalyst-vol.json"),
-    read<GammaBoardData>("gamma-board.json"),
-    read<VolConeData>("vol-cone.json"),
   ]);
 
   const asOf = [em, ti, vd, pead, gb, cv].map((d) => (d as any)?.generatedAt).filter(Boolean).sort()[0] as string | undefined;
@@ -93,12 +101,6 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
   const cutsCount = (gb?.rows ?? []).filter((r) => r.action === "cut").length;
   // priced rows only — the feed keeps unpriced calendar placeholders (mirrors CatalystVolView).
   const catRows = (cv?.rows ?? []).filter((r: any) => r.ratio != null && r.impliedMovePct != null && r.baselineMovePct != null).sort((a: any, b: any) => a.ratio - b.ratio).slice(0, 4);
-  // Coiled springs (vol cone × dealer gamma) — coiled (cheap vol + accelerant) first, then blown (amplified),
-  // ranked by spring score. The fused feed is US options names; skip 'pinned'/'none' for this setups strip.
-  const springs = fuseVolGamma(gam?.rows ?? [], cone?.rows ?? [])
-    .filter((r) => r.setup === "coiled" || r.setup === "blown")
-    .sort((a, b) => (b.springScore ?? 0) - (a.springScore ?? 0))
-    .slice(0, 6);
   const mv = (x: number | null | undefined) => (x == null ? "—" : `${x > 0 ? "+" : ""}${x.toFixed(1)}%`);
   const mvColor = (x: number) => (x > 0 ? GREEN : x < 0 ? RED : ZINC);
 
@@ -171,29 +173,15 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
           ) : <Empty t="AI ideas populate on the nightly refresh." />}
         </Widget>
 
-        {/* Coiled springs — vol cone × dealer gamma */}
-        <Widget title="Coiled springs — cheap vol + a γ accelerant" links={[{ label: "see all", href: u("/coiled") }]}>
-          {springs.length ? (
-            <table className="w-full text-left text-[12px]">
-              <tbody>
-                {springs.map((r) => (
-                  <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
-                    <td className="py-1"><Link href={u(`/stock/${r.symbol}?tab=options`)} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link></td>
-                    <td className="py-1 pl-2"><Pill t={r.setup === "coiled" ? "COILED" : "BLOWN"} c={r.setup === "coiled" ? GREEN : AMBER} /></td>
-                    <td className="py-1 text-right font-mono tabular-nums" title="realized-vol percentile in own history" style={{ color: r.pct20 != null && r.pct20 <= 25 ? GREEN : r.pct20 != null && r.pct20 >= 75 ? RED : "var(--text-3)" }}>{r.pct20 == null ? "—" : `${r.pct20.toFixed(0)}th`}</td>
-                    <td className="py-1 pl-2 text-right text-[11px]" style={{ color: r.regime === "short" ? AMBER : GREEN }} title="dealer gamma">{r.regime === "short" ? "short γ" : "long γ"}</td>
-                    <td className="py-1 pl-1 text-right font-mono tabular-nums text-[11px]" style={{ color: nearFlipPct(r.distToFlipPct, 3) ? AMBER : "var(--text-4)" }} title="distance to the gamma flip">{r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <Empty t="No coiled/amplified setups right now — needs the gamma board + vol cone." />}
-        </Widget>
-
         {/* Vol Dislocation (IV/RV + skew + term merged) */}
-        <Widget title="Vol into the print — rich/cheap · skew · term" links={[{ label: "vol", href: u("/vol-dislocation") }, { label: "skew", href: u("/skew") }, { label: "term", href: u("/term-structure") }]}>
+        <Widget
+          title="Vol into the print — rich/cheap · skew · term"
+          tip="IV/RV = at-the-money implied vol ÷ 20-day realized vol. Above ~1.6× the options are pricing far more movement than the stock delivers (sell premium); skew ▲ = puts bid (crash hedging), ▾ = calls bid; 'crush' = front-month IV far above back (backwardated — event loaded)."
+          links={[{ label: "vol", href: u("/vol-dislocation") }, { label: "skew", href: u("/skew") }, { label: "term", href: u("/term-structure") }]}
+        >
           {volRows.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "to print", "IV/RV", "skew", "term"]} />
               <tbody>
                 {volRows.map((r) => (
                   <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
@@ -210,9 +198,14 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
         </Widget>
 
         {/* Sell premium (rich) */}
-        <Widget title="Sell premium — richest into the print" links={[{ label: "earnings", href: u("/earnings-week") }]}>
+        <Widget
+          title="Sell premium — richest into the print"
+          tip="Implied = the options' expected earnings move (ATM straddle price ÷ stock price, at the expiry bracketing the report). Hist = the stock's average absolute post-earnings move over its past prints. Rich× = implied ÷ hist — above ~1.15× the market is paying more for the move than the stock historically delivers."
+          links={[{ label: "earnings", href: u("/earnings-week") }]}
+        >
           {sellRows.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "implied", "hist", "rich", "days"]} />
               <tbody>
                 {sellRows.map((r) => (
                   <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
@@ -229,9 +222,14 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
         </Widget>
 
         {/* Buy the move (cheap) */}
-        <Widget title="Buy the move — cheapest into the print" links={[{ label: "earnings", href: u("/earnings-week") }]}>
+        <Widget
+          title="Buy the move — cheapest into the print"
+          tip="Same math as Sell premium, other tail: implied move (ATM straddle ÷ spot) UNDER the stock's own historical earnings move (ratio ≤ ~0.85×) — the options are cheap relative to how much this name usually moves on the print."
+          links={[{ label: "earnings", href: u("/earnings-week") }]}
+        >
           {buyRows.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "implied", "hist", "cheap", "days"]} />
               <tbody>
                 {buyRows.map((r) => (
                   <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
@@ -248,9 +246,14 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
         </Widget>
 
         {/* PEAD */}
-        <Widget title="Still drifting — post-earnings" links={[{ label: "see all", href: u("/pead") }]}>
+        <Widget
+          title="Still drifting — post-earnings"
+          tip="Names that reported in the last 12 days. Day-1 = the earnings-day reaction; Drift = the move from the reaction close to the latest close. ✓ = the drift continues the reaction's direction (the classic PEAD setup); ✗ = fading it."
+          links={[{ label: "see all", href: u("/pead") }]}
+        >
           {peadRows.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "when", "day-1", "drift", "cont."]} />
               <tbody>
                 {peadRows.map((r) => (
                   <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
@@ -267,9 +270,15 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
         </Widget>
 
         {/* Sandbaggers */}
-        <Widget title="Sandbaggers — guide low, beat" links={[{ label: "see all", href: u("/guidance") }]} note={cutsCount ? `+${cutsCount} guidance cuts flagged this cycle` : undefined}>
+        <Widget
+          title="Sandbaggers — guide low, beat"
+          tip="Companies that systematically guide below what they then report (beats / total guided quarters, from their own 8-K guidance history). A sandbagger with a print coming up tends to 'surprise' again; the action chip shows their latest guidance move."
+          links={[{ label: "see all", href: u("/guidance") }]}
+          note={cutsCount ? `+${cutsCount} guidance cuts flagged this cycle` : undefined}
+        >
           {sand.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "days", "beats", "guide"]} />
               <tbody>
                 {sand.map((r) => (
                   <tr key={r.symbol} className="border-t border-[var(--divider)] first:border-0">
@@ -285,9 +294,14 @@ export default async function EarningsDeskPage({ params }: { params: Promise<{ u
         </Widget>
 
         {/* Catalyst vol */}
-        <Widget title="Cheap options into a scheduled event" links={[{ label: "see all", href: u("/catalyst-vol") }]}>
+        <Widget
+          title="Cheap options into a scheduled event"
+          tip="Known dated catalysts (investor days, analyst days) where the straddle to just past the event (implied) prices LESS movement than the stock's normal baseline over the same span — cheap optionality into a binary date."
+          links={[{ label: "see all", href: u("/catalyst-vol") }]}
+        >
           {catRows.length ? (
             <table className="w-full text-left text-[12px]">
+              <TH cols={["Ticker", "<event", "days", "implied vs base", ""]} />
               <tbody>
                 {catRows.map((r: any) => (
                   <tr key={r.ticker} className="border-t border-[var(--divider)] first:border-0">

@@ -39,7 +39,7 @@ export default function IpoDetailView({ universe, event }: { universe: string; e
         <Fact label="Deal size" value={fmtSize(e.sizeUsdM)} />
         <Fact label="Exchange" value={e.exchange || "—"} />
         {e.kind !== "upcoming" && <Fact label="Since IPO" value={e.sinceIpoPct == null ? "—" : `${e.sinceIpoPct >= 0 ? "+" : ""}${e.sinceIpoPct.toFixed(1)}%`} color={perfColor(e.sinceIpoPct)} />}
-        {e.kind === "lockup" && e.lockupDate && <Fact label="Lockup expiry" value={`${dateLabel(e.lockupDate)}${e.daysToLockup != null ? ` (${e.daysToLockup >= 0 ? "in " + e.daysToLockup + "d" : -e.daysToLockup + "d ago"})` : ""}`} />}
+        {e.kind !== "upcoming" && e.lockupDate && <Fact label="Lockup expiry" value={`${dateLabel(e.lockupDate)}${e.daysToLockup != null ? ` (${e.daysToLockup >= 0 ? "in " + e.daysToLockup + "d" : -e.daysToLockup + "d ago"})` : ""}`} />}
         {s?.sector && <Fact label="Sector" value={s.sector} />}
       </div>
 
