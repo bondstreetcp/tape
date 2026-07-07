@@ -121,8 +121,17 @@ async function main() {
       return `${a.symbol} ${a.action === "up" ? "UPGRADE" : "DOWNGRADE"} ${a.fromGrade || "?"}→${a.toGrade || "?"} (${a.firm})${up}`;
     });
 
+  // Which run is this? Pre-open frames the brief around the overnight + the day ahead; post-close
+  // (including the 22:47 UTC full rebuild) frames it as the session recap + tomorrow's setups.
+  const etHour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" }));
+  const run: NonNullable<DeskNote["run"]> = etHour < 12 ? "morning" : "evening";
+  const FRAME = run === "morning"
+    ? "RUN CONTEXT: this is the PRE-OPEN MORNING run. Frame the brief as: what happened overnight and yesterday, and what to watch INTO today's session.\n"
+    : "RUN CONTEXT: this is the POST-CLOSE EVENING run. Frame the brief as: the session recap — what actually traded and what hit after the bell — and what it sets up for tomorrow ('watchToday' = tomorrow's watch list).\n";
+
   const block = (title: string, lines: string[]) => (lines.length ? `\n=== ${title} ===\n${lines.join("\n")}` : "");
   const user =
+    FRAME +
     `${SCHEMA_HINT}\n` +
     block("BIGGEST MOVES (1-day, S&P 500; with 1w/YTD trend, sector, size, valuation, 52w-position, next-earnings, catalyst)", movers) +
     block("MATERIAL NEW SEC FILINGS (with what-changed + the model's takeaway)", filings) +
@@ -176,6 +185,7 @@ async function main() {
 
   const note: DeskNote = {
     generatedAt: new Date().toISOString(),
+    run,
     // Always dated — a bare "overnight" on a note that survives a failed rebuild reads as fresh
     // when it's actually yesterday's (F13 staleness honesty).
     asOf: overnight?.since

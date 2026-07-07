@@ -31,6 +31,7 @@ export interface DeskNoteWatch {
 }
 export interface DeskNote {
   generatedAt: string; // ISO
+  run?: "morning" | "evening"; // which desk run wrote it (pre-open vs post-close framing)
   asOf: string; // human label for the window
   tldr: string; // 2-3 sentence overview — the tape + the one thing that matters most
   sections: DeskNoteSection[];

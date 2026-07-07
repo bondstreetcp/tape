@@ -38,6 +38,11 @@ on:
     # Shanghai 07:00 / Hong Kong 08:00 UTC), so the Asian constituents aren't a day stale vs the live
     # index chart during the US day.
     - cron: "29 10 * * 1-5"
+    # ~12:41 & ~21:19 UTC — the DESK ticks: regenerate the AI Daily Desk brief pre-open (~8:41am EDT,
+    # the "morning run") and post-close (~5:19pm EDT, the "evening run"). GitHub cron has no DST, so
+    # these drift +1h vs ET in winter; minutes deliberately off :15/:45 (scheduler congestion).
+    - cron: "41 12 * * 1-5"
+    - cron: "19 21 * * 1-5"
     # ~22 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the 4pm ET close
     # (handles EST/EDT) so the options-flow scan captures the settled volume.
     - cron: "47 22 * * 1-5"
@@ -66,6 +71,9 @@ jobs:
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
       INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
+      # DESK = the twice-daily Daily Desk brief ticks (pre-open + post-close) — they run the quote
+      # refresh (wall-clock picked) + the desk note, then the usual R2 upload + deploy hook.
+      DESK: ${{ github.event.schedule == '41 12 * * 1-5' || github.event.schedule == '19 21 * * 1-5' }}
       # Job-level so EVERY LLM step inherits it — 8 steps (trump-truth, fed, campaigns, biotech,
       # policy, catalyst-vol, corp-events, ipo) shipped without a per-step env block and silently
       # printed "LLM not configured — skipping" every night; their feeds only updated when run
@@ -497,8 +505,8 @@ jobs:
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
       # Needs OPENROUTER_API_KEY; skipped cleanly if it isn't set.
-      - name: Refresh Morning Desk Note
-        if: ${{ env.FULL == 'true' }}
+      - name: Refresh Daily Desk Note
+        if: ${{ env.FULL == 'true' || env.DESK == 'true' }}
         run: npm run refresh-desk-note
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

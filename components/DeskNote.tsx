@@ -33,21 +33,25 @@ export default function DeskNote({ note, universe }: { note: DeskNote | null; un
   // Stamp the note's OWN recency (generatedAt), not note.asOf — asOf is the overnight-filings *window*
   // start ("since Jul 1"), which froze on a stale-looking date even when the brief was rebuilt nightly.
   const fresh = fmtFresh(note.generatedAt);
+  const runChip = note.run === "morning" ? { t: "Morning run", c: "#f59e0b" } : note.run === "evening" ? { t: "Evening run", c: "#a78bfa" } : null;
   return (
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-sm font-semibold">
-          Morning Desk Note{fresh && <span className="font-normal text-[var(--text-4)]"> · as of {fresh}</span>}
+          Desk Note
+          {runChip && <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: runChip.c, background: `color-mix(in oklab, ${runChip.c} 15%, transparent)` }}>{runChip.t}</span>}
+          {fresh && <span className="font-normal text-[var(--text-4)]"> · as of {fresh}</span>}
         </h2>
         <span className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">AI brief · research, not advice</span>
       </div>
       {note.tldr && <p className="mb-4 border-l-2 border-[color-mix(in_srgb,var(--accent)_50%,transparent)] pl-3 text-sm leading-snug text-[var(--text)]">{note.tldr}</p>}
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {note.sections.map((s, i) => (
           <div key={i}>
-            <h3 className="text-[13px] font-semibold text-[var(--text)]">{s.heading}</h3>
-            {s.synthesis && <p className="mb-2 mt-0.5 text-xs italic leading-snug text-[var(--text-3)]">{s.synthesis}</p>}
+            {/* Section title — sized as a real header with a rule, so the themes scan at a glance. */}
+            <h3 className="border-b border-[var(--divider)] pb-1 text-[17px] font-bold leading-snug text-[var(--text)]">{s.heading}</h3>
+            {s.synthesis && <p className="mb-2.5 mt-1.5 text-[13px] italic leading-snug text-[var(--text-3)]">{s.synthesis}</p>}
             <ul className="space-y-3">
               {s.bullets.map((b, j) => (
                 <li key={j}>
