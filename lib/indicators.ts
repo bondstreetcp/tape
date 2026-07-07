@@ -147,30 +147,3 @@ export const PANELS: { id: PanelId; label: string }[] = [
   { id: "macd", label: "MACD (12,26,9)" },
   { id: "rsi", label: "RSI (14)" },
 ];
-
-/** Compute the overlay arrays requested, from a close series. */
-export function computeOverlay(id: OverlayId, closes: number[]) {
-  switch (id) {
-    case "sma20":
-      return { lines: [{ data: sma(closes, 20), color: "#38bdf8" }] };
-    case "sma50":
-      return { lines: [{ data: sma(closes, 50), color: "#fbbf24" }] };
-    case "sma150":
-      return { lines: [{ data: sma(closes, 150), color: "#fb923c" }] };
-    case "sma200":
-      return { lines: [{ data: sma(closes, 200), color: "#f472b6" }] };
-    case "ema12":
-      return { lines: [{ data: ema(closes, 12), color: "#4ade80" }] };
-    case "ema26":
-      return { lines: [{ data: ema(closes, 26), color: "#c084fc" }] };
-    case "bb": {
-      const b = bollinger(closes, 20, 2);
-      return {
-        lines: [
-          { data: b.upper, color: "#8b93a7" },
-          { data: b.lower, color: "#8b93a7" },
-        ],
-      };
-    }
-  }
-}

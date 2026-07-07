@@ -144,13 +144,11 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/earnings-desk", "/catalyst-calendar", "/binary-week", "/trade-desk", "/earnings-week", "/earnings-move",
   "/earnings-setup", "/track-record", "/guidance", "/pead",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol",
-  // US relative-value feed
+  // US-only non-options feeds
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)
+  "/insiders", // SEC Form 4 open-market buys (US filers only; page renders UsOnlyNotice on direct nav)
   // (merger-arb is an external link to arb.bondstreetcp.com — not gated)
 ]);
-/** True if a relative path (e.g. "/skew" or "/skew/AAPL") is one of the US-only feature routes. */
-export const isUsOnlyPath = (relPath: string): boolean =>
-  [...US_ONLY_PATHS].some((p) => relPath === p || relPath.startsWith(p + "/"));
 
 const _allHubs: NavHub[] = [GROUP_HUBS.Markets, GROUP_HUBS.Options, GROUP_HUBS.Screens, GROUP_HUBS.Research].flatMap((h) => h ?? []);
 const _featByPath = new Map(FEATURES.map((f) => [f.path, f] as const));
@@ -165,9 +163,3 @@ export function hubForPath(relPath: string): { label: string; items: NavItem[] }
 export const ALL_NAV: NavItem[] = [...TOP_LINKS, ...FEATURES];
 export const NAV_GROUPS: NavGroup[] = ["Markets", "Options", "Event-Driven", "Screens", "Research"];
 export const JOBS: Job[] = ["Track the market", "Find ideas", "Research a name", "Income strategies"];
-export const JOB_BLURB: Record<Job, string> = {
-  "Track the market": "See what's happening right now across the market.",
-  "Find ideas": "Surface interesting names and setups to look into.",
-  "Research a name": "Dig into a single company in depth.",
-  "Income strategies": "Options and fund screens for generating yield.",
-};

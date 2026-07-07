@@ -43,10 +43,18 @@ async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): P
   return out;
 }
 
+// Calendar-day countdown: floor "now" to its own UTC midnight before diffing the stored YYYY-MM-DD —
+// this script runs in the ~22:47 UTC FULL rebuild, where an un-floored diff rounds tomorrow's event to
+// 0 and drops it, blanking the board for the event's entire decision day (the 10f4c822 gotcha class).
+const daysToUTC = (dateIso: string): number => {
+  const nowMid = Math.floor(Date.now() / DAY) * DAY;
+  return Math.round((Date.parse(dateIso + "T00:00:00Z") - nowMid) / DAY);
+};
+
 const isForwardBinary = (i: BioCatalyst): boolean => {
   if (!(i.statusKind === "pdufa" || i.statusKind === "readout" || i.statusKind === "enrolling-done")) return false;
   if (!i.primaryCompletion) return false;
-  const days = Math.round((Date.parse(i.primaryCompletion + "T00:00:00Z") - Date.now()) / DAY);
+  const days = daysToUTC(i.primaryCompletion);
   return days >= 1 && days <= MAX_DAYS_OUT;
 };
 
@@ -63,7 +71,7 @@ async function main() {
 
   const priced = await mapPool(events, 4, async (i): Promise<BioVolRow | null> => {
     const eventDate = i.primaryCompletion!;
-    const days = Math.round((Date.parse(eventDate + "T00:00:00Z") - Date.now()) / DAY);
+    const days = daysToUTC(eventDate); // calendar-day diff, not wall-clock (see daysToUTC)
     const base: BioVolRow = {
       ticker: i.ticker, company: i.company, drug: i.drug, condition: i.condition, phase: i.phase,
       eventKind: i.statusKind === "pdufa" ? "pdufa" : "readout",

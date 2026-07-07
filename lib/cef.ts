@@ -60,8 +60,6 @@ export function loadCef(): Promise<CefData | null> {
   return _cache;
 }
 
-export const CEF_GROUPS: CefGroup[] = ["Fixed Income", "Alternatives", "Equity", "Allocation", "Other"];
-
 /** Bucket a Morningstar category / strategy into a coarse asset class. Order matters —
  *  "Private Equity" must hit Alternatives before the generic "equity" test. */
 export function cefGroup(category: string, strategy: string | null): CefGroup {

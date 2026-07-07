@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 const gex = (n: number): string => {
   const a = Math.abs(n), s = n < 0 ? "−" : "";
@@ -60,7 +61,7 @@ function Row({ universe, r }: { universe: string; r: GammaBoardRow }) {
       <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: nf ? c : "var(--text-3)", fontWeight: nf ? 600 : 400 }} title={nf ? "Spot sits on the gamma-flip — a small move flips the dealer-hedging regime" : ""}>
         {r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}
       </td>
-      <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.pcRatio == null ? "var(--text-4)" : r.pcRatio >= 1.3 ? SHORT : r.pcRatio <= 0.7 ? LONG : "var(--text-3)" }}>{r.pcRatio ?? "—"}</td>
+      <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.pcRatio == null ? "var(--text-4)" : r.pcRatio >= 1.3 ? SHORT : r.pcRatio <= 0.7 ? LONG : "var(--text-3)" }} title="Put ÷ call open interest — ≥1.3 put-heavy (amber), ≤0.7 call-heavy (green)">{r.pcRatio ?? "—"}</td>
       <td className="px-2 py-2 text-right font-mono tabular-nums text-[#22c55e]">{r.callWall?.strike ?? "—"}</td>
       <td className="px-3 py-2 text-right font-mono tabular-nums text-[#ef4444]">{r.putWall?.strike ?? "—"}</td>
     </tr>
@@ -96,6 +97,12 @@ export default function GammaBoardView({ universe, data }: { universe: string; d
         <UniverseSwitcher current={universe} />
       </div>
 
+      <HowToRead>
+        <p><b>What&apos;s here:</b> the dealer-gamma (GEX) read for the most-optioned US names. <b>Net γ</b> is the dollar gamma dealers must hedge per 1% move — negative (short) means their hedging <b>chases</b> price and amplifies moves; positive (long) means they fade price and dampen moves. <b>Gross γ</b> is total positioning size regardless of sign.</p>
+        <p><b>Flip / Δflip:</b> the spot level where net dealer gamma crosses zero, and how far spot sits from it (% of spot). Near 0 = the name sits on the regime boundary, where a small move flips dealer hedging from dampening to amplifying.</p>
+        <p><b>P/C</b> is put ÷ call open interest — <span style={{ color: SHORT }}>≥1.3 put-heavy</span> (hedged/defensive) and <span style={{ color: LONG }}>≤0.7 call-heavy</span> (speculative) are color-coded. <b>Call/put walls</b> are the biggest-OI strikes — they often act as magnets or resistance/support into expiry.</p>
+      </HowToRead>
+
       {(spx || qqq) && (
         <div className="mb-4 grid grid-cols-2 gap-2.5 sm:max-w-md">
           {spx && <MarketTile row={spx} />}
@@ -130,10 +137,10 @@ export default function GammaBoardView({ universe, data }: { universe: string; d
                 <th className="px-2 py-2 text-right font-medium">Gross γ</th>
                 <th className="px-2 py-2 text-right font-medium">Spot</th>
                 <th className="px-2 py-2 text-right font-medium">Flip</th>
-                <th className="px-2 py-2 text-right font-medium">Δflip</th>
-                <th className="px-2 py-2 text-right font-medium">P/C</th>
-                <th className="px-2 py-2 text-right font-medium">Call wall</th>
-                <th className="px-3 py-2 text-right font-medium">Put wall</th>
+                <th className="px-2 py-2 text-right font-medium" title="Distance from spot to the zero-gamma flip level (% of spot) — near 0 = on the regime boundary">Δflip</th>
+                <th className="px-2 py-2 text-right font-medium">P/C <InfoDot term="Put/call ratio" /></th>
+                <th className="px-2 py-2 text-right font-medium">Call wall <InfoDot term="Call wall" /></th>
+                <th className="px-3 py-2 text-right font-medium">Put wall <InfoDot term="Put wall" /></th>
               </tr>
             </thead>
             <tbody>{rows.map((r) => <Row key={r.symbol} universe={universe} r={r} />)}</tbody>

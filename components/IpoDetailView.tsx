@@ -4,7 +4,8 @@ import type { IpoEvent } from "@/lib/ipoMonitor";
 import { fmtSize, perfColor } from "@/lib/ipoMonitor";
 import { fmtUsd, valueTagColor } from "@/lib/ipoFinancials";
 
-const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+// UTC-pinned: a bare YYYY-MM-DD parsed as UTC midnight but formatted in a US browser zone shows one day early.
+const dateLabel = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`);
 
 export default function IpoDetailView({ universe, event }: { universe: string; event: IpoEvent }) {

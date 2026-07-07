@@ -100,13 +100,18 @@ export async function straddleMove(sym: string, baseChain: OptionChain | null, e
 // are priced on the SAME (event) chain the straddle used, and the chosen expiry is reported.
 export function tradeIdea(
   richness: { verdict: string; avgRealized: number } | null,
-  optionsR: { skew: number | null; maxPainVsSpot?: number | null; callWall?: { strike: number } | null; putWall?: { strike: number } | null } | null,
+  optionsR: { maxPainVsSpot?: number | null; callWall?: { strike: number } | null; putWall?: { strike: number } | null } | null,
   straddle: { lowerBE: number; upperBE: number; price: number; expiry?: string | null; dte?: number | null } | null,
   chain: OptionChain | null,
   impliedMove: number | null,
   term?: { crushRatio: number; frontDte: number; backDte: number } | null,
 ): TradeIdea | null {
   if (!richness || !straddle || !chain || impliedMove == null) return null;
+  // Skew is computed HERE from the (event) chain both callers pass — it drives the condor-vs-strangle
+  // structure choice, so it must be single-sourced. Previously the card's route fed BASE-chain skew via
+  // optionsR while the nightly logger fed EVENT-chain skew, so the two could pick different structures
+  // for the same name and the track record would grade a different play than the card showed.
+  const skew = skewOf(chain);
   const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))].sort((a, b) => a - b);
   if (strikes.length < 4) return null;
   const near = (t: number) => strikes.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a));
@@ -126,7 +131,7 @@ export function tradeIdea(
   // non-neutral signals to agree — max-pain alone is a soft "pin" signal, so it can't drive it by itself.
   const lean: "bullish" | "bearish" | null = (() => {
     const sig: number[] = [];
-    if (optionsR?.skew != null) sig.push(optionsR.skew > 0.03 ? -1 : optionsR.skew < -0.03 ? 1 : 0); // puts bid → downside hedged
+    if (skew != null) sig.push(skew > 0.03 ? -1 : skew < -0.03 ? 1 : 0); // puts bid → downside hedged
     if (optionsR?.maxPainVsSpot != null) sig.push(optionsR.maxPainVsSpot > 0.015 ? 1 : optionsR.maxPainVsSpot < -0.015 ? -1 : 0); // pin above spot → upward pull
     if (optionsR?.callWall && optionsR?.putWall) {
       const cd = Math.abs(optionsR.callWall.strike - straddle.price), pd = Math.abs(optionsR.putWall.strike - straddle.price);
@@ -153,7 +158,7 @@ export function tradeIdea(
     return null;
   })();
   if (richness.verdict === "rich") {
-    const skewRich = optionsR?.skew != null && optionsR.skew > 0.03; // puts notably bid → prefer defined risk
+    const skewRich = skew != null && skew > 0.03; // puts notably bid on the EVENT chain → prefer defined risk
     const wing = Math.max(strikes.find((s) => s > callK) ? near(callK + (callK - putK)) - callK : 0, (callK - putK) / 2) || 5;
     const legsData = skewRich
       ? legsOf([
@@ -229,7 +234,8 @@ export async function buildEarningsTrade(sym: string, earningsISO: string | null
   if (verdict === "fair") return null;
   const richness = { verdict, avgRealized: avgRealizedPct };
   const straddle = { lowerBE: sm.lowerBE, upperBE: sm.upperBE, price: sm.price, expiry: sm.expiry, dte: sm.dte };
-  const trade = tradeIdea(richness, { skew: skewOf(sm.chain) }, straddle, sm.chain, impliedMove);
+  // Skew (the condor/strangle switch) is derived inside tradeIdea from sm.chain — identical to the card.
+  const trade = tradeIdea(richness, null, straddle, sm.chain, impliedMove);
   if (!trade || !trade.legsData) return null; // need priced legs to settle later
   return { spot: sm.price, impliedMovePct: impliedMove, verdict: verdict as "rich" | "cheap", richnessRatio: ratio, avgRealizedPct, trade };
 }

@@ -8,7 +8,8 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 
-const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+// UTC-pinned: a bare YYYY-MM-DD parsed as UTC midnight but formatted in a US browser zone shows one day early.
+const dateLabel = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 type F = "all" | "cheap";
 // The data file also carries UNPRICED calendar rows (null pricing — kept so a transient options
 // failure doesn't forget a future event); the board shows priced rows only.

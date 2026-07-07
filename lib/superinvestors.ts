@@ -77,7 +77,10 @@ export const INVESTORS: Investor[] = [
   { slug: "markel", name: "Markel Group", manager: "Tom Gayner", cik: "1096343", blurb: "Insurance float invested in durable compounders." },
   { slug: "gotham", name: "Gotham Asset Mgmt", manager: "Joel Greenblatt", cik: "1510387", blurb: "“Magic formula”: high returns on capital, cheap." },
   { slug: "greenhaven", name: "Greenhaven Associates", manager: "Edgar Wachenheim", cik: "846222", blurb: "Concentrated, patient deep-value in out-of-favor names." },
-  { slug: "dodgecox", name: "Dodge & Cox", manager: "Investment Committee", cik: "200217", blurb: "Patient, fundamental value; low-turnover large caps." },
+  // manager = the firm name, NOT "Investment Committee": the manager string is the chip label on
+  // Distribution/Smart-Money/Confluence/Warnings, where a bare "Investment Committee" identifies nothing
+  // (and in Warnings text reads like the COMPANY's own committee sold).
+  { slug: "dodgecox", name: "Dodge & Cox", manager: "Dodge & Cox", cik: "200217", blurb: "Patient, fundamental value; low-turnover large caps." },
   { slug: "tweedy", name: "Tweedy Browne", manager: "Tweedy, Browne Co.", cik: "732905", blurb: "Graham-style value; the original net-net shop." },
   { slug: "fairholme", name: "Fairholme Capital", manager: "Bruce Berkowitz", cik: "1056831", blurb: "Highly concentrated, contrarian deep value." },
   { slug: "thirdpoint", name: "Third Point", manager: "Daniel Loeb", cik: "1040273", blurb: "Event-driven and activist; flexible value." },
@@ -134,7 +137,6 @@ export const INVESTORS: Investor[] = [
   { slug: "altarock", name: "AltaRock Partners", manager: "Mark Massey", cik: "1631014", blurb: "Ultra-concentrated quality compounders; a few names, near-zero turnover." },
 ];
 
-export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
 
 let _cache: Promise<SuperInvestorsData | null> | null = null;
 

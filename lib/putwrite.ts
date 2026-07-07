@@ -77,8 +77,12 @@ export interface IronCondorSuggestion {
 // Each tenor also carries the covered-CALL side: `callDelta` is the target call delta and `zCall`
 // = N⁻¹(callDelta) (negative ⇒ OTM strike above spot). m1 sells a ~30Δ call (modest cap), m3 a
 // ~20Δ call (more room). The covered call reuses the SAME expiry/chain the put screen already pulls.
+// z such that N(z) = 0.84 → locates the strike of a ~16-delta (0.16) OTM put. THE single source for
+// the 16Δ z-quantile — also used by refresh-putwrite's credit-spread legs; don't re-inline 0.9945.
+export const Z_16DELTA = 0.9945;
+
 export const PUT_TENORS = [
-  { id: "m1", short: "~1M", note: "≈16Δ · 30–45 DTE", targetDte: 35, dteMin: 18, dteMax: 66, prefMin: 30, prefMax: 45, z: 0.9945, callDelta: 0.30, zCall: -0.5244 },
+  { id: "m1", short: "~1M", note: "≈16Δ · 30–45 DTE", targetDte: 35, dteMin: 18, dteMax: 66, prefMin: 30, prefMax: 45, z: Z_16DELTA, callDelta: 0.30, zCall: -0.5244 },
   { id: "m3", short: "~3M", note: "≈10Δ · ~3-month · further OTM", targetDte: 95, dteMin: 70, dteMax: 125, prefMin: 82, prefMax: 105, z: 1.2816, callDelta: 0.20, zCall: -0.8416 },
 ] as const;
 export type TenorId = (typeof PUT_TENORS)[number]["id"];
@@ -180,9 +184,6 @@ export function ivFromCall(S: number, K: number, T: number, r: number, price: nu
   }
   return (lo + hi) / 2;
 }
-
-// z such that N(z) = 0.84 → locates the strike of a ~16-delta (0.16) OTM put.
-export const Z_16DELTA = 0.9945;
 
 /** Annualized realized volatility from the last `window` daily closes (close-to-close). */
 export function realizedVol(closes: number[], window = 20): number | null {

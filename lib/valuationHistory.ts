@@ -60,8 +60,3 @@ export function loadValuationHistory(): Promise<ValuationHistoryData | null> {
       .catch(() => null);
   return _cache;
 }
-
-/** The name's primary (highest-priority eligible) multiple, for a sensible default toggle. */
-export function primaryMultiple(n: ValuationName): MultipleKey | null {
-  return n.eligible[0] ?? null;
-}

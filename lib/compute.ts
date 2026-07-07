@@ -54,21 +54,6 @@ export function matchesFilter(
   }
 }
 
-export interface HighLowTally {
-  near52High: number;
-  near52Low: number;
-}
-
-export function tallyHighLow(rows: StockRow[], threshold: number): HighLowTally {
-  let near52High = 0;
-  let near52Low = 0;
-  for (const r of rows) {
-    if (isNearHigh(r, threshold)) near52High++;
-    if (isNearLow(r, threshold)) near52Low++;
-  }
-  return { near52High, near52Low };
-}
-
 /** Slice a price series to the window implied by a timeframe. */
 export function sliceSeries(
   intraday: SeriesPoint[],

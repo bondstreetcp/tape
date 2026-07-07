@@ -17,7 +17,7 @@ import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
 import { getOptions } from "../lib/options";
 import {
-  ivFromPut, putDelta, ivFromCall, callDelta, realizedVol, realizedVolRank, ivPercentile, PUT_TENORS,
+  ivFromPut, putDelta, ivFromCall, callDelta, realizedVol, realizedVolRank, ivPercentile, PUT_TENORS, Z_16DELTA,
   type TenorId, type PutWriteCandidate, type PutWriteData, type PutSuggestion, type CallSuggestion,
   type BullPutSuggestion, type IronCondorSuggestion,
 } from "../lib/putwrite";
@@ -157,7 +157,7 @@ async function buildLegsAtTenor(
   let bullPut: BullPutSuggestion | null = null;
   let condor: IronCondorSuggestion | null = null;
   if (atmIV && puts.length >= 2) {
-    const sp = pickByZ(puts, spot, T, atmIV, 0.9945, R); // ~16Δ short put
+    const sp = pickByZ(puts, spot, T, atmIV, Z_16DELTA, R); // ~16Δ short put
     const lp = pickByZ(puts, spot, T, atmIV, 1.4051, R); // ~8Δ long put (the risk-defining wing)
     if (sp && lp && sp.strike > lp.strike) {
       const credit = sp.m - lp.m, width = sp.strike - lp.strike, maxLoss = width - credit;
@@ -173,7 +173,7 @@ async function buildLegsAtTenor(
       }
     }
     // iron condor = the bull-put spread + a mirror bear-call spread
-    const sc = pickByZ(calls, spot, T, atmIV, -0.9945, R); // ~16Δ short call
+    const sc = pickByZ(calls, spot, T, atmIV, -Z_16DELTA, R); // ~16Δ short call
     const lc = pickByZ(calls, spot, T, atmIV, -1.4051, R); // ~8Δ long call
     if (sp && lp && sc && lc && sp.strike > lp.strike && lc.strike > sc.strike && sc.strike > sp.strike) {
       const credit = sp.m - lp.m + (sc.m - lc.m);

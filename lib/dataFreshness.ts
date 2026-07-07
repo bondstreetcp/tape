@@ -88,6 +88,15 @@ const FEEDS: FeedSpec[] = [
   { file: "spinoffs.json", label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
   { file: "trade-log.json", label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
   { file: "same-store-sales.json", label: "Same-store sales", tier: "core", maxAgeHours: CORE },
+  { file: "trade-ideas.json", label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
+  { file: "vol-dislocation.json", label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  // biotech-vol / pead: age-only — zero forward binaries or an earnings-lull window are legitimate
+  { file: "biotech-vol.json", label: "Biotech event vol", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  { file: "pead.json", label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  { file: "dispersion.json", label: "Index dispersion", tier: "core", maxAgeHours: CORE },
+  { file: "guidance-board.json", label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
+  { file: "pairs.json", label: "Pairs stat-arb", tier: "core", maxAgeHours: CORE, countPath: "pairs" },
+  { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
   { file: "campaigns.json", label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },
@@ -107,6 +116,7 @@ const FEEDS: FeedSpec[] = [
   { file: "13f-story.json", label: "13F quarter story", tier: "synthesis", maxAgeHours: SYNTH },
   { file: "congress-summary.json", label: "Congress summary", tier: "synthesis", maxAgeHours: SYNTH },
   { file: "confluence.json", label: "Confluence engine", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "warnings.json", label: "Warning signs board", tier: "synthesis", maxAgeHours: SYNTH, countPath: "names" },
 ];
 
 // Per-universe snapshot row-count floors — a snapshot below its floor is a partial-fetch / degraded

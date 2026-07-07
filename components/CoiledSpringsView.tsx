@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
 
 const pv = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
 const SETUP: Record<Setup, { label: string; c: string; hint: string }> = {
@@ -61,6 +62,13 @@ export default function CoiledSpringsView({ universe, rows, generatedAt }: { uni
         <UniverseSwitcher current={universe} />
       </div>
 
+      <HowToRead>
+        <p><b>What&apos;s here:</b> every scanned name classified by where its <b>realized vol sits in its own historical cone</b> (quiet vs blown-out) crossed with <b>how dealers are positioned</b> (short gamma amplifies moves, long gamma dampens them). The join is the signal — neither board alone tells you a move is both cheap AND likely to run.</p>
+        <p><b>The three setups:</b> <b style={{ color: SETUP.coiled.c }}>Coiled</b> = RV ≤25th percentile of its cone + a dealer accelerant (short γ, or spot within ±3% of the flip) — optionality is cheap and a move would be amplified. <b style={{ color: SETUP.pinned.c }}>Pinned</b> = quiet + dealers long γ away from the flip — moves get faded, favors selling premium. <b style={{ color: SETUP.blown.c }}>Blown</b> = RV already ≥75th percentile + short γ — the move is underway and being amplified.</p>
+        <p><b>Score</b> = coiled-ness (100 − RV percentile) + 25 if dealers are short gamma + 25 if spot is within ±3% of the flip — so a 90+ name is very quiet with a full accelerant stack. <b>Δflip</b> is the signed distance from spot to the zero-gamma flip level (% of spot); <b>P/C</b> is put ÷ call open interest.</p>
+        <p>Realized cone from the price series; dealer gamma is the naive end-of-day-OI model. Decision support, not advice.</p>
+      </HowToRead>
+
       <div className="mb-3 flex flex-wrap gap-1.5 text-[12px]">
         {FILTERS.map((f) => (
           <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-md border px-2.5 py-1 ${filter === f.key ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>
@@ -85,8 +93,8 @@ export default function CoiledSpringsView({ universe, rows, generatedAt }: { uni
                 <th className="px-2 py-2 text-right font-medium">RV %ile</th>
                 <th className="px-2 py-2 text-right font-medium">RV 21d</th>
                 <th className="px-2 py-2 font-medium">Dealer γ</th>
-                <th className="px-2 py-2 text-right font-medium">Δflip</th>
-                <th className="px-3 py-2 text-right font-medium">P/C</th>
+                <th className="px-2 py-2 text-right font-medium">Δflip <InfoDot term="Gamma flip" /></th>
+                <th className="px-3 py-2 text-right font-medium">P/C <InfoDot term="Put/call ratio" /></th>
               </tr>
             </thead>
             <tbody>
@@ -108,7 +116,7 @@ export default function CoiledSpringsView({ universe, rows, generatedAt }: { uni
                     <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.pct20 == null ? "var(--text-4)" : r.pct20 <= 25 ? "#22c55e" : r.pct20 >= 75 ? "#ef4444" : "var(--text-3)" }}>{r.pct20 == null ? "—" : `${r.pct20.toFixed(0)}%`}</td>
                     <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{pv(r.cur20)}</td>
                     <td className="px-2 py-2"><span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: gc, background: `color-mix(in oklab, ${gc} 15%, transparent)` }}>{r.regime === "short" ? "short" : "long"}</span></td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: near ? gc : "var(--text-3)", fontWeight: near ? 600 : 400 }} title={near ? "Spot on the gamma flip — a small move flips the regime" : ""}>{r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}</td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: near ? gc : "var(--text-3)", fontWeight: near ? 600 : 400 }} title={near ? "Spot on the gamma flip — a small move flips the regime" : "Signed distance from spot to the zero-gamma flip level (% of spot)"}>{r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}</td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{r.pcRatio ?? "—"}</td>
                   </tr>
                 );

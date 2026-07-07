@@ -36,7 +36,3 @@ export const INTL_COMPS: IntlCompName[] = [
   { yahoo: "SMWH.L", lse: "SMWH", name: "WH Smith", region: "UK", industry: "Specialty Retail", metricHint: "like-for-like sales" },
 ];
 
-const BY_YAHOO = new Map(INTL_COMPS.map((c) => [c.yahoo, c] as const));
-export const intlCompOf = (yahooSym: string): IntlCompName | undefined => BY_YAHOO.get(yahooSym);
-export const intlNameOf = (yahooSym: string): string | undefined => BY_YAHOO.get(yahooSym)?.name;
-export const intlRegionOf = (yahooSym: string): string | undefined => BY_YAHOO.get(yahooSym)?.region;

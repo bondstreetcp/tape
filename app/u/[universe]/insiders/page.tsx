@@ -26,7 +26,7 @@ async function loadBroadUs(): Promise<Snapshot | null> {
 export default async function InsidersPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
-  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Insider Cluster-Buying" relPath="/insiders" />;
+  if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Insider Cluster-Buying" relPath="/insiders" dataNote="This board is built on SEC Form 4 insider-buy filings, which only US-listed companies file" />;
 
   const snap = await loadBroadUs();
   let file: InsidersFile | null = null;

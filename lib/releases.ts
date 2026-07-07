@@ -31,8 +31,6 @@ export const RELEASES: ReleaseDef[] = [
   { key: "sentiment", label: "Consumer sentiment", fredId: "UMCSENT", transform: "level", unit: "", scale: 1, chart: "line", hint: "University of Michigan sentiment index" },
 ];
 
-export const RELEASE_BY_KEY: Record<string, ReleaseDef> = Object.fromEntries(RELEASES.map((r) => [r.key, r]));
-
 // Calendar event label (from econCalendar) → release key.
 export const LABEL_TO_RELEASE: Record<string, string> = {
   "Jobs report (NFP)": "payrolls",
