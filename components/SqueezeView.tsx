@@ -61,7 +61,7 @@ export default function SqueezeView({ data, universe }: { data: SqueezeData; uni
               <th className="px-2 py-2 text-right font-medium">Squeeze</th>
               <th className="px-2 py-2 text-right font-medium" title="Short interest as a % of float">% Float</th>
               <th className="px-2 py-2 text-right font-medium" title="Days to cover = shares short ÷ avg daily volume">DTC</th>
-              <th className="px-2 py-2 text-right font-medium" title="Month-over-month change in shares short">Shorts MoM</th>
+              <th className="px-2 py-2 text-right font-medium" title="Change in shares short vs ~a month ago. We now persist our own short-interest history and diff it (Yahoo stopped supplying the prior-month figure), so this fills in over the coming weeks as history accrues.">Shorts MoM</th>
               <th className="px-3 py-2 text-right font-medium" title="Distance from the 52-week high">% from 52wH</th>
             </tr>
           </thead>
