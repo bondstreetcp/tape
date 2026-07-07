@@ -106,6 +106,32 @@ export const INVESTORS: Investor[] = [
   { slug: "maverick", name: "Maverick Capital", manager: "Lee Ainslie", cik: "934639", blurb: "Tiger cub long/short; deep-fundamental stock selection across sectors." },
   { slug: "viking", name: "Viking Global", manager: "Andreas Halvorsen", cik: "1103804", blurb: "Tiger cub long/short; concentrated fundamental growth at scale." },
   { slug: "lonepine", name: "Lone Pine Capital", manager: "David Craver & Kelly Granat", cik: "1061165", blurb: "Mandel's Tiger cub; concentrated long/short growth compounders." },
+  // Deep-dive roster expansion (added 2026-07-06) — famous single-CIO / founder-led books, every CIK
+  // live-resolved to its ACTIVE 13F-HR filer (dormant same-name entities avoided; verified via
+  // scripts resolver). Value shops, quality-growth compounders, Tiger cubs, and concentrated activists.
+  { slug: "tigerglobal", name: "Tiger Global", manager: "Chase Coleman", cik: "1167483", blurb: "Tiger cub growth — concentrated bets on internet, software & fintech leaders." },
+  { slug: "abrams", name: "Abrams Capital", manager: "David Abrams", cik: "1358706", blurb: "Baupost-schooled concentrated value; low-turnover, high-conviction book." },
+  { slug: "southeastern", name: "Southeastern (Longleaf)", manager: "Mason Hawkins", cik: "807985", blurb: "Deep-value price-to-value discipline; concentrated and engaged." },
+  { slug: "fpa", name: "First Pacific Advisors", manager: "Steven Romick", cik: "1377581", blurb: "Contrarian absolute-value; quality bought with a margin of safety." },
+  { slug: "harris", name: "Oakmark / Harris Assoc.", manager: "Bill Nygren", cik: "813917", blurb: "Oakmark's value engine — out-of-favor quality at a discount to worth." },
+  { slug: "ariel", name: "Ariel Investments", manager: "John Rogers", cik: "936753", blurb: "Patient small/mid-cap value — 'slow and steady' quality turnarounds." },
+  { slug: "hhlr", name: "Hillhouse (HHLR)", manager: "Lei Zhang", cik: "1762304", blurb: "Hillhouse's US book — long-term compounding in consumer, tech & healthcare." },
+  { slug: "corvex", name: "Corvex Management", manager: "Keith Meister", cik: "1535472", blurb: "Icahn-schooled activist; concentrated, catalyst-driven stakes." },
+  { slug: "sachemhead", name: "Sachem Head", manager: "Scott Ferguson", cik: "1582090", blurb: "Pershing-schooled activist; a few concentrated, engaged positions at a time." },
+  { slug: "glenview", name: "Glenview Capital", manager: "Larry Robbins", cik: "1138995", blurb: "Concentrated long book with a healthcare tilt; fundamental value-growth." },
+  { slug: "gardnerrusso", name: "Gardner Russo & Quinn", manager: "Tom Russo", cik: "860643", blurb: "Global consumer-brand value; decades-long holds in durable compounders." },
+  { slug: "wedgewood", name: "Wedgewood Partners", manager: "David Rolfe", cik: "859804", blurb: "Focused quality growth — a dozen wide-moat franchises, very low turnover." },
+  { slug: "giverny", name: "Giverny Capital", manager: "David Poppe", cik: "1641864", blurb: "Ex-Sequoia quality compounders; concentrated, long-term value." },
+  { slug: "smead", name: "Smead Capital", manager: "Bill Smead", cik: "1427008", blurb: "Value with a behavioral bent; durable, cash-generative, out-of-favor names." },
+  { slug: "davis", name: "Davis Advisors", manager: "Chris Davis", cik: "1036325", blurb: "Davis 'Selected' quality at a discount; financials-heavy, multi-decade holds." },
+  { slug: "weitz", name: "Weitz Investment", manager: "Wally Weitz", cik: "883965", blurb: "Value across caps — quality businesses at a discount to conservative worth." },
+  { slug: "polen", name: "Polen Capital", manager: "Dan Davidowitz", cik: "1034524", blurb: "Concentrated quality growth — high-ROE compounders, very low turnover." },
+  { slug: "whalerock", name: "Whale Rock", manager: "Alex Sacerdote", cik: "1387322", blurb: "Tiger-cub tech growth; concentrated software, internet & AI-cycle bets." },
+  { slug: "gates", name: "Gates Foundation Trust", manager: "Michael Larson", cik: "1166559", blurb: "The Gates Foundation endowment (Cascade-managed) — very long-term holds." },
+  { slug: "politan", name: "Politan Capital", manager: "Quentin Koffey", cik: "1885245", blurb: "Concentrated activist; a handful of hands-on engagements (e.g. Masimo)." },
+  { slug: "fundsmith", name: "Fundsmith", manager: "Terry Smith", cik: "1868537", blurb: "Terry Smith's 'buy good companies, don't overpay, do nothing' quality book." },
+  { slug: "hound", name: "Hound Partners", manager: "Jonathan Auerbach", cik: "1353316", blurb: "Tiger-cub long/short; concentrated growth-at-a-reasonable-price." },
+  { slug: "altarock", name: "AltaRock Partners", manager: "Mark Massey", cik: "1631014", blurb: "Ultra-concentrated quality compounders; a few names, near-zero turnover." },
 ];
 
 export const INVESTOR_BY_SLUG: Record<string, Investor> = Object.fromEntries(INVESTORS.map((i) => [i.slug, i]));
