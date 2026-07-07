@@ -535,6 +535,15 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # Warning Signs — the BEARISH twin: stacks rich-vs-history + estimate cuts + super-investor exits
+      # + guidance cuts + downgrades + put-heavy flow. Same inputs as Confluence (runs right after it).
+      - name: Refresh Warning Signs
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-warnings
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.
       # Needs valuation-history.json + the snapshot (above) + OPENROUTER_API_KEY.
       - name: Refresh valuation-discount verdicts
