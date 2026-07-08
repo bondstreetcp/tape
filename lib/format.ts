@@ -54,12 +54,16 @@ export function fmtMoney(v: number | null | undefined, currency = "USD", dec?: n
   return c.suffix ? `${num}${c.sym}` : `${c.sym}${num}`;
 }
 
-/** Standard user-facing date: "Jul 1, 2026" (pass {year:false} for "Jul 1" in space-tight cells). */
+/** Standard user-facing date: "Jul 1, 2026" (pass {year:false} for "Jul 1" in space-tight cells).
+ *  A bare YYYY-MM-DD is a CALENDAR DATE: it's pinned to UTC so it can't render one day early in US
+ *  browsers (JS parses it as UTC midnight, and local formatting shifts it back). Timestamps and Date
+ *  objects are moments in time and keep local rendering. */
 export function fmtDate(d: string | number | Date, opts?: { year?: boolean }): string {
   try {
-    const dt = d instanceof Date ? d : new Date(d);
+    const bareDay = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const dt = d instanceof Date ? d : new Date(bareDay ? d + "T00:00:00Z" : d);
     if (Number.isNaN(dt.getTime())) return String(d);
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(opts?.year === false ? {} : { year: "numeric" }) });
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(bareDay ? { timeZone: "UTC" } : {}), ...(opts?.year === false ? {} : { year: "numeric" }) });
   } catch {
     return String(d);
   }

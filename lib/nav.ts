@@ -73,6 +73,7 @@ export const FEATURES: NavItem[] = [
   // ── Research
   { label: "Confluence Engine", path: "/confluence", desc: "Names where several independent bullish signals stack up — the flagship idea scanner", group: "Screens", job: "Find ideas", kw: "confluence signals ideas opportunities value smart money setups" },
   { label: "Warning Signs", path: "/warnings", desc: "The bearish twin — names where several negative signals stack up (rich vs history + estimate cuts + super-investor exits + downgrade)", group: "Screens", job: "Find ideas", kw: "warning signs bearish red flags value trap short candidate expensive rich overvalued estimate cuts downgrade guidance cut super investor selling distribution put flow avoid sell confluence negative signals risk" },
+  { label: "Signal Track Record", path: "/signal-record", desc: "Every idea board graded on what its picks actually did next — logged live, scored at 1w/1m/3m vs the S&P", group: "Screens", job: "Find ideas", kw: "signal track record scorecard accountability hit rate edge performance do the signals work confluence warnings squeeze leaders insiders backtest forward returns graded receipts win rate" },
   { label: "Smart-Money Radar", path: "/smart-money", desc: "Who's quietly accumulating — super-investor 13F adds + Congress buys, dip-buys flagged", group: "Screens", job: "Find ideas", kw: "smart money insiders accumulation 13f congress buying dip institutional" },
   { label: "Insider Cluster-Buying", path: "/insiders", desc: "Open-market insider buys (SEC Form 4) — several insiders or big cheques flagged", group: "Screens", job: "Find ideas", kw: "insider buying form 4 open market cluster buy sec code p executives directors" },
   { label: "Revisions Momentum", path: "/revisions", desc: "Where the Street is quietly raising (or cutting) estimates — the revision-momentum factor", group: "Screens", job: "Find ideas", kw: "estimate revisions momentum eps consensus upgrades pead drift analyst starmine" },
@@ -124,7 +125,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   // Event-Driven has no hubs — its 7 monitors show as a flat, scannable dropdown.
   Screens: [
     { label: "Screener", blurb: "Build your own filter — screen the whole universe by return, valuation & quality", paths: ["/screener"] },
-    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up", paths: ["/confluence", "/warnings", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
+    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up — and the live track record grading them", paths: ["/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
     { label: "Value & Backtest", blurb: "Cheap vs. its own history, reverse-DCF expectations, and factor-screen backtesting", paths: ["/valuation-history", "/expectations", "/backtest"] },
   ],
   Research: [
@@ -148,6 +149,7 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   // US-only non-options feeds
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)
   "/insiders", // SEC Form 4 open-market buys (US filers only; page renders UsOnlyNotice on direct nav)
+  "/signal-record", // grades the US idea boards (signal-log.json is built from US feeds)
   // (merger-arb is an external link to arb.bondstreetcp.com — not gated)
 ]);
 

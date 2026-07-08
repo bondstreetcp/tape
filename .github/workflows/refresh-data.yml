@@ -43,6 +43,11 @@ on:
     # these drift +1h vs ET in winter; minutes deliberately off :15/:45 (scheduler congestion).
     - cron: "41 12 * * 1-5"
     - cron: "19 21 * * 1-5"
+    # ~14:07 UTC — MORNING-DESK RETRY: GitHub silently DROPPED the 12:41 tick on 2026-07-08 and the
+    # morning brief never generated. refresh-desk-note now skips when the note is <150min fresh, so
+    # this retry is a no-op whenever the primary tick ran and a rescue when it didn't. (The evening
+    # run needs no retry — the 22:47 FULL rebuild regenerates the note ~1.5h later anyway.)
+    - cron: "7 14 * * 1-5"
     # ~22 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the 4pm ET close
     # (handles EST/EDT) so the options-flow scan captures the settled volume.
     - cron: "47 22 * * 1-5"
@@ -71,9 +76,10 @@ jobs:
     env:
       FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
       INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
-      # DESK = the twice-daily Daily Desk brief ticks (pre-open + post-close) — they run the quote
-      # refresh (wall-clock picked) + the desk note, then the usual R2 upload + deploy hook.
-      DESK: ${{ github.event.schedule == '41 12 * * 1-5' || github.event.schedule == '19 21 * * 1-5' }}
+      # DESK = the twice-daily Daily Desk brief ticks (pre-open + post-close) + the 14:07 morning
+      # RETRY — they run the quote refresh (wall-clock picked) + the desk note (which self-skips when
+      # <150min fresh), then the usual R2 upload + deploy hook.
+      DESK: ${{ github.event.schedule == '41 12 * * 1-5' || github.event.schedule == '19 21 * * 1-5' || github.event.schedule == '7 14 * * 1-5' }}
       # Job-level so EVERY LLM step inherits it — 8 steps (trump-truth, fed, campaigns, biotech,
       # policy, catalyst-vol, corp-events, ipo) shipped without a per-step env block and silently
       # printed "LLM not configured — skipping" every night; their feeds only updated when run
@@ -542,6 +548,15 @@ jobs:
         run: npm run refresh-warnings
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
+      # Signal Track Record — logs tonight's idea-board membership (Confluence/Warnings/Squeeze/
+      # Leaders/Insiders/Smart-Money/Distribution/Coiled/Positioning) and fills due 1w/1m/3m marks.
+      # MUST run after Confluence + Warning Signs (reads their artifacts); rebuilds the page-load
+      # boards with the same lib builders their pages use. Forward-only history — never shrinks.
+      - name: Refresh signal track record
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-signal-log
         continue-on-error: true
 
       # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.

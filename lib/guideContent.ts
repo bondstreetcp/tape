@@ -2172,6 +2172,39 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/signal-record",
+        "title": "Signal Track Record",
+        "question": "Do the idea boards actually work — what happened to their picks after they appeared?",
+        "how": "Every night, the moment a name first shows up on an idea board (Confluence, Warning Signs, Short-Squeeze, Leaders breakouts, Insider Buying, Smart-Money, Distribution, Coiled Springs, or the Positioning Radar), it is logged with that day’s price. The record then checks back at fixed horizons — one week, one month, three months — and compares the stock’s return to the S&P 500 over the same window. Bullish boards are graded on beating the index, bearish boards on the stock falling or lagging, and Coiled Springs (a bet on a big move in either direction) on whether the stock moved more than the index did. The log is forward-only: it starts the day tracking began, with no back-filled history — so early numbers are small samples, and the record gets more meaningful every week.",
+        "metrics": [
+          {
+            "term": "Edge",
+            "plain": "The one bigger-is-better number: return in excess of the S&P for bullish boards, the inverse for bearish ones, extra movement vs the index for Coiled Springs."
+          },
+          {
+            "term": "Hit rate",
+            "plain": "Share of wins — a bullish pick rose, a bearish pick fell, a big-move pick out-moved the index."
+          },
+          {
+            "term": "Logged / Open",
+            "plain": "Total entries recorded for a signal, and how many haven’t reached their final three-month check yet."
+          },
+          {
+            "term": "1w / 1m / 3m",
+            "plain": "The raw price return from the day a name appeared to roughly one week, one month, and three months later (marked on the first weekday after each boundary)."
+          },
+          {
+            "term": "Entry",
+            "plain": "The stock’s price on the day it was logged — the baseline every return is measured from."
+          },
+          {
+            "term": "Seed",
+            "plain": "An entry logged on a board’s very first tracked night (the whole board at once, rather than a fresh appearance that day)."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/smart-money",
         "title": "Smart-Money Radar",
         "question": "Which stocks are professional investors and members of Congress quietly accumulating right now?",
