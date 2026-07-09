@@ -51,7 +51,17 @@ on:
     # ~22 UTC — the FULL rebuild (history + intl + options flow + macro), ~1-2h after the 4pm ET close
     # (handles EST/EDT) so the options-flow scan captures the settled volume.
     - cron: "47 22 * * 1-5"
-  workflow_dispatch: {} # lets you trigger it manually from the Actions tab (always a full rebuild)
+  # Manual/API trigger. `mode` lets an EXTERNAL scheduler (the Synology NAS — see
+  # docs/SETUP-NAS-CRON.md) dispatch specific tick types: GitHub's shared cron scheduler routinely
+  # delays runs 1-2h or silently drops them (the 2026-07-08 morning-brief incident), while dispatched
+  # runs start within seconds. No input (or mode=full) = a full rebuild, same as before.
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which tick to run"
+        type: choice
+        options: [full, quotes, intl, desk]
+        default: full
 
 # Allow the job to push the refreshed data back to the repo.
 permissions:
@@ -74,12 +84,14 @@ jobs:
     # universes" step) — NOT from github.event.schedule, which GitHub routinely mislabels when it
     # delays a scheduled run or re-fires a backlogged one.
     env:
-      FULL: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '47 22 * * 1-5' }}
-      INTL: ${{ github.event.schedule == '29 10 * * 1-5' }}
+      # A dispatch with NO mode (old UI runs, plain API calls) stays a FULL rebuild; mode=quotes falls
+      # through all three flags to the wall-clock session-picked quotes refresh, exactly like a quote cron.
+      FULL: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.mode == 'full' || github.event.inputs.mode == '' || github.event.inputs.mode == null)) || github.event.schedule == '47 22 * * 1-5' }}
+      INTL: ${{ github.event.schedule == '29 10 * * 1-5' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'intl') }}
       # DESK = the twice-daily Daily Desk brief ticks (pre-open + post-close) + the 14:07 morning
       # RETRY — they run the quote refresh (wall-clock picked) + the desk note (which self-skips when
       # <150min fresh), then the usual R2 upload + deploy hook.
-      DESK: ${{ github.event.schedule == '41 12 * * 1-5' || github.event.schedule == '19 21 * * 1-5' || github.event.schedule == '7 14 * * 1-5' }}
+      DESK: ${{ github.event.schedule == '41 12 * * 1-5' || github.event.schedule == '19 21 * * 1-5' || github.event.schedule == '7 14 * * 1-5' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'desk') }}
       # Job-level so EVERY LLM step inherits it — 8 steps (trump-truth, fed, campaigns, biotech,
       # policy, catalyst-vol, corp-events, ipo) shipped without a per-step env block and silently
       # printed "LLM not configured — skipping" every night; their feeds only updated when run
