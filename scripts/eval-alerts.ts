@@ -174,8 +174,16 @@ async function main() {
       console.log(`inserted ${inserted.length} new alerts (rest were duplicates).`);
     }
   } catch (e: any) {
-    console.error("alert eval failed:", String(e?.message || e).slice(0, 300));
-    process.exitCode = 1;
+    const msg = String(e?.message || e);
+    // The alerts feature is SHELVED for beta — the tables only exist once docs/SETUP-auth.md's
+    // migration runs. A missing table is that expected state, not a pipeline error (it was failing
+    // every NAS/local tick where RESEARCH_DATABASE_URL is set but the migration isn't applied).
+    if (/relation .* does not exist/i.test(msg)) {
+      console.log("alert eval: alert tables not created (feature shelved) — skipping.");
+    } else {
+      console.error("alert eval failed:", msg.slice(0, 300));
+      process.exitCode = 1;
+    }
   } finally {
     await sql.end({ timeout: 5 });
   }

@@ -63,20 +63,70 @@ runs on the active node; nothing special needed.
   still refreshes nightly, at worst a couple hours late). The freshness gate + Ops-alerts workflow
   stay on GitHub as the independent watchdog either way.
 
-## Phase 2 (optional, later): move the COMPUTE to the NAS too
+## Phase 2: the COMPUTE moves to the NAS
 
-Only worth it if you want off GitHub runners entirely (privacy, longer runs, more RAM — the 1621+'s
-64 GB dwarfs the 7 GB runner). Sketch, if/when wanted:
+The pipeline itself runs in a Docker container on the DS1621+; GitHub keeps CI-on-push, the
+Ops-alerts watchdog, and `workflow_dispatch` as the manual fallback. The orchestrator
+([`scripts/run-tick.ts`](../scripts/run-tick.ts)) replicates refresh-data.yml **step for step**
+(same order, same continue-on-error, hydrate-first hard gate, freshness-gate-blocks-deploy) and
+holds the hourly schedule in one place (`auto` mode) — when the workflow gains a step, add it to
+run-tick's STEPS table in the same commit.
 
-- **Container Manager** (Docker) → a `node:22` container with the repo cloned to a NAS volume and
-  the API keys in a mounted env file (this DOES move all secrets onto the NAS — the main tradeoff).
-- A `run-tick.sh <mode>` orchestrator replicating refresh-data.yml's step order (hydrate-from-R2 →
-  refresh steps per mode → data-to-r2 → check-freshness → curl the Vercel Deploy Hook), each step
-  `|| true` to mirror `continue-on-error`.
-- The same hourly Task Scheduler pattern, running `docker exec` instead of the dispatch curl.
-- Keep the GitHub `47 22` FULL cron as fallback and the Ops-alerts workflow as the watchdog — and
-  set BOTH schedulers' write paths through the same R2 bucket only ONE at a time (disable one side's
-  upload before enabling the other; two independent writers can interleave tarball uploads).
+Tradeoff accepted in this phase: **the API keys move onto the NAS** (`tape.env`). Keep that file
+`chmod 600` on an encrypted-at-rest volume if available.
 
-Don't start phase 2 until phase 1 has run clean for a while — phase 1 already eliminates the
-observed failure mode (dropped/late ticks), which is the actual problem.
+### B2.1 — bootstrap (~15 min, SSH)
+
+```sh
+mkdir -p /volume1/docker/tape
+# 1) secrets: copy your working .env.local from the dev machine as tape.env, then ADD one line:
+#    VERCEL_DEPLOY_HOOK=<from Vercel → Project → Settings → Git → Deploy Hooks>
+vi /volume1/docker/tape/tape.env && chmod 600 /volume1/docker/tape/tape.env
+# 2) the repo (public — no creds needed):
+git clone https://github.com/bondstreetcp/tape.git /volume1/docker/tape/repo
+```
+
+### B2.2 — the container (~5 min)
+
+Container Manager → **Project** → Create → name `tape`, path `/volume1/docker/tape`, paste
+[`scripts/nas/docker-compose.yml`](../scripts/nas/docker-compose.yml) → build/up. Then one-time
+dependency install + smoke test from SSH:
+
+```sh
+docker exec tape-runner sh -c "cd /app && npm ci"
+docker exec tape-runner sh -c "cd /app && npx tsx scripts/run-tick.ts quotes --dry"   # plan check
+docker exec tape-runner sh -c "cd /app && npx tsx scripts/run-tick.ts quotes"        # real ~1-min tick
+tail -20 /volume1/docker/tape/tick.log 2>/dev/null || true
+```
+
+The real tick should end `done: 2/2 steps ok` (hydrate → quotes → alerts → R2 upload → deploy hook).
+
+### B2.3 — swap the hourly task
+
+Copy [`scripts/nas/tape-tick.sh`](../scripts/nas/tape-tick.sh) to `/volume1/docker/tape/` and
+`chmod 700` it. Edit the phase-1 Task Scheduler entry (or create it now if you skipped phase 1):
+same schedule (daily, 00:00, every 1 hour, user **root**, email on abnormal exit), command:
+
+```sh
+/volume1/docker/tape/tape-tick.sh
+```
+
+⚠ **Never run phase 1 dispatch AND phase 2 exec together** — two writers interleave on the R2
+tarball. The hourly task runs exactly one of them.
+
+### B2.4 — cutover (the flip)
+
+Once a NAS FULL run has gone green (check `tick.log` after 23:00 UTC: `done: …/58 steps ok`,
+freshness gate ✓, deploy hook 200/201):
+
+1. Remove ALL `schedule:` crons from `.github/workflows/refresh-data.yml` (ask Claude — one commit).
+   `workflow_dispatch` stays: from anywhere, `gh workflow run refresh-data.yml -f mode=full` is the
+   emergency fallback if the NAS is down (GitHub still has all the secrets).
+2. The Ops-alerts watchdog (freshness-alert.yml) stays on GitHub — an independent system that
+   alerts when the NAS pipeline goes stale. Set `ALERT_WEBHOOK_URL` so it can actually reach you.
+3. binary-digest.yml (Monday push digest) stays on GitHub — delay-tolerant, secrets already there.
+
+### Rollback
+
+The GitHub path never goes away: re-add the crons (git revert the cutover commit) and disable the
+NAS task. Both sides read/write the same R2 bucket, so switching back is one commit + one checkbox.

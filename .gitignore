@@ -24,3 +24,6 @@ data/.research/
 # frequently-rewritten data OUT of git history is the whole point (see docs/RESEARCH-LAKE.md).
 lake/
 sql/views_local.sql
+
+# run-tick orchestrator lock (NAS/local ticks)
+.tick.lock
