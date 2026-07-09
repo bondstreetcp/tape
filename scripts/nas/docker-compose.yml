@@ -1,20 +1,26 @@
-# Tape compute container for the Synology DS1621+ (Container Manager → Project).
-# The container idles; the hourly DSM task runs `docker exec` → scripts/run-tick.ts (see
-# scripts/nas/tape-tick.sh + docs/SETUP-NAS-CRON.md Phase 2). The repo lives on a NAS volume so
-# node_modules persists between ticks (npm ci only reruns when the lockfile changes).
+# Tape compute for the Synology DS1621+ — a SELF-SCHEDULING container. Drag-and-drop setup:
+#   1. In File Station, make a folder e.g. /docker/tape and drop in THREE files:
+#        docker-compose.yml   (this file)
+#        tape-entrypoint.sh   (scripts/nas/tape-entrypoint.sh)
+#        tape.env             (copy tape.env.example → tape.env and fill in your keys)
+#   2. Container Manager → Project → Create → point at that folder → Build → Run.
+# The container clones the repo, installs deps, and runs a tick every hour — no SSH, no DSM task.
+# Full runbook + the alternative external-scheduler setup: docs/SETUP-NAS-CRON.md.
 services:
   tape-runner:
-    image: node:22-bookworm # includes git; DS1621+ is x86_64 (AMD V1500B) so standard amd64 images
+    image: node:22-bookworm # the FULL variant (not -slim/-alpine) — it ships git, which the entrypoint needs
     container_name: tape-runner
     working_dir: /app
-    command: ["sleep", "infinity"] # idle; ticks arrive via docker exec
     restart: unless-stopped
     env_file:
-      - /volume1/docker/tape/tape.env # ALL the API keys — chmod 600, never in the repo
-    volumes:
-      - /volume1/docker/tape/repo:/app # the git clone (bootstrap: see the runbook)
+      - ./tape.env # ALL the API keys + VERCEL_DEPLOY_HOOK — keep this file chmod 600, never in the repo
     environment:
-      - TAPE_PULL=1 # each tick pulls latest main first (the checkout-equivalent)
-    # 64 GB box — no limits needed; uncomment to be polite to other NAS services:
-    # mem_limit: 16g
+      - TAPE_PULL=1 # each tick git-pulls main first (fresh code without rebuilding the image)
+      - TAPE_LOG=/app/tick.log
+    volumes:
+      - ./repo:/app # the repo + node_modules live here so they persist across restarts (cloned on first boot)
+      - ./tape-entrypoint.sh:/tape-entrypoint.sh:ro
+    entrypoint: ["sh", "/tape-entrypoint.sh"]
+    # 64 GB box, so no limits needed; uncomment to cap if the NAS runs other heavy services:
+    # mem_limit: 24g
     # cpus: 4

@@ -4,11 +4,14 @@
  * continue-on-error semantics), so the NAS pipeline and the GitHub fallback can never drift.
  * When you add a step to the workflow, add it to STEPS below (and vice versa).
  *
- *   npx tsx scripts/run-tick.ts <full|quotes|intl|desk|auto> [--dry]
+ *   npx tsx scripts/run-tick.ts <full|quotes|intl|desk|narration|digest|auto> [--dry]
  *
- * auto  = map the current hour to a tick (the NAS's hourly Task Scheduler entry uses this):
- *         UTC 02/04/06/08 quotes · UTC 10 intl · ET 08+17 desk · ET 10/12/14/16 quotes · UTC 23 full
- *         (exits silently on non-tick hours + weekends — an hourly no-op costs nothing).
+ * auto      = map the current hour to a tick (the NAS's hourly scheduler uses this):
+ *             UTC 02/04/06/08 quotes · UTC 10 intl · ET 08+17 desk · ET 10/12/14/16 quotes · UTC 23 full;
+ *             + Monday 13:00 UTC fires the weekly digest. Silent no-op off-tick — hourly is free.
+ * narration = refresh-narration.yml (the cheap "refresh AI narration" button): just the 7 LLM narration
+ *             steps + upload + deploy, for when narration blanks out (an OpenRouter 402). ~$0.70 / 10min.
+ * digest    = binary-digest.yml: push the weekly binary-events webhook/email. No R2 upload, no deploy.
  * --dry = print the resolved step plan and exit (verify against the workflow after edits).
  *
  * Semantics mirrored from the workflow:
@@ -25,15 +28,19 @@ import { spawnSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
-type Mode = "full" | "quotes" | "intl" | "desk";
+// Data-pipeline modes (mirror refresh-data.yml) + two ported side-workflows: `narration` =
+// refresh-narration.yml (the cheap "refresh AI narration" button — the 7 LLM narration steps, no full
+// rebuild), `digest` = binary-digest.yml (the weekly Monday push, webhook/email only, no R2/deploy).
+type Mode = "full" | "quotes" | "intl" | "desk" | "narration" | "digest";
 type When = "always" | "full" | "quotes-or-desk" | "full-or-intl" | "full-or-desk";
 
 const STEP_TIMEOUT_MIN = 45; // overnight-filings broad scan is ~30m — nothing legitimate exceeds this
 const LOCK = path.join(process.cwd(), ".tick.lock");
 const LOCK_STALE_H = 5;
 
-// ── The step table: refresh-data.yml, transcribed. ────────────────────────────────────────────────
-const STEPS: { name: string; cmd: string; when: When; env?: Record<string, string> }[] = [
+// ── The step table: refresh-data.yml, transcribed. `narr` marks the 7 steps refresh-narration.yml
+// runs (they're a subset of FULL). ────────────────────────────────────────────────────────────────
+const STEPS: { name: string; cmd: string; when: When; env?: Record<string, string>; narr?: true }[] = [
   { name: "Refresh quotes (intraday)", cmd: "npm run refresh-quotes", when: "quotes-or-desk" }, // ONLY env set at runtime
   { name: "Refresh US universes (prices, returns, fundamentals)", cmd: "npm run refresh-data", when: "full" },
   { name: "Refine generic sub-industry labels", cmd: "npm run patch-industries", when: "full" },
@@ -59,7 +66,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh same-store sales (comps)", cmd: "npm run refresh-sss", when: "full" },
   { name: "Refresh intl same-store sales (UK/EU comps)", cmd: "npm run refresh-sss-intl", when: "full" },
   { name: "Refresh guidance (forward outlook)", cmd: "npm run refresh-guidance", when: "full", env: { LIMIT: "150" } },
-  { name: "Refresh guidance board", cmd: "npm run refresh-guidance-board", when: "full" },
+  { name: "Refresh guidance board", cmd: "npm run refresh-guidance-board", when: "full", narr: true },
   { name: "Refresh IV history", cmd: "npm run refresh-iv-history", when: "full" },
   { name: "Refresh Reddit buzz", cmd: "npm run refresh-apewisdom", when: "full" },
   { name: "Refresh put-writing screen", cmd: "npm run refresh-putwrite", when: "full" },
@@ -76,20 +83,20 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh biotech event vol", cmd: "npm run refresh-biotech-vol", when: "full" },
   { name: "Refresh policy & contracts", cmd: "npm run refresh-policy", when: "full" },
   { name: "Refresh catalyst vol", cmd: "npm run refresh-catalyst-vol", when: "full" },
-  { name: "Refresh trade desk", cmd: "npm run refresh-trade-ideas", when: "full" },
+  { name: "Refresh trade desk", cmd: "npm run refresh-trade-ideas", when: "full", narr: true },
   { name: "Refresh dispersion", cmd: "npm run refresh-dispersion", when: "full" },
   { name: "Refresh dealer gamma board", cmd: "npm run refresh-gamma-board", when: "full" },
   { name: "Refresh post-earnings drift", cmd: "npm run refresh-pead", when: "full" },
   { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh IPO & lockup monitor", cmd: "npm run refresh-ipo", when: "full" },
   { name: "Refresh spinoff turnover", cmd: "npm run refresh-spinoffs", when: "full" },
-  { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk" },
-  { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full" },
+  { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk", narr: true },
+  { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full", narr: true },
   { name: "Refresh Warning Signs", cmd: "npm run refresh-warnings", when: "full" },
   { name: "Refresh signal track record", cmd: "npm run refresh-signal-log", when: "full" },
-  { name: "Refresh valuation-discount verdicts", cmd: "npm run refresh-valuation-explain", when: "full" },
-  { name: "Refresh 13F quarter story", cmd: "npm run refresh-13f-story", when: "full" },
-  { name: "Refresh Congress summary", cmd: "npm run refresh-congress-summary", when: "full" },
+  { name: "Refresh valuation-discount verdicts", cmd: "npm run refresh-valuation-explain", when: "full", narr: true },
+  { name: "Refresh 13F quarter story", cmd: "npm run refresh-13f-story", when: "full", narr: true },
+  { name: "Refresh Congress summary", cmd: "npm run refresh-congress-summary", when: "full", narr: true },
   { name: "Refresh macro (FRED)", cmd: "npm run refresh-macro", when: "full" },
   { name: "Evaluate alerts", cmd: "npm run eval-alerts", when: "always" },
   { name: "Export research lake (Parquet → R2)", cmd: "npm run build-lake && npm run backfill-prices", when: "full" },
@@ -123,6 +130,12 @@ function autoMode(now = new Date()): Mode | null {
   return mode;
 }
 
+/** The weekly binary-events digest (binary-digest.yml): Monday ~08:45 ET. Auto fires it at 13:00 UTC
+ * Monday alongside whatever data tick that hour has (they're independent — digest only pushes a webhook). */
+function isDigestDue(now = new Date()): boolean {
+  return now.getUTCDay() === 1 && now.getUTCHours() === 13;
+}
+
 /** Same wall-clock session pick as the workflow's "Pick session universes" step. */
 function sessionOnly(): string {
   const h = new Date().getUTCHours();
@@ -150,21 +163,26 @@ async function main() {
   const arg = (process.argv[2] || "").toLowerCase();
   const dry = process.argv.includes("--dry");
 
+  const fromAuto = arg === "auto";
   let mode: Mode;
-  if (arg === "auto") {
+  let autoDigest = false; // auto also fires the weekly digest on Monday
+  if (fromAuto) {
     const m = autoMode();
-    if (!m) { console.log("run-tick: not a tick hour — exiting."); return; }
-    mode = m;
-  } else if (arg === "full" || arg === "quotes" || arg === "intl" || arg === "desk") {
+    autoDigest = isDigestDue();
+    if (!m && !autoDigest) { console.log("run-tick: not a tick hour — exiting."); return; }
+    mode = m ?? "digest"; // Monday 13:00 with no data tick → digest-only
+    if (!m && autoDigest) autoDigest = false; // already the primary mode; don't double-run
+  } else if (arg === "full" || arg === "quotes" || arg === "intl" || arg === "desk" || arg === "narration" || arg === "digest") {
     mode = arg;
   } else {
-    console.error("usage: run-tick.ts <full|quotes|intl|desk|auto> [--dry]");
+    console.error("usage: run-tick.ts <full|quotes|intl|desk|narration|digest|auto> [--dry]");
     process.exit(2);
   }
 
-  const plan = STEPS.filter((s) => runs(s.when, mode));
+  const plan = mode === "digest" ? [] : mode === "narration" ? STEPS.filter((s) => s.narr) : STEPS.filter((s) => runs(s.when, mode));
   if (dry) {
-    console.log(`run-tick DRY (mode=${mode}) — ${plan.length} refresh steps + hydrate/upload/gate/deploy:`);
+    if (mode === "digest") { console.log("run-tick DRY (mode=digest): hydrate → push-binary-digest (webhook/email; no R2 upload / deploy)."); return; }
+    console.log(`run-tick DRY (mode=${mode}) — ${plan.length} refresh steps + hydrate/upload${mode === "full" ? "/gate" : ""}/deploy${autoDigest ? " + weekly digest" : ""}:`);
     for (const s of plan) console.log(`  ${s.cmd.padEnd(46)} ${s.name}`);
     return;
   }
@@ -198,6 +216,14 @@ async function main() {
       process.exit(1);
     }
 
+    // ── digest: read the hydrated feeds, push the webhook/email, done. No R2 upload, no deploy. ────
+    if (mode === "digest") {
+      const ok = step("Push weekly binary-events digest", "npm run push-binary-digest");
+      log(`digest ${ok ? "sent" : "FAILED"} (no R2 upload / deploy).`);
+      if (!ok) process.exit(1);
+      return; // finally { unlock() }
+    }
+
     // ── Refresh steps (each continue-on-error, like the workflow) ─────────────────────────────────
     let fails = 0;
     for (const s of plan) {
@@ -224,6 +250,9 @@ async function main() {
     } else {
       log("deploy SKIPPED (upload failed or freshness gate red) — never deploy known-stale data.");
     }
+
+    // Weekly binary-events digest, alongside a Monday data tick (independent — webhook only).
+    if (autoDigest) step("Push weekly binary-events digest", "npm run push-binary-digest");
 
     log(`done: ${plan.length - fails}/${plan.length} steps ok${fails ? ` (${fails} failed — continue-on-error)` : ""}`);
     // Exit non-zero when the run is materially broken so DSM Task Scheduler emails:
