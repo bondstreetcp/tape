@@ -149,8 +149,9 @@ export default function EarningsMoveView({
                       <td className="px-2 py-1.5"><Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=options`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link></td>
                       <td className="max-w-[14rem] truncate px-2 py-1.5"><span className="text-[var(--text-2)]">{r.name}</span><span className="ml-1.5 text-[10px] text-[var(--text-4)]">{r.sector}</span></td>
                       <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">${r.price.toFixed(2)}</td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" title={r.earningsEstimate ? "Estimated date" : "Confirmed date"}>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" title={r.dateSource === "nasdaq" ? "Date from Nasdaq's calendar — it disagreed with or was missing from Yahoo, and the exchange calendar wins" : r.earningsEstimate ? "Estimated date" : "Confirmed date"}>
                         <span className={r.earningsEstimate ? "underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 text-[var(--text-2)]" : "text-[var(--text-2)]"}>{dateLabel(r.earningsDate)}</span>
+                        {r.dateSource === "nasdaq" && <span className="ml-1 rounded border border-[var(--border)] px-0.5 text-[9px] uppercase tracking-wide text-[var(--text-4)]">ndq</span>}
                         <span className="ml-1 text-[10px] text-[var(--text-4)]">{r.daysToEarnings === 0 ? "today" : `${r.daysToEarnings}d`}</span>
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{dateLabel(r.expiry + "T00:00:00Z")}<span className="ml-1 text-[10px] text-[var(--text-4)]">{r.dte}d</span></td>

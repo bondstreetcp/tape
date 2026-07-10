@@ -169,6 +169,13 @@ async function main() {
 
   const prior: IpoData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: nowISO, scanned: 0, events: [] as IpoEvent[] }));
   const known = new Set(prior.events.map((e) => e.id));
+  // Ledger of EVERY accession ever classified (accepted or rejected), accession → date screened.
+  // `known` only remembers ACCEPTED rows, so before this ledger every junk shell S-1 was re-fetched
+  // and re-classified nightly until it aged out of the EFTS window — ~45% of the app's entire LLM
+  // spend ($13.58 of $30 over 9 days). Rejects are final: an S-1 doesn't stop being junk overnight,
+  // and a real IPO's later AMENDMENT arrives as a NEW accession, so nothing real is lost.
+  const SCREENED_FILE = path.join(DATA, "ipo-screened.json");
+  const screened: Record<string, string> = await fsp.readFile(SCREENED_FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
   // Per-kind screen budget. Each kind has its OWN counter, so no kind can starve another. Upcoming
   // runs high (130) because the tickered-first pool holds ~all real registrations (≈128 in a busy
   // 30-day window); a real IPO that filed a week ago must be reachable before it ages out. A junk
@@ -176,12 +183,15 @@ async function main() {
   // IPO is confirmed). recent (424B4) / lockup stay at 60.
   const LIMIT: Record<IpoKind, number> = { upcoming: 130, ipo: 60, lockup: 60 };
   const cap: Record<string, number> = {};
-  const fresh = uniq.filter((t) => !known.has(t.hit.accession)).filter((t) => { const n = cap[t.kind] || 0; if (n >= LIMIT[t.kind]) return false; cap[t.kind] = n + 1; return true; });
-  console.log(`${fresh.length} new filings to screen ${JSON.stringify(cap)}`);
+  const fresh = uniq
+    .filter((t) => !known.has(t.hit.accession) && !(t.hit.accession in screened))
+    .filter((t) => { const n = cap[t.kind] || 0; if (n >= LIMIT[t.kind]) return false; cap[t.kind] = n + 1; return true; });
+  console.log(`${fresh.length} new filings to screen ${JSON.stringify(cap)} (${Object.keys(screened).length} previously screened, skipped)`);
 
   const built = await mapPool(fresh, 4, async ({ hit, kind }): Promise<IpoEvent | null> => {
     const text = await fetchFilingBodyText(hit);
-    if (!text) return null;
+    if (!text) return null; // fetch failed — do NOT mark screened; retry next night
+    screened[hit.accession] = iso(Date.now()); // classification is about to run — verdict is final either way
     const c = kind === "upcoming" ? await classifyUpcoming(hit, text) : await classifyIpo(hit, text);
     if (!c || (kind !== "upcoming" && !c.ticker)) return null;
     const summary = await summarizeFiling(hit, text).catch(() => null);
@@ -242,6 +252,12 @@ async function main() {
       e.financials = cikM ? await fetchIpoFinancials(cikM[1], e.ticker).catch(() => null) : null;
     });
   }
+
+  // Persist the screened ledger, pruned past the widest EFTS lookback (75d) + margin — an accession
+  // older than that can never reappear in the search results, so its entry is dead weight.
+  const pruneBefore = iso(Date.now() - 100 * DAY);
+  for (const [acc, d] of Object.entries(screened)) if (d < pruneBefore) delete screened[acc];
+  await fsp.writeFile(SCREENED_FILE, JSON.stringify(screened));
 
   await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData));
   const by = (k: string) => merged.filter((e) => e.kind === k).length;
