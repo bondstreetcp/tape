@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoadingState } from "./Spinner";
 import type { TimeframeKey } from "@/lib/timeframes";
+import { usePolledFetch, fmtClock } from "@/lib/usePolledFetch";
 
 interface Bar { t: number; c: number }
 
@@ -28,10 +29,25 @@ export default function IndexChart({ symbol, name, tf }: { symbol: string; name:
     return () => { a = false; };
   }, [symbol]);
 
+  // 1D/1W poll the LIVE intraday feed (same as the industry charts) — the one-shot /api/ohlc payload
+  // can be minutes-cached, and a mount-time fetch would otherwise freeze the headline chart at
+  // page-load (the KOSPI page showed the prior session all day).
+  const intradayTf = tf === "1d" || tf === "1w";
+  const liveUrl = useMemo(
+    () => (intradayTf ? `/api/intraday?symbols=${encodeURIComponent(symbol)}${tf === "1d" ? "&interval=5m" : ""}` : null),
+    [intradayTf, symbol, tf],
+  );
+  const { data: liveRaw, asOf } = usePolledFetch(intradayTf, liveUrl, tf === "1d" ? 40_000 : 60_000);
+  const liveIntraday = useMemo<Bar[]>(() => {
+    const xy: [number, number][] = liveRaw?.series?.[symbol] ?? [];
+    return xy.map(([t, c]) => ({ t, c }));
+  }, [liveRaw, symbol]);
+
   const series = useMemo(() => {
-    if (!data) return [] as Bar[];
-    const intra = (tf === "1d" || tf === "1w") && data.intraday.length >= 2;
-    const src = intra ? data.intraday : data.daily;
+    if (!data && !liveIntraday.length) return [] as Bar[];
+    const intraSrc = liveIntraday.length >= 2 ? liveIntraday : data?.intraday ?? [];
+    const intra = intradayTf && intraSrc.length >= 2;
+    const src = intra ? intraSrc : data?.daily ?? [];
     if (!src.length) return [];
     // Anchor the window to the LAST bar, not now — else a weekend/holiday (feed a day or two stale)
     // would trim a 1D/1W view to nothing.
@@ -39,7 +55,7 @@ export default function IndexChart({ symbol, name, tf }: { symbol: string; name:
     const cutoff = tf === "ytd" ? Date.UTC(new Date(anchor).getUTCFullYear(), 0, 1) : anchor - WINDOW_DAYS[tf] * DAY;
     const s = src.filter((b) => b.t >= cutoff);
     return s.length >= 2 ? s : src.slice(-2); // never render a stub
-  }, [data, tf]);
+  }, [data, tf, intradayTf, liveIntraday]);
 
   const first = series[0]?.c, last = series[series.length - 1]?.c;
   const chg = first != null && last != null && first !== 0 ? (last / first - 1) * 100 : null;
@@ -51,6 +67,9 @@ export default function IndexChart({ symbol, name, tf }: { symbol: string; name:
       <div className="mb-2 flex items-center gap-2">
         <h2 className="text-base font-bold text-[var(--text)]">{name}</h2>
         <span className="font-mono text-[11px] text-[var(--text-4)]">{symbol}</span>
+        {intradayTf && asOf != null && (
+          <span className="ml-auto text-[10px] tabular-nums text-[var(--text-4)]">as of {fmtClock(asOf)}</span>
+        )}
       </div>
       {last != null && (
         <div className="mb-2 flex flex-wrap items-baseline gap-2">
@@ -62,9 +81,9 @@ export default function IndexChart({ symbol, name, tf }: { symbol: string; name:
           )}
         </div>
       )}
-      {err ? (
+      {err && !series.length ? (
         <div className="py-12 text-center text-sm text-[var(--text-3)]">No chart data for this index.</div>
-      ) : !data ? (
+      ) : !data && !series.length ? (
         <LoadingState label="Loading chart…" className="py-12" />
       ) : (
         <Line series={series} up={up} fmtVal={fmtVal} />

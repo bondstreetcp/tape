@@ -49,9 +49,12 @@ export async function GET(
         .chart(sym, { period1: new Date(now - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false })
         .catch(() => null),
     ]);
+    // Cache briefly: this payload also carries the INTRADAY series that 1D/1W charts render, and a
+    // long TTL serves yesterday's session as if it were today's (the KOSPI chart showed the prior
+    // day's −3% session while the header said +0.6% — the old s-maxage=3600 + 24h SWR did that).
     return NextResponse.json(
       { daily: bars((d as any)?.quotes || []), intraday: bars((i as any)?.quotes || []) },
-      { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
+      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } },
     );
   } catch (e: any) {
     return NextResponse.json({ daily: [], intraday: [], error: String(e?.message || e) });
