@@ -264,7 +264,10 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
     priorBlock +
     rfLine;
 
-  const digest = await chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000 });
+  // local:true — the highest-input-token nightly job (whole filing diffs); serve from the local
+  // overnight box when configured (NONE-gated + "only explicitly-stated numbers" rubric keeps it
+  // grounded regardless of model). Falls back to Flash cloud if the box is offline.
+  const digest = await chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000, local: true });
   if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
   if (typeof digest.headline !== "string") return null;
   const headline = digest.headline.trim();

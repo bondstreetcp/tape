@@ -77,6 +77,12 @@ export interface ChatOpts {
   // use it for LIVE, timeout-bound requests where a 40-50s deep-reasoning call risks the function
   // limit. Nightly scripts can leave it unset (full reasoning) since they aren't timeout-bound.
   reasoningEffort?: "low" | "medium" | "high";
+  // Route this call to the local overnight box (LLM_LOCAL_*) when it's configured. Set `true` on a
+  // NIGHTLY batch extractor that's pinned to an explicit model (guidance, overnight-filings) so it
+  // joins the bare-default fleet on the home server; set `false` on a LIVE /api route that happens
+  // to use the bare-default tier (stocktwits-summary) so a user never waits on the batch box.
+  // Undefined = the legacy heuristic (bare-default tier → local). See localEligible().
+  local?: boolean;
 }
 
 interface ChatMessage {
@@ -85,14 +91,23 @@ interface ChatMessage {
 }
 
 // ── Local-inference split (env-gated; INERT until both vars are set) ────────────────────────────
-// When LLM_LOCAL_BASE_URL + LLM_LOCAL_MODEL are configured, DEFAULT-tier calls (the mechanical
-// extraction fleet — overnight filings, event feeds…) try the local OpenAI-compatible server
-// (vLLM on the EPYC/3090 box, via a tunnel) FIRST; PRO_MODEL judgment calls always stay on
-// OpenRouter. Any local failure falls through to OpenRouter on the next attempt, so the home box
-// being offline never kills a feed. See docs/SETUP-local-llm.md.
+// When LLM_LOCAL_BASE_URL + LLM_LOCAL_MODEL are configured, NIGHTLY extraction calls try the local
+// OpenAI-compatible server (vLLM on the EPYC/3090 box) FIRST: the bare-default fleet automatically,
+// and the Flash-pinned extractors (guidance, overnight-filings) via {local:true}. PRO_MODEL
+// judgment and LIVE /api routes stay on OpenRouter. Any local failure falls through to OpenRouter on
+// the next attempt, so the home box being offline never kills a feed. See docs/SETUP-local-llm.md.
 const LOCAL_URL = (process.env.LLM_LOCAL_BASE_URL || "").replace(/\/+$/, "");
 const LOCAL_MODEL = process.env.LLM_LOCAL_MODEL || "";
 const LOCAL_KEY = process.env.LLM_LOCAL_API_KEY || "local";
+
+/** Whether a chat call may be served by the local overnight box (subject to LLM_LOCAL_* being set).
+ *  Explicit opts.local wins; otherwise the legacy heuristic — the bare-default tier is batch
+ *  extraction (→ local), while an explicit model is either PRO judgment or a live Flash route
+ *  (→ cloud). Nightly Flash extractors opt IN with {local:true}; live bare-default routes opt OUT
+ *  with {local:false}. Pure + exported for the routing test. */
+export function localEligible(opts: { model?: string; local?: boolean }): boolean {
+  return opts.local ?? !opts.model;
+}
 
 async function callChat(
   messages: ChatMessage[],
@@ -100,7 +115,7 @@ async function callChat(
   jsonMode: boolean,
 ): Promise<string | null> {
   const key = await apiKey();
-  const wantLocal = !!LOCAL_URL && !!LOCAL_MODEL && !opts.model; // default tier only — PRO stays cloud
+  const wantLocal = !!LOCAL_URL && !!LOCAL_MODEL && localEligible(opts); // nightly extraction only — see localEligible()
   if (!key && !wantLocal) {
     console.warn("lib/llm: OPENROUTER_API_KEY not set (env or .env.local) — skipping LLM call.");
     return null;

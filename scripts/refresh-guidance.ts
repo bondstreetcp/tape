@@ -80,7 +80,10 @@ const GUIDANCE_MODEL = process.env.GUIDANCE_MODEL || FLASH_MODEL;
 let GROUND_DROPS = 0; // $ figures dropped by the number-grounding guard (a model computed/inferred them)
 
 async function extract(sym: string, text: string, ctx: { mktcapM: number | null; consEps: number | null }): Promise<Extracted | null> {
-  const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: GUIDANCE_MODEL, maxTokens: MAXTOK, reasoningEffort: "low" });
+  // local:true — nightly Flash extraction, so serve from the local overnight box when configured
+  // (grounded: numberGroundedIn drops any $ figure not verbatim in the filing, so a weaker local
+  // model's miss is a gap, never a wrong number). Falls back to Flash cloud if the box is offline.
+  const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, { model: GUIDANCE_MODEL, maxTokens: MAXTOK, reasoningEffort: "low", local: true });
   if (raw == null) return null; // LLM transport failure ≠ "no guidance" — caller must not store [] or advance the gate
   const root = Array.isArray(raw) ? raw[0] : raw;
   const arr: any[] = Array.isArray(root?.guides) ? root.guides : Array.isArray(raw) ? raw : root && typeof root === "object" && root.period ? [root] : [];
