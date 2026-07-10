@@ -96,18 +96,19 @@ it `chmod 600`, ideally on an encrypted shared folder.
 2. **Container Manager** → **Project** → **Create** → name `tape`, point at that `/docker/tape`
    folder (it reads the compose file) → **Build** → **Run**.
 
-That's it. On first boot the container clones the repo into `./repo`, runs `npm ci`, then runs a
-tick immediately and every hour after. Watch it work in **Container Manager → tape-runner → Logs**,
-or in `/docker/tape/repo/tick.log`. The first quotes/desk tick should end `done: N/N steps ok`
-(hydrate → refresh → R2 upload → deploy hook); the nightly `full` (23:00 UTC) runs all 58 steps.
+That's it. On first boot the container clones the repo into a Docker-managed volume, runs `npm ci`,
+then runs a tick immediately and every hour after. Watch it in **Container Manager → Container →
+tape-runner → Log** (everything goes to stdout — there's no host log file with the named-volume
+setup). The first quotes/desk tick should end `done: N/N steps ok` (hydrate → refresh → R2 upload →
+deploy hook); the nightly `full` (23:00 UTC) runs all 58 steps.
 
 New code ships automatically — each tick `git pull`s `main` first (and re-runs `npm ci` only when
 the lockfile changed), so you never rebuild the image for a code change.
 
 ### Cutover (the flip)
 
-Once one NAS `full` run has gone green (`tick.log` after 23:00 UTC shows `done: …/58 steps ok`,
-freshness gate ✓, deploy hook 200/201), tell Claude to **remove the `schedule:` crons from
+Once one NAS `full` run has gone green (the tape-runner Log after 23:00 UTC shows `done: …/58 steps
+ok`, freshness gate ✓, deploy hook 200/201), tell Claude to **remove the `schedule:` crons from
 `refresh-data.yml`** (one commit). Keep on GitHub afterward:
 
 - **`workflow_dispatch`** — the from-anywhere fallback if the NAS is down:

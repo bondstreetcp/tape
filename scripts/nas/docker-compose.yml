@@ -5,6 +5,7 @@
 #        tape.env             (copy tape.env.example → tape.env and fill in your keys)
 #   2. Container Manager → Project → Create → point at that folder → Build → Run.
 # The container clones the repo, installs deps, and runs a tick every hour — no SSH, no DSM task.
+# Watch progress in Container Manager → Container → tape-runner → Log.
 # Full runbook + the alternative external-scheduler setup: docs/SETUP-NAS-CRON.md.
 services:
   tape-runner:
@@ -16,11 +17,17 @@ services:
       - ./tape.env # ALL the API keys + VERCEL_DEPLOY_HOOK — keep this file chmod 600, never in the repo
     environment:
       - TAPE_PULL=1 # each tick git-pulls main first (fresh code without rebuilding the image)
-      - TAPE_LOG=/app/tick.log
     volumes:
-      - ./repo:/app # the repo + node_modules live here so they persist across restarts (cloned on first boot)
+      # /app is a DOCKER-MANAGED named volume, NOT a host folder: Docker creates it automatically (a
+      # host bind-mount source must pre-exist or the build fails with "…/repo does not exist"), it starts
+      # truly empty (so the first-boot git clone can't trip on Synology @eaDir metadata), and the repo +
+      # node_modules persist across restarts/rebuilds. Logs go to stdout → Container Manager's Log tab.
+      - tape-app:/app
       - ./tape-entrypoint.sh:/tape-entrypoint.sh:ro
     entrypoint: ["sh", "/tape-entrypoint.sh"]
     # 64 GB box, so no limits needed; uncomment to cap if the NAS runs other heavy services:
     # mem_limit: 24g
     # cpus: 4
+
+volumes:
+  tape-app: # first boot clones the repo here; survives container delete/recreate (empty → re-clones)
