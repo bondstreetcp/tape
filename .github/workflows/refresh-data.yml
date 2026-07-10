@@ -571,6 +571,13 @@ jobs:
         run: npm run refresh-signal-log
         continue-on-error: true
 
+      # Signal-efficacy BACKTEST — replays the price-reconstructible signals (Leaders RS, breakout,
+      # 12-1 momentum, RSI oversold) monthly over ~5y of stored series. Pure local math, no network.
+      - name: Backtest price signals
+        if: ${{ env.FULL == 'true' }}
+        run: npm run backtest-signals
+        continue-on-error: true
+
       # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.
       # Needs valuation-history.json + the snapshot (above) + OPENROUTER_API_KEY.
       - name: Refresh valuation-discount verdicts

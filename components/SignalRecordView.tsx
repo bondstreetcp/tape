@@ -9,6 +9,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import HowToRead from "./HowToRead";
+import SignalBacktest from "./SignalBacktest";
+import type { BacktestFile } from "@/lib/signalBacktest";
 
 const UP = "#22c55e", DOWN = "#ef4444";
 const pct = (v: number | null | undefined, digits = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(digits)}%`);
@@ -16,7 +18,7 @@ const edgeColor = (v: number | null | undefined) => (v == null ? "var(--text-4)"
 const dirLabel = { bullish: "Bullish", bearish: "Bearish", move: "Big move" } as const;
 
 export default function SignalRecordView({
-  universe, summariesAll, summariesFresh, events, totalEvents, since, generatedAt,
+  universe, summariesAll, summariesFresh, events, totalEvents, since, generatedAt, backtest,
 }: {
   universe: string;
   summariesAll: SignalSummary[]; // every event, seed entries included
@@ -25,10 +27,12 @@ export default function SignalRecordView({
   totalEvents: number;
   since: string;
   generatedAt: string;
+  backtest: BacktestFile | null; // ~5y replay of the price-reconstructible signals (null until first run)
 }) {
   const [filter, setFilter] = useState<SignalKey | "all">("all");
   const [q, setQ] = useState("");
   const [includeSeed, setIncludeSeed] = useState(true);
+  const [tab, setTab] = useState<"live" | "backtest">("live");
   const summaries = includeSeed ? summariesAll : summariesFresh;
 
   const shown = useMemo(() => {
@@ -51,6 +55,17 @@ export default function SignalRecordView({
         <UniverseSwitcher current={universe} />
       </div>
 
+      {backtest && (
+        <div className="mb-4 inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+          <button onClick={() => setTab("live")} className={TB(tab === "live")}>Live record (since {fmtDate(since)})</button>
+          <button onClick={() => setTab("backtest")} className={TB(tab === "backtest")} title="The price-reconstructible signals replayed monthly over ~5 years of stored series">Backtest (~5y, price signals)</button>
+        </div>
+      )}
+
+      {tab === "backtest" && backtest ? (
+        <SignalBacktest bt={backtest} />
+      ) : (
+      <>
       <HowToRead>
         <p><b>What&apos;s here:</b> the accountability layer for the idea scanners. The boards (Confluence, Warning Signs, Squeeze, Leaders…) are rebuilt and overwritten every night — so this page keeps the receipts: the day a name first shows up on a board, we log it with its price, then check back at fixed horizons.</p>
         <p><b>Edge</b> is the one number where bigger is always better, whatever the signal&apos;s direction: for <b>bullish</b> boards it&apos;s the return <i>in excess of the S&amp;P 500</i>; for <b>bearish</b> boards (Warning Signs, Distribution, put-positioning) it&apos;s the <i>inverse</i> — a fall or a lag counts as a win; for <b>Coiled Springs</b> (a bet on a big move, either way) it&apos;s how much <i>more</i> the stock moved than the index, direction ignored.</p>
@@ -168,6 +183,8 @@ export default function SignalRecordView({
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </main>
   );
 }

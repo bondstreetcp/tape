@@ -76,6 +76,7 @@
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "refresh-warnings": "tsx scripts/refresh-warnings.ts",
     "refresh-signal-log": "tsx scripts/refresh-signal-log.ts",
+    "backtest-signals": "tsx scripts/backtest-signals.ts",
     "refresh-valuation-explain": "tsx scripts/refresh-valuation-explain.ts",
     "refresh-13f-story": "tsx scripts/refresh-13f-story.ts",
     "refresh-congress-summary": "tsx scripts/refresh-congress-summary.ts",

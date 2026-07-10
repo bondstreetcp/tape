@@ -2200,6 +2200,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "Seed",
             "plain": "An entry logged on a board’s very first tracked night (the whole board at once, rather than a fresh appearance that day)."
+          },
+          {
+            "term": "Backtest tab (~5y, price signals)",
+            "plain": "Replays the signals that can be recomputed purely from past prices (Leaders RS, breakout tag, 12−1 momentum, RSI oversold) at every month-end over ~5 years, grading picks against the same day's equal-weight pool. Boards needing options/positioning/filings history stay forward-only — replaying them would peek at the future. Uses today's index members, so treat the edges as upper bounds."
           }
         ],
         "usOnly": true

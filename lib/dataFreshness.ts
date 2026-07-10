@@ -98,6 +98,7 @@ const FEEDS: FeedSpec[] = [
   { file: "pairs.json", label: "Pairs stat-arb", tier: "core", maxAgeHours: CORE, countPath: "pairs" },
   { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
+  { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
   { file: "campaigns.json", label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },

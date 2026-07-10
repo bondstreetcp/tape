@@ -94,6 +94,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full", narr: true },
   { name: "Refresh Warning Signs", cmd: "npm run refresh-warnings", when: "full" },
   { name: "Refresh signal track record", cmd: "npm run refresh-signal-log", when: "full" },
+  { name: "Backtest price signals", cmd: "npm run backtest-signals", when: "full" },
   { name: "Refresh valuation-discount verdicts", cmd: "npm run refresh-valuation-explain", when: "full", narr: true },
   { name: "Refresh 13F quarter story", cmd: "npm run refresh-13f-story", when: "full", narr: true },
   { name: "Refresh Congress summary", cmd: "npm run refresh-congress-summary", when: "full", narr: true },

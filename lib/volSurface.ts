@@ -2,13 +2,14 @@
  * Implied-vol SURFACE math (client-safe, no I/O). Per expiry we fit a smooth "fair" smile and read off
  * each listed strike's rich/cheap RESIDUAL — the actual per-strike pricing signal.
  *
- * The fair smile is a WEIGHTED least-squares fit of TOTAL VARIANCE  w = σ²·T  as a quadratic in
- * log-moneyness  k = ln(K/F):   w(k) = c0 + c1·k + c2·k².  It is closed-form (3×3 normal equations), so it
- * never fails to converge on the sparse / noisy OTM quotes Yahoo returns, and it captures the three things
- * that matter — level (c0), skew (c1), curvature/smile (c2).  σ(k) = √(w(k)/T).  The per-strike residual
- * (listed IV − fitted IV) is the rich/cheap read. (Full arb-free SVI is a later upgrade; on LISTED strikes
- * inside the fitted band the quadratic is more than adequate and far more stable than a 5-param nonlinear
- * fit on retail chain data.)
+ * Two fitters, dispatched by fitSmile():
+ *   • SVI (Gatheral raw, Zeliade quasi-explicit calibration) — the PREFERRED fit: linear wings are the
+ *     correct asymptotics, so extrapolation beyond the quoted strikes is sane and the slice is arb-aware.
+ *   • Weighted quadratic in log-moneyness  w(k) = c0 + c1·k + c2·k²  (closed-form 3×3, one Huber
+ *     reweight) — the ROBUST FALLBACK when SVI degenerates on sparse/junk retail quotes, and the init
+ *     intuition for what the smile's level/skew/curvature mean.
+ * Both fit TOTAL VARIANCE w = σ²·T against k = ln(K/F); σ(k) = √(w(k)/T). The per-strike residual
+ * (listed IV − fitted IV) is the rich/cheap read.
  */
 
 export interface SmilePoint {
@@ -196,23 +197,30 @@ export function fitSVI(points: SmilePoint[], T: number): SmileFit | null {
     }
     return sw > 0 ? Math.sqrt(se / sw) : Infinity;
   };
-  let best: SviParams | null = null,
-    bestErr = Infinity;
-  for (let i = 0; i < 9; i++) {
-    const m = kmin + (kmax - kmin) * (i / 8);
-    for (let j = 0; j < 8; j++) {
-      const sig = 0.02 * Math.pow(1.8, j); // ~0.02 … ~1.2
-      const p = sviInner(rows, m, sig);
-      if (!p) continue;
-      const e = wRmse(p);
-      if (e < bestErr) {
-        bestErr = e;
-        best = p;
+  // Accumulator object (not a bare let) so the closure assignment survives TS narrowing.
+  const acc: { p: SviParams | null; err: number } = { p: null, err: Infinity };
+  const scan = (ms: number[], sigs: number[]) => {
+    for (const m of ms)
+      for (const sig of sigs) {
+        const p = sviInner(rows, m, sig);
+        if (!p) continue;
+        const e = wRmse(p);
+        if (e < acc.err) {
+          acc.err = e;
+          acc.p = p;
+        }
       }
-    }
+  };
+  // Coarse grid over (m, σ), then one refinement pass around the winner — the coarse grid alone
+  // leaves ~0.3 vol pts of parameter-granularity error on clean data; refined it's <0.1.
+  const mStep = (kmax - kmin) / 8;
+  scan(Array.from({ length: 9 }, (_, i) => kmin + mStep * i), Array.from({ length: 8 }, (_, j) => 0.02 * Math.pow(1.8, j)));
+  if (acc.p) {
+    const b = acc.p;
+    scan(Array.from({ length: 7 }, (_, i) => b.m + mStep * ((i - 3) / 3)), Array.from({ length: 7 }, (_, j) => b.sig * Math.pow(1.8, (j - 3) / 3)));
   }
-  if (!best) return null;
-  const p = best;
+  if (!acc.p) return null;
+  const p = acc.p;
   const ivAt = (k: number) => {
     const w = sviW(p, k);
     return w > 0 ? Math.sqrt(w / T) : 0;

@@ -6,6 +6,7 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import EmptyState from "@/components/EmptyState";
 import SignalRecordView from "@/components/SignalRecordView";
 import { summarizeSignals, type SignalLogFile } from "@/lib/signalLog";
+import type { BacktestFile } from "@/lib/signalBacktest";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
     .readFile(path.join(process.cwd(), "data", "signal-log.json"), "utf8")
     .then((s) => JSON.parse(s) as SignalLogFile)
     .catch(() => null);
+  const backtest = await fsp
+    .readFile(path.join(process.cwd(), "data", "signal-backtest.json"), "utf8")
+    .then((s) => JSON.parse(s) as BacktestFile)
+    .catch(() => null); // absent until the first nightly backtest run — the view hides the tab
   if (!log?.events?.length) return <EmptyState universe={universe} title="Signal Track Record" note="The log starts accruing on the next nightly run — every idea board's picks get graded from that day forward." />;
 
   const summariesAll = summarizeSignals(log.events);
@@ -40,6 +45,7 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
       totalEvents={log.events.length}
       since={log.since}
       generatedAt={log.generatedAt}
+      backtest={backtest}
     />
   );
 }
