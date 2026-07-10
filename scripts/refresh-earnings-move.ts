@@ -2,7 +2,11 @@
  * Builds data/earnings-move.json — the earnings expected-move screen.
  *
  * 1. Find US names reporting within the next ~16 days (snapshot earningsDate), > $250M cap —
- *    plus a live recheck of names whose date RECENTLY PASSED (a moved print leaves a stale date).
+ *    plus a live recheck of names whose date RECENTLY PASSED (a moved print leaves a stale date),
+ *    plus Nasdaq's public earnings calendar as a SECOND source: Yahoo misses or garbles small-cap
+ *    dates (HELE: Yahoo said Oct 8, the real print was Jul 8 — invisible on the board all week).
+ *    First live run admitted 23 names Yahoo lacked and corrected 16 dates. A universe name Nasdaq
+ *    lists in-window is admitted (or its date corrected) with dateSource:"nasdaq".
  * 2. For each, pull the option chain at the expiry just AFTER the report (STRICTLY after for an
  *    after-close print — same-day options die at 4pm, before the print), price the ATM straddle
  *    → implied move % (straddle / spot) and the implied vol the straddle bakes in.
@@ -69,6 +73,59 @@ async function chainRetry(sym: string, date?: string) {
   return getOptions(sym, date);
 }
 
+/**
+ * Nasdaq's public earnings calendar — one request per weekday in the window. Needs browser-like
+ * headers (the API hangs/403s a bare fetch) and a polite throttle. Returns symbol → epoch ms of the
+ * report, soonest date wins when a symbol shows on two days. AMC prints get 21:00Z so the existing
+ * `getUTCHours() >= 20` rule picks a STRICTLY-after expiry; BMO/unknown get 12:00Z. Any single day
+ * failing is logged and skipped — a blocked Nasdaq must never take the whole board down.
+ */
+async function fetchNasdaqCalendar(nowDayEpoch: number, windowDays: number): Promise<Map<string, number>> {
+  const DAY = 86_400_000;
+  const out = new Map<string, number>();
+  let days = 0, failed = 0, rows = 0;
+  for (let i = 0; i <= windowDays; i++) {
+    const d = new Date((nowDayEpoch + i) * DAY);
+    if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue; // weekend
+    const iso = d.toISOString().slice(0, 10);
+    days++;
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 12_000);
+      const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${iso}`, {
+        signal: ctl.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          Accept: "application/json, text/plain, */*",
+          "Accept-Language": "en-US,en;q=0.9",
+          Origin: "https://www.nasdaq.com",
+          Referer: "https://www.nasdaq.com/",
+        },
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j: any = await res.json();
+      for (const r of j?.data?.rows ?? []) {
+        const sym = String(r?.symbol ?? "").trim().toUpperCase().replace(/\./g, "-"); // Yahoo class-share convention
+        if (!sym) continue;
+        // Only an explicit pre-market marker gets the BMO slot. "time-not-supplied" (common) is
+        // treated as AMC: a strictly-after expiry captures the event either way, while guessing BMO
+        // on a real AMC print prices a straddle that DIES at the close, hours before the report.
+        const amc = String(r?.time ?? "") !== "time-pre-market";
+        const e = Date.parse(`${iso}T${amc ? "21" : "12"}:00:00Z`);
+        rows++;
+        if (!out.has(sym) || e < out.get(sym)!) out.set(sym, e);
+      }
+    } catch (err: any) {
+      failed++;
+      console.warn(`  nasdaq calendar ${iso}: ${err?.message ?? err}`);
+    }
+    await sleep(400);
+  }
+  console.log(`nasdaq calendar: ${days - failed}/${days} days fetched, ${rows} rows, ${out.size} unique symbols`);
+  return out;
+}
+
 async function main() {
   const now = Date.now();
   const DAY = 86_400_000;
@@ -80,14 +137,16 @@ async function main() {
   const seen = new Set<string>();
   const pool: any[] = [];
   const stale: any[] = []; // date recently passed → maybe a MOVED print; recheck live below
+  const uniBySym = new Map<string, any>(); // every eligible US name — the Nasdaq merge grounds against this
   for (const uni of US_UNIVERSES) {
     const snap = await loadSnapshot(uni);
     if (!snap) continue;
     for (const s of snap.stocks) {
+      if (!(s.marketCap > MIN_MKTCAP)) continue;
+      if (!uniBySym.has(s.symbol)) uniBySym.set(s.symbol, s);
       if (seen.has(s.symbol)) continue;
       const e = s.earningsDate ? Date.parse(s.earningsDate) : NaN;
       if (!Number.isFinite(e)) continue;
-      if (!(s.marketCap > MIN_MKTCAP)) continue;
       const days = calDays(e);
       if (days >= 0 && days <= WINDOW) {
         seen.add(s.symbol);
@@ -120,6 +179,37 @@ async function main() {
     } catch { /* keep going */ }
   }
   if (stale.length) console.log(`stale-date recheck: ${recheck.length}/${stale.length} recently-passed dates requeried → ${readmitted} re-admitted (moved prints)`);
+
+  // SECOND SOURCE: Nasdaq's calendar. A universe name Nasdaq lists in-window is admitted if Yahoo
+  // missed it entirely (HELE: Yahoo said Oct 8, real print Jul 8 — invisible all week), and has its
+  // date corrected when the sources disagree on the calendar day. Nasdaq wins a disagreement — its
+  // per-day lists are exchange-curated while Yahoo mixes stale estimates — and the row carries
+  // dateSource:"nasdaq" so the provenance is visible downstream.
+  const yahooCount = pool.length;
+  let nasdaqNew = 0, nasdaqFixed = 0;
+  try {
+    const ndq = await fetchNasdaqCalendar(nowDay, WINDOW);
+    for (const [sym, e] of ndq) {
+      const s = uniBySym.get(sym);
+      if (!s) continue; // not a >$250M US-universe name — stay grounded in our own lists
+      const days = calDays(e);
+      if (days < 0 || days > WINDOW) continue;
+      if (seen.has(sym)) {
+        const row = pool.find((p) => p.symbol === sym);
+        if (row && new Date(row._e).toISOString().slice(0, 10) !== new Date(e).toISOString().slice(0, 10)) {
+          Object.assign(row, { earningsDate: new Date(e).toISOString(), _days: days, _e: e, earningsEstimate: false, dateSource: "nasdaq" });
+          nasdaqFixed++;
+        }
+      } else {
+        seen.add(sym);
+        pool.push({ ...s, earningsDate: new Date(e).toISOString(), _days: days, _e: e, earningsEstimate: false, dateSource: "nasdaq" });
+        nasdaqNew++;
+      }
+    }
+  } catch (err: any) {
+    console.warn(`⚠ nasdaq calendar unavailable (${err?.message ?? err}) — continuing Yahoo-only`);
+  }
+  console.log(`sources: yahoo ${yahooCount} · nasdaq +${nasdaqNew} admitted, ${nasdaqFixed} dates corrected`);
 
   pool.sort((a, b) => a._days - b._days);
   const work = pool.slice(0, CAP);
@@ -188,6 +278,7 @@ async function main() {
     const row: EarningsMoveRow = {
       symbol: sym, name: s.name, sector: s.sector || "—", price: spot, marketCap: s.marketCap,
       earningsDate: s.earningsDate, daysToEarnings: s._days, earningsEstimate: !!s.earningsEstimate,
+      dateSource: s.dateSource, // undefined for Yahoo rows — JSON.stringify drops it
       expiry: exp, dte, straddle: +straddle.toFixed(2), impliedMovePct: +impliedMovePct.toFixed(2),
       impliedIV: impliedIV != null ? +impliedIV.toFixed(3) : null,
       histAvgMovePct: histAvgMovePct != null ? +histAvgMovePct.toFixed(2) : null,

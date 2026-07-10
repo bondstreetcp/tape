@@ -20,6 +20,8 @@ export interface EarningsMoveRow {
   earningsDate: string; // ISO
   daysToEarnings: number;
   earningsEstimate: boolean; // Yahoo's date is an estimate, not confirmed
+  dateSource?: "nasdaq"; // date came from Nasdaq's calendar (absent = Yahoo snapshot/live). Yahoo
+  // misses/garbles small-cap dates (HELE: Yahoo said Oct 8, real print Jul 8) — Nasdaq is the cross-check.
   expiry: string; // the option expiry just after earnings (captures the event)
   dte: number;
   straddle: number; // ATM straddle price per share
