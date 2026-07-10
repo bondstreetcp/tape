@@ -283,7 +283,10 @@ const safeChar = (cp: number) => {
   }
 };
 
-export function htmlToText(html: string): string {
+/** HTML → text. `limit` defaults to the historical 80k cap; callers that need DEEP sections of a
+ * long filing (a proxy's Summary Compensation Table sits ~page 69, far past 80k chars) pass more
+ * and window the result themselves. */
+export function htmlToText(html: string, limit = 80000): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -297,7 +300,7 @@ export function htmlToText(html: string): string {
     .replace(/\n[ \t]+/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
-    .slice(0, 80000);
+    .slice(0, limit);
 }
 
 /** Fetch a filing's main human-readable exhibit (e.g. the earnings press release) as text. */

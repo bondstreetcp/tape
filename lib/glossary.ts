@@ -111,4 +111,12 @@ export const GLOSSARY: Record<string, string> = {
   "Merger arb spread": "How far a takeover target trades BELOW the agreed deal value — the return you capture if the deal closes. A wide spread signals the market's doubt the deal completes.",
   "Sharpe": "Return earned per unit of risk taken. Higher is a better risk-adjusted result.",
   "Max drawdown": "The worst peak-to-trough drop over the period — the deepest loss you'd have sat through.",
+  // Executive compensation (proxy statement)
+  "NEO": "Named executive officer — the CEO, CFO and next-highest-paid execs whose pay the proxy must disclose.",
+  "Bonus metrics": "The performance measures the annual cash bonus is scored on (e.g. EPS, revenue), with each measure's weight.",
+  "PSU": "Performance stock unit — shares that only vest if multi-year goals (e.g. relative TSR, EPS growth) are hit.",
+  "Non-equity incentive": "The annual cash bonus actually EARNED under the formula plan — the column most 'bonus' money sits in.",
+  "Perquisites": "Extra personal benefits the company pays for — aircraft use, security, financial planning, club dues.",
+  "Say-on-pay": "The shareholder vote approving executive pay. Support below ~90% is a warning; below 70% is a revolt.",
+  "TSR": "Total shareholder return — price change plus dividends. 'Relative TSR' compares it to an index or peer group.",
 };

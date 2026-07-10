@@ -2,6 +2,7 @@
 import type { CompanyProfile, Holder } from "@/lib/companyProfile";
 import { currencyPrefix } from "@/lib/format";
 import ExecBios from "./ExecBios";
+import Compensation from "./Compensation";
 import InsiderActivity from "./InsiderActivity";
 
 function big(v: number | null, currency?: string): string {
@@ -222,6 +223,10 @@ export function ProfilePanel({ profile, symbol, currency }: { profile: CompanyPr
 
       <Card title="Key Executives" wide>
         <ExecBios symbol={symbol} officers={profile.officers} currency={currency} />
+      </Card>
+
+      <Card title="Compensation — how management gets paid" wide>
+        <Compensation symbol={symbol} />
       </Card>
     </div>
   );
