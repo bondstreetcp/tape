@@ -175,11 +175,15 @@ async function main() {
     }
   } catch (e: any) {
     const msg = String(e?.message || e);
-    // The alerts feature is SHELVED for beta — the tables only exist once docs/SETUP-auth.md's
-    // migration runs. A missing table is that expected state, not a pipeline error (it was failing
-    // every NAS/local tick where RESEARCH_DATABASE_URL is set but the migration isn't applied).
-    if (/relation .* does not exist/i.test(msg)) {
-      console.log("alert eval: alert tables not created (feature shelved) — skipping.");
+    // The alerts feature is SHELVED for beta, so ANY DB-unavailability is the expected inert state,
+    // not a pipeline failure — skip (exit 0) instead of flagging a red step on every tick:
+    //  - relation … does not exist → the auth migration (docs/SETUP-auth.md) hasn't been run
+    //  - ENOTFOUND / getaddrinfo → the direct db.<proj>.supabase.co host is IPv6-only; from an
+    //    IPv4-only network (e.g. the NAS) it won't resolve. Use the pooler URL if alerts are un-shelved.
+    //  - ECONNREFUSED / ETIMEDOUT / auth → unreachable or wrong creds while shelved.
+    const shelved = /relation .* does not exist/i.test(msg) || /ENOTFOUND|getaddrinfo|ECONNREFUSED|ETIMEDOUT|ECONNRESET|EAI_AGAIN|SASL|password authentication|self.signed|certificate/i.test(msg);
+    if (shelved) {
+      console.log(`alert eval: DB not reachable/configured (alerts shelved for beta) — skipping. [${msg.slice(0, 80)}]`);
     } else {
       console.error("alert eval failed:", msg.slice(0, 300));
       process.exitCode = 1;
