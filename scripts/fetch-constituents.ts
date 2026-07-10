@@ -167,13 +167,23 @@ async function main() {
       if (e?.code !== "ENOENT") throw e;
     }
   }
+  // Liquid US names EXCLUDED from every index our lists derive from, appended to the broadest
+  // universe so the app still covers them. LEVI: FTSE Russell's 5%-voting-rights floor keeps
+  // Levi Strauss (family-controlled class B votes) out of the Russell indexes entirely (like SNAP
+  // pre-2023), and it isn't in the S&P 1500 lists we pull — so a $6B household name was invisible
+  // to EVERY board (found 2026-07-10 when it reported earnings and wasn't on the earnings screen).
+  const US_EXTRAS: Entry[] = [
+    { symbol: "LEVI", name: "Levi Strauss & Co.", sector: "Consumer Discretionary", industry: "Apparel, Accessories & Luxury Goods" },
+  ];
+
   if (iwvText) {
     try {
       const r3000 = parseIWV(toRows(iwvText), gics);
       const m = new Map<string, Entry>();
       for (const e of r3000) if (!m.has(e.symbol)) m.set(e.symbol, e);
+      for (const e of US_EXTRAS) if (!m.has(e.symbol)) m.set(e.symbol, e);
       universes.russell3000 = [...m.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
-      console.log(`  Russell 3000: ${universes.russell3000.length} (from ${iwvFrom})`);
+      console.log(`  Russell 3000: ${universes.russell3000.length} (from ${iwvFrom} + ${US_EXTRAS.length} index-excluded extras)`);
     } catch (e: any) {
       console.warn(`  Russell 3000 skipped: ${e.message}`);
     }
