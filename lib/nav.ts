@@ -102,6 +102,7 @@ export const FEATURES: NavItem[] = [
   { label: "Filings & Docs", path: "/research", desc: "Browse and AI-summarize a company's SEC filings", group: "Research", job: "Research a name", kw: "filings documents sec edgar summary" },
   { label: "Research Desk", path: "/research-desk", desc: "Upload sell-side PDFs → searchable, cross-broker synthesis", group: "Research", job: "Research a name", kw: "research pdf upload broker analyst report" },
   { label: "Portfolio Cockpit", path: "/portfolio", desc: "Paste your book → live gross/net exposure, sector tilts, concentration, beta & a market-shock P&L", group: "Research", job: "Track the market", kw: "portfolio book positions holdings risk exposure gross net long short beta market shock scenario stress test concentration hhi sector tilt cockpit blotter my positions var drawdown hedge" },
+  { label: "Portfolio Radar", path: "/portfolio-radar", desc: "Every forward catalyst in YOUR book on one timeline — earnings (implied move), biotech/FDA readouts, investor days, lockups — with the long/short side attached", group: "Research", job: "Track the market", kw: "portfolio catalyst radar my book holdings earnings dates biotech pdufa fda readout lockup investor day forward calendar what's happening in my names position side long short binary event risk upcoming events my positions blotter watch calendar personalized" },
 ];
 
 // Sub-hubs — the Research and Strategies menus grew long, so cluster each into a few hubs that act as
@@ -132,7 +133,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   Research: [
     { label: "A Name", blurb: "Dig into one company — compare, ratio/spread charts, sector compare, SEC filings, sell-side research, overnight desk notes", paths: ["/compare-stocks", "/ratio", "/compare", "/research", "/research-desk", "/overnight"] },
     { label: "Ownership", blurb: "Who owns it + who's trading it — super-investor 13F holdings + distribution, Congress trades, Trump's stock calls", paths: ["/superinvestors", "/distribution", "/congress", "/trump-stocks"] },
-    { label: "Portfolio & Tools", blurb: "Your book's risk cockpit, holdco NAV discounts, relative-value pairs, and closed-end-fund discounts", paths: ["/portfolio", "/holdco-nav", "/pairs", "/cef", "/cef-hunter"] },
+    { label: "Portfolio & Tools", blurb: "Your book's risk cockpit + catalyst radar, holdco NAV discounts, relative-value pairs, and closed-end-fund discounts", paths: ["/portfolio", "/portfolio-radar", "/holdco-nav", "/pairs", "/cef", "/cef-hunter"] },
   ],
 };
 
@@ -152,6 +153,7 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/insiders", // SEC Form 4 open-market buys (US filers only; page renders UsOnlyNotice on direct nav)
   "/signal-record", // grades the US idea boards (signal-log.json is built from US feeds)
   "/buybacks", // S&P 500 capital return from SEC XBRL companyfacts (US filers only)
+  "/portfolio-radar", // joins the book to the US catalyst feeds (earnings/biotech/lockup)
   // (merger-arb is an external link to arb.bondstreetcp.com — not gated)
 ]);
 

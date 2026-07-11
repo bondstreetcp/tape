@@ -2999,6 +2999,20 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/portfolio-radar",
+        "title": "Portfolio Catalyst Radar",
+        "question": "What's about to happen in the names I actually hold — which of my positions has an earnings print, an FDA decision, an investor day, or a lockup expiry coming up, and how big a deal is it?",
+        "how": "Paste the same book you use in the cockpit (it reads from the same local store, and never leaves your browser), and it filters the forward Catalyst Calendar down to only your names, soonest first. Each event carries the position side, because the same catalyst is opposite risk on a long vs a short — an FDA readout you're short into is a binary working against you. Events are grouped into this week / this month / later, and rated for impact: binary clinical or regulatory events rank highest, then earnings with a large options-implied move; IPO-lockup expiries flag insider-supply overhangs. Every date and implied move comes straight from the underlying feeds; nothing is invented. It also lists which of your names have no catalyst in the window, so you know the quiet ones. US-market catalysts.",
+        "metrics": [
+          { "term": "Days-to / date", "plain": "How many days until the catalyst, and the calendar date. The list is ordered soonest-first." },
+          { "term": "Long / Short tag", "plain": "Which way you're positioned in that name (from the sign of your shares). A catalyst on a short is directional risk in the opposite direction from the same catalyst on a long." },
+          { "term": "Event kind", "plain": "Earnings, investor/analyst day, biotech/FDA readout, or IPO-lockup expiry — colour-coded, with the underlying feed's detail (e.g. the implied move, or the drug + condition)." },
+          { "term": "Impact (High / Med / Low)", "plain": "High = a binary clinical/regulatory event or earnings with a big implied move; Medium = a lockup or ordinary print; the count of high-impact events in the next 30 days is summarized up top." },
+          { "term": "Quiet names", "plain": "Holdings with no forward catalyst in the next 120 days — surfaced so the absence is explicit, not just missing." }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/overnight",
         "title": "Overnight Filings",
         "question": "Which new material SEC filings dropped overnight, what changed in them versus the prior comparable filing, and which look market-moving?",
