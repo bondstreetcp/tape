@@ -119,4 +119,9 @@ export const GLOSSARY: Record<string, string> = {
   "Perquisites": "Extra personal benefits the company pays for — aircraft use, security, financial planning, club dues.",
   "Say-on-pay": "The shareholder vote approving executive pay. Support below ~90% is a warning; below 70% is a revolt.",
   "TSR": "Total shareholder return — price change plus dividends. 'Relative TSR' compares it to an index or peer group.",
+  // Capital return
+  "Shareholder yield": "Buybacks + dividends returned to owners in a year, as a % of market value — the total cash a company hands back.",
+  "Buyback yield": "Cash spent repurchasing stock over the past year ÷ market value. How much of itself the company bought back.",
+  "Net share count change": "The year-over-year change in shares outstanding. Negative = the count actually shrank (real, per-share-accretive); positive = buybacks are losing to stock-comp dilution.",
+  "Payout / FCF": "Buybacks + dividends ÷ free cash flow. Above 1 means the company returns more than it earns — funded from the balance sheet or debt.",
 };

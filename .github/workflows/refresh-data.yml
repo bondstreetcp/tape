@@ -240,6 +240,14 @@ jobs:
         run: npm run refresh-valuation-history
         continue-on-error: true
 
+      # Buyback & Capital-Return board — S&P 500 capital return from SEC XBRL companyfacts (repurchase
+      # cash, dividends, share count → buyback/total yield, net share-count change, payout/FCF). Same
+      # SEC rate-limiter as above; no key, no LLM.
+      - name: Refresh buyback & capital-return board
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-buybacks
+        continue-on-error: true
+
       # Relative-value pairs (stat-arb) — same-sector S&P 500 pairs whose spread is stretched + mean-reverts.
       # Pure local math off the stored price series (no fetch/LLM), so it's fast + free.
       - name: Refresh pairs (stat-arb)

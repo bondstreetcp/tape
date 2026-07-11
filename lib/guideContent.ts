@@ -2479,6 +2479,22 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/buybacks",
+        "title": "Buyback & Capital Return",
+        "question": "How much does each company hand back to shareholders through buybacks and dividends — and is the buyback actually shrinking the share count, or just offsetting the stock it gives employees?",
+        "how": "For every S&P 500 company, one pull of its SEC filings (XBRL) gives the cash it spent repurchasing stock, the dividends it paid, its free cash flow, and its share count — all straight from the filings, nothing estimated. From those: buyback yield (repurchases ÷ market value), total shareholder yield (buybacks + dividends), and the number that separates real buybacks from theatre — the year-over-year change in shares outstanding. A company can spend billions repurchasing stock and still have a flat or rising share count because it hands so much stock to employees; only when the count actually falls do you, the owner, get a bigger slice. Buyback figures are trailing-twelve-months where the quarters are cleanly filed, else the latest full fiscal year; a de-spike drops obvious filing errors (an authorization amount mis-tagged as cash spent). US filers only.",
+        "metrics": [
+          { "term": "Total yield", "plain": "Buyback yield + dividend yield — all the cash returned to shareholders in a year as a % of the company's market value." },
+          { "term": "Buyback yield", "plain": "Cash spent repurchasing shares over the past year ÷ market value. How much of itself the company bought back." },
+          { "term": "Net Δ shares", "plain": "The year-over-year change in shares outstanding. Green/negative = the count really shrank (accretive to you); red/positive = the buyback is losing to stock-based-comp dilution. The truth serum of this board." },
+          { "term": "Buyback $", "plain": "The actual cash spent on repurchases over the trailing year, from the cash-flow statement." },
+          { "term": "Accel", "plain": "The latest quarter's repurchase pace vs the trailing-year run-rate. Above 1 = the company is stepping up buybacks." },
+          { "term": "Pay/FCF", "plain": "(Buybacks + dividends) ÷ free cash flow. Above 1 means it's returning more than it earns — funded from the balance sheet or debt, so watch sustainability." },
+          { "term": "Flags", "plain": "Shrinking count (real reduction ≥1%), High total yield (≥5%), Accelerating, Over-distributing (returning >FCF)." }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/expectations",
         "title": "Expectations (Reverse-DCF)",
         "question": "What future growth is baked into a stock's price, and is that more or less than the business has actually delivered?",

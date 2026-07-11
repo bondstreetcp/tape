@@ -69,6 +69,7 @@ const FEEDS: FeedSpec[] = [
   // core — rewritten every FULL run; empty on the count-gated ones = definitely broken
   { file: "estimates.json", label: "Estimate revisions", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 100 },
   { file: "valuation-history.json", label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500 },
+  { file: "buybacks.json", label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300 },
   { file: "congress.json", label: "Congress trades", tier: "core", maxAgeHours: CORE, countPath: "trades", minCount: 100 },
   { file: "guidance.json", label: "Guidance", tier: "core", maxAgeHours: CORE, countPath: "byTicker", minCount: 20 },
   { file: "catalysts.json", label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
