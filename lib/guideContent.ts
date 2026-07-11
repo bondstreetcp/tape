@@ -1646,10 +1646,18 @@ export const GUIDE_GROUPS: GuideGroup[] = [
       },
       {
         "path": "/spinoffs",
-        "title": "Spinoff Turnover",
-        "question": "Among recently spun-off companies, which have seen enough forced selling exhaust that the stock may be near a bottom?",
-        "how": "When a company splits off a division as a brand-new stock (the 'spinco'), index funds and the parent's shareholders who never chose to own it dump their shares — mechanical, price-insensitive selling that can push the new stock below fair value until it runs out. This board tracks a 'share-register turnover clock': total trading volume since the spin (including 'when-issued' trading before the official spin date) as a percent of shares outstanding, a proxy for how much of the ownership base has changed hands. A 2020–24 backtest of 28 spins found the old 'about 50% turned equals the bottom' rule now fires too early; the zone that actually worked was roughly 100–150% turned (median +12% over the following six months). Read it as: names near or through that 100–150% zone (marked 'register turned') have likely worked off the forced selling.",
+        "title": "Spin-offs",
+        "question": "Which spin-offs are coming down the pipe, and among those already trading, which have seen enough forced selling exhaust that the stock may be near a bottom?",
+        "how": "Two sections covering the separation lifecycle. UPCOMING: companies that have filed a Form 10 (the SEC registration a subsidiary files to become an independent public company — the canonical, months-ahead signal a spin is coming) are surfaced with the parent, what's being separated, and the expected timing where the filing states it; a 'stage' tag reads the registration age and amendment count (a Form 10 that's been amended and pending a while is usually close to completing). COMPLETED: once a spin is trading, the 'share-register turnover clock' tracks total volume since the spin (including 'when-issued' trading) as a percent of shares outstanding — index funds and parent holders who never chose the new stock dump it, and that forced selling exhausts as the register turns over. A 2020–24 backtest of 28 spins found the old '~50% turned = the bottom' rule now fires too early; the zone that worked was roughly 100–150% turned (median +12% over the next six months). Read it as: coming spins to research early, then names near/through the 100–150% zone that have likely worked off the forced selling.",
         "metrics": [
+          {
+            "term": "Upcoming — SpinCo / Parent",
+            "plain": "A subsidiary registering to be spun off (from its Form 10 filing) and the parent doing the spin. The parent is verified against the filing text; timing and distribution ratio are shown only where the filing states them."
+          },
+          {
+            "term": "Stage (Newly filed / Progressing / Late-stage)",
+            "plain": "How far along the registration is, from the days since the first Form 10 and the number of amendments — later-stage filings are typically closer to actually distributing."
+          },
           {
             "term": "Spinco",
             "plain": "The newly independent company created by the spin-off (ticker and name)."

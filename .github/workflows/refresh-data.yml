@@ -527,12 +527,16 @@ jobs:
         run: npm run refresh-ipo
         continue-on-error: true
 
-      # Spinoff turnover — cumulative volume since the spin ÷ shares outstanding (the ~50%
-      # seller-exhaustion clock). Curated roster in lib/spinoffs.ts; free Yahoo, no LLM.
-      - name: Refresh spinoff turnover
+      # Spin-offs — the completed-turnover clock (curated roster, free Yahoo) PLUS the upcoming
+      # pipeline: EDGAR Form 10 (10-12B) discovery, grounded parent/business via a cheap Flash call
+      # (screened-ledger cached → ~nil ongoing cost). OPENROUTER_API_KEY optional (pipeline skips
+      # cleanly without it; the turnover clock still runs).
+      - name: Refresh spin-offs (turnover + Form 10 pipeline)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-spinoffs
         continue-on-error: true
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
