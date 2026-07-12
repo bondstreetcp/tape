@@ -2,15 +2,17 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
-import { SIGNAL_META, SIGNAL_ORDER, type ConfluenceData, type ConfluenceName, type SignalKind } from "@/lib/confluence";
+import { SIGNAL_META, SIGNAL_ORDER, type ConfluenceData, type ConfluenceName, type FlaggedInfo, type SignalKind } from "@/lib/confluence";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
 const money = (v: number | null) =>
   v == null ? "—" : v >= 1e12 ? `$${(v / 1e12).toFixed(1)}T` : v >= 1e9 ? `$${(v / 1e9).toFixed(0)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v}`;
 const pct = (v: number | null, d = 0) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 const col = (v: number | null) => (v == null ? "var(--text-3)" : v >= 0 ? "#22c55e" : "#ef4444");
+// Bare YYYY-MM-DD must render in UTC or US browsers show the prior day.
+const day = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export default function ConfluenceView({ data, universe }: { data: ConfluenceData; universe: string }) {
+export default function ConfluenceView({ data, universe, flagged }: { data: ConfluenceData; universe: string; flagged?: Record<string, FlaggedInfo> | null }) {
   const [filter, setFilter] = useState<SignalKind | null>(null);
   const names = useMemo(() => (filter ? data.names.filter((n) => n.kinds.includes(filter)) : data.names), [data.names, filter]);
   const asOf = data.generatedAt ? new Date(data.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
@@ -47,7 +49,10 @@ export default function ConfluenceView({ data, universe }: { data: ConfluenceDat
       </div>
 
       <div className="mb-3 text-xs text-[var(--text-4)]">
-        {names.length} names · across the Russell 3000{asOf ? ` · as of ${asOf}` : ""}
+        {names.length} names · across the Russell 3000{asOf ? ` · as of ${asOf}` : ""} ·{" "}
+        <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline" title="Every appearance on this board is logged and graded on its 1w/1m/3m return vs the S&P">
+          graded on the Track Record →
+        </Link>
       </div>
 
       {names.length === 0 && (
@@ -55,20 +60,27 @@ export default function ConfluenceView({ data, universe }: { data: ConfluenceDat
       )}
       <ul className="space-y-3">
         {names.map((n) => (
-          <ConfluenceCard key={n.symbol} n={n} universe={universe} />
+          <ConfluenceCard key={n.symbol} n={n} universe={universe} f={flagged?.[n.symbol]} />
         ))}
       </ul>
     </main>
   );
 }
 
-function ConfluenceCard({ n, universe }: { n: ConfluenceName; universe: string }) {
+function ConfluenceCard({ n, universe, f }: { n: ConfluenceName; universe: string; f?: FlaggedInfo }) {
+  // The accountability line: return since the Track Record first logged this stint on the board.
+  const since = f && n.price != null && n.price > 0 && f.entryPrice > 0 ? (n.price / f.entryPrice - 1) * 100 : null;
   return (
     <li className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--border-strong)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="rounded bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-xs font-bold text-[var(--accent)]" title="Confluence score (weighted signal stack)">{n.score}</span>
+            {f?.isNew && (
+              <span className="rounded bg-[var(--accent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white" title="First appeared on the board on the latest tracked run">
+                New
+              </span>
+            )}
             <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{n.symbol}</Link>
             <span className="truncate text-sm text-[var(--text-3)]">{n.name}</span>
           </div>
@@ -77,6 +89,15 @@ function ConfluenceCard({ n, universe }: { n: ConfluenceName; universe: string }
         <div className="shrink-0 text-right text-xs">
           <div className="tabular-nums" style={{ color: col(n.retYtd) }}>{pct(n.retYtd)} <span className="text-[var(--text-4)]">YTD</span></div>
           <div className="tabular-nums text-[var(--text-3)]">{pct(n.pctFromHigh)} <span className="text-[var(--text-4)]">vs high</span></div>
+          {f && since != null && (
+            <div
+              className="tabular-nums"
+              style={{ color: col(since) }}
+              title={(f.seed ? `On the board when tracking began (${day(f.date)})` : `First flagged ${day(f.date)}`) + " — raw price return since; the S&P-adjusted grade lives on the Track Record"}
+            >
+              {pct(since, 1)} <span className="text-[var(--text-4)]">since {day(f.date)}</span>
+            </div>
+          )}
         </div>
       </div>
 

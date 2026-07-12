@@ -43,6 +43,15 @@ export interface ConfluenceData {
   counts: Record<SignalKind, number>; // how many names carry each signal (for the legend)
 }
 
+/** A board name's entry in the Signal Track Record log (joined by the page) — closes the
+ * accountability loop AT the board: when was this name flagged, and what has it done since. */
+export interface FlaggedInfo {
+  date: string; // YYYY-MM-DD the name was logged (this stint on the board)
+  entryPrice: number; // nightly close the day it was flagged
+  isNew: boolean; // appeared on the latest tracked run (a fresh entrant, not a seed)
+  seed: boolean; // was already on the board the night tracking began
+}
+
 export const SIGNAL_ORDER: SignalKind[] = ["value", "smartmoney", "insider", "congress", "buyback", "revisions", "analyst", "options", "squeeze", "catalyst"];
 
 export const SIGNAL_META: Record<SignalKind, { label: string; color: string; blurb: string }> = {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, daysBetween,
+  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, summarizeTags, daysBetween,
   type SignalEvent,
 } from "../lib/signalLog";
 
@@ -142,6 +142,40 @@ test("summarizeSignals: move-direction hit = out-moved the index (benchmark-gate
   assert.equal(h.n, 3); // all three have returns
   assert.equal(h.hitN, 2); // but only two are hit-gradable
   assert.equal(h.hitRate, 0.5);
+});
+
+test("summarizeTags: per-kind attribution — multi-tag entries count toward each kind, untagged excluded", () => {
+  // Two tagged confluence entries + one legacy untagged one (pre-2026-07-12 log format).
+  const a = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-12", tags: ["value", "insider"] });
+  a.marks.w1 = { date: "2026-07-19", price: 105, spx: 5000 }; // +5% vs flat S&P → edge +0.05
+  const b = ev({ signal: "confluence", symbol: "BBB", date: "2026-07-12", tags: ["value"] });
+  b.marks.w1 = { date: "2026-07-19", price: 95, spx: 5000 }; // −5% vs flat → edge −0.05
+  const legacy = ev({ signal: "confluence", symbol: "OLD", date: "2026-07-08" }); // no tags
+  legacy.marks.w1 = { date: "2026-07-15", price: 200, spx: 5000 }; // must NOT pollute any kind
+
+  const mix = summarizeTags([a, b, legacy], "confluence");
+  assert.deepEqual(mix.map((t) => t.tag), ["value", "insider"]); // sorted by entry count desc
+  const value = mix.find((t) => t.tag === "value")!;
+  assert.equal(value.events, 2); // AAA + BBB carry it
+  assert.ok(Math.abs(value.horizons.w1!.avgEdge! - 0) < 1e-12); // +0.05 and −0.05 average out
+  const insider = mix.find((t) => t.tag === "insider")!;
+  assert.equal(insider.events, 1); // only AAA
+  assert.ok(Math.abs(insider.horizons.w1!.avgEdge! - 0.05) < 1e-12);
+  assert.equal(insider.horizons.w1!.hitRate, 1); // AAA rose
+  // a different signal's events never leak in
+  assert.deepEqual(summarizeTags([a, b], "warnings"), []);
+});
+
+test("summarizeTags: direction comes from the SIGNAL (warnings tags grade bearish) + seed filter", () => {
+  const w = ev({ signal: "warnings", symbol: "DN", date: "2026-07-12", tags: ["distribution"] });
+  w.marks.w1 = { date: "2026-07-19", price: 90, spx: 5000 }; // fell 10%, flat S&P → bearish WIN
+  const mix = summarizeTags([w], "warnings");
+  assert.ok(Math.abs(mix[0].horizons.w1!.avgEdge! - 0.10) < 1e-12); // edge positive for a bearish hit
+  assert.equal(mix[0].horizons.w1!.hitRate, 1);
+  // seed exclusion mirrors the scorecard's checkbox
+  const seeded = ev({ signal: "warnings", symbol: "S", date: "2026-07-12", tags: ["distribution"], seed: true });
+  assert.equal(summarizeTags([w, seeded], "warnings")[0].events, 2);
+  assert.equal(summarizeTags([w, seeded], "warnings", { includeSeed: false })[0].events, 1);
 });
 
 test("summarizeSignals: seed filter", () => {

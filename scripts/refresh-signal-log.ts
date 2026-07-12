@@ -96,13 +96,14 @@ async function main() {
     spxClose(),
   ]);
 
-  const m = (r: { symbol: string; name?: string; sector?: string | null }, score?: number | null, note?: string): MemberInput =>
-    ({ symbol: r.symbol, name: r.name || r.symbol, sector: r.sector ?? union.get(r.symbol)?.sector ?? null, score: score ?? null, note });
+  const m = (r: { symbol: string; name?: string; sector?: string | null }, score?: number | null, note?: string, tags?: string[]): MemberInput =>
+    ({ symbol: r.symbol, name: r.name || r.symbol, sector: r.sector ?? union.get(r.symbol)?.sector ?? null, score: score ?? null, note, ...(tags?.length ? { tags } : {}) });
 
   const membership: Partial<Record<SignalKey, MemberInput[]>> = {};
   // Artifact-backed boards: the file IS the board (already floored/sorted by its refresh script).
-  if (confluence?.names?.length) membership.confluence = cap(confluence.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`));
-  if (warnings?.names?.length) membership.warnings = cap(warnings.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`));
+  // Their kinds ride along as TAGS so the record can attribute performance per stacked signal.
+  if (confluence?.names?.length) membership.confluence = cap(confluence.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
+  if (warnings?.names?.length) membership.warnings = cap(warnings.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
   // Page-load-computed boards: same builders, same inputs, the board's own headline ranking.
   if (si) {
     membership.smartmoney = cap(buildSmartMoney(si, cong, ctxBy), 25).map((n) => m(n, n.score, `${n.investors.length} buyers`));
@@ -157,7 +158,8 @@ async function main() {
         id: `${signal}|${member.symbol}|${todayISO}`,
         signal, symbol: member.symbol, name: member.name, sector: member.sector ?? null,
         date: todayISO, entryPrice, spxEntry: spx,
-        score: member.score ?? null, note: member.note, ...(seed ? { seed: true } : {}), marks: {},
+        score: member.score ?? null, note: member.note,
+        ...(member.tags?.length ? { tags: member.tags } : {}), ...(seed ? { seed: true } : {}), marks: {},
       });
       newN++;
     }

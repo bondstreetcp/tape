@@ -5,7 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 import EmptyState from "@/components/EmptyState";
 import SignalRecordView from "@/components/SignalRecordView";
-import { summarizeSignals, type SignalLogFile } from "@/lib/signalLog";
+import { summarizeSignals, summarizeTags, type SignalLogFile } from "@/lib/signalLog";
 import type { BacktestFile } from "@/lib/signalBacktest";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -36,6 +36,12 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
   const summariesAll = summarizeSignals(log.events);
   const summariesFresh = summarizeSignals(log.events, { includeSeed: false });
   const latest = [...log.events].sort((a, b) => b.date.localeCompare(a.date) || a.signal.localeCompare(b.signal)).slice(0, EVENTS_SHOWN);
+  // Per-kind attribution WITHIN the Confluence board (events log their signal kinds as tags from
+  // 2026-07-12). Computed over the FULL log server-side, like the scorecard.
+  const confluenceMix = summarizeTags(log.events, "confluence");
+  const confluenceMixSince = log.events
+    .filter((e) => e.signal === "confluence" && e.tags?.length)
+    .reduce<string | null>((min, e) => (min == null || e.date < min ? e.date : min), null);
 
   return (
     <SignalRecordView
@@ -47,6 +53,8 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
       since={log.since}
       generatedAt={log.generatedAt}
       backtest={backtest}
+      confluenceMix={confluenceMix}
+      confluenceMixSince={confluenceMixSince}
     />
   );
 }

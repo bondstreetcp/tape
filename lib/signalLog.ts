@@ -76,6 +76,10 @@ export interface SignalEvent {
   spxEntry: number | null;
   score?: number | null; // the board's own score at entry, where it has one
   note?: string; // tiny context, e.g. "3 signals" / "springScore 84"
+  /** Composition at entry — for Confluence/Warnings, WHICH signal kinds the name carried. Powers the
+   * per-kind attribution ("does insider-carrying confluence beat options-carrying?"). Logged from
+   * 2026-07-12; earlier events pre-date it and stay unattributed. */
+  tags?: string[];
   seed?: boolean; // logged on the signal's FIRST run (whole board, not a fresh appearance)
   marks: Partial<Record<HorizonKey, SignalMark>>;
 }
@@ -97,6 +101,7 @@ export interface MemberInput {
   sector?: string | null;
   score?: number | null;
   note?: string;
+  tags?: string[]; // composition at entry (e.g. confluence signal kinds) — stored on the event
 }
 
 /** Whole calendar days between two YYYY-MM-DD dates (both pinned to UTC midnight — no TZ drift). */
@@ -213,6 +218,40 @@ const median = (xs: number[]) => {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 };
 
+/** Aggregate one horizon over a set of graded events — shared by the per-signal and per-tag
+ * summaries so the two scorecards can't drift. Null when nothing has reached the horizon. */
+function horizonSummary(evs: SignalEvent[], h: HorizonKey, dir: SignalDirection): HorizonSummary | null {
+  const rets: EventReturn[] = [];
+  for (const e of evs) {
+    const r = eventReturn(e, h);
+    if (r) rets.push(r);
+  }
+  if (!rets.length) return null;
+  const raw = rets.map((r) => r.ret);
+  const excess = rets.map((r) => r.excess).filter((x): x is number => x != null);
+  const edges = rets.map((r) => edgeOf(dir, r)).filter((x): x is number => x != null);
+  let hitN = 0, hits = 0;
+  for (const r of rets) {
+    if (dir === "move") {
+      if (r.spxRet == null) continue;
+      hitN++;
+      if (Math.abs(r.ret) > Math.abs(r.spxRet)) hits++;
+    } else {
+      hitN++;
+      if (dir === "bullish" ? r.ret > 0 : r.ret < 0) hits++;
+    }
+  }
+  return {
+    n: rets.length,
+    avgRet: mean(raw),
+    medRet: median(raw),
+    hitRate: hitN ? hits / hitN : null,
+    hitN,
+    avgExcess: excess.length ? mean(excess) : null,
+    avgEdge: edges.length ? mean(edges) : null,
+  };
+}
+
 /** Aggregate every graded event per signal per horizon. Seed events (the first run's whole board)
  * are included — they're real forward-looking entries too — but callers can filter them out. */
 export function summarizeSignals(events: SignalEvent[], opts: { includeSeed?: boolean } = {}): SignalSummary[] {
@@ -225,37 +264,47 @@ export function summarizeSignals(events: SignalEvent[], opts: { includeSeed?: bo
     // coiled setups) — vanishing from the scorecard reads as "not tracked", which is wrong.
     const horizons: SignalSummary["horizons"] = {};
     for (const h of HORIZONS) {
-      const rets: EventReturn[] = [];
-      for (const e of evs) {
-        const r = eventReturn(e, h.key);
-        if (r) rets.push(r);
-      }
-      if (!rets.length) continue;
-      const raw = rets.map((r) => r.ret);
-      const excess = rets.map((r) => r.excess).filter((x): x is number => x != null);
-      const edges = rets.map((r) => edgeOf(dir, r)).filter((x): x is number => x != null);
-      let hitN = 0, hits = 0;
-      for (const r of rets) {
-        if (dir === "move") {
-          if (r.spxRet == null) continue;
-          hitN++;
-          if (Math.abs(r.ret) > Math.abs(r.spxRet)) hits++;
-        } else {
-          hitN++;
-          if (dir === "bullish" ? r.ret > 0 : r.ret < 0) hits++;
-        }
-      }
-      horizons[h.key] = {
-        n: rets.length,
-        avgRet: mean(raw),
-        medRet: median(raw),
-        hitRate: hitN ? hits / hitN : null,
-        hitN,
-        avgExcess: excess.length ? mean(excess) : null,
-        avgEdge: edges.length ? mean(edges) : null,
-      };
+      const hz = horizonSummary(evs, h.key, dir);
+      if (hz) horizons[h.key] = hz;
     }
     out.push({ signal, events: evs.length, open: evs.filter((e) => !e.marks.m3).length, horizons });
   }
+  return out;
+}
+
+export interface TagSummary {
+  tag: string; // e.g. a Confluence signal kind ("insider", "buyback"…)
+  events: number; // tagged entries carrying this tag
+  open: number; // of those, not yet past the 3-month check
+  horizons: Partial<Record<HorizonKey, HorizonSummary>>;
+}
+
+/** Per-tag attribution WITHIN one signal's events — e.g. "how did Confluence names carrying the
+ * insider kind do vs those carrying options flow?" An entry with several tags counts toward each
+ * (the question is conditional performance, not an orthogonal factor decomposition — the how-to-read
+ * says so). Only events logged WITH tags contribute; the pre-tagging backlog stays out rather than
+ * polluting the attribution with unattributable entries. */
+export function summarizeTags(events: SignalEvent[], signal: SignalKey, opts: { includeSeed?: boolean } = {}): TagSummary[] {
+  const includeSeed = opts.includeSeed ?? true;
+  const dir = SIGNAL_META[signal].direction;
+  const byTag = new Map<string, SignalEvent[]>();
+  for (const e of events) {
+    if (e.signal !== signal || !e.tags?.length || (!includeSeed && e.seed)) continue;
+    for (const t of e.tags) {
+      const a = byTag.get(t) ?? [];
+      a.push(e);
+      byTag.set(t, a);
+    }
+  }
+  const out: TagSummary[] = [];
+  for (const [tag, evs] of byTag) {
+    const horizons: TagSummary["horizons"] = {};
+    for (const h of HORIZONS) {
+      const hz = horizonSummary(evs, h.key, dir);
+      if (hz) horizons[h.key] = hz;
+    }
+    out.push({ tag, events: evs.length, open: evs.filter((e) => !e.marks.m3).length, horizons });
+  }
+  out.sort((a, b) => b.events - a.events || a.tag.localeCompare(b.tag));
   return out;
 }

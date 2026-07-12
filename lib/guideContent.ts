@@ -2140,6 +2140,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "YTD · vs high",
             "plain": "Context on each card: the stock's year-to-date price return and how far it trades below its 52-week high."
+          },
+          {
+            "term": "Since flagged / New",
+            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record first logged it on this board, and a New badge for names that appeared on the latest run. The S&P-adjusted grade lives on the Track Record page."
           }
         ]
       },
@@ -2220,6 +2224,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "Backtest tab (~5y, price signals)",
             "plain": "Replays the signals that can be recomputed purely from past prices (Leaders RS, breakout tag, 12−1 momentum, RSI oversold) at every month-end over ~5 years, grading picks against the same day's equal-weight pool. Boards needing options/positioning/filings history stay forward-only — replaying them would peek at the future. Uses today's index members, so treat the edges as upper bounds."
+          },
+          {
+            "term": "Confluence mix",
+            "plain": "Attribution within the Confluence board: each entry records which signal kinds it carried (value, insider buying, buyback…), so as grades mature this table shows which kinds actually carry the edge. A name with several kinds counts toward each — conditional performance, not an isolated factor return."
           }
         ],
         "usOnly": true

@@ -3,8 +3,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   HORIZONS, SIGNAL_META, eventReturn, edgeOf,
-  type HorizonKey, type SignalEvent, type SignalKey, type SignalSummary,
+  type HorizonKey, type SignalEvent, type SignalKey, type SignalSummary, type TagSummary,
 } from "@/lib/signalLog";
+import { SIGNAL_META as CONFLUENCE_KIND_META, type SignalKind as ConfluenceKind } from "@/lib/confluence";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -19,6 +20,7 @@ const dirLabel = { bullish: "Bullish", bearish: "Bearish", move: "Big move" } as
 
 export default function SignalRecordView({
   universe, summariesAll, summariesFresh, events, totalEvents, since, generatedAt, backtest,
+  confluenceMix = [], confluenceMixSince = null,
 }: {
   universe: string;
   summariesAll: SignalSummary[]; // every event, seed entries included
@@ -28,6 +30,8 @@ export default function SignalRecordView({
   since: string;
   generatedAt: string;
   backtest: BacktestFile | null; // ~5y replay of the price-reconstructible signals (null until first run)
+  confluenceMix?: TagSummary[]; // per-kind attribution within Confluence (tags logged from 2026-07-12)
+  confluenceMixSince?: string | null; // date of the first kind-tagged Confluence entry
 }) {
   const [filter, setFilter] = useState<SignalKey | "all">("all");
   const [q, setQ] = useState("");
@@ -126,6 +130,68 @@ export default function SignalRecordView({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Confluence mix — per-kind attribution (the input to future evidence-based signal weights) */}
+      <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="border-b border-[var(--border)] px-3 py-2.5">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Confluence mix — which stacked signals carry the edge?</h2>
+          <p className="mt-0.5 text-[11px] text-[var(--text-4)]">
+            Confluence entries log WHICH signal kinds they carried{confluenceMixSince ? ` (since ${fmtDate(confluenceMixSince)})` : ""}. Each row: entries that carried that kind, graded like the scorecard. A name carrying several kinds counts toward each — this reads conditional performance (&ldquo;how did names carrying X do&rdquo;), not an isolated factor return. The engine&apos;s weights are hand-set priors today; this table is the evidence that will eventually re-set them.
+          </p>
+        </div>
+        {confluenceMix.length === 0 ? (
+          <div className="px-3 py-4 text-[12px] text-[var(--text-4)]">
+            No kind-tagged entries yet — Confluence entries carry their signal kinds from the next nightly run onward; per-kind grades appear as those entries reach their 1-week / 1-month / 3-month marks.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
+              <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Signal kind</th>
+                  <th className="px-2 py-2 text-right font-medium" title="Kind-tagged Confluence entries carrying this signal">Entries</th>
+                  <th className="px-2 py-2 text-right font-medium" title="Not yet past the 3-month check">Open</th>
+                  {HORIZONS.map((h) => (
+                    <th key={h.key} className="px-2 py-2 text-right font-medium" title={`Average edge vs S&P and hit rate over graded ${h.label} windows, for entries carrying this kind`}>{h.label} edge · hit</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {confluenceMix.map((t) => {
+                  const km = CONFLUENCE_KIND_META[t.tag as ConfluenceKind];
+                  return (
+                    <tr key={t.tag} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+                      <td className="px-3 py-2">
+                        <span className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={km ? { color: km.color, background: `color-mix(in oklab, ${km.color} 15%, transparent)` } : undefined} title={km?.blurb}>
+                          {km?.label ?? t.tag}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{t.events}</td>
+                      <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-4)]">{t.open}</td>
+                      {HORIZONS.map((h) => {
+                        const hz = t.horizons[h.key];
+                        return (
+                          <td key={h.key} className="px-2 py-2 text-right font-mono tabular-nums">
+                            {hz ? (
+                              <span>
+                                <b style={{ color: edgeColor(hz.avgEdge) }}>{pct(hz.avgEdge)}</b>
+                                <span className="text-[var(--text-4)]"> · {hz.hitRate == null ? "—" : `${Math.round(hz.hitRate * 100)}%`}</span>
+                                <span className="text-[10px] text-[var(--text-4)]"> n{hz.n}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[var(--text-4)]" title="No tagged entries have reached this horizon yet">accruing…</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Event log */}
