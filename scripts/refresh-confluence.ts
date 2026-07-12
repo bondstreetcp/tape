@@ -1,11 +1,12 @@
 /**
  * Confluence Engine refresh — fuses the app's INDEPENDENT bullish signals (cheap-vs-own-history,
- * super-investor 13F adds, open-market insider buying, Congress buys, rising analyst EPS, upgrades,
- * call-heavy options flow, squeeze fuel, and a dated catalyst — incl. FDA PDUFA decisions / clinical
- * readouts) and ranks the names where several agree. GLM writes a thesis / risk / what-to-watch for
- * the top names. Decision-support only — no buy/sell/hold. Runs in the nightly FULL rebuild AFTER
- * refresh-data / refresh-valuation-history / refresh-13f / refresh-congress / refresh-flow /
- * refresh-catalysts / refresh-biotech(-vol) / refresh-estimates / refresh-insiders (reads their artifacts).
+ * super-investor 13F adds, open-market insider buying, Congress buys, a real buyback / shrinking share
+ * count, rising analyst EPS, upgrades, call-heavy options flow, squeeze fuel, and a dated catalyst —
+ * incl. FDA PDUFA decisions / clinical readouts) and ranks the names where several agree. GLM writes a
+ * thesis / risk / what-to-watch for the top names. Decision-support only — no buy/sell/hold. Runs in
+ * the nightly FULL rebuild AFTER refresh-data / refresh-valuation-history / refresh-13f /
+ * refresh-congress / refresh-flow / refresh-catalysts / refresh-biotech(-vol) / refresh-estimates /
+ * refresh-insiders / refresh-buybacks (reads their artifacts).
  *   npm run refresh-confluence
  */
 import { promises as fs } from "fs";
@@ -46,6 +47,8 @@ async function main() {
   // Dated clinical binaries (PDUFA / readouts) + their options-implied move — the event-driven catalyst.
   const biotech = await fs.readFile(path.join(DATA, "biotech-catalysts.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const biotechVol = await fs.readFile(path.join(DATA, "biotech-vol.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  // SEC XBRL capital-return board — real YoY share-count change + total shareholder yield (refresh-buybacks).
+  const buybacks = await fs.readFile(path.join(DATA, "buybacks.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
   // ── accumulate signals per ticker ──────────────────────────────────────────
   const sig = new Map<string, ConfluenceSignal[]>();
@@ -186,6 +189,30 @@ async function main() {
     }
   }
 
+  // 10) BUYBACK — REAL capital return: the share count is genuinely SHRINKING (netShareChangePct is the
+  //     truth serum — negative = the count is really falling, not just mopping up stock-comp dilution),
+  //     usually paired with a high total shareholder yield. A disciplined buyer of its own cheap stock is
+  //     a quality tailwind that stacks with value + insider buying.
+  for (const r of (buybacks?.rows || []) as any[]) {
+    const shr = r?.netShareChangePct;                              // fraction; negative = count shrinking
+    const ty = r?.totalYield;                                      // fraction (buyback yield + dividend yield)
+    const realShrink = shr != null && shr <= -0.02;               // count down ≥2% YoY (a real reduction)
+    const richReturn = ty != null && ty >= 0.06 && shr != null && shr <= -0.005; // ≥6% yield AND actually reducing
+    if (!realShrink && !richReturn) continue;
+    const bits: string[] = [];
+    if (shr != null) bits.push(`share count ${pct(shr * 100, 1)} YoY`);
+    if (ty != null) bits.push(`${(ty * 100).toFixed(1)}% shareholder yield`);
+    if (r?.buybackAccel != null && r.buybackAccel >= 1.25) bits.push("pace accelerating");
+    add(r.symbol, {
+      kind: "buyback",
+      label: realShrink ? "Shrinking float" : "High shareholder yield",
+      detail: bits.join(" · ") || "returning capital to shareholders",
+      // A sustained, genuine share-count reduction is a solid quality signal (weight like revisions /
+      // congress); +0.5 when the total yield is also rich (≥6%) — an aggressive cheap-stock buyer.
+      weight: 1.5 + (ty != null && ty >= 0.06 ? 0.5 : 0),
+    });
+  }
+
   // ── build the ranked board (require ≥2 distinct signal kinds = real confluence) ──
   const ctx = new Map((snap?.stocks || []).map((s) => [s.symbol, s] as const));
   const names: ConfluenceName[] = [];
@@ -222,7 +249,7 @@ async function main() {
   if (await llmConfigured()) {
     const toExplain = board.slice(0, TOP_EXPLAIN);
     const SYSTEM =
-      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, and a dated catalyst — which may be a specific FDA PDUFA decision or a clinical trial readout that could UNLOCK the thesis on a known date). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
+      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, a real buyback (the share count is genuinely shrinking, not just offsetting stock-comp dilution) often with a high total shareholder yield, and a dated catalyst — which may be a specific FDA PDUFA decision or a clinical trial readout that could UNLOCK the thesis on a known date). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
       "Ground every claim in the supplied signals + context — never invent a number or a reason. Two to three crisp sentences total across the three fields each. Be specific to the company, not generic. " +
       NO_ADVICE;
     const SCHEMA = 'Return ONLY JSON: {"reads":[{"symbol": string, "thesis": string, "risk": string, "watch": string}]}';

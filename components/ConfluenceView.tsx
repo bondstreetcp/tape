@@ -22,7 +22,7 @@ export default function ConfluenceView({ data, universe }: { data: ConfluenceDat
       <PageHeader
         universe={universe}
         title="Confluence Engine"
-        desc="Names where several INDEPENDENT bullish signals line up — cheap vs its own 10-year history, super-investor 13F buying, Congress buys, analyst upgrades, call-heavy options flow, catalysts. One signal is noise; a stack of unrelated ones agreeing is a setup worth a look. Decision-support, not advice."
+        desc="Names where several INDEPENDENT bullish signals line up — cheap vs its own 10-year history, super-investor 13F buying, Congress buys, a real buyback (shrinking share count), analyst upgrades, call-heavy options flow, catalysts. One signal is noise; a stack of unrelated ones agreeing is a setup worth a look. Decision-support, not advice."
       />
 
       {/* legend doubles as a filter */}

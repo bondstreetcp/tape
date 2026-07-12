@@ -2110,6 +2110,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "A member of Congress recently bought it (a net buyer), per required trade disclosures."
           },
           {
+            "term": "Buyback signal",
+            "plain": "The company is genuinely shrinking its share count (a real buyback, not just offsetting stock-based pay), often with a high total shareholder yield — a sign of capital-return discipline."
+          },
+          {
             "term": "Estimates rising signal",
             "plain": "Wall Street analysts are raising their earnings-per-share forecasts."
           },
