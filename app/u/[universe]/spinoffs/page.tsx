@@ -6,7 +6,8 @@ import type { SpinoffsData } from "@/lib/spinoffs";
 import SpinoffsView from "@/components/SpinoffsView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 export const metadata = { title: "Spinoff Turnover" };
 
 export default async function SpinoffsPage({ params }: { params: Promise<{ universe: string }> }) {

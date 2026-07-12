@@ -6,7 +6,8 @@ import { loadSnapshot } from "@/lib/data";
 import type { VolConeData } from "@/lib/volCone";
 import VolConeView from "@/components/VolConeView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 const load = (): Promise<VolConeData | null> =>
   fsp

@@ -8,7 +8,8 @@ import type { ThirteenFStory } from "@/lib/thirteenFStory";
 import SuperInvestorsView from "@/components/SuperInvestorsView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // GLM narrative of the quarter's consensus 13F rotation (scripts/refresh-13f-story.ts).
 function loadStory(): Promise<ThirteenFStory | null> {

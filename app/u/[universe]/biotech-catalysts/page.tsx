@@ -5,7 +5,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { BiotechData } from "@/lib/biotech";
 import BiotechView from "@/components/BiotechView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function loadBiotech(): Promise<BiotechData | null> {
   return fsp

@@ -6,7 +6,8 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import BiotechVolView from "@/components/BiotechVolView";
 import type { BiotechVolData } from "@/lib/biotechVol";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function load(): Promise<BiotechVolData | null> {
   return fsp

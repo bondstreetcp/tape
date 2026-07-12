@@ -6,7 +6,8 @@ import { buildSmartMoneySell } from "@/lib/smartMoneySell";
 import DistributionView from "@/components/DistributionView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Smart-Money Distribution — the SELL side of the super-investor 13Fs, computed at request from the
 // snapshot (cross-universe data; the [universe] param only drives nav + links). Broad Russell 3000

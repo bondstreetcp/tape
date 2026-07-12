@@ -9,7 +9,8 @@ import EmptyState from "@/components/EmptyState";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { Snapshot } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Insider Cluster-Buying — the nightly Form 4 open-market-buy scan (data/insiders.json). Open-market
 // insider buying is overwhelmingly a SMALL/MID-CAP signal (mega-cap officers rarely buy with cash), so

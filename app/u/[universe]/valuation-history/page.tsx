@@ -8,7 +8,8 @@ import type { ValuationExplainMap } from "@/lib/valuationExplain";
 import ValuationHistoryView from "@/components/ValuationHistoryView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // GLM genuine-vs-trap verdicts on the deepest discounts (scripts/refresh-valuation-explain.ts).
 // generatedAt rides along so the badges can carry an "AI · as of" staleness label.

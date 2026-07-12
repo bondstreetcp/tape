@@ -8,7 +8,8 @@ import { buildCatalystCalendar } from "@/lib/catalystCalendar";
 import type { SnapshotEarnings } from "@/lib/portfolioCatalysts";
 import PortfolioRadar from "@/components/PortfolioRadar";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 const DAY = 86_400_000;
 
 const read = (f: string): Promise<any> =>

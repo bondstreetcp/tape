@@ -6,7 +6,8 @@ import type { WarningsData } from "@/lib/warnings";
 import WarningsView from "@/components/WarningsView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function loadWarnings(): Promise<WarningsData | null> {
   return fs

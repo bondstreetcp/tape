@@ -4,7 +4,8 @@ import { loadEarningsMove } from "@/lib/earningsMove";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import EarningsCalendar, { type Setup } from "@/components/EarningsCalendar";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 export default async function EarningsPage({
   params,

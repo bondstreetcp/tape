@@ -5,7 +5,8 @@ import EarningsSetupView from "@/components/EarningsSetupView";
 import EmptyState from "@/components/EmptyState";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Earnings Setup Cards — a glanceable card deck of upcoming reporters (implied move vs. the stock's
 // own history). Reuses data/earnings-move.json; the [universe] param drives nav + links.

@@ -5,7 +5,8 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { IncomeCandidate } from "@/lib/portfolioIncome";
 import PortfolioIncome from "@/components/PortfolioIncome";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Portfolio Options Income — the covered-call suggestions (from the nightly putwrite scan) are shipped
 // slim to the client, which reads the pasted book from localStorage and joins to it. Book stays local.

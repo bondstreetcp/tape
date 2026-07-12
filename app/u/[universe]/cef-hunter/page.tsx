@@ -5,7 +5,8 @@ import { buildCefHunter } from "@/lib/cefHunter";
 import CefHunterView from "@/components/CefHunterView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // CEF Discount Hunter — the scored shortlist of the most stretched US closed-end-fund discounts.
 // Reuses data/cef.json; the [universe] param only drives nav + links.

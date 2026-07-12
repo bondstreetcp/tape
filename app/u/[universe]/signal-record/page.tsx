@@ -8,7 +8,8 @@ import SignalRecordView from "@/components/SignalRecordView";
 import { summarizeSignals, type SignalLogFile } from "@/lib/signalLog";
 import type { BacktestFile } from "@/lib/signalBacktest";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Signal Track Record — grades every idea board on what its picks actually did next. The summary is
 // computed server-side over the FULL forward-accumulating log; only the latest slice of raw events

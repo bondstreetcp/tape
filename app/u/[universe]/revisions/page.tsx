@@ -7,7 +7,8 @@ import { buildRevisions, type EstimatesFile } from "@/lib/revisions";
 import RevisionsView from "@/components/RevisionsView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Revisions Momentum — joins the nightly estimate snapshot (data/estimates.json) with the current
 // universe's snapshot. Estimate revisions are refreshed by `npm run refresh-estimates`.

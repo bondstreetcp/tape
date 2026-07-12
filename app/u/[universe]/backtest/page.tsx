@@ -1,7 +1,8 @@
 import Backtest from "@/components/Backtest";
 import { loadSnapshot } from "@/lib/data";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 export const metadata = { title: "Backtest" };
 
 export default async function BacktestPage({ params }: { params: Promise<{ universe: string }> }) {

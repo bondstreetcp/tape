@@ -6,7 +6,8 @@ import type { TradeDeskData } from "@/lib/tradeIdeas";
 import TradeDeskView from "@/components/TradeDeskView";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function loadDesk(): Promise<TradeDeskData | null> {
   return fsp

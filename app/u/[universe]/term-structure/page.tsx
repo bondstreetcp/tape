@@ -6,7 +6,8 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { VolDisData } from "@/lib/volDislocation";
 import TermStructureView from "@/components/TermStructureView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function loadVolDis(): Promise<VolDisData | null> {
   return fsp

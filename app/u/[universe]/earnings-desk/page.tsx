@@ -14,7 +14,8 @@ import type { PeadData } from "@/lib/pead";
 import type { GuidanceBoardData } from "@/lib/guidanceBoard";
 import type { EmData, EmRow } from "@/components/EarningsWeekView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 const read = <T,>(f: string): Promise<T | null> =>
   fsp.readFile(path.join(process.cwd(), "data", f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);

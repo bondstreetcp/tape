@@ -6,7 +6,8 @@ import type { ConfluenceData } from "@/lib/confluence";
 import ConfluenceView from "@/components/ConfluenceView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 function loadConfluence(): Promise<ConfluenceData | null> {
   return fs

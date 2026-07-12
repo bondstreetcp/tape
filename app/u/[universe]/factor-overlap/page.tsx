@@ -4,7 +4,8 @@ import { loadSnapshot } from "@/lib/data";
 import { buildFactorOverlap } from "@/lib/factorOverlap";
 import FactorOverlapView from "@/components/FactorOverlapView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Factor-Screen Overlap — computed at request from the current universe's snapshot (its per-stock
 // `fund` metrics drive the 9 named screens).

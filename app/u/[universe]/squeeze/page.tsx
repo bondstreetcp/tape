@@ -8,7 +8,8 @@ import type { EstimatesFile } from "@/lib/revisions";
 import SqueezeView from "@/components/SqueezeView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Short-Squeeze Radar — joins the per-name short-interest block in the nightly estimate snapshot
 // (data/estimates.json, US-only) with the current universe's snapshot.

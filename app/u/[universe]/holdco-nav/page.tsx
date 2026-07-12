@@ -6,7 +6,8 @@ import type { HoldcoNavData } from "@/lib/holdco";
 import HoldcoNavView from "@/components/HoldcoNavView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Holdco NAV tracker — universe-independent screener (lives under /u/[universe] to inherit the nav).
 // Reads data/holdco-nav.json, built by `npm run refresh-holdco-nav`.

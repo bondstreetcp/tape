@@ -5,7 +5,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import OvernightFilingsView from "@/components/OvernightFilingsView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Overnight Filings (SuperAnalyst) — AI desk notes on new material SEC filings vs the prior
 // comparable. Universe-independent data; the current universe's symbol set is passed so a ticker

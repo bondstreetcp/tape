@@ -6,7 +6,8 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import { buildCatalystCalendar } from "@/lib/catalystCalendar";
 import CalendarView from "@/components/CalendarView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 const read = (f: string): Promise<any> =>
   fsp.readFile(path.join(process.cwd(), "data", f), "utf8").then((s) => JSON.parse(s)).catch(() => null);

@@ -4,7 +4,8 @@ import { loadSnapshot } from "@/lib/data";
 import { buildExpectations } from "@/lib/expectations";
 import ExpectationsView from "@/components/ExpectationsView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Expectations / Reverse-DCF — computed at request from the snapshot's per-stock fund block
 // (fcfYield + revenue growth). Pure compute, no new feed.

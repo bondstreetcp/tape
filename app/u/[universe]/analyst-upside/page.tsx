@@ -8,7 +8,8 @@ import type { EstimatesFile } from "@/lib/revisions";
 import AnalystUpsideView from "@/components/AnalystUpsideView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Analyst Upside — joins the nightly estimate snapshot (data/estimates.json: target/price/rating per
 // name) with the current universe's snapshot. Refreshed by `npm run refresh-estimates`.

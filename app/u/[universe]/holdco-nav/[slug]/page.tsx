@@ -6,7 +6,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { holdcoByTicker, type HoldcoNavData } from "@/lib/holdco";
 import HoldcoDetailView from "@/components/HoldcoDetailView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Per-holdco detail — NAV-basket vs price chart + discount-over-time + constituents.
 export default async function HoldcoDetailPage({ params }: { params: Promise<{ universe: string; slug: string }> }) {

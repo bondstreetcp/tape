@@ -4,7 +4,8 @@ import { loadSnapshot } from "@/lib/data";
 import { buildLeaders } from "@/lib/leaders";
 import LeadersView from "@/components/LeadersView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Leaders Board — computed at request from the current universe's snapshot (multi-timeframe returns
 // + MA fields on every StockRow). No new feed.

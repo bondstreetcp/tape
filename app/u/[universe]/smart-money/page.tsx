@@ -7,7 +7,8 @@ import { buildSmartMoney } from "@/lib/smartMoney";
 import SmartMoneyView from "@/components/SmartMoneyView";
 import EmptyState from "@/components/EmptyState";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Smart-Money Radar — computed at request from the 13F + Congress snapshots (cross-universe data;
 // the [universe] param only drives nav + links). Broad Russell 3000 snapshot supplies context.

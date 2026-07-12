@@ -5,7 +5,8 @@ import { buildBreadth, buildRegime } from "@/lib/breadth";
 import { getMacroCached } from "@/lib/macroData";
 import BreadthView from "@/components/BreadthView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Breadth & Regime — market internals computed at request from the snapshot (MA/return fields on
 // every StockRow) + the macro snapshot for the risk-backdrop strip. No new feed.

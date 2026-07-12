@@ -7,7 +7,8 @@ import { xyToPoints } from "@/lib/compute";
 import SectorView from "@/components/SectorView";
 import SetupNotice from "@/components/SetupNotice";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 export default async function SectorPage({
   params,

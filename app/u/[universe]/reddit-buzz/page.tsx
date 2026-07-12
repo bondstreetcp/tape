@@ -6,7 +6,8 @@ import { loadSnapshot } from "@/lib/data";
 import { buildBuzzRows, type ApeWisdomData } from "@/lib/apewisdom";
 import RedditBuzzView from "@/components/RedditBuzzView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
+export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
 // Cross-universe Reddit-buzz board — what retail is talking about (ApeWisdom mention counts).
 export default async function RedditBuzzPage({ params }: { params: Promise<{ universe: string }> }) {
