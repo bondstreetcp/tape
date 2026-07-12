@@ -6,6 +6,7 @@ import { computePortfolio, scenarioPnL, parsePositions, type NameData } from "@/
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
+import MyBookTabs from "./MyBookTabs";
 import InfoDot from "./InfoDot";
 
 const STORE_KEY = "tape.portfolio.positions";
@@ -132,6 +133,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <MyBookTabs universe={universe} current="/portfolio" />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         {/* ---- Input ---- */}

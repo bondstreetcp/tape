@@ -7,6 +7,7 @@ import { parsePositions } from "@/lib/portfolio";
 import { KIND_META, type CatalystEvent } from "@/lib/catalystCalendar";
 import { buildPortfolioCatalysts, type Impact, type PortfolioCatalyst, type SnapshotEarnings } from "@/lib/portfolioCatalysts";
 import UniverseSwitcher from "./UniverseSwitcher";
+import MyBookTabs from "./MyBookTabs";
 import HowToRead from "./HowToRead";
 
 // Same book the Portfolio Cockpit saves — so paste it in either place and both stay in sync.
@@ -57,6 +58,8 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <MyBookTabs universe={universe} current="/portfolio-radar" />
 
       <HowToRead>
         <p><b>What&apos;s here:</b> your pasted holdings joined to the forward Catalyst Calendar — earnings (with the options-implied move), investor days, biotech/FDA readouts, and IPO-lockup expiries. Only names you own show up, soonest first.</p>

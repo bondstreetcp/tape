@@ -8,6 +8,7 @@ import type { TenorId } from "@/lib/putwrite"; // type-only — lib/putwrite pul
 import { buildPortfolioIncome, type IncomeCandidate } from "@/lib/portfolioIncome";
 import InfoDot from "./InfoDot";
 import UniverseSwitcher from "./UniverseSwitcher";
+import MyBookTabs from "./MyBookTabs";
 import HowToRead from "./HowToRead";
 
 const STORE_KEY = "tape.portfolio.positions"; // shared with the Cockpit + Radar
@@ -51,6 +52,8 @@ export default function PortfolioIncome({ universe, candidates, generatedAt }: {
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+
+      <MyBookTabs universe={universe} current="/portfolio-income" />
 
       <HowToRead>
         <p><b>What&apos;s here:</b> for each LONG in your book that&apos;s in the options-quality universe, the best out-of-the-money covered call at the chosen tenor — the premium you collect up front (per share and in total dollars for your lot), the annualized income yield, and the total return if the stock rises through the strike and your shares are called away.</p>
