@@ -60,7 +60,9 @@ export function buildPortfolioIncome(
   tenor: TenorId,
   opts: { nowMs?: number } = {},
 ): IncomeResult {
-  const nowMs = opts.nowMs ?? Date.now();
+  // Floor to UTC midnight so an earnings/expiry date (bare YYYY-MM-DD → UTC midnight) that lands TODAY
+  // still counts as "in the window" during US market hours, instead of reading as already past.
+  const nowMs = Math.floor((opts.nowMs ?? Date.now()) / 86_400_000) * 86_400_000;
   const net = netBySymbol(positions);
   const bySym = new Map(candidates.map((c) => [c.symbol.trim().toUpperCase(), c]));
 

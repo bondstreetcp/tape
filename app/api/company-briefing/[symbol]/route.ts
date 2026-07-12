@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tickerToCik, getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
-import { section, namedCompetitors, grounded, clean, strList } from "@/lib/filingSections";
+import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
 import type { CompanyBriefing } from "@/lib/companyBriefing";
 
 export const dynamic = "force-dynamic";
@@ -77,11 +77,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sym
   const out = await chatJSON<any>(SYSTEM, `${sym} 10-K (filed ${src.date}):\n\n${packed}\n\n${SCHEMA}`, { model: PRO_MODEL, maxTokens: 5000, reasoningEffort: "low" }).catch(() => null);
   if (!out) return NextResponse.json(base({ source: { url: src.url, date: src.date, form: src.form }, note: "Briefing generation failed — try again." }), noStore);
 
-  const textLower = src.text.toLowerCase();
+  // Named rivals: the code-extracted list (grounded by construction) first, then any LLM extras whose
+  // FULL name appears as a contiguous phrase in the filing (phraseGrounded — a scattered-word check
+  // would let a fabricated common-word "competitor" slip past the "pulled verbatim" claim the UI makes).
+  const textNorm = norm(src.text);
   const competitors = (() => {
     const seen = new Set<string>();
     const merged: string[] = [];
-    for (const c of [...namedCompetitors(src.text), ...strList(out.competitors, textLower, 12, true)]) {
+    const llmExtras = strList(out.competitors, null, 12).filter((c) => phraseGrounded(c, textNorm));
+    for (const c of [...namedCompetitors(src.text), ...llmExtras]) {
       const k = c.toLowerCase();
       if (!seen.has(k)) { seen.add(k); merged.push(c); }
     }

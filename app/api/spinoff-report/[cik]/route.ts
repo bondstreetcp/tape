@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
+import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
 import type { SpinoffReport, SpinoffFinancials } from "@/lib/spinoffReport";
 
 export const dynamic = "force-dynamic";
@@ -28,23 +29,6 @@ const SCHEMA =
   '"competitors":string[],"customers":string|null,"suppliers":string|null,"moats":string[],"risks":string[],"watchItems":string[],' +
   '"financials":{"revenue":string|null,"growth":string|null,"profitability":string|null,"note":string|null}|null}';
 
-/** Cut a window at the densest occurrence of `re` (a Form 10's real section, not its table-of-contents
- * line) — scored by keyword density in the following text. `first` takes the first occurrence above a
- * score floor instead (for a section whose heading repeats as a running header). */
-function section(text: string, re: RegExp, len: number, opts: { back?: number; scoreRe?: RegExp; first?: boolean; minScore?: number } = {}): string {
-  const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
-  const scoreRe = opts.scoreRe ?? /\b(market|industry|customer|competitor|revenue|product|segment|demand|growth|supplier)\b/gi;
-  let best: { i: number; score: number } | null = null;
-  for (let m = g.exec(text); m; m = g.exec(text)) {
-    const probe = text.slice(m.index, m.index + Math.min(len, 9000));
-    const score = (probe.match(new RegExp(scoreRe.source, scoreRe.flags.includes("g") ? scoreRe.flags : scoreRe.flags + "g")) || []).length;
-    if (opts.first) { if (score >= (opts.minScore ?? 4)) { best = { i: m.index, score }; break; } }
-    else if (!best || score > best.score) best = { i: m.index, score };
-    if (g.lastIndex === m.index) g.lastIndex++;
-  }
-  return best ? text.slice(Math.max(0, best.i - (opts.back ?? 0)), best.i + len) : "";
-}
-
 /** Latest Form 10 for a CIK → the info statement text (primary doc + the largest HTML exhibit, which
  * is where a spin's real disclosure lives), full-length (htmlToText's default cap hides deep sections). */
 async function gatherForm10(cik: string): Promise<{ url: string; date: string; form: string; text: string; parent: string | null } | null> {
@@ -70,38 +54,6 @@ async function gatherForm10(cik: string): Promise<{ url: string; date: string; f
   if (text.replace(/\s/g, "").length < 4000) return null;
   return { url: `${base}/${r.primaryDocument[idx]}`, date: r.filingDate[idx], form: r.form[idx], text, parent: null };
 }
-
-// Named competitors are a STRUCTURED list in the filing ("competitors are/include A, B and C.",
-// "we compete with A, B and C.") — pull them by regex over the FULL text (grounded by construction,
-// and robust to which window the section extractor happened to land on). Merged with the LLM's list.
-function namedCompetitors(text: string): string[] {
-  const out = new Set<string>();
-  const re = /(?:competitors\s+(?:are|include|:|such as(?: those)?)|\bcompete(?:s)?\s+(?:with|against))\s+([A-Z][^.]{5,260}?)\./g;
-  // Reject possessive phrases and generic descriptors — "Enviri's business segments", "our other
-  // divisions" etc. are separation-context noise, not named rivals.
-  const bad = /['’]|\b(businesses?|segments?|operations?|subsidiar|affiliate|divisions?|portfolios?|products?|services?|markets?|industr|customers?|suppliers?|regions?)\b/i;
-  for (let m = re.exec(text); m && out.size < 12; m = re.exec(text)) {
-    for (const raw of m[1].split(/,|\band\b|\bas well as\b/)) {
-      const name = raw.trim().replace(/^(the|other|various|certain|numerous|several|many|both|its|our)\s+/i, "").replace(/\s+(inc|corp|corporation|group|company|co|plc|ltd|systems)\.?$/i, "").trim();
-      if (name.length >= 2 && name.length <= 46 && /^[A-Z0-9]/.test(name) && !bad.test(name) && !/^(we|our|its|their|his|her|they|companies|manufacturers?|distributors?|competitors?|others?|both|each|firms?|players?|vendors?|businesses)$/i.test(name)) out.add(name);
-    }
-  }
-  return [...out];
-}
-
-const clean = (s: unknown, max = 900): string | null => (typeof s === "string" && s.trim() ? s.trim().slice(0, max) : null);
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-/** A named entity is grounded when its distinctive words (≥4 chars) all appear in the filing text. */
-function grounded(name: string, textLower: string): boolean {
-  const words = norm(name).split(" ").filter((w) => w.length >= 4 && !["corporation", "company", "incorporated", "holdings", "group", "limited"].includes(w));
-  if (!words.length) return norm(name).length >= 3 && textLower.includes(norm(name)); // short/acronym names
-  return words.every((w) => textLower.includes(w));
-}
-const strList = (arr: unknown, textLower: string | null, cap: number, ground = false): string[] =>
-  (Array.isArray(arr) ? arr : [])
-    .map((x) => clean(x, 120))
-    .filter((x): x is string => !!x && (!ground || !textLower || grounded(x, textLower)))
-    .slice(0, cap);
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik: string }> }) {
   const { cik: cikRaw } = await params;
@@ -138,7 +90,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik
   const out = await chatJSON<any>(SYSTEM, `Form 10 for CIK ${cik} (filed ${src.date}):\n\n${packed}\n\n${SCHEMA}`, { model: PRO_MODEL, maxTokens: 5000, reasoningEffort: "low" }).catch(() => null);
   if (!out) return NextResponse.json(base({ source: { url: src.url, date: src.date, form: src.form }, note: "Briefing generation failed — try again." }), { headers: { "Cache-Control": "no-store" } });
 
-  const textLower = src.text.toLowerCase();
+  const textNorm = norm(src.text);
   const fin = out.financials && typeof out.financials === "object"
     ? ({ revenue: clean(out.financials.revenue, 80), growth: clean(out.financials.growth, 80), profitability: clean(out.financials.profitability, 100), note: clean(out.financials.note, 200) } as SpinoffFinancials)
     : null;
@@ -150,12 +102,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik
     howItMakesMoney: clean(out.howItMakesMoney),
     industry: clean(out.industry, 1400),
     competitivePosition: clean(out.competitivePosition),
-    // Code-extracted named rivals (grounded by construction) first, then any GROUNDED extras the LLM
-    // found — deduped case-insensitively. Both are backed by the filing text; nothing invented.
+    // Code-extracted named rivals (grounded by construction) first, then any LLM extras whose FULL name
+    // appears as a contiguous phrase in the filing (phraseGrounded — a scattered-word match would let a
+    // fabricated common-word rival past the "nothing invented" claim). Deduped case-insensitively.
     competitors: (() => {
       const seen = new Set<string>();
       const merged: string[] = [];
-      for (const c of [...namedCompetitors(src.text), ...strList(out.competitors, textLower, 12, true)]) {
+      const llmExtras = strList(out.competitors, null, 12).filter((c) => phraseGrounded(c, textNorm));
+      for (const c of [...namedCompetitors(src.text), ...llmExtras]) {
         const k = c.toLowerCase();
         if (!seen.has(k)) { seen.add(k); merged.push(c); }
       }

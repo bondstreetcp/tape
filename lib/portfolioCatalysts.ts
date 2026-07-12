@@ -65,7 +65,11 @@ export function buildPortfolioCatalysts(
   opts: { horizonDays?: number; earningsDates?: Record<string, SnapshotEarnings>; nowMs?: number } = {},
 ): PortfolioCatalystResult {
   const horizon = opts.horizonDays ?? 120;
-  const nowMs = opts.nowMs ?? Date.now();
+  const DAY = 86_400_000;
+  // Floor "now" to UTC midnight: a bare YYYY-MM-DD earnings date parses to UTC midnight, so diffing it
+  // against a live instant makes a name reporting TODAY read as daysTo −1 during US market hours and
+  // wrongly drop into "quiet" (the documented date-countdown off-by-one). Compare by calendar day.
+  const nowMs = Math.floor((opts.nowMs ?? Date.now()) / DAY) * DAY;
   const norm = (s: string) => s.trim().toUpperCase();
   // Net shares per symbol (a book may list a name twice); sign decides the side, 0 nets out → skip.
   const bySymbol = new Map<string, number>();
@@ -100,7 +104,7 @@ export function buildPortfolioCatalysts(
       if (hasEarnings.has(sym)) continue;
       const se = opts.earningsDates[sym];
       if (!se?.date) continue;
-      const daysTo = Math.round((Date.parse(se.date) - nowMs) / 86_400_000);
+      const daysTo = Math.round((Date.parse(se.date) - nowMs) / DAY);
       if (!Number.isFinite(daysTo) || daysTo < 0 || daysTo > horizon) continue;
       add({ date: se.date.slice(0, 10), daysTo, kind: "earnings", ticker: sym, company: se.name ?? sym, sector: se.sector, label: "Earnings", movePct: null, detail: se.estimated ? "date estimated" : undefined }, net);
     }

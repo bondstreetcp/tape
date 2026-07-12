@@ -116,16 +116,25 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
   let llmCalls = 0, gated = 0;
   for (const g of byCik.values()) {
     if (isCompleted(g.hit.issuer, g.hit.ticker)) continue; // already distributed → lives in the turnover table
-    const daysInReg = Math.round((now - Date.parse(g.first)) / DAY);
+    const prev = priorByCik.get(g.cik);
+    // The EFTS window slides, so g.first / g.amendments only see hits still INSIDE the 220-day window;
+    // once the initial 10-12B scrolls past startdt, g.first jumps forward and the age would RESET. Anchor
+    // to the earliest date we've ever recorded (and never let the amendment count run backwards) so a
+    // late-stage spin keeps aging monotonically and sorts ahead of newer filings.
+    const firstFiled = prev?.firstFiledDate && prev.firstFiledDate < g.first ? prev.firstFiledDate : g.first;
+    const amendments = Math.max(g.amendments, prev?.amendments ?? 0);
+    const daysInReg = Math.round((now - Date.parse(firstFiled)) / DAY);
     const base: Omit<SpinPipelineRow, "parent" | "parentTicker" | "business" | "expectedTiming" | "ratio"> = {
-      spinco: g.hit.issuer, ticker: g.hit.ticker, firstFiledDate: g.first, filedDate: g.last,
-      amendments: g.amendments, daysInReg, url: edgarDocUrl(g.cik, g.hit.accession, g.hit.doc), cik: g.cik,
+      spinco: g.hit.issuer, ticker: g.hit.ticker, firstFiledDate: firstFiled, filedDate: g.last,
+      amendments, daysInReg, url: edgarDocUrl(g.cik, g.hit.accession, g.hit.doc), cik: g.cik,
     };
-    // Skip the LLM when we've already screened this exact latest filing — reuse the prior extraction
-    // (the screened ledger remembers the accession; a new amendment re-triggers). Keeps cost ~nil.
+    // Already screened this exact latest filing → never re-fetch or re-LLM it (cost ~nil). A prior row
+    // means it classified as a spin: reuse the extraction, just refresh the counters. NO prior row means
+    // it was screened and GATED as a non-spin — skip it silently. The ledger must remember REJECTS too,
+    // or every gated 10-12B in the window gets re-billed nightly until it ages out (the refresh-ipo fix).
     if (screened[g.cik] === g.hit.accession) {
-      const p = priorByCik.get(g.cik);
-      if (p) { out.push({ ...p, ...base }); continue; } // refresh the day counters, keep the extraction
+      if (prev) out.push({ ...prev, ...base });
+      continue;
     }
     const text = await fetchFilingBodyText(g.hit).catch(() => "");
     if (!text || text.length < 1000) continue; // fetch failed → don't mark screened; retry next run
@@ -153,9 +162,12 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
     if ((now - Date.parse(p.firstFiledDate)) / DAY >= 400) continue;
     out.push({ ...p, daysInReg: Math.round((now - Date.parse(p.firstFiledDate)) / DAY) });
   }
-  // prune the screened ledger to CIKs still in play
-  const live = new Set(out.map((r) => r.cik));
-  for (const k of Object.keys(screened)) if (!live.has(k)) delete screened[k];
+  // Prune the screened ledger to CIKs EFTS still returned this run (i.e. still inside the 220-day
+  // window). Rejects stay remembered while in-window — that's the point; once a filing ages out EFTS
+  // stops returning it, so it can never be re-billed and is safe to forget. (Pruning to `out` would drop
+  // every reject, reopening the leak.)
+  const seen = new Set(byCik.keys());
+  for (const k of Object.keys(screened)) if (!seen.has(k)) delete screened[k];
   await fsp.writeFile(SCREENED, JSON.stringify(screened));
   out.sort((a, b) => b.daysInReg - a.daysInReg); // late-stage (longest in registration) first
   console.log(`pipeline: ${out.length} upcoming spins (${llmCalls} LLM calls, ${gated} gated non-spins)`);

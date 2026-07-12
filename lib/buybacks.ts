@@ -128,7 +128,12 @@ export function despikeQuarters(quarters: { end: string; val: number }[], k = 5)
 export function ttmSum(quarters: { end: string; val: number }[]): { val: number; asOf: string } | null {
   if (quarters.length < 4) return null;
   const last4 = quarters.slice(-4);
-  if (spanDays(last4[0].end, last4[3].end) > 400) return null; // a gap → not a clean TTM
+  // A clean TTM is 4 CONSECUTIVE quarters. The total-span check catches a big hole, but when
+  // despikeQuarters removes a MID-series spike the surviving last-4 span only ~1y and sneak under 400d
+  // while silently substituting the year-ago quarter for the missing one — so also reject any internal
+  // step wider than a single quarter (~92d; 130 leaves slack for 53-week fiscal calendars).
+  if (spanDays(last4[0].end, last4[3].end) > 400) return null;
+  for (let i = 1; i < last4.length; i++) if (spanDays(last4[i - 1].end, last4[i].end) > 130) return null;
   return { val: last4.reduce((s, q) => s + q.val, 0), asOf: last4[3].end };
 }
 

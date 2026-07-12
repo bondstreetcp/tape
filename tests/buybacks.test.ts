@@ -67,6 +67,20 @@ test("ttmSum needs 4 quarters within ~400d, else null (caller falls back to annu
   assert.equal(ttmSum(gapped), null);
 });
 
+test("ttmSum rejects a mid-series gap even when the 4-quarter span sneaks under a year", () => {
+  // A despiked MID-series quarter leaves a hole: the surviving last-4 span only ~1y (<400d, so the
+  // total-span guard passes) but one internal step is ~half a year — that must NOT be sold as a clean
+  // TTM (it would silently substitute the year-ago quarter for the missing one).
+  const gapped = [
+    { end: "2024-06-30", val: 3 },
+    { end: "2024-09-30", val: 3.5 }, // 2024-12-31 removed as a spike → the gap is right here
+    { end: "2025-03-31", val: 4 },
+    { end: "2025-06-30", val: 4.2 },
+  ];
+  // total span 2024-06-30 → 2025-06-30 = 365d (under 400, the old guard passed it) but 09-30→03-31 = 182d
+  assert.equal(ttmSum(gapped), null);
+});
+
 test("despikeQuarters drops a bad-data outlier quarter (the CRM $27B-vs-$3B-norm case)", () => {
   const q = [
     { end: "2025-04-30", val: 2.6e9 },

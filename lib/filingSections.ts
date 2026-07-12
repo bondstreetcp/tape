@@ -55,6 +55,16 @@ export function grounded(name: string, textLower: string): boolean {
   return words.every((w) => textLower.includes(w));
 }
 
+/** Stronger than grounded() for a NAMED ENTITY: the whole normalized name must appear as a CONTIGUOUS
+ * phrase in the (already norm()'d) filing corpus — a single token still matches itself. This kills the
+ * scattered-word hallucination grounded() lets through (a fabricated "Global Technologies" whose two
+ * common words merely occur separately in the filing). Normalize the corpus once per filing (norm() is
+ * a cheap two-pass replace) and reuse it. */
+export function phraseGrounded(name: string, textNorm: string): boolean {
+  const n = norm(name);
+  return n.length >= 3 && textNorm.includes(n);
+}
+
 /** Map an LLM string array → cleaned, capped, optionally grounded-against-the-filing list. */
 export const strList = (arr: unknown, textLower: string | null, cap: number, ground = false): string[] =>
   (Array.isArray(arr) ? arr : [])

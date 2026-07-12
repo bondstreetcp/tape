@@ -56,6 +56,14 @@ test("earnings-through-expiry flag fires only when the print lands inside the ca
   assert.equal(r.rows.find((x) => x.symbol === "B")!.earningsBeforeExpiry, false); // earnings @50d > expiry @30d
 });
 
+test("earnings landing TODAY still flags during US market hours (now floored to UTC midnight)", () => {
+  const afternoon = NOW + 15 * 3_600_000; // 15:00Z — mid US session, same calendar day as NOW
+  const today = new Date(NOW).toISOString().slice(0, 10); // bare YYYY-MM-DD → parses to UTC midnight
+  const c = cand({ symbol: "A", nextEarnings: today, calls: { m1: call({ expiry: iso(20), premium: 1 }), m3: null } });
+  const r = buildPortfolioIncome([{ symbol: "A", shares: 100 }], [c], "m1", { nowMs: afternoon });
+  assert.equal(r.rows[0].earningsBeforeExpiry, true); // print today (≤ expiry) must not read as already past
+});
+
 test("rows sort by biggest dollar premium first; m3 tenor selects the other suggestion", () => {
   const cands = [
     cand({ symbol: "SMALL", price: 50, calls: { m1: call({ expiry: iso(30), premium: 1 }), m3: null } }),
