@@ -10,6 +10,7 @@ import { turnoverColor, regStage } from "@/lib/spinoffs";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import SpinoffBriefing from "./SpinoffBriefing";
 
 type SortKey = "setup" | "turnover" | "recent" | "since";
 
@@ -40,7 +41,7 @@ function PipelineSection({ universe, pipeline }: { universe: string; pipeline: S
   return (
     <div className="mb-6">
       <h2 className="mb-1 text-sm font-semibold text-[var(--text-2)]">Upcoming — in registration <span className="font-normal text-[var(--text-4)]">· {pipeline.length}</span></h2>
-      <p className="mb-2 max-w-3xl text-[12px] text-[var(--text-4)]">Companies that have filed a <b>Form 10 (10-12B)</b> to separate a subsidiary — the months-ahead signal a spin is coming, before it distributes. Parent grounded against the filing; timing/ratio shown only where the filing states them.</p>
+      <p className="mb-2 max-w-3xl text-[12px] text-[var(--text-4)]">Companies that have filed a <b>Form 10 (10-12B)</b> to separate a subsidiary — the months-ahead signal a spin is coming, before it distributes. Parent grounded against the filing; timing/ratio shown only where the filing states them. Hit <b>Briefing →</b> on any row for a generalist&apos;s primer drilled from the Form 10 (industry, competitors, customers, suppliers, risks).</p>
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[820px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
@@ -60,8 +61,9 @@ function PipelineSection({ universe, pipeline }: { universe: string; pipeline: S
                 <tr key={p.cik} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2.5">
                     <a href={p.url} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] hover:underline">{p.ticker || p.spinco}</a>
-                    {p.ticker && <div className="max-w-[200px] truncate text-[11px] text-[var(--text-4)]">{p.spinco}</div>}
-                    {p.business && <div className="max-w-[240px] truncate text-[11px] text-[var(--text-4)]" title={p.business}>{p.business}</div>}
+                    {p.ticker && <div className="max-w-[220px] truncate text-[11px] text-[var(--text-4)]">{p.spinco}</div>}
+                    {p.business && <div className="max-w-[260px] truncate text-[11px] text-[var(--text-4)]" title={p.business}>{p.business}</div>}
+                    <div className="mt-1"><SpinoffBriefing cik={p.cik} spinco={p.spinco} parent={p.parent} /></div>
                   </td>
                   <td className="px-2 py-2.5 text-[12px] text-[var(--text-3)]">
                     {p.parent ?? <span className="text-[var(--text-4)]">—</span>}

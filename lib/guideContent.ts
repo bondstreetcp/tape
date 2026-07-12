@@ -1659,6 +1659,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "How far along the registration is, from the days since the first Form 10 and the number of amendments — later-stage filings are typically closer to actually distributing."
           },
           {
+            "term": "Briefing →",
+            "plain": "A generalist's primer drilled from the SpinCo's Form 10 — what the business is and why it's being spun, how the industry works, the specifically-named competitors, the customer and supplier base, key risks, and a financial snapshot. It's the issuer's own account (its framing of its rivals), pulled from the filing with nothing added from outside — a fast way to get up to speed on an unfamiliar industry."
+          },
+          {
             "term": "Spinco",
             "plain": "The newly independent company created by the spin-off (ticker and name)."
           },
