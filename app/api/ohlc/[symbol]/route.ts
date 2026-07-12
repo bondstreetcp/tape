@@ -49,12 +49,13 @@ export async function GET(
         .chart(sym, { period1: new Date(now - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false })
         .catch(() => null),
     ]);
-    // Cache briefly: this payload also carries the INTRADAY series that 1D/1W charts render, and a
-    // long TTL serves yesterday's session as if it were today's (the KOSPI chart showed the prior
-    // day's −3% session while the header said +0.6% — the old s-maxage=3600 + 24h SWR did that).
+    // Cache tuned between two failures: a LONG TTL served yesterday's session as today's (the KOSPI
+    // stale-chart bug — old 1h + 24h SWR), but a 2-min TTL made every chart poll hit the function and
+    // was a Fluid-CPU driver. 10-min s-maxage + 1-day SWR: the CDN serves polls from cache (revalidating
+    // in the background), the function runs ~6×/hour per symbol, and the chart is never a day stale.
     return NextResponse.json(
       { daily: bars((d as any)?.quotes || []), intraday: bars((i as any)?.quotes || []) },
-      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } },
+      { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=86400" } },
     );
   } catch (e: any) {
     return NextResponse.json({ daily: [], intraday: [], error: String(e?.message || e) });

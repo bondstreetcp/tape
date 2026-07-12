@@ -37,7 +37,9 @@ export default function IndexChart({ symbol, name, tf }: { symbol: string; name:
     () => (intradayTf ? `/api/intraday?symbols=${encodeURIComponent(symbol)}${tf === "1d" ? "&interval=5m" : ""}` : null),
     [intradayTf, symbol, tf],
   );
-  const { data: liveRaw, asOf } = usePolledFetch(intradayTf, liveUrl, tf === "1d" ? 40_000 : 60_000);
+  // 3-min poll: this is the always-on home-page chart, so a fast cadence multiplies serverless load
+  // across every open tab. An index overview doesn't need 40s freshness; the "as of" stamp shows it.
+  const { data: liveRaw, asOf } = usePolledFetch(intradayTf, liveUrl, 180_000);
   const liveIntraday = useMemo<Bar[]>(() => {
     const xy: [number, number][] = liveRaw?.series?.[symbol] ?? [];
     return xy.map(([t, c]) => ({ t, c }));

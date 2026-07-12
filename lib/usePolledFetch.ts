@@ -30,9 +30,13 @@ export function usePolledFetch(
         .catch(() => {})
         .finally(() => { if (alive) setLoading(false); });
     };
-    tick();
-    const id = setInterval(tick, intervalMs);
-    return () => { alive = false; clearInterval(id); };
+    tick(); // initial fetch always runs
+    // PAUSE polling while the tab is backgrounded — a forgotten open tab would otherwise hammer the
+    // (serverless) endpoint forever, which was a real Vercel Fluid-CPU driver. Resume on refocus.
+    const id = setInterval(() => { if (!document.hidden) tick(); }, intervalMs);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [enabled, url, intervalMs]);
 
   return { data, asOf, loading };
