@@ -3021,6 +3021,21 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/portfolio-income",
+        "title": "Portfolio Options Income",
+        "question": "How much income could I generate writing covered calls against the stocks I already own, and what would it cost me in upside?",
+        "how": "A covered call means selling someone the right to buy your shares at a higher (strike) price by a certain date; you keep the cash premium no matter what, and only give up the stock if it rises through the strike. Paste your book (same local store as the Cockpit and Radar — it never leaves your browser) and for each long holding that's in the options-quality universe it shows the best out-of-the-money call at your chosen tenor, sized in real dollars for your actual share count. A ~1-month tenor sells a roughly 30-delta call (more premium, tighter cap on upside); ~3-month sells a ~20-delta call (less premium, more room to run). Short positions are excluded (you need the shares to cover), and lots under 100 shares show the per-share yield but can't write a standard 100-share contract. It flags any holding whose next earnings report lands before the call expires — writing through an earnings print collects richer premium but adds gap-and-assignment risk. Every strike, premium and yield comes from the nightly options scan; nothing is modeled beyond it. US options only.",
+        "metrics": [
+          { "term": "Sell call (strike · expiry · Δ)", "plain": "The suggested out-of-the-money call to write: its strike price, expiration, days to expiry, and delta (~0.30 for the 1-month, ~0.20 for the 3-month)." },
+          { "term": "Premium $", "plain": "The cash you collect up front = premium per share × 100 × the number of whole contracts you can write (shares ÷ 100, rounded down)." },
+          { "term": "Ann. yield", "plain": "The static income return — premium ÷ stock price — annualized. What you'd earn if the stock stays flat and you keep re-writing the call each period." },
+          { "term": "If called", "plain": "The total annualized return if the stock rises through the strike and your shares are assigned away: the premium plus the gain up to the strike." },
+          { "term": "Upside cap", "plain": "How far the stock can rise before your shares get called away (the strike relative to today's price) — the upside you're giving up for the premium." },
+          { "term": "⚠ Earnings in window", "plain": "The holding's next earnings print falls before the call expires — extra premium, but gap and early-assignment risk. Cross-check the Catalyst Radar." }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/overnight",
         "title": "Overnight Filings",
         "question": "Which new material SEC filings dropped overnight, what changed in them versus the prior comparable filing, and which look market-moving?",
