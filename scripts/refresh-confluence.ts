@@ -49,6 +49,11 @@ async function main() {
   const biotechVol = await fs.readFile(path.join(DATA, "biotech-vol.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   // SEC XBRL capital-return board — real YoY share-count change + total shareholder yield (refresh-buybacks).
   const buybacks = await fs.readFile(path.join(DATA, "buybacks.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  // Activist campaigns (13D/letters — refresh-campaigns), management's own guidance record
+  // (refresh-guidance-board) and the completed-spin turnover clock (refresh-spinoffs).
+  const campaigns = await fs.readFile(path.join(DATA, "campaigns.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const guidance = await fs.readFile(path.join(DATA, "guidance-board.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const spins = await fs.readFile(path.join(DATA, "spinoffs.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
   // ── accumulate signals per ticker ──────────────────────────────────────────
   const sig = new Map<string, ConfluenceSignal[]>();
@@ -213,6 +218,56 @@ async function main() {
     });
   }
 
+  // 11) ACTIVIST — an activist holds a stake and is agitating for change (13D / open letter, ≤270d:
+  //     a live campaign stays a catalyst for quarters). The campaigner + ask make the chip concrete.
+  for (const c of (campaigns?.campaigns || []) as any[]) {
+    if (c?.type !== "activist" || !c?.ticker) continue;
+    const ageD = (Date.now() - Date.parse(c.date)) / 86_400_000;
+    if (!Number.isFinite(ageD) || ageD < 0 || ageD > 270) continue;
+    add(c.ticker, {
+      kind: "activist",
+      label: "Activist engaged",
+      detail: `${c.campaigner || "An activist"}${c.ask ? ` — ${c.ask}` : ""}`.slice(0, 160),
+      weight: 2, // a public activist push is a high-conviction, event-driven signal
+    });
+  }
+
+  // 12) GUIDANCE — management's OWN numbers: a raised outlook (event), and/or a habitual sandbagger
+  //     (beat its own guide ≥75% of tracked quarters) whose current guide is therefore likely soft.
+  for (const r of (guidance?.rows || []) as any[]) {
+    if (!r?.symbol) continue;
+    const sandbagger = (r.total ?? 0) >= 4 && r.beats / r.total >= 0.75;
+    const raised = r.action === "raise";
+    if (!raised && !sandbagger) continue;
+    const beatBit = sandbagger ? `beat own guide ${r.beats}/${r.total} qtrs${r.avgVsGuide != null ? ` (avg +${(r.avgVsGuide * 100).toFixed(0)}%)` : ""}` : "";
+    add(r.symbol, {
+      kind: "guidance",
+      label: raised ? "Guide raised" : "Sandbagger",
+      detail: raised ? `Raised its own ${r.period || "forward"} outlook${beatBit ? ` · ${beatBit}` : ""}` : beatBit,
+      weight: (raised ? 1.5 : 1) + (raised && sandbagger ? 0.5 : 0), // a raise from a sandbagger is the strongest read
+    });
+  }
+
+  // 13) SPIN EXHAUSTION — a completed spin-off whose register has turned ~1–2× since separation:
+  //     the backtested seller-exhaustion zone (forced/indexed sellers done; see /spinoffs). Past ~200%
+  //     the signal is stale — the turn happened long ago.
+  for (const r of (spins?.rows || []) as any[]) {
+    if (!r?.ticker || r?.turnoverPct == null) continue;
+    if (r.turnoverPct < 100 || r.turnoverPct > 200) continue;
+    add(r.ticker, {
+      kind: "spinturn",
+      label: "Spin register turned",
+      detail: `${Math.round(r.turnoverPct)}% of the register traded since spin (${r.daysSince}d) — seller-exhaustion zone`,
+      weight: 1.5,
+    });
+  }
+
+  // Signal-MAP coverage (pre-≥2-filter) — distinguishes "rule never fires" (a data/shape bug) from
+  // "fires but nothing stacks a second signal tonight" (the confluence bar working as designed).
+  const mapCounts = SIGNAL_ORDER.reduce((acc, k) => { acc[k] = 0; return acc; }, {} as Record<SignalKind, number>);
+  for (const signals of sig.values()) for (const s of signals) mapCounts[s.kind]++;
+  console.log(`confluence: signal-map coverage (pre-filter) ${JSON.stringify(mapCounts)}`);
+
   // ── build the ranked board (require ≥2 distinct signal kinds = real confluence) ──
   const ctx = new Map((snap?.stocks || []).map((s) => [s.symbol, s] as const));
   const names: ConfluenceName[] = [];
@@ -249,7 +304,7 @@ async function main() {
   if (await llmConfigured()) {
     const toExplain = board.slice(0, TOP_EXPLAIN);
     const SYSTEM =
-      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, a real buyback (the share count is genuinely shrinking, not just offsetting stock-comp dilution) often with a high total shareholder yield, and a dated catalyst — which may be a specific FDA PDUFA decision or a clinical trial readout that could UNLOCK the thesis on a known date). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
+      "You are a senior buy-side analyst. Each name below carries SEVERAL INDEPENDENT bullish signals that happen to agree (value, smart-money 13F buying, open-market insider buying, Congress buying, rising analyst EPS estimates, an analyst upgrade, call-heavy options flow, a crowded short = squeeze potential, a real buyback (the share count is genuinely shrinking, not just offsetting stock-comp dilution) often with a high total shareholder yield, an activist investor publicly pushing for change, management raising its own guidance and/or habitually beating its own guide (a sandbagger), a completed spin-off whose share register has fully turned (seller exhaustion), and a dated catalyst — which may be a specific FDA PDUFA decision or a clinical trial readout that could UNLOCK the thesis on a known date). For each name write the SECOND LAYER: (thesis) the bull case these signals TOGETHER imply and the mechanism that ties them — not a restatement of the chips; (risk) the strongest bear case or what would make this a value trap / a head-fake; (watch) the concrete thing that would confirm or refute the setup (an earnings print, a guide, a deal close, follow-through buying). " +
       "Ground every claim in the supplied signals + context — never invent a number or a reason. Two to three crisp sentences total across the three fields each. Be specific to the company, not generic. " +
       NO_ADVICE;
     const SCHEMA = 'Return ONLY JSON: {"reads":[{"symbol": string, "thesis": string, "risk": string, "watch": string}]}';

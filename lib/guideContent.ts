@@ -2110,8 +2110,16 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "A member of Congress recently bought it (a net buyer), per required trade disclosures."
           },
           {
+            "term": "Activist signal",
+            "plain": "An activist investor holds a stake and is publicly pushing for change (board seats, a sale, capital return) — a live 13D campaign or open letter."
+          },
+          {
             "term": "Buyback signal",
             "plain": "The company is genuinely shrinking its share count (a real buyback, not just offsetting stock-based pay), often with a high total shareholder yield — a sign of capital-return discipline."
+          },
+          {
+            "term": "Guidance signal",
+            "plain": "Management raised its own forward outlook, or habitually beats its own guide (a 'sandbagger' — so the current guide is probably conservative too)."
           },
           {
             "term": "Estimates rising signal",
@@ -2132,6 +2140,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "Catalyst signal",
             "plain": "A dated near-term event — often an FDA drug-approval decision (PDUFA) or a trial result — that could unlock the thesis."
+          },
+          {
+            "term": "Spin exhausted signal",
+            "plain": "A recently spun-off company whose entire share register has traded ~1–2 times since separation — the point where forced and disinterested sellers are historically done."
           },
           {
             "term": "Thesis / Risk / Watch",
@@ -2170,6 +2182,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "Well-known professional investors sold out or sharply trimmed the position last quarter, per their 13F filing — the quarterly SEC disclosure where large managers list their US holdings."
           },
           {
+            "term": "Short report signal",
+            "plain": "A short-seller published a public research report arguing the stock should fall — the most direct bear signal there is."
+          },
+          {
             "term": "Guidance cut signal",
             "plain": "Management lowered its own forward outlook for sales or profit."
           },
@@ -2188,6 +2204,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "YTD · vs high",
             "plain": "Context on each card: the stock's year-to-date price return and how far it trades below its 52-week high."
+          },
+          {
+            "term": "Since flagged / New",
+            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record first logged it here (on a warning, a FALL is the signal working — shown green), and a New badge for names that appeared on the latest run."
           }
         ]
       },
@@ -2226,8 +2246,8 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "Replays the signals that can be recomputed purely from past prices (Leaders RS, breakout tag, 12−1 momentum, RSI oversold) at every month-end over ~5 years, grading picks against the same day's equal-weight pool. Boards needing options/positioning/filings history stay forward-only — replaying them would peek at the future. Uses today's index members, so treat the edges as upper bounds."
           },
           {
-            "term": "Confluence mix",
-            "plain": "Attribution within the Confluence board: each entry records which signal kinds it carried (value, insider buying, buyback…), so as grades mature this table shows which kinds actually carry the edge. A name with several kinds counts toward each — conditional performance, not an isolated factor return."
+            "term": "Confluence / Warnings mix",
+            "plain": "Attribution within the two fusion boards: each entry records which signal kinds it carried (value, insider buying, buyback… / expensive, short report…), so as grades mature these tables show which kinds actually carry the edge. A name with several kinds counts toward each — conditional performance, not an isolated factor return."
           }
         ],
         "usOnly": true

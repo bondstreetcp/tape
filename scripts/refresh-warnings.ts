@@ -32,6 +32,7 @@ async function main() {
   const analyst = await getAnalystActions("sp500").catch(() => [] as any[]);
   const estimates = await fs.readFile(path.join(DATA, "estimates.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const guidance = await fs.readFile(path.join(DATA, "guidance-board.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const campaigns = await fs.readFile(path.join(DATA, "campaigns.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
   const sig = new Map<string, WarningSignal[]>();
   const add = (sym: string, s: WarningSignal) => {
@@ -94,6 +95,25 @@ async function main() {
     if (a.put > a.call * 2 && a.put >= 250_000) add(sym, { kind: "putflow", label: "Put-heavy flow", detail: `${money(a.put)} put premium vs ${money(a.call)} calls`, weight: 1 });
   }
 
+  // 7) SHORT REPORT — a short-seller published a public thesis (refresh-campaigns; ≤270d — a
+  //    published short case stays live for quarters). The single most classic bear signal.
+  for (const c of (campaigns?.campaigns || []) as any[]) {
+    if (c?.type !== "short" || !c?.ticker) continue;
+    const ageD = (Date.now() - Date.parse(c.date)) / 86_400_000;
+    if (!Number.isFinite(ageD) || ageD < 0 || ageD > 270) continue;
+    add(c.ticker, {
+      kind: "shortcampaign",
+      label: "Short report",
+      detail: `${c.campaigner || "A short-seller"} published a short thesis${c.ask ? ` — ${c.ask}` : ""}`.slice(0, 160),
+      weight: 2.5, // a researched public short case is the strongest single bear signal
+    });
+  }
+
+  // Signal-MAP coverage (pre-≥2-filter) — "rule never fires" (a bug) vs "fires but doesn't stack".
+  const mapCounts = WARNING_ORDER.reduce((acc, k) => { acc[k] = 0; return acc; }, {} as Record<WarningKind, number>);
+  for (const signals of sig.values()) for (const s of signals) mapCounts[s.kind]++;
+  console.log(`warnings: signal-map coverage (pre-filter) ${JSON.stringify(mapCounts)}`);
+
   // ── build the ranked board (require ≥2 distinct signal kinds) ──
   const names: WarningName[] = [];
   for (const [sym, signals] of sig) {
@@ -114,7 +134,7 @@ async function main() {
   if (await llmConfigured()) {
     const toExplain = board.slice(0, TOP_EXPLAIN);
     const SYSTEM =
-      "You are a skeptical short-side analyst. Each name below carries SEVERAL INDEPENDENT bearish signals that happen to agree (rich vs its own history, EPS estimates being cut, super-investor 13F selling, a guidance cut, an analyst downgrade, put-heavy flow). For each write: (thesis) the BEAR case these signals TOGETHER imply and the mechanism tying them — a name priced for perfection that informed money + the Street are abandoning, not a restatement of the chips; (risk) what would INVALIDATE the warning — the strongest reason it might be fine (a durable moat, a one-off, cheap on forward numbers); (watch) the concrete thing that would confirm or refute the warning (a guide, a print, follow-through selling). " +
+      "You are a skeptical short-side analyst. Each name below carries SEVERAL INDEPENDENT bearish signals that happen to agree (rich vs its own history, EPS estimates being cut, super-investor 13F selling, a published short-seller report, a guidance cut, an analyst downgrade, put-heavy flow). For each write: (thesis) the BEAR case these signals TOGETHER imply and the mechanism tying them — a name priced for perfection that informed money + the Street are abandoning, not a restatement of the chips; (risk) what would INVALIDATE the warning — the strongest reason it might be fine (a durable moat, a one-off, cheap on forward numbers); (watch) the concrete thing that would confirm or refute the warning (a guide, a print, follow-through selling). " +
       "Ground every claim in the supplied signals + context — never invent a number or a reason. Two to three crisp sentences total across the three fields. Be specific to the company, not generic. " + NO_ADVICE;
     const SCHEMA = 'Return ONLY JSON: {"reads":[{"symbol": string, "thesis": string, "risk": string, "watch": string}]}';
     const lines = toExplain.map((n) => {

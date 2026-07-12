@@ -4,7 +4,9 @@
 // AGREE. One signal is noise; three unrelated signals pointing the same way is a setup worth a
 // look. GLM writes a thesis / risk / what-to-watch for the top names. Decision-support, not advice.
 
-export type SignalKind = "value" | "smartmoney" | "insider" | "congress" | "buyback" | "revisions" | "analyst" | "options" | "squeeze" | "catalyst";
+export type SignalKind =
+  | "value" | "smartmoney" | "insider" | "congress" | "activist" | "buyback" | "guidance"
+  | "revisions" | "analyst" | "options" | "squeeze" | "catalyst" | "spinturn";
 
 export interface ConfluenceSignal {
   kind: SignalKind;
@@ -43,26 +45,23 @@ export interface ConfluenceData {
   counts: Record<SignalKind, number>; // how many names carry each signal (for the legend)
 }
 
-/** A board name's entry in the Signal Track Record log (joined by the page) — closes the
- * accountability loop AT the board: when was this name flagged, and what has it done since. */
-export interface FlaggedInfo {
-  date: string; // YYYY-MM-DD the name was logged (this stint on the board)
-  entryPrice: number; // nightly close the day it was flagged
-  isNew: boolean; // appeared on the latest tracked run (a fresh entrant, not a seed)
-  seed: boolean; // was already on the board the night tracking began
-}
+// The signal-log join shown on the board cards ("±x% since flagged") — shared with Warnings.
+export type { FlaggedInfo } from "./signalLog";
 
-export const SIGNAL_ORDER: SignalKind[] = ["value", "smartmoney", "insider", "congress", "buyback", "revisions", "analyst", "options", "squeeze", "catalyst"];
+export const SIGNAL_ORDER: SignalKind[] = ["value", "smartmoney", "insider", "congress", "activist", "buyback", "guidance", "revisions", "analyst", "options", "squeeze", "catalyst", "spinturn"];
 
 export const SIGNAL_META: Record<SignalKind, { label: string; color: string; blurb: string }> = {
   value: { label: "Value", color: "#22c55e", blurb: "Trading cheap vs its own 10-year valuation" },
   smartmoney: { label: "Smart money", color: "#a78bfa", blurb: "A super-investor added or initiated it last quarter (13F; 56-manager roster)" },
   insider: { label: "Insider buying", color: "#10b981", blurb: "Insiders bought on the open market (SEC Form 4)" },
   congress: { label: "Congress", color: "#60a5fa", blurb: "A member of Congress bought it recently (net buyer)" },
+  activist: { label: "Activist", color: "#818cf8", blurb: "An activist investor holds a stake and is pushing for change (13D / campaign)" },
   buyback: { label: "Buyback", color: "#84cc16", blurb: "The share count is genuinely shrinking — a real buyback, not just mopping up stock-comp dilution — often with a high total shareholder yield" },
+  guidance: { label: "Guidance", color: "#eab308", blurb: "Management raised its own forward outlook, or habitually beats its own guide (a sandbagger)" },
   revisions: { label: "Estimates rising", color: "#2dd4bf", blurb: "Analysts are raising EPS estimates (revision momentum)" },
   analyst: { label: "Analyst", color: "#38bdf8", blurb: "A recent sell-side upgrade" },
   options: { label: "Call flow", color: "#f59e0b", blurb: "Unusually call-heavy options flow" },
   squeeze: { label: "Squeeze fuel", color: "#fb7185", blurb: "Heavily shorted — squeeze potential if the bull case plays out" },
   catalyst: { label: "Catalyst", color: "#ec4899", blurb: "A dated near-term catalyst — often an FDA PDUFA decision or a clinical trial readout that could unlock the thesis" },
+  spinturn: { label: "Spin exhausted", color: "#f97316", blurb: "A completed spin-off whose register has fully turned (~100–200% of shares traded since separation) — the backtested seller-exhaustion zone" },
 };

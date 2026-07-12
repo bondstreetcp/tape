@@ -104,6 +104,15 @@ export interface MemberInput {
   tags?: string[]; // composition at entry (e.g. confluence signal kinds) — stored on the event
 }
 
+/** A board name's entry in this log, joined back onto its board by the server page — closes the
+ * accountability loop AT the board: when was this name flagged, and what has it done since. */
+export interface FlaggedInfo {
+  date: string; // YYYY-MM-DD the name was logged (this stint on the board)
+  entryPrice: number; // nightly close the day it was flagged
+  isNew: boolean; // appeared on the latest tracked run (a fresh entrant, not a seed)
+  seed: boolean; // was already on the board the night tracking began
+}
+
 /** Whole calendar days between two YYYY-MM-DD dates (both pinned to UTC midnight — no TZ drift). */
 export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((Date.parse(toISO + "T00:00:00Z") - Date.parse(fromISO + "T00:00:00Z")) / 86_400_000);

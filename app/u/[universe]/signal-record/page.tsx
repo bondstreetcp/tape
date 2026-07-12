@@ -36,12 +36,12 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
   const summariesAll = summarizeSignals(log.events);
   const summariesFresh = summarizeSignals(log.events, { includeSeed: false });
   const latest = [...log.events].sort((a, b) => b.date.localeCompare(a.date) || a.signal.localeCompare(b.signal)).slice(0, EVENTS_SHOWN);
-  // Per-kind attribution WITHIN the Confluence board (events log their signal kinds as tags from
+  // Per-kind attribution WITHIN the two fusion boards (events log their signal kinds as tags from
   // 2026-07-12). Computed over the FULL log server-side, like the scorecard.
-  const confluenceMix = summarizeTags(log.events, "confluence");
-  const confluenceMixSince = log.events
-    .filter((e) => e.signal === "confluence" && e.tags?.length)
-    .reduce<string | null>((min, e) => (min == null || e.date < min ? e.date : min), null);
+  const mixSince = (signal: "confluence" | "warnings") =>
+    log.events
+      .filter((e) => e.signal === signal && e.tags?.length)
+      .reduce<string | null>((min, e) => (min == null || e.date < min ? e.date : min), null);
 
   return (
     <SignalRecordView
@@ -53,8 +53,10 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
       since={log.since}
       generatedAt={log.generatedAt}
       backtest={backtest}
-      confluenceMix={confluenceMix}
-      confluenceMixSince={confluenceMixSince}
+      confluenceMix={summarizeTags(log.events, "confluence")}
+      confluenceMixSince={mixSince("confluence")}
+      warningsMix={summarizeTags(log.events, "warnings")}
+      warningsMixSince={mixSince("warnings")}
     />
   );
 }
