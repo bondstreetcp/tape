@@ -50,7 +50,7 @@ export default function ConfluenceView({ data, universe, flagged }: { data: Conf
 
       <div className="mb-3 text-xs text-[var(--text-4)]">
         {names.length} names · across the Russell 3000{asOf ? ` · as of ${asOf}` : ""} ·{" "}
-        <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline" title="Every appearance on this board is logged and graded on its 1w/1m/3m return vs the S&P">
+        <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline" title="Board appearances are logged and graded on their 1w/1m/3m return vs the S&P">
           graded on the Track Record →
         </Link>
       </div>
@@ -93,7 +93,7 @@ function ConfluenceCard({ n, universe, f }: { n: ConfluenceName; universe: strin
             <div
               className="tabular-nums"
               style={{ color: col(since) }}
-              title={(f.seed ? `On the board when tracking began (${day(f.date)})` : `First flagged ${day(f.date)}`) + " — raw price return since; the S&P-adjusted grade lives on the Track Record"}
+              title={(f.seed ? `On the board when tracking began (${day(f.date)})` : `Flagged ${day(f.date)} (this stint on the board)`) + " — raw price return since; the S&P-adjusted grade lives on the Track Record"}
             >
               {pct(since, 1)} <span className="text-[var(--text-4)]">since {day(f.date)}</span>
             </div>

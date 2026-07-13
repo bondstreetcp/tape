@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, summarizeTags, daysBetween,
-  type SignalEvent,
+  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, summarizeTags, joinFlagged, daysBetween,
+  type SignalEvent, type SignalLogFile,
 } from "../lib/signalLog";
 
 const ev = (o: Partial<SignalEvent> & { signal: SignalEvent["signal"]; symbol: string; date: string }): SignalEvent => ({
@@ -176,6 +176,47 @@ test("summarizeTags: direction comes from the SIGNAL (warnings tags grade bearis
   const seeded = ev({ signal: "warnings", symbol: "S", date: "2026-07-12", tags: ["distribution"], seed: true });
   assert.equal(summarizeTags([w, seeded], "warnings")[0].events, 2);
   assert.equal(summarizeTags([w, seeded], "warnings", { includeSeed: false })[0].events, 1);
+});
+
+test("summarizeTags: a duplicated tag inside one event never double-counts it", () => {
+  const e = ev({ signal: "confluence", symbol: "DUP", date: "2026-07-12", tags: ["value", "value"] });
+  e.marks.w1 = { date: "2026-07-19", price: 105, spx: 5000 };
+  const mix = summarizeTags([e], "confluence");
+  assert.equal(mix.length, 1);
+  assert.equal(mix[0].events, 1); // not 2
+  assert.equal(mix[0].open, 1); // no m3 yet → open
+  assert.equal(mix[0].horizons.w1!.n, 1);
+});
+
+test("joinFlagged: latest stint wins, NEW only for non-seeds on the latest run, legacy logs degrade", () => {
+  const log = (events: SignalEvent[], lastSeen?: SignalLogFile["lastSeen"]): SignalLogFile =>
+    ({ generatedAt: "", since: "2026-07-08", events, lastMembership: {}, lastSeen });
+  const seedEv = ev({ signal: "confluence", symbol: "SEED", date: "2026-07-08", entryPrice: 50, seed: true });
+  const oldEv = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 100 });
+  const reEv = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-12", entryPrice: 120 }); // re-entry
+  const stale = ev({ signal: "confluence", symbol: "BBB", date: "2026-07-09", entryPrice: 80 });
+  const zero = ev({ signal: "confluence", symbol: "ZERO", date: "2026-07-12", entryPrice: 0 }); // unpriceable
+  const wrongSig = ev({ signal: "warnings", symbol: "AAA", date: "2026-07-12", entryPrice: 999 });
+  const seen = { confluence: { AAA: "2026-07-12", BBB: "2026-07-12", SEED: "2026-07-12" } };
+  const syms = new Set(["AAA", "BBB", "SEED", "ZERO", "MISSING"]);
+
+  const f = joinFlagged(log([seedEv, oldEv, reEv, stale, zero, wrongSig], seen), "confluence", syms)!;
+  assert.equal(f.AAA.date, "2026-07-12"); // the LATEST stint, not the July 1 entry
+  assert.equal(f.AAA.entryPrice, 120); // measures from the re-entry price
+  assert.equal(f.AAA.isNew, true); // dated on the latest run (max lastSeen = 07-12)
+  assert.equal(f.BBB.isNew, false); // logged on an earlier run
+  assert.equal(f.SEED.isNew, false); // seeds never badge as NEW
+  assert.equal(f.SEED.seed, true);
+  assert.ok(!("ZERO" in f)); // entryPrice must be > 0
+  assert.ok(!("MISSING" in f)); // never logged → no entry (view shows a plain card)
+  // a warnings event never leaks into a confluence join
+  assert.equal(f.AAA.entryPrice, 120);
+
+  // legacy log without lastSeen (older file format): everything joins, nothing is NEW
+  const legacy = joinFlagged(log([oldEv]), "confluence", new Set(["AAA"]))!;
+  assert.equal(legacy.AAA.isNew, false);
+  // nothing relevant in the log → null (view degrades wholesale)
+  assert.equal(joinFlagged(log([wrongSig], seen), "confluence", new Set(["NOPE"])), null);
 });
 
 test("summarizeSignals: seed filter", () => {

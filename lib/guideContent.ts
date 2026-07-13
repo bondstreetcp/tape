@@ -2155,7 +2155,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           },
           {
             "term": "Since flagged / New",
-            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record first logged it on this board, and a New badge for names that appeared on the latest run. The S&P-adjusted grade lives on the Track Record page."
+            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record logged this stint on the board (a name that left and later returned measures from its return), and a New badge for names that appeared on the latest run. The S&P-adjusted grade lives on the Track Record page."
           }
         ]
       },
@@ -2207,7 +2207,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           },
           {
             "term": "Since flagged / New",
-            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record first logged it here (on a warning, a FALL is the signal working — shown green), and a New badge for names that appeared on the latest run."
+            "plain": "Accountability on each card: the stock's raw price move since the Signal Track Record logged this stint on the board (on a warning, a FALL is the signal working — shown green), and a New badge for names that appeared on the latest run."
           }
         ]
       },

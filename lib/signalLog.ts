@@ -113,6 +113,29 @@ export interface FlaggedInfo {
   seed: boolean; // was already on the board the night tracking began
 }
 
+/** Pure board×log join (lib/flaggedJoin does the fs read): for each board symbol, its LATEST log
+ * entry for `signal` — i.e. this stint on the board (a re-entry after a real absence measures from
+ * its own flag date, matching the log's episode model). isNew = a non-seed entry dated on the
+ * latest tracked run (the newest lastSeen stamp — every priced member is stamped each run). Null
+ * when the log holds nothing for these symbols. ⚠ Prices are NOT re-based across stock splits —
+ * same known limit as the marks (see the header). */
+export function joinFlagged(log: SignalLogFile, signal: SignalKey, symbols: Set<string>): Record<string, FlaggedInfo> | null {
+  if (!log?.events?.length) return null;
+  const latest = new Map<string, SignalEvent>();
+  for (const e of log.events) {
+    if (e.signal !== signal || !symbols.has(e.symbol) || !(e.entryPrice > 0)) continue;
+    const p = latest.get(e.symbol);
+    if (!p || e.date > p.date) latest.set(e.symbol, e); // YYYY-MM-DD → lexicographic is chronological
+  }
+  if (!latest.size) return null;
+  const seenDates = Object.values(log.lastSeen?.[signal] ?? {});
+  const lastRun = seenDates.length ? seenDates.reduce((a, b) => (a > b ? a : b)) : null;
+  const out: Record<string, FlaggedInfo> = {};
+  for (const [sym, e] of latest)
+    out[sym] = { date: e.date, entryPrice: e.entryPrice, isNew: !e.seed && lastRun != null && e.date === lastRun, seed: !!e.seed };
+  return out;
+}
+
 /** Whole calendar days between two YYYY-MM-DD dates (both pinned to UTC midnight — no TZ drift). */
 export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((Date.parse(toISO + "T00:00:00Z") - Date.parse(fromISO + "T00:00:00Z")) / 86_400_000);
@@ -299,7 +322,9 @@ export function summarizeTags(events: SignalEvent[], signal: SignalKey, opts: { 
   const byTag = new Map<string, SignalEvent[]>();
   for (const e of events) {
     if (e.signal !== signal || !e.tags?.length || (!includeSeed && e.seed)) continue;
-    for (const t of e.tags) {
+    // Set-dedupe: the producers guarantee one-per-kind, but a duplicated tag must never
+    // double-count an event in its own bucket.
+    for (const t of new Set(e.tags)) {
       const a = byTag.get(t) ?? [];
       a.push(e);
       byTag.set(t, a);

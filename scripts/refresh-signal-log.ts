@@ -102,8 +102,11 @@ async function main() {
   const membership: Partial<Record<SignalKey, MemberInput[]>> = {};
   // Artifact-backed boards: the file IS the board (already floored/sorted by its refresh script).
   // Their kinds ride along as TAGS so the record can attribute performance per stacked signal.
-  if (confluence?.names?.length) membership.confluence = cap(confluence.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
-  if (warnings?.names?.length) membership.warnings = cap(warnings.names, 40).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
+  // ⚠ The cap MUST cover the engines' BOARD_MAX (60) — a lower cap silently un-logs the board's tail
+  // (ranks 41-60 never graded, no since-flagged line, entry prices mis-based when a name climbs in),
+  // breaking the "logger == card" doctrine and the boards' "appearances are logged" claim.
+  if (confluence?.names?.length) membership.confluence = cap(confluence.names, 60).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
+  if (warnings?.names?.length) membership.warnings = cap(warnings.names, 60).map((n) => m(n, n.score, `${(n.kinds || []).length} signals`, n.kinds));
   // Page-load-computed boards: same builders, same inputs, the board's own headline ranking.
   if (si) {
     membership.smartmoney = cap(buildSmartMoney(si, cong, ctxBy), 25).map((n) => m(n, n.score, `${n.investors.length} buyers`));

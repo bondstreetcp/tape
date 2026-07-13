@@ -233,13 +233,15 @@ async function main() {
   }
 
   // 12) GUIDANCE — management's OWN numbers: a raised outlook (event), and/or a habitual sandbagger
-  //     (beat its own guide ≥75% of tracked quarters) whose current guide is therefore likely soft.
+  //     whose current guide is therefore likely soft. Sandbagger uses the guidance board's OWN tag
+  //     (guidanceTag: beat rate ≥80% AND avg beat > +1%) so /confluence can never contradict /guidance
+  //     — plus a ≥4-quarter depth bar for this board (the canonical tag allows 2).
   for (const r of (guidance?.rows || []) as any[]) {
     if (!r?.symbol) continue;
-    const sandbagger = (r.total ?? 0) >= 4 && r.beats / r.total >= 0.75;
+    const sandbagger = r.tag === "sandbagger" && (r.total ?? 0) >= 4;
     const raised = r.action === "raise";
     if (!raised && !sandbagger) continue;
-    const beatBit = sandbagger ? `beat own guide ${r.beats}/${r.total} qtrs${r.avgVsGuide != null ? ` (avg +${(r.avgVsGuide * 100).toFixed(0)}%)` : ""}` : "";
+    const beatBit = sandbagger ? `beat own guide ${r.beats}/${r.total} qtrs${r.avgVsGuide != null ? ` (avg ${pct(r.avgVsGuide * 100)} vs guide)` : ""}` : "";
     add(r.symbol, {
       kind: "guidance",
       label: raised ? "Guide raised" : "Sandbagger",
