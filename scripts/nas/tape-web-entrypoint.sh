@@ -80,14 +80,20 @@ stop_server() {
   SERVER_PID=""
 }
 
-# Any answer below 500 counts as up: "/" 307s to /u/<default>, and a stale-data 503 from the freshness
+# Any 1xx-4xx answer counts as up: "/" 307s to /u/<default>, and a stale-data 503 from the freshness
 # endpoint must NOT be read as "the web server is down" (that would restart-loop a healthy site).
+# 000 (connection refused) and 5xx are down.
+#
+# ⚠ curl, NOT `node -e "fetch(...).then(r=>process.exit(...))"`. Calling process.exit() from inside a
+# resolved fetch promise trips a libuv assertion (UV_HANDLE_CLOSING) and exits 127 — i.e. the probe
+# reports FAILURE against a perfectly healthy server. curl ships in the image: node:22-bookworm
+# descends from buildpack-deps:bookworm-curl (the same reason git is available).
 healthy() {
   i=0
   while [ "$i" -lt "$HEALTH_TRIES" ]; do
-    if node -e "fetch('http://127.0.0.1:${PORT}/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
-      return 0
-    fi
+    # curl prints 000 and exits non-zero when nothing is listening; `|| true` keeps set -e out of it.
+    code=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null || true)
+    case "$code" in [1-4]*) return 0 ;; esac
     i=$((i + 1))
     sleep 2
   done

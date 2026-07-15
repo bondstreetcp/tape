@@ -31,14 +31,15 @@ services:
       - tape-web-app:/app
       - ./tape-web-entrypoint.sh:/tape-web-entrypoint.sh:ro
     entrypoint: ["sh", "/tape-web-entrypoint.sh"]
-    # Any answer < 500 is "up" — "/" 307s to the default universe, and a stale-data 503 from
-    # /api/health/data must not be mistaken for a dead web server.
+    # Any 1xx-4xx is "up" — "/" 307s to the default universe, and a stale-data 503 from
+    # /api/health/data must not be mistaken for a dead web server. 000 (refused) / 5xx = unhealthy.
+    #
+    # ⚠ curl, NOT `node -e "fetch(...).then(r=>process.exit(...))"`: calling process.exit() from a
+    # resolved fetch promise trips a libuv assertion and exits 127 against a HEALTHY server — Docker
+    # would read that as unhealthy and restart-loop a working site. curl is in the image
+    # (node:22-bookworm ← buildpack-deps:bookworm-curl, same reason git is there).
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))
+      test: ["CMD-SHELL", "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ | grep -qE '^[1-4]'"]
       interval: 60s
       timeout: 10s
       retries: 3
