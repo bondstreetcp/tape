@@ -4,6 +4,7 @@
  * price / next-earnings) and tags each name sandbagger / over-promiser / steady from its beat-its-own-guide
  * record. Pure transform — NO fetches. Run AFTER refresh-guidance in the nightly FULL job.
  */
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
 import { loadSnapshot } from "../lib/data";
@@ -69,7 +70,9 @@ async function main() {
   });
 
   const out: GuidanceBoardData = { generatedAt: g.generatedAt || new Date().toISOString(), scanned: rows.length, rows };
-  await fs.writeFile(path.join(DATA, "guidance-board.json"), JSON.stringify(out));
+  // Guarded: a vendor-outage night must leave the prior board stale, not blank (see lib/feedGuard).
+  const w = await writeFeedGuarded("guidance-board.json", out);
+  if (!w.written) { console.error(`refresh-guidance-board: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   const sand = rows.filter((r) => r.tag === "sandbagger").length,
     over = rows.filter((r) => r.tag === "over-promiser").length,
     tr = rows.filter((r) => r.total).length;

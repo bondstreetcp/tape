@@ -5,6 +5,7 @@
  * most). No LLM; live option chains only. Reuses the dispersion vol-probe harness (throttle/mapPool/retry).
  * Nightly FULL. See lib/gammaBoard.ts for the reading of net/gross GEX, the flip, and the OI walls.
  */
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
 import { loadSnapshot } from "../lib/data";
@@ -93,7 +94,9 @@ async function main() {
   if (rows.length < 10) { console.error(`gamma-board: only ${rows.length} names priced — aborting (keep previous file).`); process.exit(1); }
 
   const out: GammaBoardData = { generatedAt: new Date().toISOString(), universe: "sp500", scanned: targets.length, rows };
-  await fs.writeFile(path.join(DATA, "gamma-board.json"), JSON.stringify(out));
+  // Guarded: a vendor-outage night must leave the prior board stale, not blank (see lib/feedGuard).
+  const w = await writeFeedGuarded("gamma-board.json", out);
+  if (!w.written) { console.error(`refresh-gamma-board: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   const shortN = rows.filter((r) => r.regime === "short").length;
   // ETF coverage is called out explicitly — a missing headline index (e.g. SPY) is a silent data-quality
   // hit the total row count would hide, so name which of them actually priced.

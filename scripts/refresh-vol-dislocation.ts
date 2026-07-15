@@ -7,6 +7,7 @@
  * earnings-driven flag (rich vol that just reflects a print inside the front expiry — expected, not a
  * dislocation). Writes data/vol-dislocation.json, sorted richest-vol first.
  */
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
 import type { VolDisRow, VolDisData } from "../lib/volDislocation";
@@ -125,7 +126,9 @@ async function main() {
     scanned: rows.length,
     rows,
   };
-  await fs.writeFile(path.join(process.cwd(), "data", "vol-dislocation.json"), JSON.stringify(out));
+  // Guarded: a vendor-outage night must leave the prior board stale, not blank (see lib/feedGuard).
+  const w = await writeFeedGuarded("vol-dislocation.json", out);
+  if (!w.written) { console.error(`refresh-vol-dislocation: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   const rich = rows.filter((r) => r.ivPremium >= 1.4).length,
     cheap = rows.filter((r) => r.ivPremium <= 1.1).length;
   console.log(`vol-dislocation: ${rows.length} names (${broadN} from the broad probe) · rich (IV/RV≥1.4): ${rich} · cheap (≤1.1): ${cheap}`);

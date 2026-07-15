@@ -12,16 +12,15 @@
  *   • payout ÷ FCF (annual basis)                         (>1 = returning more than it earns)
  * All grounded in the filings — no LLM. Run: npm run refresh-buybacks. Nightly FULL.
  */
-import { promises as fsp } from "fs";
-import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { tickerToCik } from "../lib/edgar";
+import { writeFeedGuarded } from "../lib/feedGuard";
 import {
   quarterize, despikeQuarters, ttmSum, yoyChange, classifyBuyback,
   type BuybackRow, type BuybackData, type DurFact, type InstFact,
 } from "../lib/buybacks";
 
-const OUT = path.join(process.cwd(), "data", "buybacks.json");
+const OUT = "buybacks.json"; // written via the registry-backed guard (lib/feedGuard), not raw fs
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
@@ -172,8 +171,17 @@ async function main() {
     source: "S&P 500 capital-return from SEC XBRL companyfacts (repurchases, dividends, share count)",
     rows,
   };
-  await fsp.writeFile(OUT, JSON.stringify(data));
-  console.log(`wrote ${rows.length} rows (${ok} with data, ${noData} no companyfacts).`);
+  // GUARDED write. On 2026-07-15 this script overwrote 495 good rows with [] because SEC failed every
+  // fetch that night — the board went blank and Confluence silently lost its buyback signal. A bad
+  // night must degrade this feed to STALE, never to EMPTY. Blocked ⇒ exit non-zero so the tick logs ✗
+  // and the freshness gate reports honestly, rather than "succeeding" with destroyed data.
+  const w = await writeFeedGuarded(OUT, data);
+  if (!w.written) {
+    console.error(`refresh-buybacks: WRITE BLOCKED — ${w.reason}`);
+    console.error(`  built only ${rows.length} rows from ${names.length} names (${ok} with data, ${noData} no companyfacts) — SEC almost certainly rate-limited/blocked this run.`);
+    process.exit(1);
+  }
+  console.log(`wrote ${rows.length} rows (${ok} with data, ${noData} no companyfacts). [${w.reason}]`);
   const withBb = rows.filter((r) => r.buybackTtm);
   const shrinking = rows.filter((r) => r.badges.includes("shrinking"));
   console.log(`${withBb.length} active repurchasers · ${shrinking.length} genuinely shrinking the count`);

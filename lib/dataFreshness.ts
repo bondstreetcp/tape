@@ -32,7 +32,7 @@ const STAMP_KEYS = ["generatedAt", "updatedAt", "updated", "asOf", "lastUpdated"
 type Tier = "core" | "event" | "synthesis" | "snapshot";
 export type FreshStatus = "ok" | "stale" | "missing" | "empty" | "unreadable";
 
-interface FeedSpec {
+export interface FeedSpec {
   file: string; // relative to data/
   label: string;
   tier: Tier;
@@ -143,6 +143,20 @@ function countOf(v: unknown): number | null {
   if (Array.isArray(v)) return v.length;
   if (v && typeof v === "object") return Object.keys(v).length;
   return null;
+}
+
+/** The registry entry for a feed file (e.g. "buybacks.json"), or undefined if unregistered.
+ *  Exported so the WRITE guard (lib/feedGuard) enforces the very same countPath/minCount this
+ *  monitor reports on — one declaration, no second copy to drift. */
+export function feedSpec(file: string): FeedSpec | undefined {
+  return FEEDS.find((f) => f.file === file);
+}
+
+/** Count a feed payload's rows the way the monitor does (registry countPath → array length /
+ *  object key count). Null when the feed declares no countPath (uncountable → age-only). */
+export function feedCount(spec: FeedSpec | undefined, data: unknown): number | null {
+  if (!spec?.countPath) return null;
+  return countOf(getPath(data, spec.countPath));
 }
 function stampFrom(obj: any, keys: readonly string[]): number | null {
   for (const k of keys) {

@@ -5,6 +5,7 @@
  * bounds, 63d + 1y RV, term slope). Pure LOCAL math — no network, no LLM — so it can score the whole
  * cross-universe roster cheaply. Nightly FULL (after the snapshots/series are current).
  */
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
@@ -55,8 +56,11 @@ async function main() {
 
   const out: VolConeData = { generatedAt: new Date().toISOString(), horizons: [...CONE_HORIZONS], rows };
   // Round every vol/pct to keep the file small (fractions → 4dp, percentiles → 1dp is fine at 4dp too).
-  const json = JSON.stringify(out, (_k, v) => (typeof v === "number" ? +v.toFixed(4) : v));
-  await fs.writeFile(path.join(DATA, "vol-cone.json"), json);
+  const round = (_k: string, v: any) => (typeof v === "number" ? +v.toFixed(4) : v);
+  const json = JSON.stringify(out, round);
+  // Guarded: a vendor-outage night must leave the prior cone stale, not blank (see lib/feedGuard).
+  const w = await writeFeedGuarded("vol-cone.json", out, { replacer: round });
+  if (!w.written) { console.error(`refresh-vol-cone: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   const coiled = rows.filter((r) => r.pct20 != null && r.pct20 <= 20).length;
   const blown = rows.filter((r) => r.pct20 != null && r.pct20 >= 80).length;
   console.log(`vol-cone: wrote ${rows.length} rows (${coiled} coiled ≤20th pct, ${blown} blown-out ≥80th) · ${(json.length / 1e6).toFixed(2)} MB`);

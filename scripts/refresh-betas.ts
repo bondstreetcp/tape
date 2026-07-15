@@ -11,6 +11,7 @@
  * The stored series and Yahoo's ^GSPC use different intraday timestamps, so both are DAY-BUCKETED (one
  * close per calendar day) before aligning — else the exact-timestamp alignment finds no overlap.
  */
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
@@ -51,7 +52,9 @@ async function main() {
     const b = computeBeta(bucketByDay(d), market, 1300); // ~5y of trading days
     if (b != null) betas[sym] = Math.round(b * 1000) / 1000;
   }
-  await fs.writeFile(path.join(DATA, "betas.json"), JSON.stringify({ generatedAt: new Date().toISOString(), market: "^GSPC", betas }));
+  // Guarded: a vendor-outage night must leave the prior betas stale, not blank (see lib/feedGuard).
+  const w = await writeFeedGuarded("betas.json", { generatedAt: new Date().toISOString(), market: "^GSPC", betas });
+  if (!w.written) { console.error(`refresh-betas: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   console.log(`betas: wrote ${Object.keys(betas).length} betas (${missing} names had no series)`);
 }
 
