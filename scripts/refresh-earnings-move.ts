@@ -35,6 +35,20 @@ const WINDOW = 16; // days ahead to include
 // CAP still bounds the options-fetch cost; the pool is soonest-first so near prints always make it.
 const MIN_MKTCAP = 2.5e8;
 const CAP = 260; // most names processed (soonest first); truncation is LOGGED, never silent
+/**
+ * Wall-clock ceiling on the options fan-out. MUST stay under run-tick's STEP_TIMEOUT_MIN (45).
+ *
+ * CAP alone bounds the NAME count but not the TIME: the global 350ms gate caps the whole script at
+ * ~2.9 req/s (the 6 workers all queue behind it), each name costs TWO chain fetches, and every
+ * chainRetry miss burns 5 more gate slots plus ~4.4s of backoff. On a fast link that lands in a few
+ * minutes; on the NAS's home uplink, with Yahoo slow to answer, it ran past 45 min and the step was
+ * KILLED — writing nothing, so the feed rotted (2026-07-14/15, three nights running).
+ *
+ * The pool is already sorted soonest-first and unfetched names keep their prior row (see the
+ * carry-forward below), so spending the budget on the nearest prints and deferring the far-dated tail
+ * is exactly the right degradation — and it finishes on its own terms instead of being killed.
+ */
+const BUDGET_MIN = Number(process.env.EARNINGS_MOVE_BUDGET_MIN || 30);
 // Snapshot earningsDates go stale when a company MOVES its print (Yahoo had KRUS on Jul 7; the real
 // print was Jul 10 — the date "passed" and the name vanished). For dates that recently passed, one
 // live calendarEvents call rechecks; if the fresh date is inside the window, the name comes back.
@@ -216,7 +230,12 @@ async function main() {
   if (pool.length > CAP) console.log(`⚠ pool ${pool.length} > CAP ${CAP} — the ${pool.length - CAP} farthest-dated names are deferred to a later run (soonest-first kept)`);
   console.log(`${pool.length} US names report within ${WINDOW}d (>$${(MIN_MKTCAP / 1e6).toFixed(0)}M) → processing ${work.length}`);
 
+  const deadline = Date.now() + BUDGET_MIN * 60_000;
+  let budgetSkipped = 0;
   const built = await mapPool(work, 6, async (s) => {
+    // Soonest-first ordering means whatever the budget can't reach is the far-dated tail — and those
+    // names keep their prior row rather than vanishing. A killed step, by contrast, wrote nothing.
+    if (Date.now() > deadline) { budgetSkipped++; return null; }
     const sym: string = s.symbol;
     const base = await chainRetry(sym);
     const spot = base.underlying ?? s.price ?? null;
@@ -292,6 +311,14 @@ async function main() {
   });
 
   const rows = built.filter((r): r is EarningsMoveRow => !!r).sort((a, b) => a.daysToEarnings - b.daysToEarnings);
+  // Never silent — same rule as the CAP truncation above. A budget that quietly ate a third of the
+  // board would read as "those names have no options", which is a lie.
+  if (budgetSkipped) {
+    console.log(
+      `⚠ ${BUDGET_MIN}min options budget spent — ${budgetSkipped} of ${work.length} far-dated names not re-priced this run ` +
+        `(soonest prints were fetched first; skipped names keep their prior row via the carry-forward below).`,
+    );
+  }
 
   // CARRY-FORWARD: a still-future reporter that priced YESTERDAY but failed tonight (one flaky chain
   // fetch) keeps its prior row — a day-old straddle beats vanishing from the board the night before
