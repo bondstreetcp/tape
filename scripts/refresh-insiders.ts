@@ -61,7 +61,10 @@ async function scanSymbol(sym: string): Promise<NameBuys | null> {
   if (!cik) return null;
   const cutoff = new Date(Date.now() - WINDOW_DAYS * 86400 * 1000).toISOString().slice(0, 10);
   const fileCutoff = new Date(Date.now() - (WINDOW_DAYS + 7) * 86400 * 1000).toISOString().slice(0, 10); // filing lags the trade a few days
-  const list = (await getForm4List(cik)).filter((f) => f.date >= fileCutoff);
+  // Pass the cutoff DOWN rather than fetching everything and filtering here: it lets getForm4List skip
+  // the historical archive chunks (68 of them for JPM) once `filings.recent` provably reaches past it.
+  // Filtering after the fetch — what this used to do — paid the whole bandwidth bill and then binned it.
+  const list = await getForm4List(cik, fileCutoff);
   if (!list.length) return null;
   const parsed = (await pool(list, 4, (f) => parseForm4(cik, f))).flat();
   const buys = parsed.filter((t) => t.code === "P" && t.acquired && t.date >= cutoff && (t.shares ?? 0) > 0);

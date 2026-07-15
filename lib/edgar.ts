@@ -115,22 +115,56 @@ function collectForm4(r: any, out: F4Filing[]) {
   }
 }
 
-export async function getForm4List(cik: string): Promise<F4Filing[]> {
-  const cached = listCache.get(cik);
+/**
+ * Form 4 filings for a CIK, newest first.
+ *
+ * `since` (YYYY-MM-DD) is a HARD performance lever, not a convenience filter. A submissions JSON has
+ * `filings.recent` (the newest ~1000, often years deep) plus `filings.files[]` — historical archive
+ * chunks going back decades. Fetching those chunks is what made the nightly universe-wide scan
+ * unrunnable: JPM alone carries 68 of them (its own submissions JSON is 4.5 MB), and across the 2,606
+ * US names that ran to double-digit GB a night — to find 90 days of buys. Measured 2026-07-15:
+ * `recent` ALREADY reached past the 90-day cutoff for every name checked, so 100% of that was waste.
+ *
+ * So: when `recent`'s oldest filing is already older than `since`, the archive chunks CANNOT hold
+ * anything in window — skip them. This is provably lossless, not a heuristic; the check is on the
+ * actual oldest date present, and we fall through to the full walk whenever it can't be proven.
+ * Callers needing true full history simply omit `since` and get the old behaviour.
+ */
+export async function getForm4List(cik: string, since?: string): Promise<F4Filing[]> {
+  // Cache the FULL list under the bare CIK; windowed reads get their own keys, so a windowed call can
+  // never poison a later full-history caller with a truncated list.
+  const key = since ? `${cik}|${since}` : cik;
+  const cached = listCache.get(key);
   if (cached) return cached;
+  // A full list already in cache is a superset of any window — reuse it instead of refetching.
+  const full = since ? listCache.get(cik) : undefined;
+  if (full) {
+    const win = full.filter((f) => f.date >= since!);
+    listCache.set(key, win);
+    return win;
+  }
+
   const s = await getSubmissions(cik);
   const out: F4Filing[] = [];
   collectForm4(s.filings?.recent, out);
-  for (const f of s.filings?.files || []) {
-    try {
-      collectForm4(await getJson(`https://data.sec.gov/submissions/${f.name}`), out);
-    } catch {
-      /* skip a bad chunk */
+
+  const recentDates: string[] = s.filings?.recent?.filingDate || [];
+  const oldestRecent = recentDates.length ? recentDates[recentDates.length - 1] : null;
+  const recentCoversWindow = !!since && !!oldestRecent && oldestRecent <= since;
+
+  if (!recentCoversWindow) {
+    for (const f of s.filings?.files || []) {
+      try {
+        collectForm4(await getJson(`https://data.sec.gov/submissions/${f.name}`), out);
+      } catch {
+        /* skip a bad chunk */
+      }
     }
   }
   out.sort((a, b) => b.date.localeCompare(a.date)); // newest first
-  listCache.set(cik, out);
-  return out;
+  const res = since ? out.filter((f) => f.date >= since) : out;
+  listCache.set(key, res);
+  return res;
 }
 
 export async function parseForm4(cik: string, f: F4Filing): Promise<InsiderTx[]> {
