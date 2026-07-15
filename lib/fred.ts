@@ -10,14 +10,35 @@ const DAY = 86_400_000;
 
 interface Obs { date: string; value: number }
 
-async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
-  // Read the key at call time so a script can load .env.local before invoking getMacro.
-  const apiKey = process.env.FRED_API_KEY;
-  try {
-    if (apiKey) {
+const UA = { "User-Agent": "stock-chart-screener (research)" };
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// getMacro fires ~32 series through Promise.all — i.e. 32 SIMULTANEOUS requests. That's fine from a
+// datacenter and decidedly not from a home uplink shared with the rest of the nightly job: enough of
+// them time out that the macro build collapses. Space the starts through a serial gate (same idiom as
+// refresh-buybacks/gamma-board); with ~500ms requests a 60ms gap caps in-flight at roughly 8.
+let gate: Promise<void> = Promise.resolve();
+function throttle(ms = 60): Promise<void> {
+  const p = gate.then(() => sleep(ms));
+  gate = p;
+  return p;
+}
+
+/**
+ * ONE attempt at a series.
+ *
+ * The ok/obs split is the point: `ok:false` means the REQUEST failed (network, timeout, HTTP error)
+ * and is worth retrying, while `ok:true` with an empty array means FRED genuinely has nothing for the
+ * window and retrying would only burn time. The old code collapsed both into `[]`, so a transient
+ * blip was indistinguishable from "no data" — and silently cost the night that series.
+ */
+async function fetchOnce(id: string, cosd: string): Promise<{ ok: boolean; obs: Obs[] }> {
+  const apiKey = process.env.FRED_API_KEY; // read at call time so a script can load .env.local first
+  if (apiKey) {
+    try {
       // Keyed data API returns FULL history; the keyless graph CSV caps at ~800 obs (~3yr).
       const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&observation_start=${cosd}`;
-      const res = await fetch(url, { headers: { "User-Agent": "stock-chart-screener (research)" } });
+      const res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(20_000) });
       if (res.ok) {
         const j: any = await res.json();
         const out: Obs[] = [];
@@ -25,14 +46,14 @@ async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
           const v = parseFloat(o?.value);
           if (o?.date && Number.isFinite(v)) out.push({ date: o.date, value: v });
         }
-        if (out.length) return out;
+        if (out.length) return { ok: true, obs: out };
       }
-      // else fall through to the keyless CSV endpoint
-    }
-    const res = await fetch(`${FREDGRAPH}?id=${id}&cosd=${cosd}`, {
-      headers: { "User-Agent": "stock-chart-screener (research)" },
-    });
-    if (!res.ok) return [];
+      // non-ok (429 / 5xx) or empty → fall through to the keyless CSV
+    } catch { /* fall through to the CSV */ }
+  }
+  try {
+    const res = await fetch(`${FREDGRAPH}?id=${id}&cosd=${cosd}`, { headers: UA, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return { ok: false, obs: [] }; // HTTP error → retryable
     const lines = (await res.text()).trim().split(/\r?\n/).slice(1);
     const out: Obs[] = [];
     for (const ln of lines) {
@@ -40,10 +61,23 @@ async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
       const v = parseFloat(c[1]);
       if (c[0] && Number.isFinite(v)) out.push({ date: c[0], value: v });
     }
-    return out;
+    return { ok: true, obs: out };
   } catch {
-    return [];
+    return { ok: false, obs: [] }; // network/timeout → retryable
   }
+}
+
+/** Throttled + retried series fetch. A transient failure must not silently cost the whole night's
+ *  macro build — which is exactly what happened on the NAS: 4 curve pts / 2 indicators (vs 11 / 17 on
+ *  a fast link), tripping build-macro's don't-overwrite guard so macro.json rotted for days. */
+async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await throttle();
+    const r = await fetchOnce(id, cosd);
+    if (r.ok) return r.obs;
+    await sleep(400 * (attempt + 1)); // 400 / 800 / 1200ms backoff
+  }
+  return [];
 }
 
 const last = (o: Obs[]) => (o.length ? o[o.length - 1] : null);
