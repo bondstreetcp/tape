@@ -1,0 +1,70 @@
+# Tape WEB on the Synology DS1621+ — the site itself, served from the NAS via a Cloudflare Tunnel.
+# A second, independent origin from Vercel (and, while Vercel is capped, the only one).
+#
+# Drag-and-drop setup — in File Station make a folder e.g. /docker/tape-web and drop in FOUR files:
+#     docker-compose.web.yml    (this file — Container Manager wants it named docker-compose.yml)
+#     tape-web-entrypoint.sh    (scripts/nas/tape-web-entrypoint.sh)
+#     tape.env                  (the SAME one the compute container uses — R2 + the app's API keys)
+#     tunnel.env                (tunnel.env.example → tunnel.env, with your Cloudflare tunnel token)
+# Then: Container Manager → Project → Create → point at that folder → Build → Run.
+# Full runbook (incl. the Cloudflare side): docs/SETUP-NAS-WEB.md
+#
+# NO PORTS ARE OPENED ON YOUR ROUTER. cloudflared dials OUT to Cloudflare's edge and the site is
+# published from there — the NAS is never reachable from the internet directly.
+services:
+  tape-web:
+    image: node:22-bookworm # FULL variant (not -slim/-alpine): the entrypoint needs git
+    container_name: tape-web
+    working_dir: /app
+    restart: unless-stopped
+    env_file:
+      - ./tape.env # R2 (to hydrate data/) + the keys the app's live LLM routes use. chmod 600. Never committed.
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TAPE_WEB_CHECK_SECONDS=900 # look for work every 15 min
+      - TAPE_WEB_REBUILD_SECONDS=3600 # force a rebuild hourly to bake the tick's fresh R2 data
+    volumes:
+      # Docker-managed named volume, NOT a host bind mount — same reasoning as the compute container:
+      # it starts truly empty (so the first clone can't trip on Synology @eaDir metadata) and both A/B
+      # slots + node_modules survive restarts. ~5 GB once both slots are built.
+      - tape-web-app:/app
+      - ./tape-web-entrypoint.sh:/tape-web-entrypoint.sh:ro
+    entrypoint: ["sh", "/tape-web-entrypoint.sh"]
+    # Any answer < 500 is "up" — "/" 307s to the default universe, and a stale-data 503 from
+    # /api/health/data must not be mistaken for a dead web server.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 2400s # first boot = clone + npm ci + 150 MB hydrate + a ~1200-page build
+    expose:
+      - "3000" # reachable by cloudflared over the project network — NOT published to the LAN
+    # Uncomment to also reach it directly at http://<nas-ip>:3000 (handy while setting up / for LAN use):
+    # ports:
+    #   - "3000:3000"
+    # 64 GB box; uncomment to cap if the NAS is doing other heavy work. A next build wants ~4 GB.
+    # mem_limit: 16g
+    # cpus: 6
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tape-tunnel
+    restart: unless-stopped
+    # Token-scoped tunnel: the token names the tunnel AND carries its credentials, so there is no
+    # config file and no cert.pem to manage. Routing (hostname → http://tape-web:3000) lives in the
+    # Cloudflare dashboard. One cloudflared already opens 4 connections to 2+ edge datacenters, which
+    # is the redundancy that actually matters on the network path.
+    command: tunnel --no-autoupdate run
+    env_file:
+      - ./tunnel.env # TUNNEL_TOKEN only — deliberately NOT tape.env, so the tunnel daemon never sees your LLM/R2 keys
+    depends_on:
+      - tape-web
+
+volumes:
+  tape-web-app: # A/B slots live here; delete the volume to force a clean re-clone

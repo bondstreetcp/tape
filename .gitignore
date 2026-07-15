@@ -5,9 +5,10 @@ build/
 *.log
 npm-debug.log*
 .env*
-# NAS runner secrets — real values live in tape.env on the DS1621+; only tape.env.example is tracked.
-# (`.env*` above does NOT cover it — "tape.env" doesn't start with ".env".)
+# NAS runner secrets — real values live in tape.env / tunnel.env on the DS1621+; only the .example
+# files are tracked. (`.env*` above does NOT cover these — they don't start with ".env".)
 tape.env
+tunnel.env
 .DS_Store
 
 # data/ is NO LONGER committed — it lives in Cloudflare R2, hydrated at BUILD time by
