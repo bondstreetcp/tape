@@ -88,7 +88,7 @@ Container Manager → Container → **tape-web** → **Log**. Expect, in order:
 [tape-web] slot a: first build — cloning https://github.com/bondstreetcp/tape.git
 [tape-web] slot a: npm ci
 [tape-web] slot a: hydrating data/ from R2
-data-from-r2: hydrated data/ from R2 (150.x MB)          ← R2 creds in tape.env are good
+data-from-r2: hydrated data/ from R2 (36.8 MB)            ← the R2 tarball (~150 MB once extracted); creds are good
 [tape-web] slot a: next build (this is the slow part — the live slot is still serving)
 [tape-web] slot a: build OK @ 7793bd0
 [tape-web] serving slot a (pid NN) on :3000

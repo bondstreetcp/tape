@@ -46,7 +46,7 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 2400s # first boot = clone + npm ci + 150 MB hydrate + a ~1200-page build
+      start_period: 2400s # first boot = clone + npm ci + the R2 hydrate + a ~1200-page build
     expose:
       - "3000" # reachable by cloudflared over the project network — NOT published to the LAN
     # Uncomment to also reach it directly at http://<nas-ip>:3000 (handy while setting up / for LAN use):

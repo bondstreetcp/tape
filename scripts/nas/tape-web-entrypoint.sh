@@ -8,7 +8,7 @@
 #     /app/a   ← one of these is LIVE (next start is serving out of it)
 #     /app/b   ← the other is IDLE: we pull + npm ci + hydrate + build INTO it
 #
-# The expensive part (npm ci + a 150 MB R2 hydrate + a ~1200-page next build, minutes on this box)
+# The expensive part (npm ci + a ~37 MB R2 hydrate (~150 MB on disk) + a ~1200-page next build, minutes on this box)
 # happens entirely in the IDLE slot while the LIVE slot keeps serving. Only when the new slot builds
 # clean do we swap the server over — so downtime is one process restart (~3s), a broken build can
 # never take the site down (we just keep serving the old slot), and the previous slot stays intact on
