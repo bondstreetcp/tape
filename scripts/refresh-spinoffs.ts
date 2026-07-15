@@ -69,6 +69,38 @@ const PIPE_SYSTEM =
   NO_ADVICE;
 const PIPE_SCHEMA = 'Return ONLY JSON: {"isSpinoff":boolean,"parent":string|null,"parentTicker":string|null,"business":string|null,"expectedTiming":string|null,"ratio":string|null}';
 
+/**
+ * Has this SpinCo already DISTRIBUTED? Ask the tape, not the roster.
+ *
+ * SPINOFF_ROSTER is hand-curated, so it always lags reality by however long it takes a human to
+ * notice — and until then the pipeline advertises a finished spin as "in registration". That is
+ * exactly how MFP (Midera Food Processing) sat on the board as "Progressing · 49d" on 2026-07-15
+ * while it had been trading on NasdaqGS since 2026-06-26 at $43. A live regular-way quote is the
+ * ground truth for "the shares are out"; the roster is just bookkeeping.
+ *
+ * GROUNDED against a ticker collision: a Form 10's EFTS ticker can be pre-listing, stale, or reused
+ * by an unrelated issuer, so a quote alone isn't enough — the quote's OWN name must match the
+ * SpinCo's (name-core, suffixes stripped). Without that, a recycled 3-letter ticker would silently
+ * delete a genuinely upcoming spin from the board. Returns the first trade date (the spin date) so
+ * the log can hand you a ready-made roster line.
+ */
+async function distributedOn(spinco: string, ticker: string | null): Promise<string | null> {
+  if (!ticker) return null;
+  try {
+    const q: any = await yf.quote(ticker, {}, { validateResult: false });
+    const px = q?.regularMarketPrice;
+    const first = q?.firstTradeDateMilliseconds;
+    if (!(px > 0) || !first || first > Date.now()) return null;
+    const quoted = stripSuffix(String(q?.longName || q?.shortName || ""));
+    const want = stripSuffix(spinco);
+    // Name must corroborate the ticker, or we're looking at somebody else's stock.
+    const ok = !!quoted && !!want && (quoted === want || quoted.includes(want) || want.includes(quoted));
+    return ok ? new Date(first).toISOString().slice(0, 10) : null;
+  } catch {
+    return null; // no quote → not listed → still upcoming
+  }
+}
+
 // A completed spin lives in SPINOFF_ROSTER; keep it OUT of "upcoming". Match by ticker OR by name —
 // a Form 10's EFTS hit often carries no ticker (or a pre-listing one), so ticker alone misses e.g.
 // Versigent/Atrium that have already distributed. Compare on the name CORE (suffixes stripped).
@@ -113,9 +145,17 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
 
   const screened: Record<string, string> = await fsp.readFile(SCREENED, "utf8").then((s) => JSON.parse(s)).catch(() => ({}));
   const out: SpinPipelineRow[] = [];
+  // Graduated this run — surfaced loudly so the roster can catch up. Keyed by ticker: a name can be
+  // caught by BOTH the EFTS loop and the carry-forward loop (it's in `prior` and still in the window),
+  // and it must be reported once, not twice.
+  const distributed = new Map<string, string>();
   let llmCalls = 0, gated = 0;
   for (const g of byCik.values()) {
-    if (isCompleted(g.hit.issuer, g.hit.ticker)) continue; // already distributed → lives in the turnover table
+    if (isCompleted(g.hit.issuer, g.hit.ticker)) continue; // already in the roster → lives in the turnover table
+    // The roster lags; the tape doesn't. A SpinCo whose own ticker is already trading has distributed,
+    // roster entry or not — showing it as "in registration" is just wrong (the MFP case).
+    const spinDate = await distributedOn(g.hit.issuer, g.hit.ticker);
+    if (spinDate) { distributed.set(String(g.hit.ticker), `${g.hit.ticker} (${g.hit.issuer}) — first traded ${spinDate}`); continue; }
     const prev = priorByCik.get(g.cik);
     // The EFTS window slides, so g.first / g.amendments only see hits still INSIDE the 220-day window;
     // once the initial 10-12B scrolls past startdt, g.first jumps forward and the age would RESET. Anchor
@@ -160,6 +200,11 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
     if (out.some((r) => r.cik === p.cik)) continue;
     if (isCompleted(p.spinco, p.ticker)) continue;
     if ((now - Date.parse(p.firstFiledDate)) / DAY >= 400) continue;
+    // Same tape check on the carry-forward path: once the EFTS window slides past a spin's filings it
+    // is ONLY reachable here, so without this a distributed name would be carried as "upcoming" for
+    // its full 400-day life.
+    const spinDate = await distributedOn(p.spinco, p.ticker);
+    if (spinDate) { distributed.set(String(p.ticker), `${p.ticker} (${p.spinco}) — first traded ${spinDate}`); continue; }
     out.push({ ...p, daysInReg: Math.round((now - Date.parse(p.firstFiledDate)) / DAY) });
   }
   // Prune the screened ledger to CIKs EFTS still returned this run (i.e. still inside the 220-day
@@ -171,6 +216,14 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
   await fsp.writeFile(SCREENED, JSON.stringify(screened));
   out.sort((a, b) => b.daysInReg - a.daysInReg); // late-stage (longest in registration) first
   console.log(`pipeline: ${out.length} upcoming spins (${llmCalls} LLM calls, ${gated} gated non-spins)`);
+  // Dropping a graduated spin silently would just swap a wrong board for a MISSING name — the
+  // turnover clock (the seller-exhaustion signal) is the valuable half, and it needs a roster entry.
+  // So name them loudly with the line to paste. Ratio still needs a human: it comes from the
+  // distribution terms, and guessing it would corrupt the derived share count.
+  if (distributed.size) {
+    console.log(`pipeline: ${distributed.size} DISTRIBUTED since the last run — add to SPINOFF_ROSTER (lib/spinoffs.ts) to track turnover:`);
+    for (const d of distributed.values()) console.log(`  ⚑ ${d}`);
+  }
   return out;
 }
 

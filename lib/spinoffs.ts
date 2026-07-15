@@ -24,6 +24,11 @@ export interface SpinoffSeed {
 export const SPINOFF_ROSTER: SpinoffSeed[] = [
   { ticker: "MBGL", name: "Mobility Global", parent: "S&P Global", parentTicker: "SPGI", spinDate: "2026-07-01", ratio: 1 }, // 1 MBGL per SPGI
   { ticker: "HONA", name: "Honeywell Aerospace", parent: "Honeywell", parentTicker: "HON", spinDate: "2026-06-29" },
+  // spinDate is the tape's first regular-way session (Yahoo firstTradeDate), not a press release.
+  // No `ratio`: Yahoo already carries MFP's own share count, so the tracker doesn't need to derive it
+  // from MIDD — and the terms weren't in the Form 10 extraction, so asserting one would be a guess.
+  // (For what it's worth the counts imply ~1:1 — MIDD 45.214M vs MFP 45.215M.)
+  { ticker: "MFP", name: "Midera Food Processing", parent: "Middleby", parentTicker: "MIDD", spinDate: "2026-06-26" },
   { ticker: "FDXF", name: "FedEx Freight", parent: "FedEx", parentTicker: "FDX", spinDate: "2026-05-29" },
   { ticker: "OCTV", name: "Octave Intelligence", parent: "Hexagon AB", parentTicker: "HXGBF", spinDate: "2026-05-28" },
   { ticker: "TRAX", name: "First Tracks Biotherapeutics", parent: "AnaptysBio", parentTicker: "ANAB", spinDate: "2026-04-06" },
