@@ -54,8 +54,13 @@ prepare() {
     (cd "$dir" && git fetch --depth 20 origin main && git reset --hard origin/main && git clean -fd) || return 1
   fi
   cd "$dir" || return 1
-  log "slot $slot: npm ci"
-  npm ci --no-audit --no-fund || return 1
+  # ⚠ --include=dev is MANDATORY. The container sets NODE_ENV=production (correct for `next start`),
+  # and npm reads that as --omit=dev, so a bare `npm ci` installs ONLY the 10 production deps and
+  # silently skips the entire build toolchain — tsx (which runs data-from-r2), typescript, tailwind,
+  # @types/*. The symptom is `sh: 1: tsx: not found` right after "hydrating data/ from R2", then a
+  # boot restart-loop. Do not "simplify" this flag away.
+  log "slot $slot: npm ci (incl. devDependencies — needed to build)"
+  npm ci --include=dev --no-audit --no-fund || return 1
   # The SAME hydrate Vercel's build runs — data/ comes from R2, never from git (data/ is gitignored).
   log "slot $slot: hydrating data/ from R2"
   npm run data-from-r2 || return 1

@@ -20,6 +20,9 @@ services:
     env_file:
       - ./tape.env # R2 (to hydrate data/) + the keys the app's live LLM routes use. chmod 600. Never committed.
     environment:
+      # ⚠ npm reads NODE_ENV=production as --omit=dev. It's right for `next start`, but it means the
+      # entrypoint's `npm ci` MUST pass --include=dev or the build toolchain (tsx, typescript,
+      # tailwind, @types/*) is silently skipped and boot restart-loops on `tsx: not found`.
       - NODE_ENV=production
       - PORT=3000
       - TAPE_WEB_CHECK_SECONDS=900 # look for work every 15 min
