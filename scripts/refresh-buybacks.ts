@@ -41,6 +41,9 @@ import {
 
 const OUT = "buybacks.json"; // written via the registry-backed guard (lib/feedGuard), not raw fs
 const CACHE = path.join(process.cwd(), "data", "buybacks-facts.json");
+// Committed bootstrap seed (public SEC facts, NOT gitignored) — the escape hatch from the deadlock
+// where a zeroed board seeds an empty cache seeds a zeroed board. See the cold-start block below.
+const SEED = path.join(process.cwd(), "data-seed", "buybacks-facts.seed.json");
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
@@ -228,6 +231,20 @@ async function main() {
       seeded++;
     }
     if (seeded) console.log(`refresh-buybacks: seeded ${seeded} names from the existing board (no re-fetch needed to render)`);
+  }
+
+  // Last-resort BOOTSTRAP — both the cache AND the board are empty. That's a fresh clone, OR the
+  // deadlock the 2026-07-15 incident created: the board was zeroed, so seeding the cache from the
+  // board yields nothing, so the only way to render is live SEC fetches — and on the NAS's uplink
+  // data.sec.gov is unreachable, so it wrote 0 rows every night forever. The committed seed of public
+  // SEC facts breaks that loop: the board renders real (if aging) rows immediately and degrades to
+  // STALE, never EMPTY; the budgeted nightly refresh supersedes it oldest-first as SEC permits.
+  if (!Object.keys(cache.bySymbol).length) {
+    const seed: FactsCache = await fsp.readFile(SEED, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: "", bySymbol: {} }));
+    for (const [sym, f] of Object.entries(seed.bySymbol ?? {})) cache.bySymbol[sym] = f;
+    const n = Object.keys(cache.bySymbol).length;
+    if (n) console.log(`refresh-buybacks: COLD BOOTSTRAP — seeded ${n} names from data-seed/${path.basename(SEED)} (board + cache both empty)`);
+    else console.warn("refresh-buybacks: board, cache, AND seed all empty — the board can only fill from live SEC pulls this run.");
   }
 
   // Oldest-first: never-fetched names lead, then the most stale. Anything refreshed inside the window
