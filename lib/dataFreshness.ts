@@ -32,6 +32,10 @@ const STAMP_KEYS = ["generatedAt", "updatedAt", "updated", "asOf", "lastUpdated"
 type Tier = "core" | "event" | "synthesis" | "snapshot";
 export type FreshStatus = "ok" | "stale" | "missing" | "empty" | "unreadable";
 
+/** The external service a feed's data comes from. Lets the monitor probe that service and tell
+ *  "the upstream is unreachable from this host" (environmental) apart from "the feed logic broke". */
+export type FeedOrigin = "sec";
+
 export interface FeedSpec {
   file: string; // relative to data/
   label: string;
@@ -45,6 +49,9 @@ export interface FeedSpec {
   stampKeys?: readonly string[];
   /** no stamp field in the file → fall back to file mtime (less reliable; git touch resets it). */
   mtimeFallback?: boolean;
+  /** upstream this feed fetches from — set only where the feed's health ⟺ that service's reachability
+   *  (e.g. data.sec.gov). Drives the reachability probe that disambiguates environmental vs logic. */
+  origin?: FeedOrigin;
 }
 
 export interface FreshResult {
@@ -57,6 +64,7 @@ export interface FreshResult {
   count: number | null;
   minCount: number | null;
   detail: string;
+  origin?: FeedOrigin;
 }
 
 // ── The registry ────────────────────────────────────────────────────────────────────────────────
@@ -68,8 +76,8 @@ const CORE = 30, EVENT = 96, SYNTH = 96;
 const FEEDS: FeedSpec[] = [
   // core — rewritten every FULL run; empty on the count-gated ones = definitely broken
   { file: "estimates.json", label: "Estimate revisions", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 100 },
-  { file: "valuation-history.json", label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500 },
-  { file: "buybacks.json", label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300 },
+  { file: "valuation-history.json", label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500, origin: "sec" },
+  { file: "buybacks.json", label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300, origin: "sec" },
   { file: "congress.json", label: "Congress trades", tier: "core", maxAgeHours: CORE, countPath: "trades", minCount: 100 },
   { file: "guidance.json", label: "Guidance", tier: "core", maxAgeHours: CORE, countPath: "byTicker", minCount: 20 },
   { file: "catalysts.json", label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
@@ -85,7 +93,7 @@ const FEEDS: FeedSpec[] = [
   { file: "iv-history.json", label: "IV history", tier: "core", maxAgeHours: CORE },
   { file: "earnings-move.json", label: "Earnings expected-move", tier: "core", maxAgeHours: CORE },
   { file: "putwrite.json", label: "Put-writing screen", tier: "core", maxAgeHours: CORE },
-  { file: "insiders.json", label: "Insider buys", tier: "core", maxAgeHours: CORE },
+  { file: "insiders.json", label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
   { file: "spinoffs.json", label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
   { file: "trade-log.json", label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
   { file: "same-store-sales.json", label: "Same-store sales", tier: "core", maxAgeHours: CORE },
@@ -103,7 +111,7 @@ const FEEDS: FeedSpec[] = [
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
   { file: "campaigns.json", label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },
-  { file: "corp-events.json", label: "Corporate events", tier: "event", maxAgeHours: EVENT },
+  { file: "corp-events.json", label: "Corporate events", tier: "event", maxAgeHours: EVENT, origin: "sec" },
   { file: "biotech-catalysts.json", label: "Biotech catalysts", tier: "event", maxAgeHours: EVENT },
   { file: "policy.json", label: "Policy & contracts", tier: "event", maxAgeHours: EVENT },
   { file: "fed-watch.json", label: "Fed Watch", tier: "event", maxAgeHours: EVENT },
@@ -111,7 +119,7 @@ const FEEDS: FeedSpec[] = [
   { file: "catalyst-vol.json", label: "Catalyst vol", tier: "event", maxAgeHours: EVENT },
   { file: "trump-truth-stocks.json", label: "Trump stock calls", tier: "event", maxAgeHours: EVENT },
   { file: "trump-trades.json", label: "Trump OGE trades", tier: "event", maxAgeHours: EVENT },
-  { file: "overnight-filings.json", label: "Overnight filings", tier: "event", maxAgeHours: EVENT },
+  { file: "overnight-filings.json", label: "Overnight filings", tier: "event", maxAgeHours: EVENT, origin: "sec" },
 
   // synthesis — skip-write when there's nothing notable, so a stale stamp is legitimate for days
   { file: "desk-note.json", label: "Morning desk note", tier: "synthesis", maxAgeHours: SYNTH },
@@ -169,6 +177,7 @@ function stampFrom(obj: any, keys: readonly string[]): number | null {
 async function checkFeed(spec: FeedSpec, now: number): Promise<FreshResult> {
   const base: Omit<FreshResult, "status" | "ageHours" | "count" | "detail"> = {
     file: spec.file, label: spec.label, tier: spec.tier, maxAgeHours: spec.maxAgeHours, minCount: spec.minCount ?? null,
+    ...(spec.origin ? { origin: spec.origin } : {}),
   };
   const full = path.join(DATA, spec.file);
   let raw: string;
@@ -236,16 +245,78 @@ async function checkSnapshots(now: number): Promise<FreshResult[]> {
 
 export const FAILING: readonly FreshStatus[] = ["stale", "missing", "empty", "unreadable"];
 
+/** Result of pinging an upstream (currently only data.sec.gov) FROM THE HOST RUNNING THE CHECK.
+ *  ⚠ vantage-specific: a probe from Vercel says nothing about whether the NAS can reach SEC. The
+ *  authoritative one is the check-freshness run inside the NAS tick. */
+export interface SecProbe {
+  reachable: boolean;
+  status: number | null;
+  ms: number | null;
+  detail: string;
+}
+
 export interface FreshReport {
   checkedAt: string;
   ok: boolean;
   failing: number;
   results: FreshResult[];
+  /** Present only when ≥1 SEC-sourced feed is failing — the reason to bother probing. */
+  secProbe?: SecProbe;
+  /** One-line verdict correlating the SEC failures with the probe. "" when no SEC feed is failing. */
+  secDiagnosis?: string;
+}
+
+// A single tiny SEC request proves reachability from this host. AAPL companyfacts is the canonical
+// endpoint (what a human would curl); a Range header caps the body so we pay for the round-trip, not
+// the 4 MB. ⚠ SEC 403s any request without a descriptive contact in the UA — using the SAME UA the
+// feeds send (mirrors lib/edgar's HEADERS) means the probe reflects exactly what they'd experience,
+// so a 403 here is a real signal, not a self-inflicted format rejection. `Connection: close` keeps
+// undici from pooling a keep-alive socket that would hold the CLI process open after the check.
+const SEC_PROBE_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"; // AAPL
+const SEC_PROBE_UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
+const SEC_PROBE_TIMEOUT_MS = 8000;
+
+/** Ping data.sec.gov and report whether THIS host can reach it, with latency. Never throws. */
+export async function probeSec(): Promise<SecProbe> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(SEC_PROBE_URL, {
+      headers: { "User-Agent": SEC_PROBE_UA, Range: "bytes=0-99", "Accept-Encoding": "identity", Connection: "close" },
+      signal: AbortSignal.timeout(SEC_PROBE_TIMEOUT_MS),
+    });
+    const ms = Date.now() - t0;
+    try { await res.body?.cancel(); } catch { /* don't download the payload */ }
+    const reachable = res.status === 200 || res.status === 206; // 206 = the Range was honored
+    return {
+      reachable, status: res.status, ms,
+      detail: reachable
+        ? `data.sec.gov responded ${res.status} in ${ms}ms`
+        : `data.sec.gov returned ${res.status} in ${ms}ms — likely throttled/blocking this host`,
+    };
+  } catch (e: any) {
+    const ms = Date.now() - t0;
+    const why = e?.name === "TimeoutError" ? `timed out (>${SEC_PROBE_TIMEOUT_MS / 1000}s)` : String(e?.message || e).slice(0, 80);
+    return { reachable: false, status: null, ms, detail: `data.sec.gov unreachable — ${why}` };
+  }
+}
+
+/** PURE: the one-line verdict that tells environmental (SEC down) from feed-logic (SEC up, feed still
+ *  broken). Empty string when no SEC-sourced feed is failing — nothing to diagnose. */
+export function secDiagnosis(results: FreshResult[], probe: SecProbe | null): string {
+  const bad = results.filter((r) => r.origin === "sec" && FAILING.includes(r.status));
+  if (!bad.length) return "";
+  const names = bad.map((r) => r.file.replace(/\.json$/, "")).join(", ");
+  if (!probe) return `${bad.length} SEC-sourced feed(s) failing (${names}); SEC reachability not probed.`;
+  return probe.reachable
+    ? `${bad.length} SEC-sourced feed(s) failing (${names}) BUT ${probe.detail} — SEC is UP from this host, so look at the FEED LOGIC, not the network.`
+    : `${bad.length} SEC-sourced feed(s) failing (${names}) AND ${probe.detail} — ENVIRONMENTAL: this host can't reach SEC, not a feed-logic bug.`;
 }
 
 /** Read every registered feed + every universe snapshot and classify freshness. `ok` is false when
- *  any result is STALE / MISSING / EMPTY / UNREADABLE. */
-export async function checkFreshness(nowMs?: number): Promise<FreshReport> {
+ *  any result is STALE / MISSING / EMPTY / UNREADABLE.
+ *  When ≥1 SEC-sourced feed is failing, ping data.sec.gov to tell "the host can't reach SEC"
+ *  (environmental) apart from "the feed logic broke" — set `probe:false` to skip the network call. */
+export async function checkFreshness(nowMs?: number, opts?: { probe?: boolean }): Promise<FreshReport> {
   const now = nowMs ?? Date.now();
   const [feeds, snaps] = await Promise.all([
     Promise.all(FEEDS.map((f) => checkFeed(f, now))),
@@ -255,5 +326,15 @@ export async function checkFreshness(nowMs?: number): Promise<FreshReport> {
   const rank = (s: FreshStatus) => (FAILING.includes(s) ? 0 : 1);
   const results = [...snaps, ...feeds].sort((a, b) => rank(a.status) - rank(b.status));
   const failing = results.filter((r) => FAILING.includes(r.status)).length;
-  return { checkedAt: new Date(now).toISOString(), ok: failing === 0, failing, results };
+
+  // Probe SEC only when it could explain something — a SEC feed is actually failing. A healthy run
+  // never touches the network; a broken one pays one ≤8s round-trip to disambiguate the cause.
+  const secFailing = results.some((r) => r.origin === "sec" && FAILING.includes(r.status));
+  const secProbe = secFailing && (opts?.probe ?? true) ? await probeSec() : null;
+
+  return {
+    checkedAt: new Date(now).toISOString(), ok: failing === 0, failing, results,
+    ...(secProbe ? { secProbe } : {}),
+    ...(secFailing ? { secDiagnosis: secDiagnosis(results, secProbe) } : {}),
+  };
 }

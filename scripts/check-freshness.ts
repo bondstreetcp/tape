@@ -33,13 +33,23 @@ async function main() {
     console.log("");
   }
   for (const r of good) console.log(line(r));
-  console.log(`\n${rep.results.length} feeds · ${good.length} ok · ${bad.length} failing\n`);
+  console.log(`\n${rep.results.length} feeds · ${good.length} ok · ${bad.length} failing`);
+
+  // When SEC feeds are among the failures, the probe verdict tells environmental from feed-logic —
+  // the single most useful line for whoever's triaging (this runs inside the NAS tick, so the probe
+  // reflects the NAS's own egress to data.sec.gov).
+  if (rep.secDiagnosis) console.log(`\n  SEC: ${rep.secDiagnosis}`);
+  console.log("");
 
   if (bad.length && !warnOnly) {
     console.error(`FRESHNESS CHECK FAILED — ${bad.length} feed(s) stale/missing/empty. See above.`);
-    process.exit(1);
+    // Set the code and let the loop drain — a bare process.exit() here races with the SEC probe's
+    // still-closing socket and trips a libuv assertion on Windows (UV_HANDLE_CLOSING), the same crash
+    // the NAS healthcheck hit. Connection:close on the probe means nothing lingers to hang on.
+    process.exitCode = 1;
+    return;
   }
   if (bad.length) console.warn(`(--warn) ${bad.length} feed(s) failing, but not exiting non-zero.`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => { console.error(e); process.exitCode = 1; });
