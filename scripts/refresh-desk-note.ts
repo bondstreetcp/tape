@@ -13,7 +13,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { loadSnapshot } from "../lib/data";
-import { loadCatalysts } from "../lib/catalysts";
+import { loadCatalysts, type CatalystMap } from "../lib/catalysts";
+import { daysUntil } from "../lib/calendar";
+import { fmtDate } from "../lib/format";
 import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
@@ -62,19 +64,18 @@ async function main() {
 
   const [snap, catalysts, overnight] = await Promise.all([
     loadSnapshot(BASE).catch(() => null),
-    loadCatalysts().catch(() => ({} as Record<string, { why?: string }>)),
+    loadCatalysts().catch(() => ({} as CatalystMap)),
     loadOvernightFilings().catch(() => null),
   ]);
   const flow = getOptionsFlow();
   const analyst = await getAnalystActions(BASE).catch(() => []);
 
   const now = Date.now();
+  // Calendar-day countdown, not an elapsed-ms round — otherwise the window flips with the clock (the
+  // daysUntil class). fmtDate handles the instant-vs-bare-date distinction for the label.
   const earnSoon = (iso?: string | null) => {
-    if (!iso) return "";
-    const ms = Date.parse(iso);
-    if (!Number.isFinite(ms)) return "";
-    const days = Math.round((ms - now) / 86_400_000);
-    return days >= -1 && days <= 12 ? ` · reports ${new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
+    const days = iso ? daysUntil(iso, now) : null;
+    return days != null && days >= -1 && days <= 12 ? ` · reports ${fmtDate(iso!, { year: false })}` : "";
   };
 
   // --- Movers with trend / valuation / 52w / earnings context ---
@@ -82,10 +83,24 @@ async function main() {
   const priceOf = new Map(stocks.map((s) => [s.symbol, s.price]));
   const ranked = stocks.filter((s) => s.returns["1d"] != null).sort((a, b) => (b.returns["1d"] as number) - (a.returns["1d"] as number));
   const moverRows = [...ranked.slice(0, 6), ...ranked.slice(-6).reverse()];
+  // A cached catalyst may only explain THIS 1-day move if it was generated FOR a short-timeframe move
+  // and RECENTLY. refresh-catalysts stores each symbol's shortest-timeframe catalyst, so a name that's
+  // a 1-day mover here but was only a YTD mover there carries a YTD *story* ("up on the AI narrative")
+  // — applying that to today's gap is the same recency error as the PYPL fabrication, one layer up.
+  // When it fails the gate we fall through to the (now recency-correct) news path rather than trust it.
+  const CATALYST_MAX_AGE_MS = 3 * 86_400_000;
+  const freshDayCatalyst = (sym: string): string => {
+    const c = catalysts?.[sym];
+    if (!c?.why) return "";
+    if (c.tf && c.tf !== "1d" && c.tf !== "1w") return ""; // a longer-horizon story, not today's driver
+    if (c.ts && now - Date.parse(c.ts) > CATALYST_MAX_AGE_MS) return ""; // last week's pop, not today's
+    return c.why;
+  };
+
   const movers = await Promise.all(
     moverRows.map(async (s) => {
-      const why = (catalysts as Record<string, { why?: string }>)?.[s.symbol]?.why || "";
-      // No cached catalyst → actively pull recent news so GLM can explain the move instead of
+      const why = freshDayCatalyst(s.symbol);
+      // No usable cached catalyst → actively pull recent news so GLM can explain the move instead of
       // shrugging "unexplained". (A 12% move almost always has a reason — go find it.)
       //
       // ⚠ These are 1-DAY movers, so pickHeadlines is mandatory: getNews ranks by SOURCE and reaches

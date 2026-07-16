@@ -10,7 +10,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { getNews } from "../lib/news";
+import { getNews, pickHeadlines } from "../lib/news";
 import { cleanTicker } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
 
@@ -34,10 +34,16 @@ async function main() {
     console.log("vol-tags: no rich non-earnings names to tag.");
     return;
   }
+  // Rich vol wants the newest headlines, not the newswire's oldest: getNews ranks by SOURCE and a raw
+  // .slice(8) can truncate off today's takeover/FDA story (the PYPL-desk-note failure, same shape). A
+  // PENDING catalyst can be a few weeks old and still live, so the window is generous (45d) — but it's
+  // ranked newest-first so a fresh deal always leads. Fetch wide (free — count only truncates), pick 8.
+  const NOW = Date.now();
   const ctx = await Promise.all(
     targets.map(async (r) => {
-      const news = await getNews(r.symbol, 8).catch(() => []);
-      const heads = news.slice(0, 8).map((n) => `- ${n.time ? n.time.slice(0, 10) + " " : ""}${n.title}`).join("\n");
+      const news = await getNews(r.symbol, 30).catch(() => []);
+      const heads = pickHeadlines(news, { nowMs: NOW, windowDays: 45, limit: 8 })
+        .map((h) => `- ${h.date ? h.date + " " : ""}${h.title}`).join("\n");
       return { symbol: r.symbol, name: r.name, ivPremium: r.ivPremium, heads };
     }),
   );
