@@ -3,12 +3,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { EarningsMoveRow } from "@/lib/earningsMove";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import { fmtMarketCap, fmtDateTime } from "@/lib/format";
+import { fmtMarketCap, fmtDate, fmtDateTime } from "@/lib/format";
 import { useWatchlist } from "@/lib/watchlist";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
+// Takes a real ISO INSTANT (earningsDate carries a time), so local rendering is correct here.
+// A bare calendar date must NOT be routed through this — use fmtDate, which pins those to UTC.
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 // amber = options pricing MORE than history (rich → seller's edge); teal = LESS (cheap → buyer's edge)
@@ -154,7 +156,7 @@ export default function EarningsMoveView({
                         {r.dateSource === "nasdaq" && <span className="ml-1 rounded border border-[var(--border)] px-0.5 text-[9px] uppercase tracking-wide text-[var(--text-4)]">ndq</span>}
                         <span className="ml-1 text-[10px] text-[var(--text-4)]">{r.daysToEarnings === 0 ? "today" : `${r.daysToEarnings}d`}</span>
                       </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{dateLabel(r.expiry + "T00:00:00Z")}<span className="ml-1 text-[10px] text-[var(--text-4)]">{r.dte}d</span></td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{fmtDate(r.expiry, { year: false })}<span className="ml-1 text-[10px] text-[var(--text-4)]">{r.dte}d</span></td>
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[var(--text)]">±{pct(r.impliedMovePct)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{r.impliedIV != null ? `${(r.impliedIV * 100).toFixed(0)}%` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]" title={r.histN ? `mean of ${r.histN} reactions` : ""}>{r.histAvgMovePct != null ? `±${pct(r.histAvgMovePct)}` : "—"}</td>

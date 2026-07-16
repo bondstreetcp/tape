@@ -3,14 +3,17 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PutWriteCandidate, TenorId } from "@/lib/putwrite";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import { fmtMarketCap, fmtDateTime } from "@/lib/format";
+import { fmtMarketCap, fmtDate, fmtDateTime } from "@/lib/format";
 import { useWatchlist } from "@/lib/watchlist";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v.toFixed(d)}%`);
 const pctFrac = (v: number | null | undefined, d = 0) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
-const expLabel = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+// Expiry is a CALENDAR date (bare YYYY-MM-DD) — fmtDate pins it to UTC, so a Friday expiry can't
+// render as Thursday west of Greenwich. earnLabel below looks near-identical but is NOT the same
+// case: it takes a real ISO instant, where local rendering is the correct answer.
+const expLabel = (iso: string) => fmtDate(iso, { year: false });
 
 // next-earnings helpers — for a covered call, a report before expiry can gap the stock THROUGH the
 // strike (you'd be called away, capping a winner) or down (your premium cushion is thin).
