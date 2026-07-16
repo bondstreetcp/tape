@@ -120,5 +120,64 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
   const wire = out.filter((o) => isWire(o.publisher));
   const top = out.filter((o) => !isWire(o.publisher) && isTop(o.publisher));
   const pref = out.filter((o) => !isWire(o.publisher) && !isTop(o.publisher) && isPreferred(o.publisher));
+  // ⚠ This order is by SOURCE, deliberately — see pickHeadlines below before consuming it.
+  // `count` only truncates an already-parsed list, so asking for more costs nothing.
   return [...wire, ...top, ...pref].slice(0, count);
+}
+
+// ── Explaining a MOVE is a different job from listing news ────────────────────────────────────────
+//
+// getNews ranks by SOURCE for browsing: a company's own newswire press releases first (its
+// `press release when:120d` query reaches back FOUR MONTHS), then Reuters/Bloomberg, then the rest.
+// That's right for a news tab and exactly wrong for causal attribution — it puts an old press
+// release ahead of today's wire scoop, and any caller that then does `.slice(0, 3)` gets the stale
+// ones while today's news is truncated off the end.
+//
+// That shipped. On 2026-07-15 the Daily Desk explained PayPal's +15.6% pop — a $53bn Stripe/Advent
+// takeover offer, reported by Reuters that morning — as "Venmo's global expansion and a new payment
+// integration with Canva". Both were REAL headlines. Both were from March and April. The model was
+// handed them with the dates stripped, under the label "recent news", and told to state the most
+// likely driver; it did precisely that. Not a hallucination — a plumbing bug.
+//
+// So for attribution: re-rank by DATE, gate to a window the move could plausibly have been caused
+// in, drop the junk, and KEEP THE DATES — so the model can weigh recency itself and the prompt
+// isn't lying when it says "recent".
+
+/** Promotional / litigation / rating-only headlines — noise for "why it moved". */
+export const NEWS_JUNK =
+  /shareholder alert|class action|investigation|law\s?firm|rosen law|wolf haldenstein|pomerantz|bragar|kahn swick|schall law|glancy prongay|deadline|lost money|encourages? investors|contact[^.]{0,40}immediately|securities fraud|lawsuit|should contact|3 stocks|here'?s why|motley fool|zacks|price target|reiterates|initiates coverage/i;
+
+/** How far back a headline may sit and still plausibly explain a move over that timeframe. */
+export const CAUSAL_WINDOW_DAYS: Record<string, number> = { "1d": 5, "1w": 16, ytd: 100, "1y": 100 };
+
+export interface PickedHeadline {
+  title: string;
+  date: string; // YYYY-MM-DD, or "" when the vendor gave no date
+}
+
+/**
+ * Pick the headlines that could actually explain a move: junk dropped, gated to `windowDays`,
+ * NEWEST FIRST, then capped. Pure.
+ *
+ * Undated items are kept (vendors drop pubDate on real stories) but sorted LAST and rendered with
+ * no date, so they can only fill leftover slots and are never passed off as fresh.
+ */
+export function pickHeadlines(
+  news: NewsItem[],
+  opts: { nowMs: number; windowDays: number; limit: number },
+): PickedHeadline[] {
+  const cutoff = opts.nowMs - opts.windowDays * 86_400_000;
+  const t = (n: NewsItem) => (n.time ? Date.parse(n.time) : NaN);
+  return news
+    .filter((n) => n?.title && !NEWS_JUNK.test(n.title))
+    .filter((n) => !Number.isFinite(t(n)) || t(n) >= cutoff)
+    .sort((a, b) => {
+      const ta = t(a), tb = t(b);
+      if (!Number.isFinite(ta) && !Number.isFinite(tb)) return 0;
+      if (!Number.isFinite(ta)) return 1; // undated sinks
+      if (!Number.isFinite(tb)) return -1;
+      return tb - ta; // newest first
+    })
+    .slice(0, opts.limit)
+    .map((n) => ({ title: n.title, date: n.time ? n.time.slice(0, 10) : "" }));
 }

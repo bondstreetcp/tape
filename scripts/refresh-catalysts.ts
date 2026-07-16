@@ -16,7 +16,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { UNIVERSES } from "../lib/universes";
 import { loadSnapshot } from "../lib/data";
-import { getNews } from "../lib/news";
+import { getNews, pickHeadlines, NEWS_JUNK, CAUSAL_WINDOW_DAYS } from "../lib/news";
 import type { CatalystMap } from "../lib/catalysts";
 
 const DATA = path.join(process.cwd(), "data");
@@ -24,13 +24,14 @@ const DAY = 24 * 3600 * 1000;
 const TFS = ["1d", "1w", "ytd", "1y"] as const;
 const TF_LABEL: Record<string, string> = { "1d": "today", "1w": "this week", ytd: "year-to-date", "1y": "over the past year" };
 const TF_RANK: Record<string, number> = { "1d": 0, "1w": 1, ytd: 2, "1y": 3 }; // shortest first
-const WINDOW_DAYS: Record<string, number> = { "1d": 5, "1w": 16, ytd: 100, "1y": 100 }; // news recency by tf
 const TTL_DAYS: Record<string, number> = { "1d": 1.5, "1w": 4, ytd: 7, "1y": 7 }; // cache freshness by tf
 const N = 6; // top/bottom per timeframe
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Promotional / litigation / pure-rating headlines are noise for "why it moved".
-const JUNK = /shareholder alert|class action|investigation|law\s?firm|rosen law|wolf haldenstein|pomerantz|bragar|kahn swick|schall law|glancy prongay|deadline|lost money|encourages? investors|contact[^.]{0,40}immediately|securities fraud|lawsuit|should contact|3 stocks|here'?s why|motley fool|zacks|price target|reiterates|initiates coverage/i;
+// Headline junk + the per-timeframe recency windows live in lib/news alongside pickHeadlines, so
+// this script and refresh-desk-note pick news the SAME way by construction — the desk note having
+// its own naive version is exactly what produced the PYPL Venmo/Canva fabrication.
+const JUNK = NEWS_JUNK;
 // Strip earnings-report boilerplate; if nothing substantive is left it was just "reported its
 // Q_ results" — drop it. Keeps "Q1 earnings beat" (→ "beat") while killing "First Quarter 2026 Results".
 const BOILER = /\b(the|first|second|third|fourth|q[1-4]|fiscal|full|half|year|quarter(ly)?|results?|earnings|reports?|reported|its|announces?|announced|posts?|posted|operational|highlights?|updates?|provides?|provided|preliminary|unaudited|fy|and|of|for|20\d\d)\b/gi;
@@ -115,12 +116,10 @@ async function main() {
         if (!sym) return;
         const m = movers.get(sym)!;
         try {
-          const news = await getNews(m.name || sym, 12).catch(() => []);
-          const cutoff = now - (WINDOW_DAYS[m.tf] ?? 100) * DAY;
-          const heads = news
-            .filter((n) => !JUNK.test(n.title) && (!n.time || Date.parse(n.time) >= cutoff)) // date-gate to the tf window
-            .slice(0, 8)
-            .map((n) => ({ title: n.title, date: n.time ? n.time.slice(0, 10) : "" }));
+          // Generous count — it only truncates an already-parsed list (free), and getNews ranks by
+          // SOURCE, so a small count can drop today's wire story before we ever rank by date.
+          const news = await getNews(m.name || sym, 30).catch(() => []);
+          const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS[m.tf] ?? 100, limit: 8 });
           const why = heads.length ? await ask(key, today, m.name, sym, m.dir, m.pct, TF_LABEL[m.tf], heads) : "";
           out[sym] = { why, ts: new Date().toISOString(), tf: m.tf };
           if (why) withWhy++;
