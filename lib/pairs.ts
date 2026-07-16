@@ -30,11 +30,38 @@ export interface PairRow extends Pair {
   priceA: number | null;
   priceB: number | null;
 }
+/**
+ * A DECOUPLED pair: two same-sector names that moved together over the long window (high corrLong)
+ * but whose recent return-correlation collapsed (low corrShort). The relationship BROKE — usually a
+ * single-name catalyst on one leg (guidance, M&A, a downgrade, an idiosyncratic shock). Distinct from
+ * a "stretched" pair (a wide-but-still-mean-reverting spread): here the co-movement itself is failing.
+ */
+export interface Decoupled {
+  a: string;
+  b: string;
+  sector: string;
+  corrLong: number; // return correlation over the long window — how tightly they USED to move
+  corrShort: number; // return correlation over the recent window — how tightly they move NOW
+  drop: number; // corrLong − corrShort (the size of the break)
+  z: number; // current spread z (long-window hedge) — context only; 0 when no valid level hedge
+  beta: number; // long-window hedge ratio (0 when levels diverged past a clean hedge)
+  n: number; // overlapping observations
+  broke: string; // the leg that actually MOVED most over the recent window — the likely catalyst name
+  brokeMovePct: number; // that leg's cumulative % move over the recent window (signed — direction matters)
+}
+export interface DecoupledRow extends Decoupled {
+  nameA: string;
+  nameB: string;
+  priceA: number | null;
+  priceB: number | null;
+}
+
 export interface PairsData {
   generatedAt: string;
   universe: string;
   scanned: number;
   pairs: PairRow[];
+  decoupled?: DecoupledRow[]; // optional so pre-expansion files still parse
 }
 
 const mean = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
@@ -218,4 +245,115 @@ export function findPairs(
     }
   }
   return out.sort((x, y) => Math.abs(y.z) - Math.abs(x.z)).slice(0, topN);
+}
+
+export interface ScanOpts extends PairOpts {
+  shortWin?: number; // recent window (obs) for the decoupling break (default 21 ≈ 1 month)
+  minLongCorr?: number; // decoupling: the pair must have been at least this correlated long-run (default 0.6)
+  minDrop?: number; // decoupling: corrLong − corrShort to count as a break (default 0.45)
+  maxShortCorr?: number; // decoupling: recent corr must have fallen below this (default 0.35)
+  decoupledTopN?: number; // cap the decoupled list (default 60)
+  deadlineMs?: number; // wall-clock stop (Date.now() > deadlineMs → stop scanning) for the slow box
+}
+
+/**
+ * Universe-wide same-sector scan that computes BOTH signals from ONE alignment per pair — the
+ * efficient shape for the NAS (weak CPU, big RAM): all series resident, one pass. Returns the
+ * STRETCHED pairs (wide but mean-reverting — a convergence trade) and the DECOUPLED pairs (were
+ * tightly correlated, just broke — a catalyst tell). Same sector-bucket + per-sector liquidity cap
+ * as findPairs; honors a wall-clock `deadlineMs` so a heavy universe can't blow the step budget.
+ */
+export function scanPairs(
+  names: string[],
+  series: Map<string, Daily>,
+  sectorOf: (s: string) => string,
+  rankOf: (s: string) => number,
+  opts: ScanOpts = {},
+): { stretched: Pair[]; decoupled: Decoupled[]; pairsTested: number; truncated: boolean } {
+  const {
+    lookback = 252, minOverlap = 120, minCorr = 0.7, minAbsZ = 2, minHalfLife = 2, maxHalfLife = 60,
+    maxPerSector = 120, topN = 120,
+    shortWin = 21, minLongCorr = 0.55, minDrop = 0.35, maxShortCorr = 0.45, decoupledTopN = 60,
+    deadlineMs,
+  } = opts;
+
+  const bySector = new Map<string, string[]>();
+  for (const s of names) {
+    if (!series.has(s)) continue;
+    const sec = sectorOf(s) || "—";
+    (bySector.get(sec) ?? bySector.set(sec, []).get(sec)!).push(s);
+  }
+
+  const stretched: Pair[] = [];
+  const decoupled: Decoupled[] = [];
+  let pairsTested = 0, truncated = false;
+
+  for (const [sec, syms] of bySector) {
+    const pool = syms.sort((x, y) => (rankOf(y) || 0) - (rankOf(x) || 0)).slice(0, maxPerSector);
+    for (let i = 0; i < pool.length && !truncated; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        // Cheap deadline check every 4096 pairs — the scan is a tight synchronous loop.
+        if (deadlineMs && (pairsTested & 4095) === 0 && Date.now() > deadlineMs) { truncated = true; break; }
+        const { logA, logB } = alignLogPrices(series.get(pool[i])!, series.get(pool[j])!);
+        if (logA.length < minOverlap) continue;
+        pairsTested++;
+
+        // Trailing window shared by both signals.
+        const n = logA.length;
+        const s = Math.max(0, n - lookback);
+        const la = logA.slice(s), lb = logB.slice(s);
+        const retA: number[] = [], retB: number[] = [];
+        for (let k = 1; k < la.length; k++) { retA.push(la[k] - la[k - 1]); retB.push(lb[k] - lb[k - 1]); }
+        if (retA.length < 20) continue;
+        const corrLong = correlation(retA, retB);
+        // The level hedge is needed for the STRETCHED spread, but NOT for decoupling (a returns-space
+        // phenomenon): a pair whose prices diverged past a clean hedge (β≤0) can still be a real break.
+        const beta = hedgeRatio(la, lb);
+        const validBeta = Number.isFinite(beta) && beta > 0;
+        const spread = validBeta ? spreadSeries(la, lb, beta) : null;
+        const z = spread ? zScore(spread) : 0;
+
+        // (1) DECOUPLED takes PRECEDENCE — a broken relationship is NOT a convergence trade, so a
+        // pair classified here is excluded from the stretched list (they'd give opposite advice).
+        let isDecoupled = false;
+        if (retA.length >= shortWin && corrLong >= minLongCorr) {
+          const rAs = retA.slice(-shortWin), rBs = retB.slice(-shortWin);
+          // ⚠ A flat/frozen recent window (a halted/delisted leg carried forward) makes corr ~0
+          // artificially — not a real break. Require genuine recent variance in BOTH legs.
+          if (std(rAs) > 1e-6 && std(rBs) > 1e-6) {
+            const corrShort = correlation(rAs, rBs);
+            if (corrLong - corrShort >= minDrop && corrShort <= maxShortCorr) {
+              // Attribute the break to the leg that actually MOVED most over the window (direction
+              // and magnitude), NOT the spread sign — the spread sign only says which is currently
+              // rich, so it names the wrong leg whenever the catalyst leg fell (the move-attribution trap).
+              const moveA = rAs.reduce((t, r) => t + r, 0), moveB = rBs.reduce((t, r) => t + r, 0);
+              const bigA = Math.abs(moveA) >= Math.abs(moveB);
+              decoupled.push({
+                a: pool[i], b: pool[j], sector: sec, corrLong, corrShort, drop: corrLong - corrShort,
+                z, beta: validBeta ? beta : 0, n: la.length,
+                broke: bigA ? pool[i] : pool[j],
+                brokeMovePct: +(((Math.exp(bigA ? moveA : moveB) - 1) * 100).toFixed(1)),
+              });
+              isDecoupled = true;
+            }
+          }
+        }
+
+        // (2) STRETCHED — the classic convergence pair. Skipped for a decoupled pair (mutual-exclusion).
+        if (!isDecoupled && validBeta && spread && corrLong >= minCorr) {
+          const hl = halfLife(spread);
+          if (hl != null && hl >= minHalfLife && hl <= maxHalfLife && Math.abs(z) >= minAbsZ) {
+            stretched.push({ a: pool[i], b: pool[j], sector: sec, beta, corr: corrLong, z, halfLifeDays: hl, n: la.length, lastSpread: spread[spread.length - 1], meanSpread: mean(spread), sdSpread: std(spread) });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    stretched: stretched.sort((x, y) => Math.abs(y.z) - Math.abs(x.z)).slice(0, topN),
+    decoupled: decoupled.sort((x, y) => y.drop - x.drop).slice(0, decoupledTopN),
+    pairsTested,
+    truncated,
+  };
 }
