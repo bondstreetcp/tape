@@ -22,6 +22,19 @@
  *      Non-financials → pe, evEbitda, ps, pb. Thin-GAAP names (lots of negative/garbage P/E) →
  *      suppress P/E, lean on P/S.
  *
+ *   5) ** PANEL CACHE + FILING DETECTOR (2026-07-16) ** — this script was the pipeline's biggest
+ *      SEC hog: TWO 3.75 MB companyfacts pulls per name (getEdgarQuarterly + the supplement re-
+ *      fetched the same file) × ~2,600 names ≈ 19 GB/night, which the NAS's slow SEC path
+ *      (~4.2s/request measured) can never finish. Fundamentals only change when a company FILES,
+ *      so: the extracted quarter panel is CACHED per name (data/valuation-panel.json — internal
+ *      state like buybacks-facts, gitignored, rides to R2 in the tarball), the frames filing-
+ *      detector (lib/secFrames) marks a name due only when its newest filed period-end moved
+ *      (~a dozen names/night + a monthly restatement ceiling), each due name costs ONE
+ *      companyfacts pull (deduped via edgarQuarterlyFromFacts + supplementFromFacts on the same
+ *      JSON), and every cached name recomputes nightly against fresh Yahoo prices — so `current`
+ *      discounts stay price-fresh even on a night SEC gives us nothing. Cold start fills under a
+ *      wall-clock budget over runs (a fast-pipe GitHub FULL populates it in one night → R2 → NAS).
+ *
  *   npx tsx scripts/refresh-valuation-history.ts            # all US universes
  *   npx tsx scripts/refresh-valuation-history.ts AAPL MSFT  # specific tickers (test, no write)
  *   npx tsx scripts/refresh-valuation-history.ts --only=sp500   # one universe, write the file
@@ -31,7 +44,9 @@ import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
 import { tickerToCik } from "../lib/edgar";
-import { getEdgarQuarterly } from "../lib/edgarFinancials";
+import { edgarQuarterlyFromFacts } from "../lib/edgarFinancials";
+import { writeFeedGuarded } from "../lib/feedGuard";
+import { latestFilingEnds, isDueByFiling, cikKey, seenEndFromFacts } from "../lib/secFrames";
 import type { Snapshot } from "../lib/types";
 import type {
   MultipleKey,
@@ -46,6 +61,33 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ── The panel cache ───────────────────────────────────────────────────────────────────────────
+const PANEL = path.join(DATA_DIR, "valuation-panel.json");
+/** Quarters kept per name — effectively ALL (a bound only against pathological duplicate-period
+ *  filers). ⚠ DO NOT trim tighter as a size optimization: the shares/flow CLEANING gates compare
+ *  each quarter against the median of the WHOLE stored history, so a shorter window shifts those
+ *  medians, flips which quarters get accepted vs neighbour-carried, and CHANGES PUBLISHED NUMBERS
+ *  — measured at KEEP=60: ADBE trailing-P/E current 42 → 14, AMZN EV/EBITDA median 36 → 29,
+ *  against the same SEC data. Full history ⇒ the panel path reproduces the legacy path exactly. */
+const PANEL_KEEP = 200;
+/** Wall-clock ceiling for the companyfacts phase — must stay under run-tick's 45-min step cap. */
+const BUDGET_MIN = Number(process.env.VALUATION_BUDGET_MIN || 25);
+
+/** One cached quarter — the ONLY FinPeriod fields the multiple math reads, compacted. */
+interface PanelQuarter { d: string; rev?: number; ni?: number; oi?: number; da?: number; ltd?: number; cash?: number; eq?: number; shs?: number }
+interface PanelEntry {
+  fetchedAt: string; // YYYY-MM-DD of the companyfacts pull
+  seenEnd: string | null; // newest us-gaap/Assets end at pull time — the filing-detector idempotency key
+  q: PanelQuarter[]; // oldest→newest, trimmed to PANEL_KEEP
+  std: [string, number][]; // shortTermDebt: period-end → value (instant)
+  bshs: [string, number][]; // basicShares fallback: period-end → value (~quarter duration)
+}
+interface PanelCache { generatedAt: string; bySymbol: Record<string, PanelEntry> }
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const ageDays = (iso: string | null | undefined) => (iso ? Math.round((Date.now() - Date.parse(iso + "T00:00:00Z")) / DAY) : Infinity);
+const numU = (x: any): number | undefined => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
 
 // ---- global SEC rate limiter ----------
 // data.sec.gov throttles >10 req/s with a 429 (and the throttle lingers). We funnel EVERY SEC
@@ -120,13 +162,11 @@ function quarterDurMap(facts: any[], into: Map<string, number>) {
   }
 }
 
-async function fetchSupplement(cik: string): Promise<Supplement> {
+/** PURE half of the old fetchSupplement — extracts from an already-fetched companyfacts JSON, so
+ *  the same 3.75 MB pull feeds this AND edgarQuarterlyFromFacts (it used to be fetched TWICE). */
+function supplementFromFacts(j: any): Supplement {
   const out: Supplement = { shortTermDebt: new Map(), basicShares: new Map() };
   try {
-    const padded = cik.replace(/\D/g, "").padStart(10, "0");
-    const res = await secFetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`);
-    if (!res || !res.ok) return out;
-    const j: any = await res.json();
     const gaap = j?.facts?.["us-gaap"];
     if (!gaap) return out;
     // short-term debt: take the FIRST concept that has data per period-end (don't sum — these
@@ -147,6 +187,37 @@ async function fetchSupplement(cik: string): Promise<Supplement> {
     /* leave empty */
   }
   return out;
+}
+
+/** ONE companyfacts pull → a compact, cacheable PanelEntry. Null = the FETCH failed (transient —
+ *  the caller keeps the prior panel); a successful pull with no usable GAAP still returns an entry
+ *  (empty q) so the name doesn't churn nightly. */
+async function fetchPanel(cik: string): Promise<PanelEntry | null> {
+  const padded = cik.replace(/\D/g, "").padStart(10, "0");
+  const res = await secFetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`);
+  if (!res || !res.ok) return null;
+  const j: any = await res.json().catch(() => null);
+  if (!j) return null;
+  const periods = edgarQuarterlyFromFacts(j);
+  const supp = supplementFromFacts(j);
+  const q: PanelQuarter[] = periods
+    .map((p: any) => ({
+      d: p.date as string,
+      rev: numU(p.totalRevenue), ni: numU(p.netIncome), oi: numU(p.operatingIncome),
+      da: numU(p.depreciationAndAmortization), ltd: numU(p.longTermDebt),
+      cash: numU(p.cashAndCashEquivalents), eq: numU(p.stockholdersEquity),
+      shs: numU(p.dilutedAverageShares),
+    }))
+    .slice(-PANEL_KEEP);
+  // Trim the supplement maps to the kept window — instMap reaches back decades we'll never read.
+  const minKept = q.length ? q[0].d : "9999";
+  return {
+    fetchedAt: todayISO(),
+    seenEnd: seenEndFromFacts(j),
+    q,
+    std: [...supp.shortTermDebt].filter(([end]) => end >= minKept),
+    bshs: [...supp.basicShares].filter(([end]) => end >= minKept),
+  };
 }
 
 // ---- price history + splits ----------
@@ -309,29 +380,21 @@ function classifySector(meta: SnapMeta | undefined): SectorClass {
 // catches the resulting garbage, but exclude them outright so we never publish a tiny in-band fluke.
 const DUAL_CLASS_EXCLUDE = new Set(["BRK-B", "BRK.B", "BRK-A", "BRK.A", "BF-B", "BF.B", "BF-A", "BF.A"]);
 
-/** Compute a name's full ValuationName, or null if we can't build anything usable. */
-async function computeName(symbol: string, meta: SnapMeta | undefined): Promise<ValuationName | null> {
+/** Compute a name's full ValuationName from its CACHED panel + fresh prices, or null if we can't
+ *  build anything usable. No SEC traffic here — the panel was refreshed (or not) upstream; prices
+ *  are re-fetched every run so `current` multiples track the live tape even on a no-SEC night. */
+async function computeFromPanel(symbol: string, entry: PanelEntry, meta: SnapMeta | undefined): Promise<ValuationName | null> {
   if (DUAL_CLASS_EXCLUDE.has(symbol.toUpperCase())) return null;
-  const cik = await tickerToCik(symbol);
-  if (!cik) return null; // non-US → skip
-
-  // getEdgarQuarterly does its OWN companyfacts pull (unthrottled, no retry, returns [] on a 429).
-  // Gate it through the SEC throttle and retry with backoff so a 500-name run doesn't silently lose
-  // every name once SEC starts rate-limiting (the failure that capped the first sp500 run at ~97).
-  const fetchQuarters = async () => {
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await secThrottle();
-      const q = await getEdgarQuarterly(symbol);
-      if (q.length) return q;
-      await sleep(800 * Math.pow(2, attempt) + Math.random() * 400);
-    }
-    return [];
-  };
-  const [periods, supplement, prices] = await Promise.all([
-    fetchQuarters(),
-    fetchSupplement(cik),
-    fetchPrices(symbol),
-  ]);
+  // Reconstruct exactly the FinPeriod fields the math below reads (the panel stores only those).
+  const periods = entry.q.map((c) => ({
+    date: c.d,
+    totalRevenue: c.rev ?? null, netIncome: c.ni ?? null, operatingIncome: c.oi ?? null,
+    depreciationAndAmortization: c.da ?? null, longTermDebt: c.ltd ?? null,
+    cashAndCashEquivalents: c.cash ?? null, stockholdersEquity: c.eq ?? null,
+    dilutedAverageShares: c.shs ?? null,
+  })) as any[];
+  const supplement: Supplement = { shortTermDebt: new Map(entry.std), basicShares: new Map(entry.bshs) };
+  const prices = await fetchPrices(symbol);
   if (!periods.length || prices.quotes.length < 60) return null;
 
   // sort quarters oldest→newest by date, dedup near-duplicate ends (<25 days apart)
@@ -562,13 +625,95 @@ async function main() {
 
   console.log(`Building valuation history for ${symbols.length} symbols${onlyUniverse ? ` (universe ${onlyUniverse})` : ""}…`);
 
+  // ── Phase 1: load the panel cache + resolve CIKs ────────────────────────────────────────────
+  let panel: PanelCache = { generatedAt: "", bySymbol: {} };
+  try {
+    panel = JSON.parse(await fs.readFile(PANEL, "utf8")) as PanelCache;
+  } catch (e: any) {
+    // Distinguish "first run" (ENOENT, silent) from "corrupt/truncated cache" (parse error, LOUD —
+    // it means the panel rebuilds cold over several budgeted nights; the carry-forward keeps the
+    // published feed whole meanwhile, but someone should know the rebuild is happening).
+    if (e?.code !== "ENOENT") console.warn(`⚠ valuation-panel.json unreadable (${String(e?.message).slice(0, 80)}) — rebuilding the panel from scratch`);
+  }
+  panel.bySymbol ??= {};
+  // ⚠ Wall-clock cap on CIK resolution: tickerToCik memoizes its ticker map only on SUCCESS, so on
+  // an SEC outage every per-symbol call re-attempts the map fetch with retries — 2,600 × backoff
+  // ran to HOURS and the 45-min step kill published NOTHING, defeating the "price-fresh on a
+  // no-SEC night" invariant (review finding). Past the cap, remaining names are simply not due
+  // tonight; phase 4 + carry-forward still publish everything cached.
+  const cikBySym = new Map<string, string>();
+  const cikDeadline = Date.now() + 120_000;
+  let cikCapped = 0;
+  for (const sym of symbols) {
+    if (Date.now() > cikDeadline) { cikCapped++; continue; }
+    const c = await tickerToCik(sym).catch(() => null); // cached map lookup — cheap when SEC is up
+    if (c) cikBySym.set(sym, c); // no CIK = non-US → never panelable (same as the old early-return)
+  }
+  if (cikCapped) console.warn(`⚠ CIK resolution hit its 120s cap — ${cikCapped} names skipped tonight (SEC likely down; cached panels still compute)`);
+
+  // ── Phase 2: filing detector → who is DUE a companyfacts pull ──────────────────────────────
+  // Fundamentals only change when a company files; the frames detector says who did. A detector
+  // FAILURE falls back to blanket age-based staleness — "detector down" must never read as
+  // "nothing filed" (the feed would silently freeze). FRAMES=0 forces the fallback.
+  const now = Date.now();
+  const useFrames = process.env.FRAMES !== "0";
+  const filed = useFrames ? await latestFilingEnds(now).catch(() => null) : null;
+  if (useFrames && !filed) console.warn("⚠ frames filing-detector unavailable — falling back to blanket age-based staleness");
+  // filedDue = names due because they demonstrably FILED (new data exists). They outrank names due
+  // only via the restatement ceiling / blanket age — on a budget-capped night the ceiling cohort
+  // (synchronized by a shared cold-start fetchedAt) must never starve actual new filings.
+  const filedDue = new Set<string>();
+  const due = [...cikBySym.keys()]
+    .filter((sym) => {
+      if (explicitTickers.length) return true; // test mode: always refetch the named tickers
+      const e = panel.bySymbol[sym];
+      if (!filed) return !e || ageDays(e.fetchedAt) >= 7;
+      const frameEnd = filed.get(cikKey(cikBySym.get(sym)!));
+      const isDue = isDueByFiling(
+        e ? { fetchedAt: e.fetchedAt, seenEnd: e.seenEnd, asOf: e.q.length ? e.q[e.q.length - 1].d : null } : undefined,
+        frameEnd,
+        now,
+      );
+      if (isDue && (!e || (frameEnd && frameEnd > (e.seenEnd ?? "")))) filedDue.add(sym);
+      return isDue;
+    })
+    .sort((a, b) => {
+      const fa = filedDue.has(a) ? 1 : 0, fb = filedDue.has(b) ? 1 : 0;
+      if (fa !== fb) return fb - fa; // fresh filings first
+      return ageDays(panel.bySymbol[b]?.fetchedAt) - ageDays(panel.bySymbol[a]?.fetchedAt); // then oldest
+    });
+
+  // ── Phase 3: budgeted panel refresh — ONE companyfacts pull per due name ───────────────────
+  const deadline = now + BUDGET_MIN * 60_000;
+  let fetched = 0, failedN = 0, deferred = 0;
+  await mapPool(due, 4, async (sym) => {
+    if (Date.now() > deadline) { deferred++; return; }
+    const e = await fetchPanel(cikBySym.get(sym)!);
+    if (e) { panel.bySymbol[sym] = e; fetched++; } else failedN++; // fetch failure → keep the prior panel
+  });
+  console.log(
+    `panels: ${Object.keys(panel.bySymbol).length} cached · ${due.length} due (${filed ? `filing-detector, ${filed.size} filers visible` : "blanket 7d"})` +
+    ` · refreshed ${fetched}, failed ${failedN}${deferred ? ` · BUDGET SPENT — ${deferred} deferred to the next run` : ""}`,
+  );
+  // Persist the panel BEFORE computing/writing — tonight's SEC work must survive whatever happens
+  // downstream (the buybacks-facts doctrine: a blocked write must not re-pay the bandwidth bill).
+  // ATOMICALLY (tmp + rename): this is a multi-MB JSON, and the 45-min step kill landing mid-write
+  // would leave a truncated file that next run's parse-failure resets to {} — a full cold restart
+  // of the panel (review finding). Skipped in explicit-ticker test mode, which the header documents
+  // as "no write" — a test probe must not mutate the shared nightly cache.
+  if (!explicitTickers.length) {
+    const body = JSON.stringify({ generatedAt: new Date().toISOString(), bySymbol: panel.bySymbol } satisfies PanelCache);
+    await fs.writeFile(PANEL + ".tmp", body);
+    await fs.rename(PANEL + ".tmp", PANEL);
+  }
+
+  // ── Phase 4: compute EVERY paneled name against fresh prices (no SEC — Yahoo only) ─────────
   const names: Record<string, ValuationName> = {};
   let done = 0, ok = 0;
-  // Concurrency 4: the global SEC token bucket (~7 req/s) is the real governor; this just bounds
-  // burstiness. Each name makes ~2 SEC calls (quarterly + supplement) plus 1 Yahoo chart call.
-  await mapPool(symbols, 4, async (sym) => {
+  const computable = symbols.filter((s) => panel.bySymbol[s]?.q?.length);
+  await mapPool(computable, 6, async (sym) => {
     try {
-      const vn = await computeName(sym, meta.get(sym));
+      const vn = await computeFromPanel(sym, panel.bySymbol[sym], meta.get(sym));
       if (vn) {
         names[sym] = vn;
         ok++;
@@ -576,9 +721,35 @@ async function main() {
     } catch (e) {
       /* skip a bad name */
     }
-    if (++done % 50 === 0) console.log(`  ${done}/${symbols.length} (${ok} with data)`);
+    if (++done % 100 === 0) console.log(`  ${done}/${computable.length} (${ok} with data)`);
   });
-  console.log(`  built ${ok}/${symbols.length} names`);
+  console.log(`  built ${ok}/${computable.length} paneled names (${symbols.length} symbols in scope)`);
+
+  // ── Cold-start carry-forward ──────────────────────────────────────────────────────────────
+  // While the panel fills under the budget (night 1 on a fresh host: ~hundreds of panels, not
+  // 2,600), a symbol we HAVEN'T PANELED YET keeps its prior published entry — otherwise the first
+  // partial night would replace a 2,300-name board with a few hundred, and the write-guard can't
+  // catch it (its floor is 500; a 700-name write sails through). A symbol WITH a panel that
+  // computed to null was EVALUATED and suppressed on purpose (garbage multiple, dual-class,
+  // thin GAAP) — those still drop, exactly like the legacy full run (the resurrect-bug rule).
+  if (!explicitTickers.length) {
+    try {
+      const existing = JSON.parse(await fs.readFile(path.join(DATA_DIR, "valuation-history.json"), "utf8")) as ValuationHistoryData;
+      const inScope = new Set(symbols);
+      let carried = 0, expired = 0;
+      for (const [sym, vn] of Object.entries(existing.names)) {
+        if (names[sym] || panel.bySymbol[sym] || !inScope.has(sym)) continue;
+        // Age bound: a name that can NEVER acquire a panel (lost ticker→CIK mapping, permanently
+        // consolidated CIK) must not be re-carried verbatim forever — a frozen `current` multiple
+        // presented as live is worse than the honest gap the legacy pipeline left (review finding).
+        // Any active filer's asOf is ≲120d old; past 270d the name is genuinely dead → drop it.
+        if (!vn.asOf || ageDays(vn.asOf) > 270) { expired++; continue; }
+        names[sym] = vn;
+        carried++;
+      }
+      if (carried || expired) console.log(`  carried forward ${carried} not-yet-paneled names (cold-start fill-in)${expired ? ` · ${expired} expired (asOf >270d — permanently unpanelable)` : ""}`);
+    } catch { /* no existing file — nothing to carry */ }
+  }
 
   // For an explicit-ticker test run, print the numbers and DON'T write the file.
   if (explicitTickers.length) {
@@ -630,10 +801,18 @@ async function main() {
     }
   }
 
-  await fs.writeFile(outPath, JSON.stringify(data));
+  // GUARDED write (registry floor: 500 names). Before this, a night where SEC/Yahoo failed
+  // wholesale wrote an EMPTY names map over 2,300 good ones — the same class of self-destruction
+  // the buybacks board suffered on 2026-07-15. Degrade to STALE, never to EMPTY.
+  const w = await writeFeedGuarded("valuation-history.json", data);
+  if (!w.written) {
+    console.error(`refresh-valuation-history: WRITE BLOCKED — ${w.reason}`);
+    console.error(`  built ${Object.keys(data.names).length} names; the panel cache holds ${Object.keys(panel.bySymbol).length} — it fills in on the next runs.`);
+    process.exit(1);
+  }
   const cov = coverageSummary(data.names);
   console.log(
-    `Wrote ${outPath}\nCoverage: ${cov.total} names · pe=${cov.counts.pe} evEbitda=${cov.counts.evEbitda} ps=${cov.counts.ps} pb=${cov.counts.pb} · financials=${cov.financial}`,
+    `Wrote valuation-history.json [${w.reason}]\nCoverage: ${cov.total} names · pe=${cov.counts.pe} evEbitda=${cov.counts.evEbitda} ps=${cov.counts.ps} pb=${cov.counts.pb} · financials=${cov.financial}`,
   );
 }
 

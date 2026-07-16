@@ -119,7 +119,18 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
       cache: "no-store",
     });
     if (!res.ok) return [];
-    const j: any = await res.json();
+    return edgarQuarterlyFromFacts(await res.json());
+  } catch {
+    return [];
+  }
+}
+
+/** The pure extraction half of getEdgarQuarterly — takes an ALREADY-FETCHED companyfacts JSON.
+ *  Exists so a caller that needs several extractions from the same company (quarterly panel +
+ *  supplemental concepts) pays for the 3.75 MB pull ONCE instead of once per extractor —
+ *  refresh-valuation-history was fetching every company's facts twice (~19 GB/night). */
+export function edgarQuarterlyFromFacts(j: any): FinPeriod[] {
+  try {
     const gaap = j?.facts?.["us-gaap"];
     if (!gaap) return [];
 

@@ -34,6 +34,7 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { tickerToCik } from "../lib/edgar";
 import { writeFeedGuarded } from "../lib/feedGuard";
+import { latestFilingEnds, isDueByFiling, cikKey, seenEndFromFacts } from "../lib/secFrames";
 import {
   quarterize, despikeQuarters, ttmSum, yoyChange, classifyBuyback,
   type BuybackRow, type BuybackData, type DurFact, type InstFact,
@@ -66,6 +67,10 @@ interface CachedFacts {
   buybackAccel: number | null;
   payoutToFcf: number | null;
   asOf: string | null;
+  /** Newest us-gaap/Assets end seen at pull time — pairs with the frames filing-detector so a name
+   *  is only re-pulled when it has FILED something newer. Absent on pre-migration/seed entries
+   *  (isDueByFiling falls back to asOf; the first pull stamps it). */
+  seenEnd?: string | null;
 }
 interface FactsCache { generatedAt: string; bySymbol: Record<string, CachedFacts> }
 
@@ -183,6 +188,7 @@ async function fetchFacts(symbol: string): Promise<CachedFacts | null> {
     buybackAccel: buybackAccel != null ? +buybackAccel.toFixed(2) : null,
     payoutToFcf: payoutToFcf != null ? +payoutToFcf.toFixed(2) : null,
     asOf: bb?.asOf ?? null,
+    seenEnd: seenEndFromFacts(j),
   };
 }
 
@@ -247,16 +253,51 @@ async function main() {
     else console.warn("refresh-buybacks: board, cache, AND seed all empty — the board can only fill from live SEC pulls this run.");
   }
 
-  // Oldest-first: never-fetched names lead, then the most stale. Anything refreshed inside the window
-  // is skipped — its filings can't have moved.
+  // ── Filing detector (SEC frames) ─────────────────────────────────────────────────────────────
+  // Companyfacts only change when the company FILES, and the frames API tells us who filed in a
+  // handful of requests — so instead of re-pulling everything older than 7 days (~70 names ×
+  // 3.75 MB a night), pull only the names whose newest filed period-end moved (~a dozen a night,
+  // plus a monthly restatement ceiling). On the NAS's slow SEC path this is the difference between
+  // a step that fits its budget and one that dies. FRAMES=0 disables; a detector FAILURE (null)
+  // must fall back to the blanket age rule — "detector down" must never read as "nothing filed".
+  const now = Date.now();
+  const useFrames = process.env.FRAMES !== "0";
+  const filed = useFrames ? await latestFilingEnds(now).catch(() => null) : null;
+  if (useFrames && !filed) console.warn("refresh-buybacks: ⚠ frames filing-detector unavailable — falling back to blanket age-based staleness");
+  const frameEndBySym = new Map<string, string | undefined>();
+  if (filed) {
+    for (const s of names) {
+      const cik = await tickerToCik(s.symbol).catch(() => null); // cached map lookup — cheap
+      frameEndBySym.set(s.symbol, cik ? filed.get(cikKey(cik)) : undefined);
+    }
+  }
+
+  // Fresh FILINGS first (new data provably exists), then oldest-first — so on a budget-capped
+  // night the synchronized restatement-ceiling cohort can't starve names that actually filed.
+  const filedDue = (s: { symbol: string }): number => {
+    const c = cache.bySymbol[s.symbol];
+    const fEnd = frameEndBySym.get(s.symbol);
+    return !c || (fEnd && fEnd > (c.seenEnd ?? c.asOf ?? "")) ? 1 : 0;
+  };
   const due = names
-    .filter((s) => ageDays(cache.bySymbol[s.symbol]?.fetchedAt) >= MAX_AGE_DAYS)
-    .sort((a, b) => ageDays(cache.bySymbol[b.symbol]?.fetchedAt) - ageDays(cache.bySymbol[a.symbol]?.fetchedAt));
-  console.log(`refresh-buybacks: ${names.length} names · ${Object.keys(cache.bySymbol).length} cached · ${due.length} due (>${MAX_AGE_DAYS}d) · budget ${BUDGET_MIN}min`);
+    .filter((s) => (filed
+      ? isDueByFiling(cache.bySymbol[s.symbol], frameEndBySym.get(s.symbol), now)
+      : ageDays(cache.bySymbol[s.symbol]?.fetchedAt) >= MAX_AGE_DAYS))
+    .sort((a, b) => {
+      const d = filedDue(b) - filedDue(a);
+      if (d) return d;
+      return ageDays(cache.bySymbol[b.symbol]?.fetchedAt) - ageDays(cache.bySymbol[a.symbol]?.fetchedAt);
+    });
+  console.log(
+    `refresh-buybacks: ${names.length} names · ${Object.keys(cache.bySymbol).length} cached · ${due.length} due ` +
+    `(${filed ? `filing-detector, ${filed.size} filers visible` : `blanket >${MAX_AGE_DAYS}d`}) · budget ${BUDGET_MIN}min`,
+  );
 
   // BUDGETED pull: stop when the clock runs out, not when SEC does. The step finishing on its own
   // terms is the whole fix — a killed step wrote nothing and rotted the feed.
-  const deadline = Date.now() + BUDGET_MIN * 60_000;
+  // Anchored to `now` (captured BEFORE the frames detector), so a slow/hanging detector eats into
+  // the budget instead of extending the step past it — the whole step must fit run-tick's 45-min cap.
+  const deadline = now + BUDGET_MIN * 60_000;
   let fetched = 0, noData = 0, budgetHit = false;
   await mapPool(due, 6, async (s) => {
     if (Date.now() > deadline) { budgetHit = true; return; }
