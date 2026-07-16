@@ -24,9 +24,10 @@ import { buildPositioning } from "../lib/positioning";
 import { loadSuperInvestors } from "../lib/superinvestors";
 import { loadCongress } from "../lib/congress";
 import {
-  pickNewEntries, applyDueMarks, SIGNAL_KEYS, type MemberInput, type SignalEvent, type SignalKey,
-  type SignalLogFile,
+  pickNewEntries, applyDueMarks, applySplitsToEvent, SIGNAL_KEYS, type MemberInput, type SignalEvent,
+  type SignalKey, type SignalLogFile,
 } from "../lib/signalLog";
+import type { SplitLedgerFile } from "../lib/splits";
 import type { Snapshot } from "../lib/types";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -148,6 +149,27 @@ async function main() {
   const lastMembership = existing?.lastMembership ?? {};
   const lastSeen = existing?.lastSeen ?? {};
   const priorCount = events.length;
+
+  // ── Re-base across splits ───────────────────────────────────────────────────────────────────────
+  // Establish the invariant FIRST, before anything else touches the log: every price in here sits on
+  // TODAY's split basis. Without this a 10:1 split leaves a flagged name reading "−90% since flagged"
+  // and permanently poisons its 1w/1m/3m marks — and the log is forward-only, so a poisoned mark can
+  // never be rebuilt. The ledger is free (build-data records it, step 2 of this same FULL tick) and
+  // applySplitsToEvent is idempotent via each event's `splitAdj`, so re-running is a no-op.
+  const ledger = await readJson<SplitLedgerFile>("splits.json");
+  let rebased = 0;
+  const rebasedSyms = new Set<string>();
+  if (ledger?.splits) {
+    for (const e of events) {
+      const n = applySplitsToEvent(e, ledger.splits[e.symbol] ?? []);
+      if (n) { rebased += n; rebasedSyms.add(e.symbol); }
+    }
+    if (rebased) console.log(`signal-log: re-based ${rebased} price(s) across splits in ${rebasedSyms.size} name(s): ${[...rebasedSyms].join(", ")}`);
+  } else {
+    // Not fatal: the ledger merges forward and this pass is idempotent, so tomorrow's run catches up.
+    // Silence would be the real bug — a stale mark that LOOKS graded is worse than a logged gap.
+    console.error("signal-log: ⚠ no data/splits.json — entry prices NOT re-based tonight (build-data writes it; a split in the last 24h would misprice its name until the next FULL run).");
+  }
 
   // ── Log new appearances ─────────────────────────────────────────────────────────────────────────
   let newN = 0, skippedNoPrice = 0;

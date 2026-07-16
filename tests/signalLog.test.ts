@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, summarizeTags, joinFlagged, daysBetween,
+  pickNewEntries, applyDueMarks, eventReturn, edgeOf, summarizeSignals, summarizeTags, joinFlagged,
+  applySplitsToEvent, daysBetween,
   type SignalEvent, type SignalLogFile,
 } from "../lib/signalLog";
+import type { SplitEvent } from "../lib/splits";
 
 const ev = (o: Partial<SignalEvent> & { signal: SignalEvent["signal"]; symbol: string; date: string }): SignalEvent => ({
   id: `${o.signal}|${o.symbol}|${o.date}`, name: o.symbol, entryPrice: 100, spxEntry: 5000, marks: {}, ...o,
@@ -217,6 +219,87 @@ test("joinFlagged: latest stint wins, NEW only for non-seeds on the latest run, 
   assert.equal(legacy.AAA.isNew, false);
   // nothing relevant in the log → null (view degrades wholesale)
   assert.equal(joinFlagged(log([wrongSig], seen), "confluence", new Set(["NOPE"])), null);
+});
+
+// ── split re-base ────────────────────────────────────────────────────────────────────────────────
+// priceMult brings PRE-split prices onto the post-split basis (lib/splits): forward 10:1 → 0.1.
+const dayMs = (d: string) => Date.parse(d + "T00:00:00Z");
+const fwd10 = (d: string): SplitEvent => ({ date: dayMs(d), priceMult: 0.1 }); // 10-for-1
+const rev2 = (d: string): SplitEvent => ({ date: dayMs(d), priceMult: 2 }); // 1-for-2 reverse
+
+test("splits: a 10:1 AFTER the entry re-bases entryPrice (the '−90% since flagged' bug)", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 500 });
+  const moved = applySplitsToEvent(e, [fwd10("2026-07-20")]);
+  assert.equal(moved, 1);
+  assert.equal(e.entryPrice, 50); // 500 pre-split ⇒ 50 on today's basis
+  // the card would now read ~flat against a $52 live price, not −90%
+  assert.deepEqual(e.splitAdj, [dayMs("2026-07-20")]);
+});
+
+test("splits: IDEMPOTENT — the nightly re-run must not adjust twice", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 500 });
+  applySplitsToEvent(e, [fwd10("2026-07-20")]);
+  const after1 = e.entryPrice;
+  for (let i = 0; i < 5; i++) applySplitsToEvent(e, [fwd10("2026-07-20")]); // five more nights
+  assert.equal(e.entryPrice, after1, "re-running must be a no-op");
+  assert.equal(e.entryPrice, 50);
+});
+
+test("splits: a mark filled BETWEEN entry and the split is re-based; the RETURN stays true", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 500, spxEntry: 5000 });
+  e.marks.w1 = { date: "2026-07-08", price: 550, spx: 5050 }; // +10% pre-split
+  applySplitsToEvent(e, [fwd10("2026-07-20")]);
+  assert.equal(e.entryPrice, 50);
+  assert.equal(e.marks.w1!.price, 55); // both legs moved ⇒ ratio preserved
+  const r = eventReturn(e, "w1")!;
+  assert.ok(Math.abs(r.ret - 0.1) < 1e-12, "the +10% week must survive the split untouched");
+});
+
+test("splits: a mark taken AFTER the split is left alone (it's already post-split)", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 500 });
+  applySplitsToEvent(e, [fwd10("2026-07-20")]); // fold it in first (entry → 50)
+  // next night applyDueMarks fills w1 with a POST-split price; the split is already recorded as done
+  e.marks.w1 = { date: "2026-07-22", price: 55, spx: 5050 };
+  applySplitsToEvent(e, [fwd10("2026-07-20")]);
+  assert.equal(e.marks.w1!.price, 55, "a post-split mark must not be scaled again");
+  const r = eventReturn(e, "w1")!;
+  assert.ok(Math.abs(r.ret - 0.1) < 1e-12);
+});
+
+test("splits: one BEFORE the entry changes nothing (both legs already post-split)", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 50 });
+  e.marks.w1 = { date: "2026-07-08", price: 55, spx: 5050 };
+  const moved = applySplitsToEvent(e, [fwd10("2026-06-01")]);
+  assert.equal(moved, 0);
+  assert.equal(e.entryPrice, 50);
+  assert.equal(e.marks.w1!.price, 55);
+});
+
+test("splits: effective ON the entry date is NOT applied (that close is already post-split)", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-20", entryPrice: 50 });
+  const moved = applySplitsToEvent(e, [fwd10("2026-07-20")]);
+  assert.equal(moved, 0, "strictly-after: the evening's logged close already reflects the split");
+  assert.equal(e.entryPrice, 50);
+});
+
+test("splits: reverse split scales UP; trivial ratios are ignored", () => {
+  const e = ev({ signal: "warnings", symbol: "RVS", date: "2026-07-01", entryPrice: 3 });
+  applySplitsToEvent(e, [rev2("2026-07-10")]);
+  assert.equal(e.entryPrice, 6); // 1-for-2 ⇒ $3 becomes $6
+  // a ~1.0 ratio is a data artifact, not a split
+  const e2 = ev({ signal: "warnings", symbol: "NOP", date: "2026-07-01", entryPrice: 100 });
+  assert.equal(applySplitsToEvent(e2, [{ date: dayMs("2026-07-10"), priceMult: 1.02 }]), 0);
+  assert.equal(e2.entryPrice, 100);
+});
+
+test("splits: several splits compound, and no splits is a clean no-op", () => {
+  const e = ev({ signal: "confluence", symbol: "AAA", date: "2026-07-01", entryPrice: 500 });
+  applySplitsToEvent(e, [fwd10("2026-07-10"), rev2("2026-07-20")]); // ×0.1 then ×2
+  assert.ok(Math.abs(e.entryPrice - 100) < 1e-9);
+  const clean = ev({ signal: "confluence", symbol: "BBB", date: "2026-07-01", entryPrice: 42 });
+  assert.equal(applySplitsToEvent(clean, []), 0);
+  assert.equal(clean.entryPrice, 42);
+  assert.equal(clean.splitAdj, undefined, "no splits ⇒ no bookkeeping noise on the event");
 });
 
 test("summarizeSignals: seed filter", () => {

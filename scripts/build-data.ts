@@ -18,7 +18,10 @@ import { UNIVERSES } from "../lib/universes";
 import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
-import { adjustForCorporateActions, splitsFromYahoo, type SplitEvent } from "../lib/splits";
+import {
+  adjustForCorporateActions, splitsFromYahoo, mergeSplitLedger, LEDGER_WINDOW_DAYS,
+  type SplitEvent, type SplitLedgerFile,
+} from "../lib/splits";
 import { snapshotWriteAllowed } from "../lib/snapshotGuard";
 import type {
   Returns,
@@ -263,6 +266,10 @@ async function main() {
   const intradayPeriod1 = new Date(NOW - 8 * DAY);
   let done = 0;
   const metricBySym = new Map<string, Metric>();
+  // Splits seen this run, per symbol — we already pay for these events, so record them (see
+  // lib/splits' ledger section). Only symbols whose fetch SUCCEEDED get a key: an absent symbol
+  // means "didn't learn anything tonight", which merge treats very differently from "no splits".
+  const splitsBySym = new Map<string, SplitEvent[]>();
 
   await mapPool(allSymbols, 16, async (sym) => {
     const q = quoteMap.get(sym);
@@ -289,6 +296,7 @@ async function main() {
         pts = toPoints(ch?.quotes);
         adjXY = adjCloseXY(ch?.quotes);
         splitEvents = splitsFromYahoo(ch?.events);
+        splitsBySym.set(sym, splitEvents); // the call returned ⇒ this IS the truth for this symbol
       } catch {
         /* retry */
       }
@@ -501,6 +509,22 @@ async function main() {
     console.log(`  ${u.id}: ${stocks.length} stocks, ${sectors.length} sectors`);
   }
   if (blocked.length) console.error(`\n⚠ write-guard kept the prior snapshot for ${blocked.length} universe(s): ${blocked.join(", ")} (partial fetch this run). npm run check-freshness will flag any that stay stale.`);
+
+  // 7) Split ledger — free: step 4 already fetched these events for the countermeasure.
+  // Non-fatal by design: this is a by-product, and a snapshot run that otherwise succeeded must not
+  // exit 1 over it. Merge semantics mean a skipped night just leaves the ledger where it was.
+  try {
+    const LEDGER = path.join(DATA_DIR, "splits.json");
+    let prevLedger: SplitLedgerFile | null = null;
+    try { prevLedger = JSON.parse(await fs.readFile(LEDGER, "utf8")) as SplitLedgerFile; } catch { /* first run */ }
+    const ledger = mergeSplitLedger(prevLedger, splitsBySym, NOW);
+    await fs.writeFile(LEDGER, JSON.stringify(ledger));
+    const n = Object.values(ledger.splits).reduce((a, s) => a + s.length, 0);
+    const learned = [...splitsBySym.values()].filter((s) => s.length).length;
+    console.log(`\nSplit ledger: ${n} splits across ${Object.keys(ledger.splits).length} symbols (last ${LEDGER_WINDOW_DAYS}d) — ${splitsBySym.size}/${allSymbols.length} symbols observed, ${learned} with splits on record.`);
+  } catch (e) {
+    console.error(`⚠ split ledger not written: ${String((e as any)?.message || e)} — signal-log entry prices will re-base tomorrow instead.`);
+  }
 
   console.log("\nDone.");
 }

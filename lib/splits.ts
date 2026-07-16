@@ -70,6 +70,77 @@ export function splitsFromYahoo(events: any): SplitEvent[] {
   return out.sort((a, b) => a.date - b.date);
 }
 
+// ── The split ledger ─────────────────────────────────────────────────────────────────────────────
+// build-data already fetches `events: "div,split"` for every US name nightly (it needs them for the
+// countermeasure above) and then throws the split list away. Persisting it costs ZERO extra fetches
+// and gives anything downstream an authoritative "what split, and when" record — which the forward-
+// accumulating signal log needs to keep its stored entry prices on today's basis.
+//
+// Coverage is provable rather than hopeful: every symbol build-data writes a snapshot for is a symbol
+// it fetched chart events for. Anything reading a US snapshot is therefore covered by construction.
+//
+// ⚠ "Splits" here means what Yahoo calls a split, which is WIDER than the name suggests: it also
+// encodes SPINOFFS as an odd-ratio split (the live ledger carries FDX ×0.8058 for the FedEx Freight
+// separation alongside NFLX ×0.1 for a clean 10-for-1). That is a feature, not contamination —
+// consumers re-base stored prices to match the snapshot/series price, and build-data adjusts those
+// for spinoffs too, so the two stay on ONE basis. Ratios within ~10% of 1.0 are below every
+// consumer's MEANINGFUL floor and get ignored downstream; they're kept here rather than filtered so
+// the ledger stays a faithful record of what the vendor reported.
+
+export interface SplitLedgerFile {
+  generatedAt: string;
+  /** symbol → splits within the retention window, ascending by date. */
+  splits: Record<string, SplitEvent[]>;
+}
+
+/** How much history the ledger keeps. Comfortably longer than the signal log's 3-month horizon. */
+export const LEDGER_WINDOW_DAYS = 400;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Floor a split's timestamp to UTC midnight of its effective date.
+ *
+ * ⚠ This is load-bearing, not cosmetic. Consumers key their "already applied" bookkeeping off
+ * `date`, so the value MUST be identical every night — a vendor timestamp that drifts by hours
+ * between runs would read as a NEW split and get applied a second time. Flooring makes the key a
+ * function of the calendar day, which is the only part of it that's actually stable.
+ */
+const utcDay = (ms: number) => Math.floor(ms / DAY_MS) * DAY_MS;
+
+/**
+ * Fold tonight's observations into the ledger.
+ *
+ * MERGE, never replace: `observed` only carries the symbols whose chart fetch SUCCEEDED, so a name
+ * Yahoo dropped tonight keeps yesterday's splits instead of silently losing them. That makes this
+ * feed structurally incapable of degrading to empty — the same "stale, never destroyed" rule
+ * lib/feedGuard enforces for the counted feeds, achieved here by construction instead of a guard.
+ *
+ * Pure. First observation of a given (symbol, day) wins; entries older than the window are dropped.
+ */
+export function mergeSplitLedger(
+  prev: SplitLedgerFile | null,
+  observed: Map<string, SplitEvent[]>,
+  nowMs: number,
+  windowDays = LEDGER_WINDOW_DAYS,
+): SplitLedgerFile {
+  const cutoff = utcDay(nowMs) - windowDays * DAY_MS;
+  const out: Record<string, SplitEvent[]> = {};
+
+  const symbols = new Set([...Object.keys(prev?.splits ?? {}), ...observed.keys()]);
+  for (const sym of symbols) {
+    const byDay = new Map<number, SplitEvent>();
+    for (const s of [...(prev?.splits?.[sym] ?? []), ...(observed.get(sym) ?? [])]) {
+      if (!s || !Number.isFinite(s.date) || !Number.isFinite(s.priceMult) || s.priceMult <= 0) continue;
+      const date = utcDay(s.date);
+      if (date < cutoff) continue;
+      if (!byDay.has(date)) byDay.set(date, { date, priceMult: s.priceMult });
+    }
+    if (byDay.size) out[sym] = [...byDay.values()].sort((a, b) => a.date - b.date);
+  }
+  return { generatedAt: new Date(nowMs).toISOString(), splits: out };
+}
+
 const MEANINGFUL = 0.1; // |ln(priceMult)| threshold — ignore trivial/duplicate ratios
 const JUMP_TOL = 0.15; // rawJump must be within ±15% of priceMult to count as "unadjusted"
 

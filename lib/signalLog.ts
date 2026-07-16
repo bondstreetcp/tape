@@ -11,6 +11,8 @@
  * logger and the board can't drift (the "logger == card by construction" doctrine).
  */
 
+import type { SplitEvent } from "./splits"; // pure (no fs) — safe for this client-safe module
+
 export type SignalDirection = "bullish" | "bearish" | "move";
 
 export type SignalKey =
@@ -82,6 +84,9 @@ export interface SignalEvent {
   tags?: string[];
   seed?: boolean; // logged on the signal's FIRST run (whole board, not a fresh appearance)
   marks: Partial<Record<HorizonKey, SignalMark>>;
+  /** Split effective-dates (epoch ms) already folded into entryPrice/marks. This is the idempotency
+   * key: the re-base runs EVERY night, so without it a 10:1 split would be applied again and again. */
+  splitAdj?: number[];
 }
 
 export interface SignalLogFile {
@@ -117,8 +122,8 @@ export interface FlaggedInfo {
  * entry for `signal` — i.e. this stint on the board (a re-entry after a real absence measures from
  * its own flag date, matching the log's episode model). isNew = a non-seed entry dated on the
  * latest tracked run (the newest lastSeen stamp — every priced member is stamped each run). Null
- * when the log holds nothing for these symbols. ⚠ Prices are NOT re-based across stock splits —
- * same known limit as the marks (see the header). */
+ * when the log holds nothing for these symbols. entryPrice is kept on the current split-adjusted
+ * basis by applySplitsToEvent (run nightly), so "±x% since flagged" survives a split. */
 export function joinFlagged(log: SignalLogFile, signal: SignalKey, symbols: Set<string>): Record<string, FlaggedInfo> | null {
   if (!log?.events?.length) return null;
   const latest = new Map<string, SignalEvent>();
@@ -198,6 +203,63 @@ export function applyDueMarks(
     }
   }
   return filled;
+}
+
+/** Below this |ln(priceMult)| a "split" is a rounding artifact / duplicate ratio — ignore it.
+ *  Same threshold lib/splits uses for the price series. */
+const SPLIT_MEANINGFUL = 0.1;
+
+/**
+ * Re-base ONE event's stored prices onto the post-split basis. Pure; mutates the event in place and
+ * returns the number of prices it moved.
+ *
+ * Why this is needed at all: entryPrice and each mark are snapshots frozen at capture time, and
+ * nothing ever re-based them. lib/splits protects the price SERIES (build-data/refresh-quotes), not
+ * this log. So a 10:1 split three weeks into a stint makes /confluence read "−90% since flagged" and,
+ * worse, bakes a −90% into whichever marks were filled before the split — permanently, in a
+ * forward-only file that cannot be rebuilt.
+ *
+ * The rule is per-price, not per-event, and that distinction matters:
+ *   • a split AFTER a price was captured ⇒ that price is on the OLD basis ⇒ scale it by priceMult
+ *   • a split BEFORE it ⇒ already on the new basis ⇒ leave alone
+ * Note a split after BOTH entry and mark leaves that mark's RETURN correct (both legs pre-split, the
+ * ratio cancels) — so a blanket per-event adjustment would corrupt settled history. Scaling each
+ * price by only the splits that post-date IT normalises everything to today's basis, which fixes both
+ * the ratio and the card's "since flagged" line (that one compares against a LIVE price).
+ *
+ * `splitAdj` is the idempotency key: this runs nightly, so a split must be folded in exactly once.
+ * Marks filled AFTER a split are already correct and are protected by the same key — the split is
+ * recorded as done, so later runs skip it entirely.
+ *
+ * Strictly-after (`>`) is deliberate: Yahoo's split date is the EFFECTIVE date, and an entry logged
+ * that evening already took the post-split close.
+ * The S&P leg needs nothing — the index doesn't split.
+ */
+export function applySplitsToEvent(e: SignalEvent, splits: SplitEvent[]): number {
+  const done = new Set(e.splitAdj ?? []);
+  let moved = 0;
+  for (const s of splits) {
+    if (done.has(s.date)) continue; // already folded in on an earlier run
+    if (!Number.isFinite(s.priceMult) || s.priceMult <= 0) continue;
+    if (Math.abs(Math.log(s.priceMult)) <= SPLIT_MEANINGFUL) continue; // trivial ratio
+    const entryMs = Date.parse(e.date + "T00:00:00Z");
+    if (Number.isFinite(entryMs) && s.date > entryMs && e.entryPrice > 0) {
+      e.entryPrice = e.entryPrice * s.priceMult;
+      moved++;
+    }
+    for (const h of HORIZONS) {
+      const m = e.marks[h.key];
+      if (!m || !(m.price > 0)) continue;
+      const markMs = Date.parse(m.date + "T00:00:00Z");
+      if (Number.isFinite(markMs) && s.date > markMs) {
+        m.price = m.price * s.priceMult;
+        moved++;
+      }
+    }
+    done.add(s.date);
+  }
+  if (done.size) e.splitAdj = [...done].sort((a, b) => a - b);
+  return moved;
 }
 
 export interface EventReturn {
