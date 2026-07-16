@@ -30,8 +30,20 @@ import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
 import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
+import { mergeCarryForward, isMassLlmFailure } from "../lib/overnightFilings";
 
 const DATA = path.join(process.cwd(), "data");
+const OUT = path.join(DATA, "overnight-filings.json");
+// Wall-clock budget. The broad R3000 scan (one submissions fetch/symbol) + per-filing LLM digests
+// are SEC- and LLM-bound; on the NAS's slow SEC path (~4.2s/req, measured 2026-07-16) the run can
+// drift toward run-tick's 45-min STEP_TIMEOUT_MIN — and a KILLED step writes NOTHING. So cap the two
+// phases and CARRY FORWARD everything we don't reach, degrading the feed to STALE, never EMPTY.
+// Detection gets the larger slice (it gates everything downstream); summarize runs newest-first so a
+// cut keeps the freshest cards. Detection front-loads big caps (watch-set order sp500→…→r3000), so a
+// truncated NAS night still covers the names most likely to file something material.
+const BUDGET_MIN = Number(process.env.OVERNIGHT_BUDGET_MIN || 38);
+const DETECT_FRAC = 0.6; // share of the budget the detection phase may use before it stops scanning
+const MAX_ITEMS = 400; // bound the merged (fresh + carried) file
 const WINDOW_HOURS = process.env.WINDOW_HOURS ? Number(process.env.WINDOW_HOURS) : 36;
 const SCAN_BROAD = process.env.SCAN_BROAD === "1";
 const scanErrors: string[] = []; // symbols whose EDGAR submissions fetch failed (after retries) → silently skipped
@@ -205,7 +217,12 @@ async function filingTextByAccession(symbol: string, f: { form: string; accessio
   return t?.text || "";
 }
 
-async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail"> {
+// Discriminated result so the caller can tell a DEFINITIVE drop (NONE-gate — the filing is real but
+// immaterial, must not be carried forward) from a TRANSIENT miss (couldn't read the filing, or the
+// LLM failed — carry the prior digest instead of dropping it).
+type SummaryResult = OvernightItem | "none" | "unreadable" | "llmfail";
+
+async function summarize(nf: NewFiling): Promise<SummaryResult> {
   const isPeriodic = nf.formClean === "10-K" || nf.formClean === "10-Q";
   // Prior comparable for 8-Ks only (earnings-8-K → prior earnings-8-K). For a 10-K/10-Q we
   // deliberately DON'T paste a prior filing's text: the report already carries its own
@@ -229,7 +246,7 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
       : Promise.resolve(""),
     financialSnapshot(nf.symbol).catch(() => ""),
   ]);
-  if (!newText || newText.length < 400) return null; // couldn't read the filing → skip
+  if (!newText || newText.length < 400) return "unreadable"; // couldn't read the filing → transient, retry / carry
 
   // Free risk-factor redline counts (10-K/Q only) from the existing differ.
   let rfAdded: number | null = null;
@@ -269,9 +286,9 @@ async function summarize(nf: NewFiling): Promise<OvernightItem | null | "llmfail
   // grounded regardless of model). Falls back to Flash cloud if the box is offline.
   const digest = await chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000, local: true });
   if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
-  if (typeof digest.headline !== "string") return null;
+  if (typeof digest.headline !== "string") return "llmfail"; // malformed digest — transient, don't drop the prior
   const headline = digest.headline.trim();
-  if (!headline || /^none$/i.test(headline)) return null; // NONE-gate
+  if (!headline || /^none$/i.test(headline)) return "none"; // NONE-gate — definitively immaterial
 
   return {
     ticker: nf.symbol,
@@ -328,7 +345,8 @@ async function main() {
   // Preflight: with no LLM key every digest nulls out and the run would write items:[] with a fresh
   // timestamp — a convincing FAKE "quiet night" on the Morning Desk. Keep last night's file instead.
   if (!(await llmConfigured())) { console.error("✗ no LLM configured (OPENROUTER_API_KEY) — keeping the previous overnight file."); process.exit(1); }
-  const now = Date.now();
+  const runStart = Date.now();
+  const now = runStart;
   // Reach back the configured window OR to the previous trading session, whichever is
   // earlier — so a Monday/weekend run still catches Friday's filings (the weekend gap
   // alone is wider than the default 36h). An explicit WINDOW_HOURS override still wins
@@ -348,64 +366,88 @@ async function main() {
 
   // --- Detection (EDGAR-bound; ~4 concurrent + a polite delay) ---
   const symbols = [...watch.entries()];
-  let scanned = 0;
+  let scanned = 0, detectSkipped = 0;
+  // Detection may consume DETECT_FRAC of the budget; past that, remaining symbols short-circuit so
+  // the summarize + write phases still run. On a slow NAS night the un-scanned tail (small caps,
+  // scanned last) relies on carry-forward + the fast GitHub co-writer to stay covered.
+  const detectDeadline = runStart + BUDGET_MIN * 60_000 * DETECT_FRAC;
   // 3 concurrent + a 300ms post-fetch pause ≈ 6 req/s — comfortably under EDGAR's 10/s
   // ceiling (4×/120ms previously burst to ~15/s and got 429-throttled). fetchWithRetry
   // backs off on any residual throttle.
   const detected: NewFiling[][] = await pool(symbols, 3, async ([sym, name]) => {
+    if (Date.now() > detectDeadline) { detectSkipped++; return []; }
     const r = await detectForSymbol(sym, name, windowStart);
     if (++scanned % 100 === 0) console.log(`  …scanned ${scanned}/${symbols.length}`);
     await sleep(300);
     return r;
   });
   const newFilings = detected.flat();
-  console.log(`Detected ${newFilings.length} new material filings across ${watch.size} symbols.`);
+  // Newest-first: if the summarize budget runs out, the FRESHEST filings are the ones that got digested.
+  newFilings.sort((a, b) => Date.parse(b.acceptance) - Date.parse(a.acceptance));
+  console.log(`Detected ${newFilings.length} new material filings across ${scanned} scanned symbols.`);
+  if (detectSkipped) console.warn(`⚠ detection budget (${Math.round(BUDGET_MIN * DETECT_FRAC)}m) spent — ${detectSkipped}/${symbols.length} symbols not scanned; their prior in-window filings carry forward.`);
   if (scanErrors.length) {
     console.warn(`⚠ ${scanErrors.length} symbols dropped on EDGAR fetch errors (coverage gap): ${scanErrors.slice(0, 20).join(" · ")}${scanErrors.length > 20 ? " …" : ""}`);
   }
 
   // --- Summarize each new filing via the LLM (sequential — frugal + polite) ---
+  // `resolved` = accessions this run DEFINITIVELY settled (produced a digest, or NONE-gated as
+  // immaterial). Only these are excluded from carry-forward; anything transient (budget-deferred,
+  // unscanned, unreadable, LLM-failed) keeps its prior digest so a bad night degrades to STALE.
   const items: OvernightItem[] = [];
-  let gatedNone = 0, llmFails = 0;
+  const resolved = new Set<string>();
+  let gatedNone = 0, llmFails = 0, unreadable = 0, deferred = 0;
   for (let i = 0; i < newFilings.length; i++) {
+    if (Date.now() > runStart + BUDGET_MIN * 60_000) { deferred = newFilings.length - i; break; }
     const nf = newFilings[i];
     try {
       const item = await summarize(nf);
       if (item === "llmfail") {
         llmFails++;
         console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: LLM FAILED (not gated)`);
-      } else if (item) {
-        items.push(item);
-        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: ${item.headline}`);
+      } else if (item === "unreadable") {
+        unreadable++;
+        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: unreadable (transient)`);
+      } else if (item === "none") {
+        gatedNone++; resolved.add(nf.accession);
+        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: NONE`);
       } else {
-        gatedNone++;
-        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: NONE / unreadable`);
+        items.push(item); resolved.add(nf.accession);
+        console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: ${item.headline}`);
       }
     } catch (e: any) {
       console.log(`  [${i + 1}/${newFilings.length}] ${nf.symbol} ${nf.form}: error ${e?.message || e}`);
     }
     await sleep(150);
   }
+  if (deferred) console.warn(`⚠ summarize budget (${BUDGET_MIN}m total) spent — ${deferred} detected filings deferred to the next run (prior digests carry forward).`);
 
-  // Refuse to publish a mass-failure run: if the LLM died mid-run (outage/rate-limit), writing
-  // whatever survived (or nothing) with a fresh timestamp fakes a quiet night. Keep the old file.
-  if (newFilings.length >= 5 && llmFails > newFilings.length * 0.3) {
-    console.error(`✗ ${llmFails}/${newFilings.length} digests failed at the LLM — refusing to overwrite last night's file.`);
+  // Refuse to publish a mass-LLM-failure run: a fresh timestamp over mostly-carried data would MASK
+  // the outage from the (file-age-keyed) freshness monitor. Keep the old file + exit non-zero.
+  // isMassLlmFailure bypasses its sample-size floor when the run was budget-TRUNCATED (deferred>0),
+  // so a hanging LLM that fails the few filings it reaches on a slow night can't slip past by
+  // shrinking `attempted` below the floor (the review finding — the whole reason it's pure + tested).
+  const attempted = newFilings.length - deferred;
+  if (isMassLlmFailure(attempted, llmFails, deferred)) {
+    console.error(`✗ ${llmFails}/${attempted} digests failed at the LLM${deferred ? ` (run truncated, ${deferred} deferred)` : ""} — refusing to overwrite last night's file.`);
     process.exit(1);
   }
-  if (llmFails) console.warn(`⚠ ${llmFails} filings failed at the LLM this run (they are NOT in the digest).`);
+  if (llmFails || unreadable) console.warn(`⚠ ${llmFails} LLM-failed + ${unreadable} unreadable this run (their prior digests carry forward).`);
 
-  items.sort((a, b) => Date.parse(b.filedAt) - Date.parse(a.filedAt)); // newest-first
+  // --- Carry-forward: a truncated / partially-failed run must not SHRINK the feed (pure + tested) ---
+  const prior = await fs.readFile(OUT, "utf8").then((s) => JSON.parse(s) as { items?: OvernightItem[] }).catch(() => ({ items: [] as OvernightItem[] }));
+  const merged = mergeCarryForward(items, resolved, prior.items ?? [], windowStart, MAX_ITEMS);
+  if (merged.carried) console.log(`carried forward ${merged.carried} prior in-window digests not re-processed this run`);
 
   const out = {
     generatedAt: new Date().toISOString(),
     windowHours: effHours, // effective lookback (may exceed WINDOW_HOURS when reaching back across a weekend)
     since,
-    count: items.length,
-    items,
+    count: merged.items.length,
+    items: merged.items,
   };
-  await fs.writeFile(path.join(DATA, "overnight-filings.json"), JSON.stringify(out));
-  console.log(`\nWrote ${items.length} digests (${gatedNone} gated to NONE/unreadable) → data/overnight-filings.json`);
+  await fs.writeFile(OUT, JSON.stringify(out));
+  console.log(`\nWrote ${merged.items.length} digests (${gatedNone} NONE-gated, ${merged.carried} carried) → data/overnight-filings.json`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
