@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { currencyPrefix } from "@/lib/format";
+import { daysUntil } from "@/lib/calendar";
 import InfoDot from "@/components/InfoDot";
 
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
@@ -129,7 +130,7 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const strikes = useMemo(() => [...new Set([...callBy.keys(), ...putBy.keys()])].sort((a, b) => a - b), [callBy, putBy]);
   const atmIdx = useMemo(() => { let best = Infinity, idx = 0; strikes.forEach((s, i) => { const d = Math.abs(s - u); if (d < best) { best = d; idx = i; } }); return idx; }, [strikes, u]);
   const atmIV = useMemo(() => (strikes.length ? (callBy.get(strikes[atmIdx])?.iv ?? putBy.get(strikes[atmIdx])?.iv ?? 0.3) : 0.3), [strikes, atmIdx, callBy, putBy]);
-  const nextDte = useMemo(() => (nextExpiry ? Math.round((new Date(nextExpiry + "T00:00:00Z").getTime() - Date.now()) / 86_400_000) : null), [nextExpiry]);
+  const nextDte = useMemo(() => (nextExpiry ? daysUntil(nextExpiry) : null), [nextExpiry]);
 
   const strats = useMemo(() => (nextDte != null ? STRATS : STRATS.filter((s) => s.key !== "calendar")), [nextDte]);
   const [stratKey, setStratKey] = useState<StratKey>("long-call");

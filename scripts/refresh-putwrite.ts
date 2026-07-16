@@ -15,6 +15,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
+import { daysUntil } from "../lib/calendar";
 import { getOptions } from "../lib/options";
 import {
   ivFromPut, putDelta, ivFromCall, callDelta, realizedVol, realizedVolRank, ivPercentile, PUT_TENORS, Z_16DELTA,
@@ -87,7 +88,7 @@ async function buildLegsAtTenor(
 ): Promise<{ put: PutSuggestion | null; call: CallSuggestion | null; bullPut: BullPutSuggestion | null; condor: IronCondorSuggestion | null; atmIV: number | null }> {
   const now = Date.now();
   const allExp = base.expirations
-    .map((d: string) => ({ d, dte: Math.round((Date.parse(d + "T00:00:00Z") - now) / 86_400_000) }))
+    .map((d: string) => ({ d, dte: daysUntil(d, now) ?? -1 })) // -1 ⇒ unparseable, filtered out below
     .filter((e: { dte: number }) => e.dte >= tenor.dteMin && e.dte <= tenor.dteMax);
   const pref = allExp.filter((e: { dte: number }) => e.dte >= tenor.prefMin && e.dte <= tenor.prefMax);
   const exp = (pref.length ? pref : allExp).sort(

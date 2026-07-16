@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { fmtMoney } from "@/lib/format";
+import { daysUntil } from "@/lib/calendar";
 import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import OptionsStrategy from "./OptionsStrategy";
 import IvSurface from "./IvSurface";
@@ -112,7 +113,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
 
   const dte = useMemo(() => {
     if (!expiry) return null;
-    return Math.round((new Date(expiry + "T00:00:00Z").getTime() - Date.now()) / 86_400_000);
+    return daysUntil(expiry);
   }, [expiry]);
 
   // The next listed expiry + its ATM IV — the long leg a Call Calendar rolls into.

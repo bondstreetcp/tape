@@ -22,6 +22,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
+import { daysUntil } from "../lib/calendar";
 import { getOptions } from "../lib/options";
 import { getEarningsReactions } from "../lib/earningsReaction";
 import type { EarningsMoveData, EarningsMoveRow } from "../lib/earningsMove";
@@ -251,10 +252,10 @@ async function main() {
     let expIdx = base.expirations.findIndex((d: string) => (amc ? d > eIso : d >= eIso));
     if (expIdx === -1) expIdx = base.expirations.length - 1;
     let exp = base.expirations[expIdx];
-    let dte = Math.round((Date.parse(exp + "T00:00:00Z") - now) / 86_400_000);
+    let dte = (daysUntil(exp, now) ?? -1);
     if (dte < 1 && expIdx + 1 < base.expirations.length) {
       exp = base.expirations[expIdx + 1];
-      dte = Math.round((Date.parse(exp + "T00:00:00Z") - now) / 86_400_000);
+      dte = (daysUntil(exp, now) ?? -1);
     }
     if (dte < 1) return null; // no future expiry at all — nothing to price
     const chain = exp === base.selected ? base : await chainRetry(sym, exp);
