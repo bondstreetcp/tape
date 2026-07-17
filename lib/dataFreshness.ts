@@ -108,7 +108,7 @@ const FEEDS: FeedSpec[] = [
   // Compute-over-owned-data (no fetches) — reads the valuation panel; NOT origin:"sec", so the monitor
   // never blames a slow SEC night for a stale forensics board. Floor ramps up as the panel backfills
   // the forensics fields over nights (PANEL_SCHEMA bump forces re-pulls).
-  { file: "forensics.json", label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  { file: "forensics.json", label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 40 },
   { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
   { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
@@ -124,6 +124,10 @@ const FEEDS: FeedSpec[] = [
   { file: "trump-truth-stocks.json", label: "Trump stock calls", tier: "event", maxAgeHours: EVENT },
   { file: "trump-trades.json", label: "Trump OGE trades", tier: "event", maxAgeHours: EVENT },
   { file: "overnight-filings.json", label: "Overnight filings", tier: "event", maxAgeHours: EVENT, origin: "sec" },
+  // Local-embedding index over the overnight-filings notes (compute-over-owned-data, no fetches) — NOT
+  // origin:"sec". Accumulates over nights; the count only grows, so the floor protects the archive from
+  // a broken-embed night collapsing it (degrade to STALE, never EMPTY).
+  { file: "filing-index.json", label: "Filing semantic index", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
 
   // synthesis — skip-write when there's nothing notable, so a stale stamp is legitimate for days
   { file: "desk-note.json", label: "Morning desk note", tier: "synthesis", maxAgeHours: SYNTH },

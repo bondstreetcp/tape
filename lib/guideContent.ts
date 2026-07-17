@@ -3122,6 +3122,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "Key metrics",
             "plain": "Figures pulled straight from the filing (revenue, EPS, guidance, etc.)."
+          },
+          {
+            "term": "Related filings",
+            "plain": "Other recent filings whose AI summary reads semantically nearest this one — found by a local text-embedding model (not keywords), so it surfaces the same kind of event (a wave of exec departures, debt raises, M&A) across unrelated companies. The number is the similarity; in-window matches jump to the sibling card, older ones link to EDGAR."
           }
         ]
       }

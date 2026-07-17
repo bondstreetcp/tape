@@ -31,3 +31,4 @@ sql/views_local.sql
 
 # run-tick orchestrator lock (NAS/local ticks)
 .tick.lock
+.hf-cache/

@@ -17,6 +17,7 @@ export const GLOSSARY: Record<string, string> = {
   "Altman Z-score": "A bankruptcy-distress gauge from five balance-sheet ratios. Above 2.99 = safe, 1.81–2.99 = grey, below 1.81 = distress. Calibrated on manufacturers, so it reads low for asset-light firms; not used for financials.",
   "Piotroski F-score": "A 0–9 fundamental-strength scorecard (profitability, leverage, efficiency vs last year). 8–9 = improving on every front; 0–2 = deteriorating.",
   "Sloan accruals": "The share of profit not backed by cash: (net income − operating cash flow) ÷ assets. High positive = earnings propped up by accruals, historically lower-quality and mean-reverting.",
+  "Related filings": "Other recent SEC filings whose AI summary reads semantically nearest this one — found by a local text-embedding model, not keywords. Surfaces the same kind of event (a wave of exec departures, debt raises, M&A) across unrelated companies.",
   // Quality / fundamentals
   "ROE": "Return on equity — profit as a % of shareholder money. Higher means more efficient.",
   "ROIC": "Return on invested capital — profit vs. all the money (debt + equity) put into the business.",

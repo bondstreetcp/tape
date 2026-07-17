@@ -74,6 +74,7 @@
     "refresh-corp-events": "tsx scripts/refresh-corp-events.ts",
     "refresh-ipo": "tsx scripts/refresh-ipo.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
+    "refresh-filing-index": "tsx scripts/refresh-filing-index.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "refresh-warnings": "tsx scripts/refresh-warnings.ts",
@@ -98,6 +99,7 @@
   },
   "devDependencies": {
     "@duckdb/node-api": "^1.5.4-r.1",
+    "@huggingface/transformers": "^4.2.0",
     "@types/d3-hierarchy": "^3.1.7",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",

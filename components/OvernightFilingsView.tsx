@@ -2,8 +2,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { OvernightData, OvernightItem, Sentiment } from "@/lib/overnightFilings";
+import type { RelatedFiling } from "@/lib/filingIndex";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
 
 // Form badge palette — periodic (10-K/10-Q) · current report (8-K) · M&A (S-4/425) ·
 // offering (424B).
@@ -54,7 +56,7 @@ function impactFlag(it: OvernightItem): { cls: string; label: string; border: st
   return { cls: "bg-[#f59e0b]/20 text-[#fbbf24]", label: "Notable", border: "border-l-[#f59e0b]" };
 }
 
-export default function OvernightFilingsView({ universe, data, known, sectors = {} }: { universe: string; data: OvernightData; known: string[]; sectors?: Record<string, string> }) {
+export default function OvernightFilingsView({ universe, data, known, sectors = {}, related = {} }: { universe: string; data: OvernightData; known: string[]; sectors?: Record<string, string>; related?: Record<string, RelatedFiling[]> }) {
   const knownSet = useMemo(() => new Set(known), [known]);
   const [formF, setFormF] = useState<FormFilter>("all");
   const [sentF, setSentF] = useState<SentFilter>("all");
@@ -64,7 +66,15 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
 
   // Universe filter: the digest is built across all US large-caps, but only show filings
   // for names that belong to the currently-selected universe.
-  const universeItems = useMemo(() => data.items.filter((it) => knownSet.has(it.ticker)), [data.items, knownSet]);
+  const universeItems = useMemo(() => {
+    // Filter to this universe AND dedupe by accession: a co-filed 425/S-4 appears under multiple
+    // tickers as separate items but is ONE filing — render it once (first in-universe co-filer) so
+    // two cards can't collide on the React key or the deep-link DOM id.
+    const seen = new Set<string>();
+    const out: OvernightItem[] = [];
+    for (const it of data.items) if (knownSet.has(it.ticker) && !seen.has(it.accession)) { seen.add(it.accession); out.push(it); }
+    return out;
+  }, [data.items, knownSet]);
   // Sectors present in this universe's filings (for the dropdown).
   const sectorOpts = useMemo(() => {
     const s = new Set<string>();
@@ -89,6 +99,10 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
     const rank = (i: OvernightItem) => (i.impact === "high" ? 0 : i.impact === "medium" ? 1 : 2);
     return out.sort((a, b) => rank(a) - rank(b));
   }, [universeItems, formF, sentF, sectorF, moversOnly, q, sectors]);
+  // Accessions ACTUALLY rendered on this page (post universe + client filters) → a related neighbour
+  // that's on screen deep-links to its sibling card; anything else (out-of-universe, filtered out, or
+  // aged out of the window) falls through to its EDGAR link, so no anchor is ever dead.
+  const windowAcc = useMemo(() => new Set(rows.map((it) => it.accession)), [rows]);
   const filtered = rows.length !== universeItems.length;
   const moverCount = useMemo(() => universeItems.filter((it) => it.impact === "high").length, [universeItems]);
   // Honest window label — the effective lookback reaches back to the previous trading
@@ -174,7 +188,7 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
       ) : (
         <div className="space-y-3">
           {rows.map((it) => (
-            <Card key={it.accession} it={it} tlink={tlink} />
+            <Card key={it.accession} it={it} tlink={tlink} related={related[it.accession]} windowAcc={windowAcc} />
           ))}
         </div>
       )}
@@ -186,7 +200,7 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
   );
 }
 
-function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.ReactNode }) {
+function Card({ it, tlink, related, windowAcc }: { it: OvernightItem; tlink: (t: string) => React.ReactNode; related?: RelatedFiling[]; windowAcc: Set<string> }) {
   const sent = sentChip[it.sentiment] ?? sentChip.neutral;
   const surp = surpriseChip[it.surprise];
   const flag = impactFlag(it);
@@ -194,7 +208,7 @@ function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.Re
   const isPeriodic = it.form.replace("/A", "") === "10-K" || it.form.replace("/A", "") === "10-Q";
 
   return (
-    <article className={"overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] " + (flag ? "border-l-2 " + flag.border : "")}>
+    <article id={it.accession} className={"scroll-mt-24 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] " + (flag ? "border-l-2 " + flag.border : "")}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-[var(--divider)] px-4 py-2.5">
         <div className="flex items-center gap-2.5">
           {tlink(it.ticker)}
@@ -243,6 +257,31 @@ function Card({ it, tlink }: { it: OvernightItem; tlink: (t: string) => React.Re
                 <span className="text-[var(--text-4)]">{k}:</span> <span className="text-[var(--text-2)]">{String(v)}</span>
               </span>
             ))}
+          </div>
+        )}
+
+        {related && related.length > 0 && (
+          <div className="mt-3 border-t border-[var(--divider)] pt-2.5">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Related filings<InfoDot term="Related filings" /></div>
+            <ul className="space-y-1">
+              {related.map((rel) => {
+                const label = (
+                  <>
+                    <span className="font-semibold text-[var(--text-2)]">{rel.ticker}</span>{" "}
+                    <span className="text-[10px] text-[var(--text-4)]">{rel.form}</span>{" "}
+                    <span className="text-[var(--text-3)]">{rel.headline.length > 76 ? rel.headline.slice(0, 76) + "…" : rel.headline}</span>
+                  </>
+                );
+                return (
+                  <li key={rel.accession} className="flex items-start gap-2 text-[12px] leading-snug">
+                    <span className="mt-px shrink-0 tabular-nums text-[10px] text-[var(--text-4)]" title="Semantic similarity (cosine, 0–1)">{rel.score.toFixed(2)}</span>
+                    {windowAcc.has(rel.accession)
+                      ? <a href={"#" + rel.accession} className="hover:underline">{label}</a>
+                      : <a href={rel.url} target="_blank" rel="noreferrer" className="hover:underline">{label} <span className="text-[var(--accent)]">↗</span></a>}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </div>

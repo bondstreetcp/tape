@@ -330,6 +330,21 @@ jobs:
           SCAN_BROAD: "1"
         continue-on-error: true
 
+      # Filing semantic index — embeds the overnight-filings desk notes with a LOCAL CPU model
+      # (bge-small-en-v1.5, 384-d, @huggingface/transformers) and accumulates the vectors into a
+      # durable archive, precomputing each note's nearest neighbours for the /overnight "Related
+      # filings" list. No API key (compute-over-owned-data); the ~30MB model caches to .hf-cache.
+      - name: Cache embedding model weights
+        if: ${{ env.FULL == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-bge-small-en-v1.5-v1
+      - name: Refresh filing semantic index
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-filing-index
+        continue-on-error: true
+
       # Same-store / comparable sales for restaurants + retail — extracted from the night's earnings
       # 8-K press releases, spliced into the income statement + the Comps Board. Incremental: only a
       # name that reported a NEW quarter since the last run costs an LLM call (steady-state a handful).
