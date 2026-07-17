@@ -97,6 +97,14 @@ jobs:
       # printed "LLM not configured — skipping" every night; their feeds only updated when run
       # locally. Per-step env blocks remain harmless duplicates.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads
+      # the CUDA 12 EP binaries on linux/x64 BY DEFAULT — its install metadata lists
+      # requirements["linux/x64"] = ["cuda12"] and only the CPU runtime ships bundled in the package.
+      # This runner is CPU-only, so that download is pure waste on `npm ci` AND a network failure mode.
+      # `skip` is the officially supported opt-out (onnxruntime-node README → "CUDA EP Installation");
+      # CPU inference keeps using the bundled libonnxruntime, so the nightly embed is unaffected.
+      # Job-level so the `npm ci` step inherits it.
+      ONNXRUNTIME_NODE_INSTALL: skip
     steps:
       - uses: actions/checkout@v4
 

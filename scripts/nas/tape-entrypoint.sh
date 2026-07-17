@@ -21,6 +21,15 @@ if [ ! -d "$APP/.git" ]; then
 fi
 git pull --ff-only origin main || echo "[entrypoint] git pull failed — using the current checkout"
 
+# onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads the
+# CUDA 12 EP binaries on linux/x64 BY DEFAULT (its install metadata lists requirements["linux/x64"] =
+# ["cuda12"]; only the CPU runtime ships bundled). This box is CPU-only AND on a slow home uplink, so
+# that download is pure waste — exactly the fetch this whole NAS design avoids. `skip` is the official
+# opt-out (onnxruntime-node README → "CUDA EP Installation"); CPU inference uses the bundled
+# libonnxruntime, so the nightly embed is unaffected. Exported so the `npm ci` below AND the one
+# run-tick fires when the lockfile changes both inherit it.
+export ONNXRUNTIME_NODE_INSTALL=skip
+
 echo "[entrypoint] npm ci (first boot can take a few minutes)…"
 npm ci
 
