@@ -53,6 +53,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh mover catalysts", cmd: "npm run refresh-catalysts", when: "full" },
   { name: "Refresh closed-end funds", cmd: "npm run refresh-cef", when: "full" },
   { name: "Refresh valuation history (discount to own history)", cmd: "npm run refresh-valuation-history", when: "full" },
+  { name: "Refresh fundamental forensics (Beneish/Altman/Piotroski/Sloan)", cmd: "npm run refresh-forensics", when: "full" }, // reads the panel written just above — no network
   { name: "Refresh buyback & capital-return board", cmd: "npm run refresh-buybacks", when: "full" },
   { name: "Refresh pairs (stat-arb)", cmd: "npm run refresh-pairs", when: "full" },
   { name: "Refresh betas (portfolio cockpit)", cmd: "npm run refresh-betas", when: "full" },

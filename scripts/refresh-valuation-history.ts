@@ -74,14 +74,25 @@ const PANEL_KEEP = 200;
 /** Wall-clock ceiling for the companyfacts phase — must stay under run-tick's 45-min step cap. */
 const BUDGET_MIN = Number(process.env.VALUATION_BUDGET_MIN || 25);
 
-/** One cached quarter — the ONLY FinPeriod fields the multiple math reads, compacted. */
-interface PanelQuarter { d: string; rev?: number; ni?: number; oi?: number; da?: number; ltd?: number; cash?: number; eq?: number; shs?: number }
+/** Cache schema version. Bump when PanelQuarter gains fields — an entry with an older `v` is forced
+ *  DUE (re-pull) even if the frames detector says it's quiet, so new fields backfill across nights. */
+const PANEL_SCHEMA = 2;
+
+/** One cached quarter. The first block is the valuation-multiple inputs; the second (v2, 2026-07-16)
+ *  is the fundamental-forensics inputs (Beneish/Altman/Piotroski/Sloan). All optional — a name missing
+ *  a field just yields a null score there (honest gap), never a wrong line. */
+interface PanelQuarter {
+  d: string;
+  rev?: number; ni?: number; oi?: number; da?: number; ltd?: number; cash?: number; eq?: number; shs?: number;
+  cfo?: number; gp?: number; sga?: number; ta?: number; ca?: number; cl?: number; tl?: number; re?: number; rec?: number; ppe?: number;
+}
 interface PanelEntry {
   fetchedAt: string; // YYYY-MM-DD of the companyfacts pull
   seenEnd: string | null; // newest us-gaap/Assets end at pull time — the filing-detector idempotency key
   q: PanelQuarter[]; // oldest→newest, trimmed to PANEL_KEEP
   std: [string, number][]; // shortTermDebt: period-end → value (instant)
   bshs: [string, number][]; // basicShares fallback: period-end → value (~quarter duration)
+  v?: number; // cache schema version (absent = v1, the pre-forensics compact panel)
 }
 interface PanelCache { generatedAt: string; bySymbol: Record<string, PanelEntry> }
 
@@ -207,6 +218,11 @@ async function fetchPanel(cik: string): Promise<PanelEntry | null> {
       da: numU(p.depreciationAndAmortization), ltd: numU(p.longTermDebt),
       cash: numU(p.cashAndCashEquivalents), eq: numU(p.stockholdersEquity),
       shs: numU(p.dilutedAverageShares),
+      // forensics inputs (v2)
+      cfo: numU(p.operatingCashFlow), gp: numU(p.grossProfit), sga: numU(p.sellingGeneralAndAdministration),
+      ta: numU(p.totalAssets), ca: numU(p.currentAssets), cl: numU(p.currentLiabilities),
+      tl: numU(p.totalLiabilitiesNetMinorityInterest), re: numU(p.retainedEarnings),
+      rec: numU(p.receivables), ppe: numU(p.netPPE),
     }))
     .slice(-PANEL_KEEP);
   // Trim the supplement maps to the kept window — instMap reaches back decades we'll never read.
@@ -217,6 +233,7 @@ async function fetchPanel(cik: string): Promise<PanelEntry | null> {
     q,
     std: [...supp.shortTermDebt].filter(([end]) => end >= minKept),
     bshs: [...supp.basicShares].filter(([end]) => end >= minKept),
+    v: PANEL_SCHEMA,
   };
 }
 
@@ -667,6 +684,9 @@ async function main() {
     .filter((sym) => {
       if (explicitTickers.length) return true; // test mode: always refetch the named tickers
       const e = panel.bySymbol[sym];
+      // Schema bump (new fields added to PanelQuarter) → force a re-pull so the new fields backfill,
+      // even if the frames detector says the name is quiet. Self-heals over nights under the budget.
+      if (e && e.v !== PANEL_SCHEMA) return true;
       if (!filed) return !e || ageDays(e.fetchedAt) >= 7;
       const frameEnd = filed.get(cikKey(cikBySym.get(sym)!));
       const isDue = isDueByFiling(

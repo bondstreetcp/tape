@@ -2539,6 +2539,20 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/forensics",
+        "title": "Forensics & Quality",
+        "question": "Which companies' financial statements carry red flags — earnings that look manipulated, a balance sheet edging toward distress, deteriorating fundamentals, or profit not backed by cash?",
+        "how": "Four classic academic scorecards, computed for every US name straight from its SEC filings (the same trailing-twelve-month fundamentals panel the valuation boards use) — zero estimates, and a missing input leaves a blank rather than a wrong number. Beneish M-score reads eight signals of earnings manipulation (jumping receivables, sliding margins, growing accruals). Altman Z-score gauges bankruptcy distress from five balance-sheet ratios. Piotroski F-score is a 0–9 checklist of whether the fundamentals are improving year over year. Sloan accruals measures how much of the profit is backed by cash rather than accounting entries. Each is a screen, not a verdict — a flag means look closer, not that anything is wrong. Altman is calibrated on manufacturers (it reads low for asset-light software/services) and isn't shown for banks or insurers, where it doesn't apply. US filers only.",
+        "metrics": [
+          { "term": "Beneish M", "plain": "Earnings-manipulation score from eight red-flag ratios. Above −2.22 flags a name whose numbers look manipulated (above −1.78 is a stronger signal); the further above, the more manipulation-like. A red flag to investigate, not proof of fraud." },
+          { "term": "Altman Z", "plain": "Bankruptcy-distress score. Above 2.99 = safe, 1.81–2.99 = grey zone, below 1.81 = distress. Reads low for asset-light firms and isn't shown for financials." },
+          { "term": "Piotroski F", "plain": "Fundamental-strength scorecard, 0–9. Counts how many of nine tests (profitability, lower leverage, better efficiency vs last year) the company passes. 8–9 = improving across the board; 0–2 = weak." },
+          { "term": "Accruals", "plain": "Sloan's ratio: the slice of profit not backed by operating cash, as a % of assets. High positive = earnings leaning on accruals, historically lower-quality and prone to reverse." },
+          { "term": "Flags", "plain": "Plain-language tags rolled up from the scores: possible earnings manipulation, bankruptcy-distress zone, weak fundamentals (F ≤ 2), high accruals." }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/expectations",
         "title": "Expectations (Reverse-DCF)",
         "question": "What future growth is baked into a stock's price, and is that more or less than the business has actually delivered?",

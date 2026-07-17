@@ -60,6 +60,9 @@ const FIELDS: FieldSpec[] = [
   { field: "stockholdersEquity", kind: "inst", concepts: ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"] },
   { field: "retainedEarnings", kind: "inst", concepts: ["RetainedEarningsAccumulatedDeficit"] },
   { field: "longTermDebt", kind: "inst", concepts: ["LongTermDebtNoncurrent", "LongTermDebt"] },
+  // Added for the forensics board (Beneish M-score needs receivables for DSRI + net PP&E for AQI/DEPI).
+  { field: "receivables", kind: "inst", concepts: ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent", "AccountsReceivableNet"] },
+  { field: "netPPE", kind: "inst", concepts: ["PropertyPlantAndEquipmentNet"] },
 ];
 
 const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);

@@ -12,6 +12,11 @@ export const GLOSSARY: Record<string, string> = {
   "PEG": "P/E divided by growth rate — values a stock relative to how fast it's growing.",
   "FCF yield": "Free cash flow ÷ market value. The cash the business throws off, as a % of price.",
   "Discount to history": "How cheap a stock is versus its own typical valuation over the past 10 years.",
+  // Forensics / earnings quality
+  "Beneish M-score": "An 8-factor model for earnings-manipulation risk (rising receivables, falling margins, growing accruals…). Above −2.22 flags a name whose numbers look manipulated; higher is worse. A red flag, not proof.",
+  "Altman Z-score": "A bankruptcy-distress gauge from five balance-sheet ratios. Above 2.99 = safe, 1.81–2.99 = grey, below 1.81 = distress. Calibrated on manufacturers, so it reads low for asset-light firms; not used for financials.",
+  "Piotroski F-score": "A 0–9 fundamental-strength scorecard (profitability, leverage, efficiency vs last year). 8–9 = improving on every front; 0–2 = deteriorating.",
+  "Sloan accruals": "The share of profit not backed by cash: (net income − operating cash flow) ÷ assets. High positive = earnings propped up by accruals, historically lower-quality and mean-reverting.",
   // Quality / fundamentals
   "ROE": "Return on equity — profit as a % of shareholder money. Higher means more efficient.",
   "ROIC": "Return on invested capital — profit vs. all the money (debt + equity) put into the business.",

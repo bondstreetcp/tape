@@ -84,6 +84,7 @@ export const FEATURES: NavItem[] = [
   { label: "Overnight Filings", path: "/overnight", desc: "AI desk notes on new material SEC filings (8-K/10-Q/10-K)", group: "Research", job: "Find ideas", kw: "sec edgar filings 8-k 10-q ai superanalyst" },
   { label: "Discount to History", path: "/valuation-history", desc: "Names trading cheap vs their own 10-year valuation", group: "Screens", job: "Find ideas", kw: "valuation cheap multiple discount mean reversion" },
   { label: "Buyback & Yield", path: "/buybacks", desc: "How much each S&P 500 name returns to shareholders (buybacks + dividends) — and whether the share count is actually shrinking or just offsetting dilution", group: "Screens", job: "Find ideas", kw: "buyback repurchase share count shrink net reduction shareholder yield total yield capital return dividend cannibal accretive dilution stock comp sbc payout fcf accelerating repurchases charter cannibalize meb faber" },
+  { label: "Forensics & Quality", path: "/forensics", desc: "Universe-wide earnings-quality red flags — Beneish M (manipulation), Altman Z (distress), Piotroski F (strength), Sloan accruals — all from SEC filings", group: "Screens", job: "Find ideas", kw: "forensic accounting earnings quality manipulation beneish m-score altman z-score bankruptcy distress piotroski f-score sloan accruals red flag fraud aggressive accounting shenanigans quality of earnings restatement channel stuffing going concern shorts short candidate montier" },
   { label: "Expectations (Reverse-DCF)", path: "/expectations", desc: "What growth the price implies vs what the business delivers — cheap vs priced-for-perfection", group: "Screens", job: "Find ideas", kw: "reverse dcf implied growth expectations investing fcf mauboussin priced for perfection" },
   { label: "Compare Stocks", path: "/compare-stocks", desc: "Two+ stocks side by side, with an AI verdict", group: "Research", job: "Research a name", kw: "compare versus head to head" },
   { label: "Ratio & Formula", path: "/ratio", desc: "Plot one security against another — A÷B, spread, rebased, or a custom formula (e.g. MDT − 0.19 MMED stub)", group: "Research", job: "Research a name", kw: "ratio spread relative strength pairs rebased rs chart divided by versus formula stub spinoff implied value linear combination basket" },
@@ -129,7 +130,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   Screens: [
     { label: "Screener", blurb: "Build your own filter — screen the whole universe by return, valuation & quality", paths: ["/screener"] },
     { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up — and the live track record grading them", paths: ["/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps"] },
-    { label: "Value & Backtest", blurb: "Cheap vs. its own history, capital return (buybacks + yield), reverse-DCF expectations, and factor-screen backtesting", paths: ["/valuation-history", "/buybacks", "/expectations", "/backtest"] },
+    { label: "Value & Backtest", blurb: "Cheap vs. its own history, capital return (buybacks + yield), earnings-quality forensics, reverse-DCF expectations, and factor-screen backtesting", paths: ["/valuation-history", "/buybacks", "/forensics", "/expectations", "/backtest"] },
   ],
   Research: [
     { label: "A Name", blurb: "Dig into one company — compare, ratio/spread charts, sector compare, SEC filings, sell-side research, overnight desk notes", paths: ["/compare-stocks", "/ratio", "/compare", "/research", "/research-desk", "/overnight"] },
@@ -154,6 +155,7 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/insiders", // SEC Form 4 open-market buys (US filers only; page renders UsOnlyNotice on direct nav)
   "/signal-record", // grades the US idea boards (signal-log.json is built from US feeds)
   "/buybacks", // S&P 500 capital return from SEC XBRL companyfacts (US filers only)
+  "/forensics", // earnings-quality scores from the US SEC fundamentals panel (US filers only)
   "/portfolio-radar", // joins the book to the US catalyst feeds (earnings/biotech/lockup)
   "/portfolio-income", // joins the book to the US covered-call scan (putwrite.json)
   // (merger-arb is an external link to arb.bondstreetcp.com — not gated)

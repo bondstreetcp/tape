@@ -105,6 +105,10 @@ const FEEDS: FeedSpec[] = [
   { file: "dispersion.json", label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
   { file: "pairs.json", label: "Pairs stat-arb", tier: "core", maxAgeHours: CORE, countPath: "pairs" },
+  // Compute-over-owned-data (no fetches) — reads the valuation panel; NOT origin:"sec", so the monitor
+  // never blames a slow SEC night for a stale forensics board. Floor ramps up as the panel backfills
+  // the forensics fields over nights (PANEL_SCHEMA bump forces re-pulls).
+  { file: "forensics.json", label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
   { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
   { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
