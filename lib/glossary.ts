@@ -18,6 +18,11 @@ export const GLOSSARY: Record<string, string> = {
   "Piotroski F-score": "A 0–9 fundamental-strength scorecard (profitability, leverage, efficiency vs last year). 8–9 = improving on every front; 0–2 = deteriorating.",
   "Sloan accruals": "The share of profit not backed by cash: (net income − operating cash flow) ÷ assets. High positive = earnings propped up by accruals, historically lower-quality and mean-reverting.",
   "Related filings": "Other recent SEC filings whose AI summary reads semantically nearest this one — found by a local text-embedding model, not keywords. Surfaces the same kind of event (a wave of exec departures, debt raises, M&A) across unrelated companies.",
+  // Backtest / parameter grid
+  "Walk-forward": "The honest way to test a setting: at each rebalance, pick whatever setting led over the PREVIOUS window — using only data that existed then — and apply it forward. It's what a tuner would really have earned, unlike the best setting picked with hindsight.",
+  "Bootstrap CI": "A confidence range built by re-drawing the historical months at random 1,000 times and re-measuring. If the range spans zero, the edge can't be told apart from luck. Ours is seeded, so it doesn't drift between nightly runs.",
+  "Hindsight best": "The best-performing setting once you already know how history turned out. Pick the winner of N settings and the number flatters you even if every setting is pure noise — so it is never an achievable edge.",
+  "Edge (pp)": "Percentage points of forward return versus the equal-weight average of the same eligible names that day — so it measures stock selection, not market direction.",
   // Quality / fundamentals
   "ROE": "Return on equity — profit as a % of shareholder money. Higher means more efficient.",
   "ROIC": "Return on invested capital — profit vs. all the money (debt + equity) put into the business.",

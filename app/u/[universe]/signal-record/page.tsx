@@ -7,6 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import SignalRecordView from "@/components/SignalRecordView";
 import { summarizeSignals, summarizeTags, type SignalLogFile } from "@/lib/signalLog";
 import type { BacktestFile } from "@/lib/signalBacktest";
+import type { SignalGridFile } from "@/lib/signalGrid";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
@@ -31,6 +32,10 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
     .readFile(path.join(process.cwd(), "data", "signal-backtest.json"), "utf8")
     .then((s) => JSON.parse(s) as BacktestFile)
     .catch(() => null); // absent until the first nightly backtest run — the view hides the tab
+  const grid = await fsp
+    .readFile(path.join(process.cwd(), "data", "signal-grid.json"), "utf8")
+    .then((s) => JSON.parse(s) as SignalGridFile)
+    .catch(() => null); // same: absent until the first nightly grid run — the view hides the tab
   if (!log?.events?.length) return <EmptyState universe={universe} title="Signal Track Record" note="The log starts accruing on the next nightly run — every idea board's picks get graded from that day forward." />;
 
   const summariesAll = summarizeSignals(log.events);
@@ -53,6 +58,7 @@ export default async function SignalRecordPage({ params }: { params: Promise<{ u
       since={log.since}
       generatedAt={log.generatedAt}
       backtest={backtest}
+      grid={grid}
       confluenceMix={summarizeTags(log.events, "confluence")}
       confluenceMixSince={mixSince("confluence")}
       warningsMix={summarizeTags(log.events, "warnings")}

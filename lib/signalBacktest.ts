@@ -62,7 +62,9 @@ export const BT_METHOD: string[] = [
 ];
 
 // ── per-name state at a rebalance ──────────────────────────────────────────────────────────────
-interface NameState {
+/** Exported so lib/signalGrid can reuse the IDENTICAL state definition — the grid must never drift
+ *  from what the headline backtest measures. */
+export interface NameState {
   sym: string;
   r1w: number; r3m: number; r6m: number; r1y: number;
   mom121: number; // 12-1 momentum: t−252 → t−21
@@ -86,7 +88,7 @@ function rsi14At(c: number[], i: number): number {
   return 100 - 100 / (1 + rs);
 }
 
-function stateAt(sym: string, c: number[], i: number): NameState | null {
+export function stateAt(sym: string, c: number[], i: number): NameState | null {
   if (i < 260) return null;
   // split-artifact guard over the trailing year
   for (let j = i - 251; j <= i; j++) if (Math.abs(Math.log(c[j] / c[j - 1])) > 0.5) return null;
@@ -110,7 +112,7 @@ function stateAt(sym: string, c: number[], i: number): NameState | null {
 }
 
 // Percentile-rank helper (higher value → higher pct), mirroring lib/leaders.ts pctRanks.
-function pctRank(vals: { sym: string; v: number }[]): Map<string, number> {
+export function pctRank(vals: { sym: string; v: number }[]): Map<string, number> {
   const sorted = [...vals].sort((a, b) => a.v - b.v);
   const n = sorted.length;
   const m = new Map<string, number>();
@@ -164,14 +166,23 @@ const SIGNALS: { key: string; label: string; desc: string; pick: (st: NameState[
 ];
 
 // ── engine ─────────────────────────────────────────────────────────────────────────────────────
-const median = (xs: number[]): number => {
+export const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
   const n = s.length;
   return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
-/** Run the whole backtest over {symbol → [t, close][]} series. Pure; deterministic. */
-export function runBacktest(series: Map<string, [number, number][]>, universe = "sp500"): BacktestFile | null {
+/** The shared rebalance panel: master calendar, month-end rebalance days, and per-name close arrays.
+ *  Exported + used by BOTH runBacktest and lib/signalGrid so the two can never disagree about which
+ *  days are rebalances or which bars are in scope. */
+export interface BtPanel {
+  days: number[];
+  rebalances: number[];
+  closes: Map<string, number[]>;
+  idxOf: Map<string, Map<number, number>>;
+}
+
+export function buildPanel(series: Map<string, [number, number][]>): BtPanel | null {
   // Master calendar: every day at least 60% of names traded (drops half-holidays/new-listing gaps).
   const dayCount = new Map<number, number>();
   for (const s of series.values()) for (const [t] of s) dayCount.set(t, (dayCount.get(t) ?? 0) + 1);
@@ -195,6 +206,27 @@ export function runBacktest(series: Map<string, [number, number][]>, universe = 
     closes.set(sym, s.map((b) => b[1]));
     idxOf.set(sym, new Map(s.map((b, i) => [b[0], i])));
   }
+  return { days, rebalances, closes, idxOf };
+}
+
+/** Every eligible name's point-in-time state at rebalance day `t` (the expensive step — compute ONCE
+ *  per rebalance and reuse across every signal/param that reads it). */
+export function statesAt(panel: BtPanel, t: number): NameState[] {
+  const states: NameState[] = [];
+  for (const [sym, c] of panel.closes) {
+    const i = panel.idxOf.get(sym)!.get(t);
+    if (i == null) continue;
+    const st = stateAt(sym, c, i);
+    if (st) states.push(st);
+  }
+  return states;
+}
+
+/** Run the whole backtest over {symbol → [t, close][]} series. Pure; deterministic. */
+export function runBacktest(series: Map<string, [number, number][]>, universe = "sp500"): BacktestFile | null {
+  const panel = buildPanel(series);
+  if (!panel) return null;
+  const { rebalances } = panel;
 
   type Obs = { fwd: number; edge: number; beatMedian: boolean };
   const bySignal = new Map<string, { obs: Record<BtHorizonKey, Obs[]>; curve: { t: number; cum: number }[]; picksTotal: number; rebs: number; perRebEdge: Record<BtHorizonKey, number[]> }>();
@@ -202,13 +234,8 @@ export function runBacktest(series: Map<string, [number, number][]>, universe = 
   const everEligible = new Set<string>();
 
   for (const t of rebalances) {
-    const states: NameState[] = [];
-    for (const [sym, c] of closes) {
-      const i = idxOf.get(sym)!.get(t);
-      if (i == null) continue;
-      const st = stateAt(sym, c, i);
-      if (st) { states.push(st); everEligible.add(sym); }
-    }
+    const states = statesAt(panel, t);
+    for (const s of states) everEligible.add(s.sym);
     if (states.length < 50) continue;
     const bySym = new Map(states.map((s) => [s.sym, s]));
 

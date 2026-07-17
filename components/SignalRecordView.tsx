@@ -12,7 +12,9 @@ import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import HowToRead from "./HowToRead";
 import SignalBacktest from "./SignalBacktest";
+import SignalGrid from "./SignalGrid";
 import type { BacktestFile } from "@/lib/signalBacktest";
+import type { SignalGridFile } from "@/lib/signalGrid";
 
 const UP = "#22c55e", DOWN = "#ef4444";
 const pct = (v: number | null | undefined, digits = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(digits)}%`);
@@ -20,7 +22,7 @@ const edgeColor = (v: number | null | undefined) => (v == null ? "var(--text-4)"
 const dirLabel = { bullish: "Bullish", bearish: "Bearish", move: "Big move" } as const;
 
 export default function SignalRecordView({
-  universe, summariesAll, summariesFresh, events, totalEvents, since, generatedAt, backtest,
+  universe, summariesAll, summariesFresh, events, totalEvents, since, generatedAt, backtest, grid = null,
   confluenceMix = [], confluenceMixSince = null, warningsMix = [], warningsMixSince = null,
 }: {
   universe: string;
@@ -31,6 +33,7 @@ export default function SignalRecordView({
   since: string;
   generatedAt: string;
   backtest: BacktestFile | null; // ~5y replay of the price-reconstructible signals (null until first run)
+  grid?: SignalGridFile | null; // the same signals swept across their parameter settings (null until first run)
   confluenceMix?: TagSummary[]; // per-kind attribution within Confluence (tags logged from 2026-07-12)
   confluenceMixSince?: string | null; // date of the first kind-tagged Confluence entry
   warningsMix?: TagSummary[]; // per-kind attribution within Warning Signs (bearish grading)
@@ -39,7 +42,7 @@ export default function SignalRecordView({
   const [filter, setFilter] = useState<SignalKey | "all">("all");
   const [q, setQ] = useState("");
   const [includeSeed, setIncludeSeed] = useState(true);
-  const [tab, setTab] = useState<"live" | "backtest">("live");
+  const [tab, setTab] = useState<"live" | "backtest" | "grid">("live");
   const summaries = includeSeed ? summariesAll : summariesFresh;
 
   const shown = useMemo(() => {
@@ -62,14 +65,17 @@ export default function SignalRecordView({
         <UniverseSwitcher current={universe} />
       </div>
 
-      {backtest && (
-        <div className="mb-4 inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+      {(backtest || grid) && (
+        <div className="mb-4 inline-flex flex-wrap rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setTab("live")} className={TB(tab === "live")}>Live record (since {fmtDate(since)})</button>
-          <button onClick={() => setTab("backtest")} className={TB(tab === "backtest")} title="The price-reconstructible signals replayed monthly over ~5 years of stored series">Backtest (~5y, price signals)</button>
+          {backtest && <button onClick={() => setTab("backtest")} className={TB(tab === "backtest")} title="The price-reconstructible signals replayed monthly over ~5 years of stored series">Backtest (~5y, price signals)</button>}
+          {grid && <button onClick={() => setTab("grid")} className={TB(tab === "grid")} title="Each signal's setting swept across a grid — is the shipped setting right, or is the knob just noise?">Parameter grid</button>}
         </div>
       )}
 
-      {tab === "backtest" && backtest ? (
+      {tab === "grid" && grid ? (
+        <SignalGrid grid={grid} />
+      ) : tab === "backtest" && backtest ? (
         <SignalBacktest bt={backtest} />
       ) : (
       <>

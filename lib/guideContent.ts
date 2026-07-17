@@ -2214,8 +2214,8 @@ export const GUIDE_GROUPS: GuideGroup[] = [
       {
         "path": "/signal-record",
         "title": "Signal Track Record",
-        "question": "Do the idea boards actually work — what happened to their picks after they appeared?",
-        "how": "Every night, the moment a name first shows up on an idea board (Confluence, Warning Signs, Short-Squeeze, Leaders breakouts, Insider Buying, Smart-Money, Distribution, Coiled Springs, or the Positioning Radar), it is logged with that day’s price. The record then checks back at fixed horizons — one week, one month, three months — and compares the stock’s return to the S&P 500 over the same window. Bullish boards are graded on beating the index, bearish boards on the stock falling or lagging, and Coiled Springs (a bet on a big move in either direction) on whether the stock moved more than the index did. The log is forward-only: it starts the day tracking began, with no back-filled history — so early numbers are small samples, and the record gets more meaningful every week.",
+        "question": "Do the idea boards actually work — what happened to their picks after they appeared, and are their settings even the right ones?",
+        "how": "Every night, the moment a name first shows up on an idea board (Confluence, Warning Signs, Short-Squeeze, Leaders breakouts, Insider Buying, Smart-Money, Distribution, Coiled Springs, or the Positioning Radar), it is logged with that day’s price. The record then checks back at fixed horizons — one week, one month, three months — and compares the stock’s return to the S&P 500 over the same window. Bullish boards are graded on beating the index, bearish boards on the stock falling or lagging, and Coiled Springs (a bet on a big move in either direction) on whether the stock moved more than the index did. The log is forward-only: it starts the day tracking began, with no back-filled history — so early numbers are small samples, and the record gets more meaningful every week. Two extra tabs go further back: BACKTEST replays the signals that can be rebuilt from price history alone over ~5 years, and PARAMETER GRID asks whether each signal's shipped setting (top 25 names, RSI below 30…) is actually the right one — see below.",
         "metrics": [
           {
             "term": "Edge",
@@ -2248,6 +2248,18 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           {
             "term": "Confluence / Warnings mix",
             "plain": "Attribution within the two fusion boards: each entry records which signal kinds it carried (value, insider buying, buyback… / expensive, short report…), so as grades mature these tables show which kinds actually carry the edge. A name with several kinds counts toward each — conditional performance, not an isolated factor return."
+          },
+          {
+            "term": "Parameter grid tab",
+            "plain": "Every signal ships with a setting someone picked (top 25 names, RSI below 30…). This sweeps 18 settings per signal across four universes and grades them all. Three numbers per signal, and the order matters: SHIPPED is what the live board uses; HINDSIGHT BEST is the winner once you already know how history turned out — pick the best of 18 and the number flatters you even if all 18 are pure noise, so it is never achievable; WALK-FORWARD is the honest one — at each month it picks whatever setting led over the previous 12 months, using only data that existed then, and applies it forward."
+          },
+          {
+            "term": "Walk-forward vs shipped",
+            "plain": "The verdict. Walk-forward is compared with the shipped setting over exactly the same months it traded, so it's like-for-like. If walk-forward doesn't beat shipped — or its confidence interval spans zero — the knob is noise and the right answer is to keep the default. That's a genuine result, not a failed test."
+          },
+          {
+            "term": "95% CI",
+            "plain": "A confidence range from re-drawing the historical months at random 1,000 times and re-measuring (a bootstrap). Spanning zero means the edge can't be told apart from luck. It resamples whole months, not individual picks — picks in the same month all ride that month's market, so treating them as independent would fake a tight range. The randomness is seeded, so the numbers don't wobble between nightly runs."
           }
         ],
         "usOnly": true

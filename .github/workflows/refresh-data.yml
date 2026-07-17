@@ -613,6 +613,15 @@ jobs:
         run: npm run backtest-signals
         continue-on-error: true
 
+      # Signal PARAMETER GRID — sweeps each signal's settings across 4 US universes and reports the
+      # shipped default, the best cell in hindsight, and the honest WALK-FORWARD number (parameter
+      # chosen on trailing data only). Pure local math over the same stored series, ~10s. Seeded
+      # bootstrap CIs, so the board doesn't flicker night to night.
+      - name: Signal parameter grid (walk-forward)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-signal-grid
+        continue-on-error: true
+
       # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.
       # Needs valuation-history.json + the snapshot (above) + OPENROUTER_API_KEY.
       - name: Refresh valuation-discount verdicts

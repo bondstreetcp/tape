@@ -112,6 +112,10 @@ const FEEDS: FeedSpec[] = [
   { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
   { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
+  // Parameter grid over the same signals (compute-over-owned-data, no fetches). Per-universe
+  // carry-forward in the refresh script means a budget-truncated night keeps yesterday's universes
+  // rather than dropping them, so the floor only has to catch a total collapse.
+  { file: "signal-grid.json", label: "Signal parameter grid", tier: "synthesis", maxAgeHours: SYNTH, countPath: "universes", minCount: 1 },
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
   { file: "campaigns.json", label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },
