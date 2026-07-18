@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 // Cache 5 min — this drives a banner, it doesn't need to be tick-by-tick.
 export const revalidate = 300;
@@ -13,7 +12,7 @@ const SYMS = ["^GSPC", "^IXIC", "^DJI", "^VIX"];
  *  old headline-regex "alert" that wasn't tied to anything actionable. */
 export async function GET() {
   try {
-    const qs = (await yf.quote(SYMS, {}, { validateResult: false })) as any[];
+    const qs = (await yahoo.quote(SYMS, {}, { validateResult: false })) as any[];
     const m = new Map<string, { price: number; pct: number | null }>();
     for (const q of qs) {
       if (q?.symbol && typeof q.regularMarketPrice === "number") {

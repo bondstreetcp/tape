@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 import type { XY } from "@/lib/types";
 
 /**
@@ -8,7 +8,6 @@ import type { XY } from "@/lib/types";
  * fetches fresh bars on demand. Throttled + retried so a big sub-industry (up to ~250 names) can
  * be covered in full without hammering Yahoo, and cached briefly. Returns { series: { SYM: [[t,c], …] } }.
  */
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 
 export const dynamic = "force-dynamic";
@@ -23,7 +22,7 @@ const throttle = (gap = 100): Promise<void> => { const p = gate.then(() => sleep
 async function intradayOf(symbol: string, interval: string, days: number, tries = 2): Promise<XY[]> {
   await throttle();
   try {
-    const ch: any = await yf.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });
+    const ch: any = await yahoo.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });
     const xy = (ch.quotes || []).filter((q: any) => q?.date && q.close != null).map((q: any) => [new Date(q.date).getTime(), q.close] as XY);
     if (!xy.length && tries > 1) return intradayOf(symbol, interval, days, tries - 1);
     return xy;

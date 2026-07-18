@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 const num = (v: any): number | null => {
   if (v == null) return null;
@@ -118,21 +117,17 @@ export interface CompanyStats {
 
 export async function getCompanyStats(symbol: string): Promise<CompanyStats | null> {
   try {
-    const r: any = await yf.quoteSummary(
-      symbol,
-      {
-        modules: [
-          "financialData",
-          "defaultKeyStatistics",
-          "summaryDetail",
-          "recommendationTrend",
-          "earningsHistory",
-          "earningsTrend",
-          "upgradeDowngradeHistory",
-        ] as any,
-      },
-      { validateResult: false },
-    );
+    const modules = [
+      "financialData",
+      "defaultKeyStatistics",
+      "summaryDetail",
+      "recommendationTrend",
+      "earningsHistory",
+      "earningsTrend",
+      "upgradeDowngradeHistory",
+    ] as any;
+    // The shared client self-heals a stale crumb (retry on a fresh instance) and logs the real reason.
+    const r: any = await yahoo.quoteSummary(symbol, { modules }, { validateResult: false });
     const fd = r.financialData || {};
     const ks = r.defaultKeyStatistics || {};
     const sd = r.summaryDetail || {};
@@ -231,7 +226,12 @@ export async function getCompanyStats(symbol: string): Promise<CompanyStats | nu
       dividendRate: num(sd.dividendRate),
       payoutRatio: num(sd.payoutRatio),
     };
-  } catch {
+  } catch (e) {
+    // Surface WHY instead of a silent null — the difference between a stale crumb (self-heals, retry
+    // above), a rate-limit/geo-block from this origin's IP (needs a proxy or nightly bake), and a
+    // genuine no-data name is invisible otherwise. This log is what the NAS container should be
+    // grepped for when a stock's Earnings/Stats tab comes up empty.
+    console.warn(`companyStats ${symbol}: no stats — ${String((e as any)?.message || e).slice(0, 200)}`);
     return null;
   }
 }

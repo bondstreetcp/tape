@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 const num = (v: any): number | null => {
   if (v == null) return null;
@@ -48,7 +47,7 @@ export interface CompanyProfile {
 
 export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
   try {
-    const r: any = await yf.quoteSummary(
+    const r: any = await yahoo.quoteSummary(
       symbol,
       {
         modules: [
@@ -78,7 +77,7 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
 
     let dividends: DividendPay[] = [];
     try {
-      const ch: any = await yf.chart(
+      const ch: any = await yahoo.chart(
         symbol,
         { period1: "2019-01-01", interval: "1mo", events: "dividends" } as any,
         { validateResult: false },

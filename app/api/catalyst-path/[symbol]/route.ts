@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 import { buildCatalystPath, type StockCatalyst } from "@/lib/catalystPath";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,6 @@ export const maxDuration = 20;
 // PDUFA/readouts, IPO lockups, investor days) with the name's next-earnings + ex-dividend from Yahoo
 // into one forward timeline. Read-only join over existing data; no LLM. US-oriented (the feeds are US).
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = join(process.cwd(), "data");
 const readJson = <T,>(f: string): T | null => {
   try { const p = join(DATA, f); return existsSync(p) ? (JSON.parse(readFileSync(p, "utf8")) as T) : null; } catch { return null; }
@@ -36,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sym
   let earnDate: string | null = em?.earningsDate ? iso(em.earningsDate) : null;
   let exDiv: { date?: string | null; amount?: number | null } | null = null;
   try {
-    const qs: any = await yf.quoteSummary(sym, { modules: ["calendarEvents"] } as any).catch(() => null);
+    const qs: any = await yahoo.quoteSummary(sym, { modules: ["calendarEvents"] } as any).catch(() => null);
     const ce = qs?.calendarEvents;
     if (!earnDate) {
       const ed = ce?.earnings?.earningsDate;
@@ -50,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sym
       // figure — code grounds facts, it never invents a number.
       let amount: number | null = null;
       try {
-        const ch: any = await yf
+        const ch: any = await yahoo
           .chart(sym, { period1: new Date(Date.now() - 420 * 86_400_000), interval: "1mo", events: "dividends" } as any, { validateResult: false })
           .catch(() => null);
         const d = ch?.events?.dividends;

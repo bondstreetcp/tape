@@ -7,12 +7,11 @@
  * symbol at request time. Returns null when Yahoo has nothing usable (the caller
  * then 404s, same as before).
  */
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 import type { StockRow, Returns, SeriesPoint, XY, StockSeries } from "./types";
 import { LOOKBACK_TRADING_DAYS } from "./timeframes";
 import { adjustForCorporateActions, splitsFromYahoo } from "./splits";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 
 // GICS-ish Yahoo sector → the app's sector ETF (kept in sync with build-data.ts).
@@ -87,10 +86,10 @@ const qn = (v: any): number | null => (typeof v === "number" && Number.isFinite(
 export async function fetchLiveStock(symbol: string): Promise<{ row: StockRow; series: StockSeries } | null> {
   const sym = symbol.toUpperCase();
   const [quote, chart, prof, intra] = await Promise.all([
-    (yf.quote(sym, {}, { validateResult: false }) as Promise<any>).catch(() => null),
-    (yf.chart(sym, { period1: new Date(Date.now() - 2010 * DAY), interval: "1d", events: "div,split" }, { validateResult: false }) as Promise<any>).catch(() => null),
-    (yf.quoteSummary(sym, { modules: ["assetProfile"] }, { validateResult: false }) as Promise<any>).catch(() => null),
-    (yf.chart(sym, { period1: new Date(Date.now() - 8 * DAY), interval: "15m" }, { validateResult: false }) as Promise<any>).catch(() => null),
+    (yahoo.quote(sym, {}, { validateResult: false }) as Promise<any>).catch(() => null),
+    (yahoo.chart(sym, { period1: new Date(Date.now() - 2010 * DAY), interval: "1d", events: "div,split" }, { validateResult: false }) as Promise<any>).catch(() => null),
+    (yahoo.quoteSummary(sym, { modules: ["assetProfile"] }, { validateResult: false }) as Promise<any>).catch(() => null),
+    (yahoo.chart(sym, { period1: new Date(Date.now() - 8 * DAY), interval: "15m" }, { validateResult: false }) as Promise<any>).catch(() => null),
   ]);
 
   // Daily series + split/spinoff continuity adjustment (same as the nightly build).

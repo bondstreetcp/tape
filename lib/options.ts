@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const n = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export interface Opt {
@@ -36,7 +35,7 @@ const map = (x: any): Opt => ({
 export async function getOptions(symbol: string, date?: string): Promise<OptionChain> {
   const opts: any = {};
   if (date) opts.date = new Date(date + "T00:00:00Z");
-  const r: any = await yf.options(symbol, opts, { validateResult: false });
+  const r: any = await yahoo.options(symbol, opts, { validateResult: false });
   const expirations: string[] = (r.expirationDates || []).map((d: any) =>
     new Date(d).toISOString().slice(0, 10),
   );

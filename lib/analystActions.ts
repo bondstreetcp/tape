@@ -1,7 +1,6 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 import { loadSnapshot } from "./data";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const num = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : v?.raw ?? null);
 
 export interface AnalystAction {
@@ -38,7 +37,7 @@ export async function getAnalystActions(universe: string, topN = 140, days = 45)
   const out: AnalystAction[] = [];
   await pool(top, 8, async (s) => {
     try {
-      const r: any = await yf.quoteSummary(s.symbol, { modules: ["upgradeDowngradeHistory"] as any }, { validateResult: false });
+      const r: any = await yahoo.quoteSummary(s.symbol, { modules: ["upgradeDowngradeHistory"] as any }, { validateResult: false });
       for (const h of r.upgradeDowngradeHistory?.history || []) {
         const d = h.epochGradeDate ? new Date(h.epochGradeDate).getTime() : 0;
         if (!d || d < cutoff) continue;

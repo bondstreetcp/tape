@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 // Each curve point (a VIX tenor or an oil contract month) carries the level now and
 // where it sat 1 week / 1 month / 1 year ago, so the chart can overlay the curve's
@@ -18,7 +17,7 @@ const DAY = 86400000;
 /** ~13 months of daily closes for a symbol, as [epochMs, close] sorted ascending. */
 async function history(sym: string): Promise<[number, number][]> {
   try {
-    const r: any = await yf.chart(sym, { period1: new Date(Date.now() - 400 * DAY), interval: "1d" }, { validateResult: false });
+    const r: any = await yahoo.chart(sym, { period1: new Date(Date.now() - 400 * DAY), interval: "1d" }, { validateResult: false });
     const out: [number, number][] = [];
     for (const q of r?.quotes ?? []) {
       const t = q?.date ? new Date(q.date).getTime() : null;

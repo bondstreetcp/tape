@@ -1,7 +1,6 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 import { getFilings } from "./edgar";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 
 const num = (v: any): number | null =>
@@ -41,7 +40,7 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
   const earliest = dates[dates.length - 1];
   let closes: { t: number; c: number }[] = [];
   try {
-    const chart: any = await yf.chart(
+    const chart: any = await yahoo.chart(
       sym,
       { period1: new Date(new Date(earliest).getTime() - 7 * DAY), interval: "1d" } as any,
       { validateResult: false },
@@ -58,7 +57,7 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
   // 3) Recent EPS surprises (Yahoo only keeps ~4 quarters).
   const surprises: { t: number; sp: number }[] = [];
   try {
-    const r: any = await yf.quoteSummary(sym, { modules: ["earningsHistory"] as any }, { validateResult: false });
+    const r: any = await yahoo.quoteSummary(sym, { modules: ["earningsHistory"] as any }, { validateResult: false });
     for (const h of r.earningsHistory?.history || []) {
       const sp = num(h.surprisePercent);
       const t = h.quarter ? new Date(h.quarter).getTime() : NaN;

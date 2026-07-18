@@ -1,4 +1,4 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 import { tickerToCik } from "./edgar";
 
 /**
@@ -17,7 +17,6 @@ import { tickerToCik } from "./edgar";
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 export interface SharesHistory { annual: [string, number][]; quarterly: [string, number][] }
 
@@ -29,7 +28,7 @@ const DUR_CONCEPTS = [
 
 async function getSplits(symbol: string): Promise<{ t: number; ratio: number }[]> {
   try {
-    const ch: any = await yf.chart(symbol, { period1: new Date("2000-01-01"), interval: "1mo", events: "splits" } as any, { validateResult: false });
+    const ch: any = await yahoo.chart(symbol, { period1: new Date("2000-01-01"), interval: "1mo", events: "splits" } as any, { validateResult: false });
     const ev = ch?.events?.splits;
     const arr: any[] = Array.isArray(ev) ? ev : ev ? Object.values(ev) : [];
     return arr

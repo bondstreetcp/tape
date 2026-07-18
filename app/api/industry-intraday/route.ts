@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 import { loadSnapshot } from "@/lib/data";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { buildIndustryIndex } from "@/lib/aggregate";
@@ -12,7 +12,6 @@ import type { XY } from "@/lib/types";
  * lib the page uses. Capped to the top constituents by market cap (a cap-weighted index is
  * dominated by them) and throttled so Yahoo doesn't rate-limit the burst. Cached briefly.
  */
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 const TOP = 60; // constituents per sector to pull live (cap-weighted ⇒ the tail is negligible)
 
@@ -26,7 +25,7 @@ const throttle = (gap = 200): Promise<void> => { const p = gate.then(() => sleep
 async function intradayOf(symbol: string, interval: string, days: number): Promise<XY[]> {
   await throttle();
   try {
-    const ch: any = await yf.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });
+    const ch: any = await yahoo.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });
     return (ch.quotes || []).filter((q: any) => q?.date && q.close != null).map((q: any) => [new Date(q.date).getTime(), q.close] as XY);
   } catch { return []; }
 }

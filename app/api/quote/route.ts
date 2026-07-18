@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 
 // Live batch quotes from Yahoo (reachable from Vercel) — powers the live watchlist,
 // independent of the nightly snapshots.
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const n = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export const dynamic = "force-dynamic";
@@ -14,7 +13,7 @@ export async function GET(req: NextRequest) {
   const symbols = [...new Set(raw.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 80);
   if (!symbols.length) return NextResponse.json({ quotes: [] });
   try {
-    const res: any = await yf.quote(symbols, {}, { validateResult: false });
+    const res: any = await yahoo.quote(symbols, {}, { validateResult: false });
     const arr: any[] = Array.isArray(res) ? res : [res];
     const quotes = arr.map((q) => {
       const state: string = q.marketState || "";

@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 const num = (v: any): number | null =>
   v == null ? null : typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "object" && typeof v.raw === "number" ? v.raw : null;
@@ -37,7 +36,7 @@ export interface Ratings {
  *  the stock page). Mirrors the data in the financials Estimates tab. */
 export async function getRatings(symbol: string): Promise<Ratings | null> {
   try {
-    const r: any = await yf.quoteSummary(
+    const r: any = await yahoo.quoteSummary(
       symbol,
       { modules: ["financialData", "upgradeDowngradeHistory"] as any },
       { validateResult: false },

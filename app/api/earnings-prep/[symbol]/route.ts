@@ -6,7 +6,7 @@ import { loadEarningsMove } from "@/lib/earningsMove";
 import { getOptions, getTermStructure, type OptionChain, type Opt } from "@/lib/options";
 import { straddleMove, tradeIdea } from "@/lib/earningsTrade";
 import { peerCohort } from "@/lib/peerCohorts";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 import { getNews } from "@/lib/news";
 import { getLatestTranscript } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
@@ -127,12 +127,11 @@ async function earningsReleaseText(sym: string, dISO: string): Promise<{ text: s
   }
 }
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 // ~2yr of daily closes (dated) — for the realized-vol regime + the peer-sympathy day lookups.
 async function dailyCloses(sym: string): Promise<{ t: number; c: number }[]> {
   try {
-    const chart: any = await yf.chart(sym, { period1: new Date(Date.now() - 760 * 86_400_000), interval: "1d" } as any, { validateResult: false });
+    const chart: any = await yahoo.chart(sym, { period1: new Date(Date.now() - 760 * 86_400_000), interval: "1d" } as any, { validateResult: false });
     return (chart.quotes || []).filter((q: any) => q?.date && q.close != null).map((q: any) => ({ t: new Date(q.date).getTime(), c: q.close as number })).sort((a: any, b: any) => a.t - b.t);
   } catch {
     return [];

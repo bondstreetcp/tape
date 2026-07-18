@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 const num = (v: any): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -96,13 +95,13 @@ export async function getMarketMonitor(): Promise<{ groups: MarketGroup[]; asOf:
   const all = GROUPS.flatMap((g) => g.syms.map(([s]) => s));
   const qmap = new Map<string, any>();
   try {
-    const qs = (await yf.quote(all, {}, { validateResult: false })) as any[];
+    const qs = (await yahoo.quote(all, {}, { validateResult: false })) as any[];
     for (const q of qs) if (q?.symbol) qmap.set(q.symbol, q);
   } catch {
     // per-symbol fallback so one bad ticker doesn't blank the board
     for (const s of all) {
       try {
-        const q = await yf.quote(s, {}, { validateResult: false });
+        const q = await yahoo.quote(s, {}, { validateResult: false });
         if (q?.symbol) qmap.set(q.symbol, q);
       } catch {
         /* skip */

@@ -1,9 +1,8 @@
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 import { getEdgarQuarterly } from "./edgarFinancials";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 // Validated gross-profit backfills (data/{av,simfin}-margins.json, built by the
 // patch-margins-* scripts) — fill deep margin gaps for issuers whose SEC XBRL doesn't tag a
@@ -83,7 +82,7 @@ async function fetchType(
   type: "annual" | "quarterly",
 ): Promise<FinPeriod[]> {
   try {
-    const r: any = await yf.fundamentalsTimeSeries(
+    const r: any = await yahoo.fundamentalsTimeSeries(
       symbol,
       { period1: "2019-01-01", type, module: "all" },
       { validateResult: false },

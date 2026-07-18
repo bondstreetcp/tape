@@ -1,6 +1,5 @@
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "./yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 const g = (v: any): number | null =>
   v == null ? null : typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "object" && typeof v.raw === "number" ? v.raw : null;
@@ -31,8 +30,8 @@ export interface EarningsMultiple {
 export async function getEarningsMultiple(symbol: string): Promise<EarningsMultiple | null> {
   try {
     const [a, ch]: any = await Promise.all([
-      yf.fundamentalsTimeSeries(symbol, { period1: "2016-01-01", type: "annual", module: "all" } as any, { validateResult: false }),
-      yf.chart(symbol, { period1: "2017-01-01", interval: "1wk" } as any, { validateResult: false }),
+      yahoo.fundamentalsTimeSeries(symbol, { period1: "2016-01-01", type: "annual", module: "all" } as any, { validateResult: false }),
+      yahoo.chart(symbol, { period1: "2017-01-01", interval: "1wk" } as any, { validateResult: false }),
     ]);
     const periods = (a || [])
       .map((p: any) => ({ date: new Date(p.date).getTime(), avail: new Date(p.date).getTime() + 75 * DAY, eps: g(p.dilutedEPS) }))

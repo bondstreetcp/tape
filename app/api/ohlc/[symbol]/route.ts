@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import YahooFinance from "yahoo-finance2";
+import { yahoo } from "@/lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 20;
@@ -42,10 +41,10 @@ export async function GET(
   const dailyDays = years ? Math.round(years * 366) : 2010; // default ~5.5y
   try {
     const [d, i] = await Promise.all([
-      yf
+      yahoo
         .chart(sym, { period1: new Date(now - dailyDays * DAY), interval: "1d" }, { validateResult: false })
         .catch(() => null),
-      yf
+      yahoo
         .chart(sym, { period1: new Date(now - 8 * DAY), interval: "15m", includePrePost: false } as any, { validateResult: false })
         .catch(() => null),
     ]);
