@@ -10,6 +10,7 @@
  */
 
 import { bucketByDay, correlation, type Daily } from "./pairs";
+import { solveLinear } from "./hedgeOptimizer";
 
 const TRADING_DAYS = 252;
 const mean = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
@@ -33,6 +34,56 @@ const intersectDays = (acc: Set<number> | null, days: Set<number>): Set<number> 
   for (const d of days) if (acc.has(d)) next.add(d);
   return next;
 };
+const meanOf = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
+const covAbout = (x: number[], y: number[], mx: number, my: number): number => {
+  let s = 0;
+  for (let t = 0; t < x.length; t++) s += (x[t] - mx) * (y[t] - my);
+  return s / (x.length - 1);
+};
+
+/**
+ * Long-short factor-mimicking spreads from the ETF menu (much less collinear than the raw ETFs): Market =
+ * ^GSPC, Size = IWM−SPY (small−large), Value = IWD−IWF (value−growth), and Momentum/Quality/Low-Vol as
+ * each factor ETF's excess over the market. Returns null if the market vector is missing.
+ */
+function buildEtfFactors(extra: Record<string, number[]> | undefined, market: number[]): Record<string, number[]> | null {
+  const e = extra ?? {};
+  const n = market.length;
+  const ok = (a: string) => e[a]?.length === n;
+  const spread = (a: string, b: string) => (ok(a) && ok(b) ? e[a].map((x, i) => x - e[b][i]) : null);
+  const exMkt = (a: string) => (ok(a) ? e[a].map((x, i) => x - market[i]) : null);
+  const f: Record<string, number[]> = { Market: market };
+  const add = (name: string, v: number[] | null) => { if (v) f[name] = v; };
+  add("Size", spread("IWM", "SPY"));
+  add("Value", spread("IWD", "IWF"));
+  add("Momentum", exMkt("MTUM"));
+  add("Quality", exMkt("QUAL"));
+  add("LowVol", exMkt("USMV"));
+  return Object.keys(f).length ? f : null;
+}
+
+/**
+ * Decompose Var(P&L) across factors: ridge OLS of the book's P&L on the factor spreads, then each factor's
+ * share = bₖ·Cov(Fₖ,P)/Var(P) (sums to R²); Specific = 1 − R². Shares can be negative (a diversifying tilt).
+ */
+function factorDecomp(pnl: number[], factors: Record<string, number[]>): { factor: string; share: number }[] | null {
+  const names = Object.keys(factors);
+  const k = names.length;
+  const mP = meanOf(pnl);
+  const varP = covAbout(pnl, pnl, mP, mP);
+  if (!k || varP <= 0) return null;
+  const F = names.map((f) => factors[f]);
+  const mF = F.map(meanOf);
+  const FtF = F.map((fi, i) => F.map((fj, j) => covAbout(fi, fj, mF[i], mF[j])));
+  const Fty = F.map((fi, i) => covAbout(pnl, fi, mP, mF[i]));
+  const lam = 0.02 * ((FtF.reduce((a, row, i) => a + row[i], 0) / k) || 1);
+  const A = FtF.map((row, i) => row.map((v, j) => v + (i === j ? lam : 0)));
+  const b = solveLinear(A, Fty);
+  if (!b) return null;
+  const contrib = names.map((f, i) => ({ factor: f, share: (b[i] * Fty[i]) / varP }));
+  return [...contrib, { factor: "Specific", share: 1 - contrib.reduce((a, c) => a + c.share, 0) }];
+}
+
 // Simple daily returns of a price map over `level` dates; null if any date is missing (keeps vectors aligned).
 const returnsOn = (m: Map<number, number>, level: number[]): number[] | null => {
   const r: number[] = [];
@@ -111,6 +162,7 @@ export interface PortfolioRisk {
   factorShare: number | null; // 0..1 — share of variance from the market (R² of P&L on ^GSPC); null if no market series
   volFactorDollar: number | null; // systematic (market) annualized $ vol
   volSpecificDollar: number | null; // stock-specific (idiosyncratic) annualized $ vol
+  factorBreakdown: { factor: string; share: number }[] | null; // variance share per ETF-proxy factor + Specific; Σ ≈ 1
   var95Dollar: number; // 1-day 95% historical-sim VaR, as a POSITIVE loss
   var99Dollar: number;
   es95Dollar: number; // expected shortfall (avg of the worst 5% of days), positive loss
@@ -182,11 +234,14 @@ export function computePortfolioRisk(
   // Single-factor (market) decomposition: R² of the book's P&L on the market return is the systematic
   // share of variance; the rest is stock-specific. Needs the market return vector (else all null).
   let factorShare: number | null = null, volFactorDollar: number | null = null, volSpecificDollar: number | null = null;
+  let factorBreakdown: { factor: string; share: number }[] | null = null;
   if (aligned.market && aligned.market.length === nDays && volDaily > 0) {
     const r = correlation(pnl, aligned.market);
     factorShare = Math.max(0, Math.min(1, r * r));
     volFactorDollar = volAnn * Math.sqrt(factorShare);
     volSpecificDollar = volAnn * Math.sqrt(1 - factorShare);
+    const factors = buildEtfFactors(aligned.extra, aligned.market);
+    if (factors) factorBreakdown = factorDecomp(pnl, factors);
   }
 
   return {
@@ -199,6 +254,7 @@ export function computePortfolioRisk(
     factorShare,
     volFactorDollar,
     volSpecificDollar,
+    factorBreakdown,
     var95Dollar: var95,
     var99Dollar: var99,
     es95Dollar: es95,

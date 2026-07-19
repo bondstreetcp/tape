@@ -450,19 +450,33 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     <Stat label="Worst day" value={signMoney(portRisk.worstDayDollar)} sub={portRisk.worstDayDate ? ymd(portRisk.worstDayDate) : "—"} color="#ef4444" />
                     <Stat label="Diversification" value={pct(portRisk.diversificationBenefit * 100, 0)} sub="risk cut vs lockstep" color="#22c55e" />
                   </div>
-                  {portRisk.factorShare != null && (
-                    <div className="mt-3">
-                      <div className="mb-1 flex justify-between text-[11px]">
-                        <span className="text-[var(--accent)]">Market {Math.round(portRisk.factorShare * 100)}%{portRisk.volFactorDollar != null ? ` · ${money(portRisk.volFactorDollar)}` : ""}</span>
-                        <span className="text-[#f59e0b]">Stock-specific {Math.round((1 - portRisk.factorShare) * 100)}%{portRisk.volSpecificDollar != null ? ` · ${money(portRisk.volSpecificDollar)}` : ""}</span>
+                  {portRisk.factorShare != null && (() => {
+                    const bd = portRisk.factorBreakdown;
+                    const specific = Math.max(0, Math.min(1, bd?.find((f) => f.factor === "Specific")?.share ?? (1 - portRisk.factorShare!)));
+                    const systematic = 1 - specific;
+                    const factors = (bd ?? []).filter((f) => f.factor !== "Specific" && Math.abs(f.share) >= 0.02).sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
+                    return (
+                      <div className="mt-3">
+                        <div className="mb-1 flex justify-between text-[11px]">
+                          <span className="text-[var(--accent)]">Systematic {Math.round(systematic * 100)}% · {money(portRisk.volAnnDollar * Math.sqrt(systematic))}</span>
+                          <span className="text-[#f59e0b]">Stock-specific {Math.round(specific * 100)}% · {money(portRisk.volAnnDollar * Math.sqrt(specific))}</span>
+                        </div>
+                        <div className="flex h-2 overflow-hidden rounded bg-[var(--bg)]">
+                          <div style={{ width: `${systematic * 100}%`, background: "var(--accent)" }} />
+                          <div style={{ width: `${specific * 100}%`, background: "#f59e0b" }} />
+                        </div>
+                        {factors.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                            <span className="text-[var(--text-4)]">factors:</span>
+                            {factors.map((f) => (
+                              <span key={f.factor} className="font-mono tabular-nums"><span className="text-[var(--text-3)]">{f.factor}</span> <span style={{ color: f.share >= 0 ? "var(--accent)" : "#22c55e" }}>{f.share >= 0 ? "" : "−"}{Math.abs(Math.round(f.share * 100))}%</span></span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-1 text-[10px] text-[var(--text-4)]">Variance split by ETF-proxy factors (market, size, value, momentum, quality, low-vol); specific = stock-picking. Shares sum to ~100%.</div>
                       </div>
-                      <div className="flex h-2 overflow-hidden rounded bg-[var(--bg)]">
-                        <div style={{ width: `${portRisk.factorShare * 100}%`, background: "var(--accent)" }} />
-                        <div style={{ width: `${(1 - portRisk.factorShare) * 100}%`, background: "#f59e0b" }} />
-                      </div>
-                      <div className="mt-1 text-[10px] text-[var(--text-4)]">share of variance — market vs stock-picking (R² of the book&apos;s P&amp;L on the S&amp;P 500)</div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Applies the last {portRisk.nDays} trading days of your holdings&apos; joint returns to today&apos;s book. VaR = the loss a 1‑in‑20 (95%) / 1‑in‑100 (99%) day wouldn&apos;t exceed; shortfall = the average of the worst 5% of days. {aum ? "% figures are of account equity." : "Add account equity for % figures (now % of gross)."}
                   </p>

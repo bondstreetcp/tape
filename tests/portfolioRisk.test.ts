@@ -77,6 +77,25 @@ test("computePortfolioRisk: market split — fully systematic vs no market → n
   assert.equal(none.volFactorDollar, null);
 });
 
+test("computePortfolioRisk: factor breakdown attributes variance to ETF-proxy factors", () => {
+  const n = 90;
+  const m = Array.from({ length: n }, (_, i) => ((i * 7) % 13 - 6) / 100);
+  const size = Array.from({ length: n }, (_, i) => ((i * 5) % 7 - 3) / 200); // ~independent of m
+  const extra: Record<string, number[]> = {
+    SPY: m, IWM: m.map((x, i) => x + size[i]), // Size spread = IWM − SPY = size
+    IWD: m, IWF: m, MTUM: m, QUAL: m, USMV: m, // the other factor spreads collapse to ~0
+  };
+  const book = m.map((x, i) => x + 0.5 * size[i]); // loads on market + half the size factor
+  const aligned = { dates: Array.from({ length: n }, (_, i) => (1000 + i) * DAY), returns: { XYZ: book }, market: m, extra };
+  const risk = computePortfolioRisk([{ symbol: "XYZ", value: 10000 }], aligned)!;
+  assert.ok(risk.factorBreakdown);
+  const byF = Object.fromEntries(risk.factorBreakdown!.map((f) => [f.factor, f.share]));
+  approx(risk.factorBreakdown!.reduce((a, f) => a + f.share, 0), 1, 1e-9); // shares sum to 1
+  assert.ok(byF["Market"] > 0.3, `market ${byF["Market"]}`); // market dominates
+  assert.ok(byF["Size"] > 0.001, `size ${byF["Size"]}`); // positive size loading detected
+  assert.ok(Math.abs(byF["Specific"]) < 0.3, `specific ${byF["Specific"]}`); // little idiosyncratic
+});
+
 test("computePortfolioRisk: coverage < 1 without series; null when too short", () => {
   const r = Array.from({ length: 30 }, (_, i) => ((i * 7) % 11 - 5) / 100);
   const risk = computePortfolioRisk(
