@@ -83,6 +83,8 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   // from yesterday's board. No dependency runs the other way. Mirrored in refresh-data.yml.
   { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh earnings-play track record", cmd: "npm run refresh-trade-log", when: "full" },
+  { name: "Refresh preview accuracy record (predicted prints)", cmd: "npm run refresh-preview-log", when: "full" }, // FLASH-tier forecasts + code-graded settles
+
   { name: "Refresh options flow (S&P 500)", cmd: "npm run refresh-flow", when: "full" },
   { name: "Refresh Trump stock calls", cmd: "npm run refresh-trump-truth", when: "full" },
   { name: "Refresh Fed Watch", cmd: "npm run refresh-fed", when: "full" },

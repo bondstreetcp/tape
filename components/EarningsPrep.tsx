@@ -40,12 +40,32 @@ interface WhyState {
 interface AiPart {
   moneyLine: string;
   overview: string;
+  thesis: string; // the operational story this quarter — qualitative, not the consensus numbers
+  debate: string; // the genuine bull/bear tension this print resolves
   watch: string[];
   guidance: string;
   peerReads: string[];
   bull: string;
   bear: string;
   fromLastCall: string;
+}
+
+// The "Before the print" research × quant read — mirrors the part=preprint JSON (declared locally like
+// DataPart: importing lib/research/preprint would drag server-only deps into the client bundle).
+interface PreprintPart {
+  action: "add" | "trim" | "hedge" | "hold";
+  confidence: "high" | "medium" | "low";
+  researchScore: number;
+  publicScore: number;
+  researchAxis: { label: string; lean: -1 | 0 | 1 }[];
+  publicAxis: { label: string; lean: -1 | 0 | 1 }[];
+  infoValue: {
+    noteCount: number; freshCount: number; freshestNoteDate: string | null;
+    mgmtColorCount: number; divergences: string[]; ptRevisions: number;
+    verdict: "adds edge" | "confirms consensus" | "no incremental signal";
+  };
+  volNote: string | null;
+  narration: { oneLiner: string; why: string } | null;
 }
 
 const pp = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`); // decimal → %
@@ -225,6 +245,8 @@ function Big({ value, label, color, info }: { value: string; label: string; colo
 export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
+  // "Before the print": idle → loading → { preprint (null when no research ingested), hasResearch } | null (error)
+  const [pre, setPre] = useState<{ preprint: PreprintPart | null; hasResearch: boolean } | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
   const [why, setWhy] = useState<Record<string, WhyState>>({}); // per-print "why it moved" recap, by date
   const [dist, setDist] = useState<DistExp[] | null>(null); // implied distribution per expiry (Breeden–Litzenberger)
@@ -253,6 +275,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     let a = true;
     setData("loading");
     setAi("idle");
+    setPre("idle");
     setOpenQ(null);
     setWhy({});
     // Full timestamp (not date-only): straddleMove uses the hour for the AMC bracketing rule —
@@ -292,6 +315,28 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       .then((r) => r.json())
       .then((d) => setAi(d.ai || null))
       .catch(() => setAi(null))
+      .finally(() => clearTimeout(timer));
+  };
+
+  const runPreprint = () => {
+    setPre("loading");
+    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate)}` : "";
+    // Same 75s client abort as runAi — the self-hosted origin has no platform timeout backstopping a
+    // hung connection.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75_000);
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=preprint${eParam}`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      // Shape-guard the payload before rendering: a malformed/partial response (proxy error page,
+      // truncated JSON) must land on the "try again" state, not crash the render on p.infoValue.*.
+      .then((j) => {
+        if (!j || typeof j.hasResearch !== "boolean") return setPre(null);
+        if (!j.hasResearch) return setPre({ preprint: null, hasResearch: false }); // the honest no-corpus state
+        const p = j.preprint;
+        const ok = p && typeof p.action === "string" && p.infoValue && Array.isArray(p.researchAxis) && Array.isArray(p.publicAxis) && Array.isArray(p.infoValue.divergences);
+        setPre(ok ? { preprint: p, hasResearch: true } : null); // research exists but the payload is broken → error/retry
+      })
+      .catch(() => setPre(null))
       .finally(() => clearTimeout(timer));
   };
 
@@ -753,6 +798,62 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         )}
       </div>
 
+      {/* "Before the print" — the ingested-research × quant read (button-triggered). Lights up per
+          ticker exactly when research PDFs have been ingested for it — the test-one-company workflow. */}
+      <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Before the print <span className="font-normal normal-case">· ingested research × this terminal&apos;s quant read</span></div>
+        {pre === "idle" ? (
+          <div>
+            <button onClick={() => runPreprint()} className="rounded-lg border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition-colors hover:border-[var(--accent)]">Run the pre-print read →</button>
+            <p className="mt-1.5 text-[12.5px] text-[var(--text-4)]">Joins the sell-side notes ingested in the Research Desk with the quant setup above into one read — does the research add information value, and what does the blend say: add, trim, hedge, or hold. Rules compute the label; AI explains it.</p>
+          </div>
+        ) : pre === "loading" ? (
+          <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> reading the corpus…</div>
+        ) : pre && !pre.hasResearch ? (
+          <p className="text-[12px] text-[var(--text-3)]">No ingested research for {symbol} — this read stays quant-only (use the signals above and the AI preview below). Upload broker PDFs for {symbol} in the <span className="text-[var(--text-2)]">Research Desk</span> and run it again.</p>
+        ) : pre && pre.preprint ? (() => {
+          const p = pre.preprint;
+          const AC: Record<PreprintPart["action"], { bg: string; fg: string }> = {
+            add: { bg: "color-mix(in oklab, #22c55e 18%, transparent)", fg: "#22c55e" },
+            trim: { bg: "color-mix(in oklab, #ef4444 18%, transparent)", fg: "#ef4444" },
+            hedge: { bg: "color-mix(in oklab, #f59e0b 18%, transparent)", fg: "#f59e0b" },
+            hold: { bg: "var(--surface-2)", fg: "var(--text-2)" },
+          };
+          const iv = p.infoValue;
+          const lean = (l: -1 | 0 | 1) => (l > 0 ? "#22c55e" : l < 0 ? "#ef4444" : "var(--text-4)");
+          return (
+            <div className="space-y-2.5 text-[12px] leading-snug">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded px-2 py-0.5 text-[12px] font-bold uppercase" style={{ backgroundColor: AC[p.action].bg, color: AC[p.action].fg }}>{p.action}</span>
+                <span className="text-[11px] text-[var(--text-4)]">confidence {p.confidence}</span>
+                <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[11px]" title={`${iv.freshCount} fresh note(s) of ${iv.noteCount} · ${iv.mgmtColorCount} management/expert takeaway(s) · ${iv.divergences.length} explicit vs-Street stance(s) · ${iv.ptRevisions} fresh PT revision(s)`}>
+                  research: <b className="text-[var(--text-2)]">{iv.verdict}</b>
+                </span>
+              </div>
+              {p.narration?.oneLiner && <p className="rounded-md bg-[var(--accent-soft)] px-2.5 py-1.5 text-[var(--text)]">{p.narration.oneLiner}</p>}
+              {p.narration?.why && <p className="text-[var(--text-2)]">{p.narration.why}</p>}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title="What only the ingested notes carry — fresh ratings/PTs, explicit vs-Street stances, management access">Private research ({p.researchScore >= 0 ? "+" : ""}{p.researchScore})</div>
+                  <ul className="space-y-0.5">{p.researchAxis.length ? p.researchAxis.map((x, i) => <li key={i} className="text-[var(--text-3)]"><span style={{ color: lean(x.lean) }}>●</span> {x.label}</li>) : <li className="text-[var(--text-4)]">no fresh notes</li>}</ul>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]" title="The public/priced baseline — Yahoo consensus, revisions, the card's positioning lean">Public / priced ({p.publicScore >= 0 ? "+" : ""}{p.publicScore})</div>
+                  <ul className="space-y-0.5">{p.publicAxis.map((x, i) => <li key={i} className="text-[var(--text-3)]"><span style={{ color: lean(x.lean) }}>●</span> {x.label}</li>)}</ul>
+                </div>
+              </div>
+              {p.volNote && <p className="text-[11.5px] text-[var(--text-4)]">{p.volNote}</p>}
+              <p className="text-[11px] text-[var(--text-4)]">Action label computed by the terminal&apos;s rules from the two axes; the narrative explains it. Decision-support, not investment advice.</p>
+            </div>
+          );
+        })() : (
+          <div className="text-[12px] text-[var(--text-4)]">
+            Couldn&apos;t run the pre-print read just now.{" "}
+            <button onClick={() => runPreprint()} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
+          </div>
+        )}
+      </div>
+
       {/* AI StreetAccount-style preview (button-triggered) */}
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">AI preview <span className="font-normal normal-case">· StreetAccount-style, grounded in the signals above</span></div>
@@ -767,6 +868,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           <div className="space-y-2.5 text-[12px] leading-snug">
             {a.moneyLine && <p className="rounded-md bg-[var(--accent-soft)] px-2.5 py-1.5 text-[var(--text)]"><span className="font-semibold">The money line: </span>{a.moneyLine}</p>}
             {a.overview && <p className="text-[var(--text-2)]">{a.overview}</p>}
+            {a.thesis && <p><span className="font-semibold text-[var(--text)]">The story this quarter </span><span className="text-[var(--text-2)]">{a.thesis}</span></p>}
+            {a.debate && <p className="border-l-2 border-[var(--accent)] pl-2"><span className="font-semibold text-[var(--text)]">The debate: </span><span className="text-[var(--text-2)]">{a.debate}</span></p>}
             {a.fromLastCall && <p className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5"><span className="font-semibold text-[var(--text)]">Since last call: </span><span className="text-[var(--text-2)]">{a.fromLastCall}</span></p>}
             {a.watch.length > 0 && (
               <div>

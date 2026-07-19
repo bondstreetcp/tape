@@ -100,6 +100,9 @@ const FEEDS: FeedSpec[] = [
   { file: "insiders.json", label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
   { file: "spinoffs.json", label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
   { file: "trade-log.json", label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
+  // Forward-accumulating like the trade-log: no count floor (the log legitimately starts empty —
+  // the bootstrap-floor trap would gate the deploy on a brand-new feed's first night).
+  { file: "earnings-preview-log.json", label: "Preview accuracy record", tier: "core", maxAgeHours: CORE },
   { file: "same-store-sales.json", label: "Same-store sales", tier: "core", maxAgeHours: CORE },
   { file: "trade-ideas.json", label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
   { file: "vol-dislocation.json", label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },

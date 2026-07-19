@@ -470,6 +470,15 @@ jobs:
         run: npm run refresh-trade-log
         continue-on-error: true
 
+      # PREVIEW ACCURACY RECORD: the desk's own predicted prints (FLASH-tier forecasts logged the
+      # night before), graded by code against actuals once the names report. Forward-only.
+      - name: Refresh preview accuracy record
+        if: ${{ env.FULL == 'true' }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: npm run refresh-preview-log
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow

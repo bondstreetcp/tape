@@ -1257,6 +1257,39 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/preview-record",
+        "title": "Earnings Preview — Accuracy Record",
+        "question": "When the AI desk commits to its own predicted print — EPS, a beat/miss call, a reaction direction — how often does it turn out right?",
+        "how": "Every night the desk generates its OWN forecast for U.S. names reporting within a week, from the same data the stock page's earnings card uses: predicted EPS and revenue, a beat/miss/inline call versus the consensus bar, the expected 1-day reaction direction, a confidence level, and a few specific qualitative calls (e.g. 'guides above the Street'). The forecast is recorded BEFORE the report — nothing is backfilled — and once the company reports, code grades the numeric calls against the actuals: the EPS against the reported figure, the beat/miss call against the reported surprise, the reaction call against the realized move (flat prints under ±0.5% aren't graded — a coin flip shouldn't score). Qualitative calls are recorded and shown but deliberately never self-graded by the model. The point is accountability: if the forecasts prove accurate they carry real information; if not, this page says so plainly.",
+        "metrics": [
+          {
+            "term": "Pred EPS / Cons / Actual",
+            "plain": "The desk's predicted quarterly earnings per share, the analyst consensus at the time of the forecast, and what the company actually reported."
+          },
+          {
+            "term": "EPS ✓",
+            "plain": "Whether the predicted EPS landed within the accuracy band — ±2 cents or ±5% of the actual, whichever is wider."
+          },
+          {
+            "term": "B/M/I call",
+            "plain": "The beat / miss / inline call versus consensus, graded against the reported EPS surprise (within ±0.5% counts as inline)."
+          },
+          {
+            "term": "Rx (reaction call)",
+            "plain": "The predicted 1-day price direction, graded against the actual move after the report; moves under ±0.5% are flat and left ungraded."
+          },
+          {
+            "term": "High-conviction hit rate",
+            "plain": "The beat/miss accuracy counting only forecasts the desk marked high-confidence — whether its confidence means anything."
+          },
+          {
+            "term": "Qualitative calls",
+            "plain": "The specific, checkable predictions ('segment X accelerates', 'guide raised') recorded with each forecast — shown for your judgment, never auto-graded."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/catalyst-vol",
         "title": "Catalyst Vol — cheap options into an event",
         "question": "Which companies have a scheduled investor or analyst day where the options market isn't charging any extra premium for the event — cheap optionality into a known date?",

@@ -47,6 +47,7 @@ export const FEATURES: NavItem[] = [
   { label: "Earnings Move", path: "/earnings-move", desc: "Where options over- or under-price an earnings event", group: "Options", job: "Find ideas", kw: "earnings straddle implied move volatility" },
   { label: "Earnings Setup Cards", path: "/earnings-setup", desc: "Glanceable cards of upcoming reporters — implied vs. historical move, rich/cheap", group: "Options", job: "Find ideas", kw: "earnings setup cards implied move straddle reporting this week" },
   { label: "Earnings Play Track Record", path: "/track-record", desc: "How the earnings card's suggested option plays have actually done — logged live, settled at expiry", group: "Options", job: "Find ideas", kw: "track record performance earnings play trade log scorecard win rate pnl settled straddle strangle results hit rate accountability" },
+  { label: "Preview Accuracy Record", path: "/preview-record", desc: "The desk's own predicted prints — EPS, beat/miss and reaction calls logged before each report, graded against the actuals", group: "Options", job: "Find ideas", kw: "preview accuracy predicted print forecast eps beat miss reaction scorecard track record graded ai prediction earnings" },
   { label: "Catalyst Vol", path: "/catalyst-vol", desc: "Cheap options into a known event — investor days where the straddle isn't pricing the move", group: "Options", job: "Find ideas", kw: "catalyst investor day analyst day capital markets day cheap options straddle implied vs realized volatility event driven underpriced move optionality" },
   { label: "Biotech Event Vol", path: "/biotech-vol", desc: "Every dated clinical binary (PDUFA / Phase 2-3 readout) priced against the options chain — where the straddle looks light or loaded for the event", group: "Options", job: "Find ideas", kw: "biotech event vol pdufa fda decision phase 3 readout clinical binary straddle implied move options premium cheap expensive event driven catalyst drug approval trial data loaded light" },
   { label: "Vol Dislocation", path: "/vol-dislocation", desc: "Where option vol is rich or cheap vs realized — the variance premium, cross-sectional", group: "Options", job: "Find ideas", kw: "implied volatility realized variance premium rich cheap options overpriced underpriced skew term structure vol screener iv rank sell premium mispriced" },
@@ -120,7 +121,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Options: [
     { label: "Desks", blurb: "The collated hubs — the Earnings Season Desk, the weekly AI Trade Desk, the forward Catalyst Calendar, and this week's ranked binary events", paths: ["/earnings-desk", "/trade-desk", "/catalyst-calendar", "/binary-week"] },
-    { label: "Earnings Vol", blurb: "Trade the print — this week's reporters, implied vs. historical move, setup cards, post-earnings drift, guidance, and the live track record", paths: ["/earnings-week", "/earnings-move", "/earnings-setup", "/pead", "/guidance", "/track-record"] },
+    { label: "Earnings Vol", blurb: "Trade the print — this week's reporters, implied vs. historical move, setup cards, post-earnings drift, guidance, and the live track records", paths: ["/earnings-week", "/earnings-move", "/earnings-setup", "/pead", "/guidance", "/track-record", "/preview-record"] },
     // /vol-cone is FIRST so this hub lands on the one universe-agnostic tool — on an intl universe the
     // US-only members are hidden and clicking the hub still reaches a working page (the realized-vol cone).
     { label: "Vol & Positioning", blurb: "The realized-vol cone, where vol is rich/cheap, skew & term structure, dispersion, dealer gamma, the name-level positioning radar, coiled springs, and cheap options into a catalyst (incl. biotech binaries)", paths: ["/vol-cone", "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol"] },
@@ -148,7 +149,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
 export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   // Options → Desks + Earnings Vol + Vol & Positioning (US single-stock options / earnings feeds)
   "/earnings-desk", "/catalyst-calendar", "/binary-week", "/trade-desk", "/earnings-week", "/earnings-move",
-  "/earnings-setup", "/track-record", "/guidance", "/pead",
+  "/earnings-setup", "/track-record", "/preview-record", "/guidance", "/pead",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol",
   // US-only non-options feeds
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)
