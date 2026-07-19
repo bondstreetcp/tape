@@ -10,6 +10,8 @@ import MyBookTabs from "./MyBookTabs";
 import InfoDot from "./InfoDot";
 
 const STORE_KEY = "tape.portfolio.positions";
+const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
+const BASIS_KEY = "tape.portfolio.basis"; // "$" | "%"
 const EXAMPLE = `AAPL 100
 MSFT 60
 NVDA 40
@@ -29,6 +31,9 @@ const money = (n: number): string => {
 const signMoney = (n: number): string => (n > 0 ? "+" : "") + money(n);
 const pct = (n: number | null, d = 1) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(d)}%`);
 const px = (n: number | null | undefined) => (n == null ? "—" : `$${n.toFixed(2)}`);
+// Exposure as a % of account equity (AUM). Signed like its $ counterpart; |frac|×100.
+const pctAum = (frac: number | null | undefined, signed: boolean): string =>
+  frac == null ? "—" : `${signed ? (frac >= 0 ? "+" : "−") : ""}${Math.abs(frac * 100).toFixed(0)}%`;
 
 const SHOCKS = [-10, -5, -2, 2, 5, 10];
 const pos = (n: number) => n >= 0;
@@ -49,17 +54,31 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [resp, setResp] = useState<{ data: Record<string, NameData>; missing: string[]; asOf: string | null }>({ data: {}, missing: [], asOf: null });
   const [loading, setLoading] = useState(false);
   const [shock, setShock] = useState(-5);
+  const [aumText, setAumText] = useState(""); // account equity ($); blank = read in dollars
+  const [showPct, setShowPct] = useState(false); // $ vs % of AUM
 
-  // Restore saved book on mount; persist on every edit after.
+  // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
   useEffect(() => {
-    try { const raw = localStorage.getItem(STORE_KEY); if (raw != null) setText(raw); } catch { /* ignore */ }
+    try {
+      const raw = localStorage.getItem(STORE_KEY); if (raw != null) setText(raw);
+      const savedAum = localStorage.getItem(AUM_KEY); if (savedAum != null) setAumText(savedAum);
+      setShowPct(localStorage.getItem(BASIS_KEY) === "%");
+    } catch { /* ignore */ }
     hydrated.current = true;
   }, []);
   useEffect(() => {
     if (!hydrated.current) return;
     try { localStorage.setItem(STORE_KEY, text); } catch { /* ignore */ }
   }, [text]);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(AUM_KEY, aumText); } catch { /* ignore */ }
+  }, [aumText]);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(BASIS_KEY, showPct ? "%" : "$"); } catch { /* ignore */ }
+  }, [showPct]);
 
   const positions = useMemo(() => parsePositions(text), [text]);
   const symbolsKey = useMemo(() => [...new Set(positions.map((p) => p.symbol))].sort().join(","), [positions]);
@@ -80,10 +99,19 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   }, [symbolsKey, tf]);
 
   const dataMap = useMemo(() => new Map(Object.entries(resp.data)), [resp.data]);
-  const stats = useMemo(() => computePortfolio(positions, dataMap), [positions, dataMap]);
+  const aum = useMemo(() => {
+    const n = Number(aumText.replace(/[$,\s]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [aumText]);
+  const stats = useMemo(() => computePortfolio(positions, dataMap, aum), [positions, dataMap, aum]);
   const hasBook = stats.holdings.length > 0;
   const effN = stats.concentration.hhi > 0 ? 1 / stats.concentration.hhi : 0; // effective # of names
   const netPctGross = stats.gross ? (stats.net / stats.gross) * 100 : 0;
+  const ep = stats.exposurePct;
+  const pctMode = showPct && ep != null; // % view is only active with a usable AUM
+  // A stat card's value: % of AUM in pct-mode, else dollars (signed where it matters).
+  const cardVal = (dollar: number | null, frac: number | null | undefined, signed: boolean): string =>
+    pctMode ? pctAum(frac, signed) : dollar == null ? "—" : signed ? signMoney(dollar) : money(dollar);
 
   // --- Risk decomposition (factor tilts + correlation) — a heavier, separately-fetched read. ---
   // Send priced names ordered by |exposure| desc (holdings are pre-sorted) so if the server caps the
@@ -161,6 +189,25 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
             {resp.missing.length > 0 && (
               <p className="mt-1.5 text-[11px] text-[#f59e0b]">Not found (US names only): {resp.missing.join(", ")}</p>
             )}
+            <div className="mt-2.5 border-t border-[var(--border)] pt-2.5">
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-[12px] text-[var(--text-3)]">Account equity</span>
+                <span className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg)] focus-within:border-[var(--accent)]/60">
+                  <span className="pl-2 text-[12px] text-[var(--text-4)]">$</span>
+                  <input
+                    value={aumText}
+                    onChange={(e) => setAumText(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="250,000"
+                    aria-label="Account equity in dollars"
+                    className="w-24 bg-transparent px-1.5 py-1 text-right font-mono text-[13px] tabular-nums outline-none placeholder:text-[var(--text-4)]"
+                  />
+                </span>
+              </label>
+              <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-4)]">
+                The divisor for % of AUM (net market value + cash). Add cash your broker file doesn&apos;t print. Leave blank to read the book in dollars.
+              </p>
+            </div>
           </div>
           <p className="mt-2 px-1 text-[11px] leading-relaxed text-[var(--text-4)]">
             Prices from the latest US snapshot; betas are 5-yr weekly-equivalent vs the S&amp;P 500. International tickers aren&apos;t priced here. Research tool, not advice.
@@ -176,13 +223,29 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
           ) : (
             <div className="space-y-4">
               {/* Exposure summary */}
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-                <Stat label="Gross" value={money(stats.gross)} sub="Σ |value|" />
-                <Stat label="Net" value={signMoney(stats.net)} sub={`${pct(netPctGross, 0)} of gross`} color={pos(stats.net) ? "#22c55e" : "#ef4444"} />
-                <Stat label="Long" value={money(stats.longValue)} color="#22c55e" />
-                <Stat label="Short" value={money(stats.shortValue)} color="#ef4444" />
-                <Stat label="Net β" value={stats.beta == null ? "—" : stats.beta.toFixed(2)} sub={stats.betaCoverage < 0.999 ? `${Math.round(stats.betaCoverage * 100)}% covered` : "per $ gross"} color={stats.beta != null && stats.beta < 0 ? "#ef4444" : undefined} />
-                <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-semibold">Exposure</span>
+                  <div className="flex items-center gap-2">
+                    {pctMode && <span className="text-[11px] text-[var(--text-4)]">% of {money(stats.aum!)} equity</span>}
+                    <div className="flex overflow-hidden rounded-md border border-[var(--border)] text-[11px] font-semibold">
+                      <button onClick={() => setShowPct(false)}
+                        className={`px-2 py-0.5 ${!showPct ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>$</button>
+                      <button onClick={() => setShowPct(true)} disabled={!aum}
+                        title={aum ? "Show as % of account equity" : "Enter account equity below to enable"}
+                        className={`border-l border-[var(--border)] px-2 py-0.5 ${pctMode ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-[var(--text-4)] hover:text-[var(--text-2)]"} disabled:cursor-not-allowed disabled:opacity-40`}>% AUM</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+                  <Stat label="Gross" value={cardVal(stats.gross, ep?.gross, false)} sub="Σ |value|" />
+                  <Stat label="Net" value={cardVal(stats.net, ep?.net, true)} sub={`${pct(netPctGross, 0)} of gross`} color={pos(stats.net) ? "#22c55e" : "#ef4444"} />
+                  <Stat label="Long" value={cardVal(stats.longValue, ep?.long, false)} color="#22c55e" />
+                  <Stat label="Short" value={cardVal(stats.shortValue, ep?.short, true)} color="#ef4444" />
+                  <Stat label="Beta-adj net" value={cardVal(stats.betaDollar, ep?.betaAdj, true)} sub="Σ value·β" color={stats.betaDollar != null && stats.betaDollar < 0 ? "#ef4444" : undefined} />
+                  <Stat label="Net β" value={stats.beta == null ? "—" : stats.beta.toFixed(2)} sub={stats.betaCoverage < 0.999 ? `${Math.round(stats.betaCoverage * 100)}% covered` : "per $ gross"} color={stats.beta != null && stats.beta < 0 ? "#ef4444" : undefined} />
+                  <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
+                </div>
               </div>
 
               {/* Market-shock scenario */}
@@ -201,7 +264,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: pos(shock) ? "#22c55e" : "#ef4444" }}>{shock > 0 ? "+" : ""}{shock}%</span>
                         <span className="text-sm text-[var(--text-3)]">→ your book</span>
                         <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: c }}>{signMoney(r.dollar)}</span>
-                        <span className="font-mono text-sm tabular-nums" style={{ color: c }}>({pct(r.pct)})</span>
+                        <span className="font-mono text-sm tabular-nums" style={{ color: c }}>({pctMode ? pctAum(r.dollar / stats.aum!, true) : pct(r.pct)})</span>
                       </div>
                       <input
                         type="range" min={-15} max={15} step={0.5} value={shock}
@@ -386,7 +449,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <td className="px-2 py-2 text-[12px] text-[var(--text-3)]">{h.sector ?? "—"}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{h.shares.toLocaleString()}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{px(h.price)}</td>
-                        <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "#ef4444" }}>{signMoney(h.value)}</td>
+                        <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "#ef4444" }}>{pctMode ? pctAum(h.value / stats.aum!, true) : signMoney(h.value)}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{(h.weight * 100).toFixed(1)}%</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{typeof h.beta === "number" ? h.beta.toFixed(2) : "—"}</td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums" style={{ color: h.ret == null ? "var(--text-4)" : pos(h.ret) ? "#22c55e" : "#ef4444" }}>{pct(h.ret ?? null)}</td>

@@ -69,6 +69,37 @@ test("parsePositions: formats, shorts, dupes, comments, thousands", () => {
   assert.deepEqual(parsePositions("F 100\nF -100"), []);
 });
 
+test("computePortfolio: exposures as % of AUM incl. beta-adjusted", () => {
+  const s = computePortfolio(positions, data, 50000); // account equity $50k
+  approx(s.aum!, 50000);
+  approx(s.betaDollar!, 36000); // Σ value·β = 24000 + 22000 − 10000
+  approx(s.exposurePct!.gross, 45000 / 50000); // 0.90
+  approx(s.exposurePct!.net, 35000 / 50000); // 0.70
+  approx(s.exposurePct!.long, 40000 / 50000); // 0.80
+  approx(s.exposurePct!.short, -5000 / 50000); // −0.10
+  approx(s.exposurePct!.betaAdj!, 36000 / 50000); // beta-adjusted net / aum = 0.72
+});
+
+test("computePortfolio: no/invalid AUM → exposurePct null, backward-compatible", () => {
+  const a = computePortfolio(positions, data); // aum omitted (old 2-arg call)
+  assert.equal(a.aum, null);
+  assert.equal(a.exposurePct, null);
+  approx(a.betaDollar!, 36000); // betaDollar is AUM-independent, still computed
+  for (const bad of [0, -100, NaN, Infinity]) {
+    const s = computePortfolio(positions, data, bad);
+    assert.equal(s.aum, null, `aum ${bad}`);
+    assert.equal(s.exposurePct, null, `exposurePct ${bad}`);
+  }
+});
+
+test("computePortfolio: betaAdj null when the book has no betas", () => {
+  const noBeta = new Map<string, NameData>([["A", { symbol: "A", price: 10, beta: null }]]);
+  const s = computePortfolio([{ symbol: "A", shares: 100 }], noBeta, 5000); // +$1k, no beta
+  assert.equal(s.betaDollar, null);
+  assert.equal(s.exposurePct!.betaAdj, null); // AUM set, but no beta → beta-adjusted % is null
+  approx(s.exposurePct!.gross, 1000 / 5000); // dollar exposures still divide by AUM
+});
+
 test("computePortfolio: partial beta coverage is honest", () => {
   const d2 = new Map(data);
   d2.set("XYZ", { symbol: "XYZ", price: 100, sector: "Health", beta: null, ret: 1 }); // no beta

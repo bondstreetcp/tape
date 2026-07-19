@@ -32,6 +32,19 @@ export interface SectorExposure {
   weight: number; // net value / gross
 }
 
+/**
+ * Exposures as fractions of account equity (AUM) — the way an allocator reads a book
+ * ("133% net long") rather than a pod's dollar P&L. Signed like their $ counterparts;
+ * ×100 for a percent. Null on the parent stats when there's no usable AUM.
+ */
+export interface ExposurePct {
+  gross: number; // Σ|value| / aum
+  net: number; // net / aum
+  long: number; // long / aum
+  short: number; // short / aum (≤ 0)
+  betaAdj: number | null; // Σ value·β / aum (beta-adjusted net; null if no name has a beta)
+}
+
 export interface PortfolioStats {
   holdings: Holding[]; // priced positions, sorted by |value| desc
   missing: string[]; // positions with no price data
@@ -44,6 +57,9 @@ export interface PortfolioStats {
   beta: number | null; // net beta per $ gross (over names with a beta)
   betaCoverage: number; // fraction of gross that has a beta
   ret: number | null; // gross-weighted timeframe return, % (over names with a ret)
+  aum: number | null; // account equity (the % divisor); null when not provided or ≤ 0
+  betaDollar: number | null; // Σ value·β — beta-adjusted net $ exposure (null if no betas)
+  exposurePct: ExposurePct | null; // exposures as fractions of AUM; null without a usable AUM
 }
 
 /**
@@ -71,7 +87,11 @@ export function parsePositions(text: string): Position[] {
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-export function computePortfolio(positions: Position[], data: Map<string, NameData>): PortfolioStats {
+export function computePortfolio(
+  positions: Position[],
+  data: Map<string, NameData>,
+  aum: number | null = null,
+): PortfolioStats {
   const holdings: Holding[] = [];
   const missing: string[] = [];
   for (const p of positions) {
@@ -107,7 +127,8 @@ export function computePortfolio(positions: Position[], data: Map<string, NameDa
   // Net beta per $ gross, over names that HAVE a beta (report coverage so the number is honest).
   const betaNames = holdings.filter((h) => typeof h.beta === "number" && Number.isFinite(h.beta));
   const betaGross = sum(betaNames.map((h) => Math.abs(h.value)));
-  const beta = betaGross ? sum(betaNames.map((h) => h.value * (h.beta as number))) / gross : null;
+  const betaDollar = betaGross ? sum(betaNames.map((h) => h.value * (h.beta as number))) : null; // Σ value·β
+  const beta = betaDollar == null ? null : betaDollar / gross;
   const betaCoverage = gross ? betaGross / gross : 0;
 
   // Gross-weighted timeframe return, over names with a ret.
@@ -115,7 +136,20 @@ export function computePortfolio(positions: Position[], data: Map<string, NameDa
   const retGross = sum(retNames.map((h) => Math.abs(h.value)));
   const ret = retGross ? sum(retNames.map((h) => Math.abs(h.value) * (h.ret as number))) / retGross : null;
 
-  return { holdings, missing, gross, net, longValue, shortValue, bySector, concentration, beta, betaCoverage, ret };
+  // Exposures as % of account equity. AUM must be a positive divisor; a missing or ≤ 0
+  // value leaves every % null so the UI cleanly falls back to dollars / % of gross.
+  const usableAum = aum != null && Number.isFinite(aum) && aum > 0 ? aum : null;
+  const exposurePct: ExposurePct | null = usableAum
+    ? {
+        gross: gross / usableAum,
+        net: net / usableAum,
+        long: longValue / usableAum,
+        short: shortValue / usableAum,
+        betaAdj: betaDollar == null ? null : betaDollar / usableAum,
+      }
+    : null;
+
+  return { holdings, missing, gross, net, longValue, shortValue, bySector, concentration, beta, betaCoverage, ret, aum: usableAum, betaDollar, exposurePct };
 }
 
 /** Estimated $ P&L (and % of gross) from a broad market move, via each holding's beta: Σ value·beta·move. */
