@@ -30,6 +30,15 @@ export const HEDGE_ETFS: { etf: string; name: string; sector?: string }[] = [
 export const HEDGE_ETF_NAME: Record<string, string> = Object.fromEntries(HEDGE_ETFS.map((e) => [e.etf, e.name]));
 export const HEDGE_ETF_SECTOR: Record<string, string> = Object.fromEntries(HEDGE_ETFS.map((e) => [e.etf, e.sector ?? "ETF/Index"]));
 
+/** Representative market-cap bucket per hedge ETF, so an ETF hedge shifts the book's size mix. Matches
+ *  lib/portfolio CAP_ORDER: broad/style/sector funds are large-cap weighted; QQQ is mega-tech, IWM small,
+ *  MDY mid. */
+export const HEDGE_ETF_CAP: Record<string, string> = {
+  SPY: "Large", QQQ: "Mega", IWM: "Small", MDY: "Mid",
+  MTUM: "Large", VLUE: "Large", QUAL: "Large", USMV: "Large", IWF: "Large", IWD: "Large",
+  XLK: "Large", XLF: "Large", XLE: "Large", XLV: "Large", XLI: "Large", XLY: "Large", XLP: "Large", XLU: "Large",
+};
+
 export interface HedgeLeg {
   etf: string;
   name: string;

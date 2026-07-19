@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, type NameData } from "@/lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, CAP_ORDER, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
@@ -221,6 +221,16 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 5);
   }, [whatIfActive, stats.bySector, statsAfter.bySector]);
+  // Market-cap bucket shifts under the trade (natural size order), for the what-if card.
+  const capShifts = useMemo(() => {
+    if (!whatIfActive) return [] as { bucket: string; before: number; after: number; delta: number }[];
+    const bW = new Map(stats.byCap.map((s) => [s.bucket, s.weight * 100]));
+    const aW = new Map(statsAfter.byCap.map((s) => [s.bucket, s.weight * 100]));
+    return [...new Set([...bW.keys(), ...aW.keys()])]
+      .map((b) => { const before = bW.get(b) ?? 0, after = aW.get(b) ?? 0; return { bucket: b, before, after, delta: after - before }; })
+      .filter((r) => Math.abs(r.delta) >= 1)
+      .sort((a, b) => CAP_ORDER.indexOf(a.bucket as (typeof CAP_ORDER)[number]) - CAP_ORDER.indexOf(b.bucket as (typeof CAP_ORDER)[number]));
+  }, [whatIfActive, stats.byCap, statsAfter.byCap]);
 
   // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
   const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);
@@ -393,6 +403,22 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       </div>
                     </div>
                   )}
+                  {capShifts.length > 0 && (
+                    <div className="mt-2 border-t border-[var(--border)] pt-2">
+                      <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Size shifts (net % gross)</div>
+                      <div className="space-y-0.5">
+                        {capShifts.map((s) => (
+                          <div key={s.bucket} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-40 shrink-0 text-[var(--text-3)]">{s.bucket}</span>
+                            <span className="font-mono tabular-nums text-[var(--text-4)]">{s.before.toFixed(0)}%</span>
+                            <span className="text-[var(--text-4)]">→</span>
+                            <span className="font-mono tabular-nums text-[var(--text-2)]">{s.after.toFixed(0)}%</span>
+                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "#22c55e" : "#ef4444" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {portRisk && !portRiskAfter && (
                     <p className="mt-2 text-[11px] text-[var(--text-4)]">Predicted vol / VaR after the trade update once the new name&apos;s history loads.</p>
                   )}
@@ -535,6 +561,34 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </p>
                 </div>
               </div>
+
+              {/* Size (market-cap) exposure */}
+              {stats.byCap.length > 0 && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Size exposure <span className="text-[11px] font-normal text-[var(--text-4)]">(net, % of gross)</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">by market cap</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {stats.byCap.map((c) => {
+                      const w = c.weight * 100;
+                      return (
+                        <div key={c.bucket} className="flex items-center gap-2 text-[12px]">
+                          <span className="w-14 shrink-0 text-[var(--text-3)]">{c.bucket}</span>
+                          <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
+                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "#22c55e" : "#ef4444", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
+                            <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
+                          </div>
+                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "#22c55e" : "#ef4444" }}>{pct(w, 0)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                    Mega &gt;$200B · Large $10–200B · Mid $2–10B · Small $300M–2B · Micro &lt;$300M. ETFs use a representative bucket.
+                  </p>
+                </div>
+              )}
 
               {/* Risk decomposition: factor tilts + crowding + hedge */}
               {risk.cappedFrom && (

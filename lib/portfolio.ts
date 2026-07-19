@@ -16,6 +16,7 @@ export interface NameData {
   price: number;
   sector?: string;
   marketCap?: number;
+  capBucket?: string; // explicit size bucket (ETFs); stocks are bucketed from marketCap
   beta?: number | null; // vs the market (SPY), from the stored series
   ret?: number | null; // % return over the selected timeframe
 }
@@ -29,6 +30,26 @@ export interface Holding extends NameData {
 export interface SectorExposure {
   sector: string;
   value: number; // net $ in the sector
+  weight: number; // net value / gross
+}
+
+/** Market-cap size buckets, largest → smallest, for the size-exposure breakdown. */
+export const CAP_ORDER = ["Mega", "Large", "Mid", "Small", "Micro"] as const;
+export type CapBucket = (typeof CAP_ORDER)[number];
+
+/** Map a market cap ($) to a size bucket. null if unknown / non-positive. */
+export function capBucketOf(marketCap: number | null | undefined): CapBucket | null {
+  if (marketCap == null || !(marketCap > 0)) return null;
+  if (marketCap >= 200e9) return "Mega";
+  if (marketCap >= 10e9) return "Large";
+  if (marketCap >= 2e9) return "Mid";
+  if (marketCap >= 300e6) return "Small";
+  return "Micro";
+}
+
+export interface CapExposure {
+  bucket: string;
+  value: number; // net $ in the size bucket
   weight: number; // net value / gross
 }
 
@@ -53,6 +74,7 @@ export interface PortfolioStats {
   longValue: number;
   shortValue: number; // ≤ 0
   bySector: SectorExposure[]; // sorted by |value| desc
+  byCap: CapExposure[]; // net exposure per market-cap bucket, in CAP_ORDER
   concentration: { top1: number; top5: number; hhi: number }; // fractions of gross (0..1)
   beta: number | null; // net beta per $ gross (over names with a beta)
   betaCoverage: number; // fraction of gross that has a beta
@@ -132,6 +154,17 @@ export function computePortfolio(
     .map(([sector, value]) => ({ sector, value, weight: gross ? value / gross : 0 }))
     .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
+  // Market-cap (size) exposure (net $ per bucket). Stocks bucket from marketCap; ETFs carry an explicit
+  // capBucket (a representative size) so an ETF hedge shifts the size mix too.
+  const capMap = new Map<string, number>();
+  for (const h of holdings) {
+    const b = h.capBucket ?? capBucketOf(h.marketCap);
+    if (b) capMap.set(b, (capMap.get(b) ?? 0) + h.value);
+  }
+  const byCap: CapExposure[] = (CAP_ORDER as readonly string[])
+    .filter((b) => capMap.has(b))
+    .map((bucket) => ({ bucket, value: capMap.get(bucket)!, weight: gross ? capMap.get(bucket)! / gross : 0 }));
+
   // Concentration (fractions of GROSS).
   const absW = holdings.map((h) => Math.abs(h.value) / (gross || 1)).sort((a, b) => b - a);
   const concentration = {
@@ -165,7 +198,7 @@ export function computePortfolio(
       }
     : null;
 
-  return { holdings, missing, gross, net, longValue, shortValue, bySector, concentration, beta, betaCoverage, ret, aum: usableAum, betaDollar, exposurePct };
+  return { holdings, missing, gross, net, longValue, shortValue, bySector, byCap, concentration, beta, betaCoverage, ret, aum: usableAum, betaDollar, exposurePct };
 }
 
 /** Estimated $ P&L (and % of gross) from a broad market move, via each holding's beta: Σ value·beta·move. */

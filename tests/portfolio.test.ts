@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, HISTORICAL_EPISODES, type NameData, type Position } from "../lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, HISTORICAL_EPISODES, capBucketOf, type NameData, type Position } from "../lib/portfolio";
 
 const approx = (a: number, b: number, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≈ ${b}`);
 
@@ -98,6 +98,29 @@ test("computePortfolio: betaAdj null when the book has no betas", () => {
   assert.equal(s.betaDollar, null);
   assert.equal(s.exposurePct!.betaAdj, null); // AUM set, but no beta → beta-adjusted % is null
   approx(s.exposurePct!.gross, 1000 / 5000); // dollar exposures still divide by AUM
+});
+
+test("capBucketOf + byCap: bucket stocks by marketCap, ETFs by explicit capBucket", () => {
+  assert.equal(capBucketOf(250e9), "Mega");
+  assert.equal(capBucketOf(50e9), "Large");
+  assert.equal(capBucketOf(5e9), "Mid");
+  assert.equal(capBucketOf(1e9), "Small");
+  assert.equal(capBucketOf(100e6), "Micro");
+  assert.equal(capBucketOf(0), null);
+  assert.equal(capBucketOf(undefined), null);
+  const d = new Map<string, NameData>([
+    ["AAPL", { symbol: "AAPL", price: 300, marketCap: 4e12 }], // Mega
+    ["MDG", { symbol: "MDG", price: 50, marketCap: 5e9 }], // Mid (from marketCap)
+    ["IWM", { symbol: "IWM", price: 240, capBucket: "Small" }], // ETF: explicit bucket (no marketCap)
+    ["NOCAP", { symbol: "NOCAP", price: 10 }], // no cap info → excluded from byCap
+  ]);
+  const s = computePortfolio(parsePositions("AAPL 100\nMDG 200\nIWM -50\nNOCAP 100"), d);
+  const cap = Object.fromEntries(s.byCap.map((c) => [c.bucket, Math.round(c.value)]));
+  approx(cap["Mega"], 30000); // AAPL 100×300
+  approx(cap["Mid"], 10000); // MDG 200×50
+  approx(cap["Small"], -12000); // IWM −50×240 (short), by explicit tag
+  assert.equal(cap["Micro"], undefined); // NOCAP contributes nowhere
+  assert.deepEqual(s.byCap.map((c) => c.bucket), ["Mega", "Mid", "Small"]); // CAP_ORDER, present-only
 });
 
 test("mergePositions: sum deltas, drop net-zero, add new names (what-if)", () => {
