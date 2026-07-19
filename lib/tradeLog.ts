@@ -42,6 +42,15 @@ export interface TradeRec {
   maxProfit: number | null; // per share; null = unbounded (long tail)
   maxLoss: number | null; // per share (negative); null = unbounded (naked short call tail)
 
+  // Caution flag: a recently DISCLOSED, still-LIVE corporate catalyst (strategic-alternatives review /
+  // spin-off in motion, from data/corp-events.json; resolved events filtered out) may be WHY vol is
+  // elevated into this print — the update lands on the call, so a "rich → sell premium" read can be
+  // selling event risk, not vol mispricing (the ISRG lesson). Stamped at LOG time and RE-CHECKED
+  // nightly: a flag is ADDED whenever the disclosure date precedes the rec's print (provably pre-print,
+  // so honest even when noticed late), and never cleared. ANNOTATION ONLY: the play still logs and
+  // grades normally, so the record can MEASURE whether flagged sell-vol plays underperform.
+  catalystFlag?: { kind: "strategic-alt" | "spin-off"; headline: string; date: string } | null;
+
   // ── settlement (filled in on later runs) ──
   status: TradeStatus;
   spotAtEarnings?: number | null; // close on the reaction day
@@ -132,34 +141,58 @@ export function settlePostPrint(rec: TradeRec, reactionSpot: number, daysToExpir
   return pnl;
 }
 
+// ── Fixed-notional normalization ────────────────────────────────────────────────────────────────
+// The scorecard used to sum per-share P&L "one contract each," which over-weights expensive
+// underlyings: a $600 stock's straddle runs $30-40/share while a $50 stock's runs $1.50-2, so one UNH
+// contract dwarfed one TFC contract in every dollar aggregate. Normalize instead to a FIXED DOLLAR
+// NOTIONAL of underlying per play — contracts = notional / (spot × 100) — so every play expresses a
+// same-size bet on its stock and P&Ls are comparable across names. Per-rec fields stay per-share
+// (canonical; nothing in settlement changes); only aggregation and display rescale. The per-rec scale
+// factor is positive, so win/loss outcomes — and therefore winRate — are IDENTICAL under either basis.
+export const PLAY_NOTIONAL = 100_000;
+
+/** Contracts a fixed underlying notional buys at the logged spot (fractional — a normalization, not an
+ *  executable ticket). null on a degenerate spot. */
+export function contractsFor(spotAtRec: number, notional = PLAY_NOTIONAL): number | null {
+  return spotAtRec > 0 ? notional / (spotAtRec * 100) : null;
+}
+
+/** Per-share P&L → dollar P&L on a fixed underlying notional:
+ *  pnl/share × 100 sh/contract × (notional / (spot × 100)) contracts = pnl × notional / spot. */
+export function dollarPnl(pnlPerShare: number, spotAtRec: number, notional = PLAY_NOTIONAL): number | null {
+  return spotAtRec > 0 ? (pnlPerShare * notional) / spotAtRec : null;
+}
+
 export interface TradeStats {
   settledN: number;
   wins: number;
   losses: number;
   scratches: number;
   winRate: number | null; // wins / (wins + losses)
-  avgPnl: number | null; // mean per-share P&L across settled
-  totalPnl: number; // sum per-share P&L across settled (1-lot each)
+  avgPnl: number | null; // mean DOLLAR P&L per settled play, each normalized to PLAY_NOTIONAL of underlying
+  totalPnl: number; // sum of those dollar P&Ls (PLAY_NOTIONAL each)
   clearedN: number; // settled where the print already has a realized move recorded
   cleared: number; // of those, how often the move EXCEEDED implied (long-premium would have paid)
-  byVerdict: Record<"rich" | "cheap", { n: number; wins: number; avgPnl: number | null }>;
+  byVerdict: Record<"rich" | "cheap", { n: number; wins: number; avgPnl: number | null }>; // avgPnl in the same notional dollars
   openN: number;
   preprintN: number; // logged, still awaiting their print (the live pre-print queue)
 }
 
 // Aggregate the track record: win rate + avg P&L across SETTLED recs, split by rich (sell-premium) vs
-// cheap (buy-premium), plus how often the realized move cleared what options priced.
+// cheap (buy-premium), plus how often the realized move cleared what options priced. Dollar aggregates
+// are normalized to PLAY_NOTIONAL of underlying per play (see above); counts/rates are basis-free.
 export function summarize(recs: TradeRec[]): TradeStats {
   const settled = recs.filter((r) => r.status === "settled" && r.pnl != null);
   const wins = settled.filter((r) => r.outcome === "win").length;
   const losses = settled.filter((r) => r.outcome === "loss").length;
   const scratches = settled.filter((r) => r.outcome === "scratch").length;
-  const pnls = settled.map((r) => r.pnl as number);
+  const dollars = settled.map((r) => dollarPnl(r.pnl as number, r.spotAtRec)).filter((x): x is number => x != null);
   const withMove = recs.filter((r) => r.moveCleared != null);
   const mk = (v: "rich" | "cheap") => {
     const g = settled.filter((r) => r.verdict === v);
     const gw = g.filter((r) => r.outcome === "win").length;
-    return { n: g.length, wins: gw, avgPnl: g.length ? g.reduce((a, r) => a + (r.pnl as number), 0) / g.length : null };
+    const gd = g.map((r) => dollarPnl(r.pnl as number, r.spotAtRec)).filter((x): x is number => x != null);
+    return { n: g.length, wins: gw, avgPnl: gd.length ? gd.reduce((a, b) => a + b, 0) / gd.length : null };
   };
   return {
     settledN: settled.length,
@@ -167,8 +200,8 @@ export function summarize(recs: TradeRec[]): TradeStats {
     losses,
     scratches,
     winRate: wins + losses > 0 ? wins / (wins + losses) : null,
-    avgPnl: pnls.length ? pnls.reduce((a, b) => a + b, 0) / pnls.length : null,
-    totalPnl: pnls.reduce((a, b) => a + b, 0),
+    avgPnl: dollars.length ? dollars.reduce((a, b) => a + b, 0) / dollars.length : null,
+    totalPnl: dollars.reduce((a, b) => a + b, 0),
     clearedN: withMove.length,
     cleared: withMove.filter((r) => r.moveCleared).length,
     byVerdict: { rich: mk("rich"), cheap: mk("cheap") },

@@ -78,6 +78,10 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh vol-dislocation screen", cmd: "npm run refresh-vol-dislocation", when: "full" },
   { name: "Refresh vol-dislocation catalyst tags", cmd: "npm run refresh-vol-tags", when: "full" },
   { name: "Refresh earnings expected-move screen", cmd: "npm run refresh-earnings-move", when: "full" },
+  // corp-events BEFORE the trade-log: the track record's catalyst overlay reads corp-events.json, and
+  // running it after meant same-night 8-K disclosures (the freshest, highest-impact ones) were stamped
+  // from yesterday's board. No dependency runs the other way. Mirrored in refresh-data.yml.
+  { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh earnings-play track record", cmd: "npm run refresh-trade-log", when: "full" },
   { name: "Refresh options flow (S&P 500)", cmd: "npm run refresh-flow", when: "full" },
   { name: "Refresh Trump stock calls", cmd: "npm run refresh-trump-truth", when: "full" },
@@ -91,7 +95,6 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh dispersion", cmd: "npm run refresh-dispersion", when: "full" },
   { name: "Refresh dealer gamma board", cmd: "npm run refresh-gamma-board", when: "full" },
   { name: "Refresh post-earnings drift", cmd: "npm run refresh-pead", when: "full" },
-  { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh IPO & lockup monitor", cmd: "npm run refresh-ipo", when: "full" },
   { name: "Refresh spinoff turnover", cmd: "npm run refresh-spinoffs", when: "full" },
   { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk", narr: true },

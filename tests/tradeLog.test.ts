@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, dollarPnl, contractsFor, PLAY_NOTIONAL, type TradeLeg, type TradeRec } from "../lib/tradeLog";
 import { bsPrice, ivFromPrice } from "../lib/blackScholes";
 
 // The settlement math IS the track record's scorecard — a sign error here silently reports losing
@@ -76,13 +76,52 @@ test("summarize: counts, win rate, verdict split, cleared", () => {
   assert.equal(s.scratches, 1);
   assert.equal(s.winRate, 2 / 3); // wins / (wins + losses); scratches excluded
   assert.equal(s.openN, 1);
-  assert.ok(Math.abs(s.totalPnl - 2.5) < 1e-9); // 1.5 − 2 + 0 + 3
+  // Dollar aggregates are per $100k of underlying: every rec here has spotAtRec 100 → scale ×1000.
+  assert.ok(Math.abs(s.totalPnl - 2500) < 1e-6); // (1.5 − 2 + 0 + 3) × 100_000/100
   assert.equal(s.clearedN, 4); // recs with moveCleared != null (A false, B/C/D true) — false still counts
   assert.equal(s.cleared, 3); // of those, moveCleared === true (B, C, D)
   assert.equal(s.byVerdict.rich.n, 2);
   assert.equal(s.byVerdict.rich.wins, 1);
   assert.equal(s.byVerdict.cheap.n, 2);
   assert.equal(s.byVerdict.cheap.wins, 1);
+});
+
+// ── fixed-notional normalization — the UNH-vs-Truist comparability fix ──
+// One contract on a $600 stock dwarfed one on a $50 stock in every dollar aggregate. Normalizing to a
+// fixed notional of underlying makes the same per-share edge score the same dollars regardless of price.
+test("dollarPnl/contractsFor: $100k of a $50 stock = 12x the contracts (and dollars) of a $600 stock", () => {
+  // Same +$3/share P&L; wildly different stocks.
+  const unh = dollarPnl(3, 600)!; // 3 × 100_000 / 600 = $500
+  const tfc = dollarPnl(3, 50)!; // 3 × 100_000 / 50 = $6,000
+  assert.ok(Math.abs(unh - 500) < 1e-9);
+  assert.ok(Math.abs(tfc - 6000) < 1e-9);
+  assert.ok(Math.abs(tfc / unh - 12) < 1e-9); // exactly the 600/50 price ratio
+  assert.ok(Math.abs(contractsFor(600)! - 100_000 / 60_000) < 1e-12); // ≈1.67 contracts
+  assert.ok(Math.abs(contractsFor(50)! - 20) < 1e-12); // 20 contracts
+  // Scaling is sign-preserving → outcomes/win-rate can never change under the notional basis.
+  assert.ok(dollarPnl(-2, 600)! < 0 && dollarPnl(2, 600)! > 0);
+  assert.equal(dollarPnl(3, 0), null); // degenerate spot → null, never Infinity
+  assert.equal(contractsFor(-1), null);
+});
+
+test("summarize: notional basis fixes the expensive-stock domination", () => {
+  const base = {
+    name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "", dte: 7,
+    impliedMovePct: 8, avgRealizedPct: 6, richnessRatio: 1.3, legs: [], entryCredit: 0, maxProfit: null, maxLoss: null,
+  };
+  // A small win on a $600 stock (+$2/sh) vs a same-size per-share loss on a $50 stock (−$2/sh).
+  // Per-contract ("1 lot each") these cancelled to $0 — pretending the record broke even. At equal
+  // notional the cheap stock's loss is 12× the dollars, which is what a same-size bet actually did.
+  const recs: TradeRec[] = [
+    { ...base, id: "U", symbol: "U", spotAtRec: 600, verdict: "rich", status: "settled", pnl: 2, outcome: "win" },
+    { ...base, id: "T", symbol: "T", spotAtRec: 50, verdict: "rich", status: "settled", pnl: -2, outcome: "loss" },
+  ];
+  const s = summarize(recs);
+  assert.ok(Math.abs(s.totalPnl - (2 * 100_000 / 600 - 2 * 100_000 / 50)) < 1e-6); // ≈ +333 − 4000 = −3667
+  assert.ok(s.totalPnl < 0, "equal-notional grading must expose the cheap-stock loss the per-contract sum hid");
+  assert.equal(s.winRate, 1 / 2); // outcomes untouched by the rescale
+  assert.ok(Math.abs((s.byVerdict.rich.avgPnl as number) - s.totalPnl / 2) < 1e-6);
+  assert.equal(PLAY_NOTIONAL, 100_000); // the UI's "$100k" labels pin to this constant
 });
 
 test("summarize: empty input yields null rates, not NaN or a throw", () => {

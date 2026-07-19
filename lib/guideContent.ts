@@ -1211,7 +1211,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "path": "/track-record",
         "title": "Earnings Play — Track Record",
         "question": "How have the earnings-prep card's suggested option trades actually done once the companies reported — an honest, forward-logged scorecard?",
-        "how": "Every night the app logs the exact option structure its earnings-prep card would suggest for each name about to report — the specific legs, the entry premiums, and the expiry — then grades it the morning after the print, repricing it with the earnings 'event volatility' removed (because an earnings play is a bet on the print itself, not on where the stock drifts weeks later). A 'credit' trade collects premium up front (a sell); a 'debit' pays premium (a buy). The top scorecard aggregates the graded plays into a win rate and average profit/loss; pre-print rows are logged and still awaiting their report. It only accrues forward, so it is a real, unretouched record rather than a backtest.",
+        "how": "Every night the app logs the exact option structure its earnings-prep card would suggest for each name about to report — the specific legs, the entry premiums, and the expiry — then grades it the morning after the print, repricing it with the earnings 'event volatility' removed (because an earnings play is a bet on the print itself, not on where the stock drifts weeks later). A 'credit' trade collects premium up front (a sell); a 'debit' pays premium (a buy). Every play is normalized to a fixed $100k position in its underlying — one contract on a $600 stock and one on a $50 stock aren't comparable, so P&L is scaled to the same-size bet on every name. The top scorecard aggregates the graded plays into a win rate and average profit/loss; pre-print rows are logged and still awaiting their report. A ⚠ CATALYST tag marks plays logged while a disclosed strategic-alternatives review or spin-off was in motion — elevated option prices there may reflect the known event rather than a mispricing, the classic trap for selling premium. It only accrues forward, so it is a real, unretouched record rather than a backtest.",
         "metrics": [
           {
             "term": "Play / structure",
@@ -1231,7 +1231,11 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           },
           {
             "term": "P&L",
-            "plain": "Profit or loss per share (times 100 per contract), graded the morning after the print with earnings volatility stripped out."
+            "plain": "Profit or loss graded the morning after the print (earnings volatility stripped out), scaled to a fixed $100k position in the underlying so plays on expensive and cheap stocks are comparable. Hover a row for the per-share figure and contract count."
+          },
+          {
+            "term": "⚠ Catalyst",
+            "plain": "A disclosed strategic-alternatives review or spin-off was in motion when the play was logged — the elevated option prices may reflect that known event, not a mispricing, so treat a sell-premium suggestion with extra judgment."
           },
           {
             "term": "Outcome",

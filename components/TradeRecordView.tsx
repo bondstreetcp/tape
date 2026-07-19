@@ -2,13 +2,16 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { TradeRec } from "@/lib/tradeLog";
-import { summarize, markToIntrinsic } from "@/lib/tradeLog";
+import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL } from "@/lib/tradeLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 const money = (v: number | null | undefined, d = 2) => (v == null ? "—" : `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(d)}`);
+// Notional-dollar amounts (P&L per $100k position) — always signed, whole dollars, thousands-separated.
+const bigMoney = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`);
+const NOTIONAL_K = `$${PLAY_NOTIONAL / 1000}k`;
 const signPct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(d)}%`);
 const GREEN = "#22c55e", RED = "#ef4444";
 
@@ -36,7 +39,8 @@ export default function TradeRecordView({
     const ql = q.trim().toLowerCase();
     const get: Record<SortKey, (r: TradeRec) => number> = {
       recent: (r) => Date.parse(r.earningsDate) || 0,
-      pnl: (r) => r.pnl ?? -Infinity,
+      // Sort on the same dollar-notional basis the column displays, not raw per-share
+      pnl: (r) => (r.pnl != null ? dollarPnl(r.pnl, r.spotAtRec) ?? -Infinity : -Infinity),
       implied: (r) => r.impliedMovePct,
       realized: (r) => (r.realizedMovePct != null ? Math.abs(r.realizedMovePct) : -1),
     };
@@ -78,7 +82,7 @@ export default function TradeRecordView({
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Earnings Play — Track Record</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Every night we log the exact option structure the Earnings-prep card would suggest for names about to report — with its expiry and entry premiums — then <b>grade it at the print</b>: the structure is repriced the morning after with the event vol removed, because an earnings play is a bet on the print, not on where the stock drifts weeks later. The honest scorecard of those suggestions. {allRecs.length} plays tracked · as of {fmtDateTime(generatedAt)}
+            Every night we log the exact option structure the Earnings-prep card would suggest for names about to report — with its expiry and entry premiums — then <b>grade it at the print</b>: the structure is repriced the morning after with the event vol removed, because an earnings play is a bet on the print, not on where the stock drifts weeks later. Every play is sized to <b>{NOTIONAL_K} of underlying</b> so P&amp;Ls compare across a $600 stock and a $50 stock. The honest scorecard of those suggestions. {allRecs.length} plays tracked · as of {fmtDateTime(generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -89,17 +93,18 @@ export default function TradeRecordView({
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Graded" value={`${stats.settledN}`} sub={`${stats.preprintN} pre-print queued`} />
           <Stat label="Win rate" value={wr == null ? "—" : `${(wr * 100).toFixed(0)}%`} color={wr == null ? undefined : wr >= 0.5 ? GREEN : RED} sub={`${stats.wins}W · ${stats.losses}L · ${stats.scratches} scratch`} />
-          <Stat label="Avg P&L" value={money(stats.avgPnl)} color={stats.avgPnl == null ? undefined : stats.avgPnl >= 0 ? GREEN : RED} sub="per share (×100 / contract)" />
-          <Stat label="Total P&L" value={money(stats.totalPnl)} color={stats.totalPnl >= 0 ? GREEN : RED} sub="1 lot each, per share" />
-          <Stat label="Sell-premium" value={rich.n ? `${rich.wins}/${rich.n}` : "—"} color={rich.avgPnl == null ? undefined : rich.avgPnl >= 0 ? GREEN : RED} sub={rich.avgPnl == null ? "rich → short" : `avg ${money(rich.avgPnl)}`} />
-          <Stat label="Buy-premium" value={cheap.n ? `${cheap.wins}/${cheap.n}` : "—"} color={cheap.avgPnl == null ? undefined : cheap.avgPnl >= 0 ? GREEN : RED} sub={cheap.avgPnl == null ? "cheap → long" : `avg ${money(cheap.avgPnl)}`} />
+          <Stat label="Avg P&L" value={bigMoney(stats.avgPnl)} color={stats.avgPnl == null ? undefined : stats.avgPnl >= 0 ? GREEN : RED} sub={`per play, ${NOTIONAL_K} notional`} />
+          <Stat label="Total P&L" value={bigMoney(stats.totalPnl)} color={stats.totalPnl >= 0 ? GREEN : RED} sub={`${NOTIONAL_K} notional each`} />
+          <Stat label="Sell-premium" value={rich.n ? `${rich.wins}/${rich.n}` : "—"} color={rich.avgPnl == null ? undefined : rich.avgPnl >= 0 ? GREEN : RED} sub={rich.avgPnl == null ? "rich → short" : `avg ${bigMoney(rich.avgPnl)}`} />
+          <Stat label="Buy-premium" value={cheap.n ? `${cheap.wins}/${cheap.n}` : "—"} color={cheap.avgPnl == null ? undefined : cheap.avgPnl >= 0 ? GREEN : RED} sub={cheap.avgPnl == null ? "cheap → long" : `avg ${bigMoney(cheap.avgPnl)}`} />
         </div>
       )}
 
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
-        <span><b className="text-[var(--text-2)]">Entry</b> = net premium at the logged mid · <span style={{ color: GREEN }}>+ credit</span> (sell) · <span style={{ color: RED }}>− debit</span> (buy)</span>
-        <span><b className="text-[var(--text-2)]">P&L</b> = graded at the post-print — the structure repriced the morning after, event vol stripped out · per share, ×100 per contract</span>
+        <span><b className="text-[var(--text-2)]">Entry</b> = net premium at the logged mid, per share · <span style={{ color: GREEN }}>+ credit</span> (sell) · <span style={{ color: RED }}>− debit</span> (buy)</span>
+        <span><b className="text-[var(--text-2)]">P&L</b> = graded at the post-print (repriced the morning after, event vol stripped out), <b className="text-[var(--text-2)]">normalized to a {NOTIONAL_K} position</b> in each underlying — so a $600 stock and a $50 stock weigh the same (per-contract dollars don&apos;t compare across prices)</span>
         <span><b className="text-[var(--text-2)]">Cleared ✓</b> = the realized move exceeded what options priced (a premium-buyer&apos;s win)</span>
+        <span><b className="text-[#f59e0b]">⚠ Catalyst</b> = a disclosed strategic-alternatives / spin-off event was live when logged — elevated IV may be pricing the KNOWN event, not a vol mispricing; judge a sell-premium read accordingly</span>
         <span><b className="text-[var(--text-2)]">Pre-print</b> plays are logged &amp; awaiting their report — the live queue, shown with entry premiums.</span>
       </div>
 
@@ -149,7 +154,9 @@ export default function TradeRecordView({
               {recs.map((r) => {
                 const isCredit = r.entryCredit >= 0;
                 const prov = r.status !== "settled" && r.realizedMovePct != null && prices[r.symbol] != null ? markToIntrinsic(r, prices[r.symbol]) : null;
-                const pnl = r.status === "settled" ? r.pnl ?? null : prov;
+                const pnl = r.status === "settled" ? r.pnl ?? null : prov; // per-share (canonical)
+                const pnlDollar = pnl != null ? dollarPnl(pnl, r.spotAtRec) : null; // per $100k of underlying
+                const ctrs = contractsFor(r.spotAtRec);
                 const pnlColor = pnl == null ? "var(--text-4)" : pnl >= 0 ? GREEN : RED;
                 return (
                   <tr key={r.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
@@ -160,6 +167,14 @@ export default function TradeRecordView({
                     <td className="px-2 py-2 whitespace-nowrap text-[var(--text-2)]">{dateLabel(r.earningsDate)}</td>
                     <td className="px-2 py-2">
                       <span className="font-medium" style={{ color: r.verdict === "rich" ? RED : GREEN }}>{r.structure}</span>
+                      {r.catalystFlag && (
+                        <span
+                          className="ml-1.5 cursor-help rounded bg-[color-mix(in_oklab,#f59e0b_18%,transparent)] px-1 py-0.5 align-middle text-[10px] font-semibold text-[#f59e0b]"
+                          title={`${r.catalystFlag.kind === "strategic-alt" ? "Strategic alternatives" : "Spin-off"} disclosed ${r.catalystFlag.date}: ${r.catalystFlag.headline} — elevated IV may be pricing this known event, not a vol mispricing`}
+                        >
+                          ⚠ CATALYST
+                        </span>
+                      )}
                       <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.legsText}>{r.legsText}</div>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap font-mono text-[12px] text-[var(--text-3)]">{r.expiry}<span className="text-[var(--text-4)]"> · {r.dte}d</span></td>
@@ -175,11 +190,12 @@ export default function TradeRecordView({
                     <td
                       className="px-2 py-2 text-right font-mono tabular-nums"
                       style={{ color: pnlColor, opacity: r.status === "settled" ? 1 : 0.6 }}
-                      title={r.status === "settled"
-                        ? `${r.settleBasis === "post-print" ? "graded at the post-print" : "graded at expiry"}${r.pnlToExpiry != null && r.settleBasis === "post-print" ? ` · held to expiry: ${money(r.pnlToExpiry)}` : ""}`
-                        : prov != null ? "provisional mark at the current price (intrinsic only)" : "logged — awaiting the print"}
+                      title={(r.status === "settled"
+                        ? `${r.settleBasis === "post-print" ? "graded at the post-print" : "graded at expiry"}${r.pnlToExpiry != null && r.settleBasis === "post-print" ? ` · held to expiry: ${r.pnlToExpiry != null ? bigMoney(dollarPnl(r.pnlToExpiry, r.spotAtRec)) : "—"} (${money(r.pnlToExpiry)}/sh)` : ""}`
+                        : prov != null ? "provisional mark at the current price (intrinsic only)" : "logged — awaiting the print")
+                        + (pnl != null ? ` · ${money(pnl)}/share × ≈${ctrs != null ? Math.round(ctrs * 100).toLocaleString("en-US") : "—"} shares (≈${ctrs != null ? ctrs.toFixed(1) : "—"} contracts — ${NOTIONAL_K} of stock at $${r.spotAtRec.toFixed(0)})` : "")}
                     >
-                      {pnl == null ? "—" : `${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}`}
+                      {pnlDollar == null ? "—" : bigMoney(pnlDollar)}
                     </td>
                     <td className="px-2 py-2 text-center whitespace-nowrap">
                       {r.status === "settled" && r.outcome ? (

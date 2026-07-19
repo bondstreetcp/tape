@@ -24,6 +24,20 @@ export interface CorpEventsData {
   events: CorpEvent[]; // newest first
 }
 
+// ── helpers for the trade-log catalyst overlay (pure — tested in tests/corpEvents.test.ts) ──────
+
+// A RESOLVED catalyst (completed spin, concluded review, signed definitive deal) is no longer a reason
+// vol should be elevated into a print, so the overlay drops tickers whose most recent event reads as
+// resolved. VERB-anchored deliberately: "on track for completion July 6" (a spin still LIVE) must NOT
+// match, while "completed/completes the spin-off" and "concludes its strategic review" must.
+const RESOLVED_RE = /\b(complet(?:ed|es)|conclud(?:ed|es)|finaliz(?:ed|es)|terminat(?:ed|es)|definitive\s+(?:merger\s+)?agreement|to\s+be\s+acquired)\b/i;
+export const eventResolved = (headline: string): boolean => RESOLVED_RE.test(headline);
+
+/** Share-class root: BRK-B / BF.A → BRK / BF. EDGAR display names store the FIRST-listed class while
+ *  snapshots carry the traded one (BF-A filed vs BF-B traded), so the overlay joins on the root as a
+ *  fallback. Non-class symbols pass through unchanged. */
+export const classRoot = (sym: string): string => sym.toUpperCase().replace(/\./g, "-").replace(/-[A-Z]$/, "");
+
 export const typeColor = (t: CorpEventType): string =>
   t === "buyback" ? "#22c55e" : t === "strategic-alt" ? "#f59e0b" : t === "spin-off" ? "#a78bfa" : t === "split" ? "#60a5fa" : "#f472b6";
 export const typeLabel = (t: CorpEventType): string =>

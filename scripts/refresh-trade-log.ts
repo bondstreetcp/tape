@@ -22,6 +22,7 @@ import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
 import { buildEarningsTrade } from "../lib/earningsTrade";
 import { netCredit, payoffBounds, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
+import { eventResolved, classRoot, type CorpEventsData } from "../lib/corpEvents";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -111,6 +112,46 @@ async function main() {
     .catch(() => ({ generatedAt: nowISO, recs: [] as TradeRec[] }));
   const byId = new Map<string, TradeRec>(existing.recs.map((r) => [r.id, r]));
 
+  // ── catalyst overlay: names with a LIVE disclosed strategic-alt / spin-off event ──
+  // "Where it hits landmines": when a known catalyst (a strategic-alternatives update, a spin in
+  // motion) is WHY vol is elevated into the print, the rich→sell read is selling event risk, not vol
+  // mispricing. Stamp the flag on new recs at LOG time (annotation only — the play still logs and
+  // grades, so the record can measure whether flagged sell-vol plays underperform). Best-effort: a
+  // missing corp-events.json (fresh checkout) just means no flags attach this run.
+  const CATALYST_KINDS = new Set<string>(["strategic-alt", "spin-off"]);
+  const CATALYST_WINDOW_D = 120; // strategic reviews run months; older than this is likely resolved/stale
+  const catalystByTicker = new Map<string, NonNullable<TradeRec["catalystFlag"]>>();
+  try {
+    const ce = JSON.parse(await fsp.readFile(path.join(DATA, "corp-events.json"), "utf8")) as CorpEventsData;
+    for (const ev of ce.events || []) {
+      if (!ev.ticker || !CATALYST_KINDS.has(ev.type)) continue;
+      const t = Date.parse(ev.date);
+      if (!Number.isFinite(t) || now - t > CATALYST_WINDOW_D * DAY) continue;
+      const key = ev.ticker.toUpperCase();
+      const prev = catalystByTicker.get(key);
+      if (!prev || t > Date.parse(prev.date)) {
+        catalystByTicker.set(key, { kind: ev.type as "strategic-alt" | "spin-off", headline: ev.headline, date: ev.date.slice(0, 10) });
+      }
+    }
+  } catch { /* board missing on this box — no flags this run */ }
+  // Drop tickers whose MOST RECENT event reads RESOLVED (completed spin / concluded review / signed
+  // definitive deal) — the catalyst is over, so the elevated-IV caution no longer applies. Filtering
+  // AFTER most-recent selection matters: an older "announced" event must not resurrect a ticker whose
+  // spin has since completed (the MIDD case — "on track for completion" then "completed").
+  for (const [k, v] of catalystByTicker) if (eventResolved(v.headline)) catalystByTicker.delete(k);
+  // Alias each surviving flag under its share-class ROOT: EDGAR stores the FIRST-listed class (BF-A)
+  // while snapshots trade the other (BF-B) — without the root fallback a Brown-Forman/Berkshire event
+  // would silently never flag. Exact key wins at lookup; roots are the fallback.
+  for (const [k, v] of [...catalystByTicker]) {
+    const root = classRoot(k);
+    if (root !== k) {
+      const prev = catalystByTicker.get(root);
+      if (!prev || Date.parse(v.date) > Date.parse(prev.date)) catalystByTicker.set(root, v);
+    }
+  }
+  const flagFor = (sym: string) => catalystByTicker.get(sym.toUpperCase()) ?? catalystByTicker.get(classRoot(sym));
+  if (catalystByTicker.size) console.log(`catalyst overlay: ${catalystByTicker.size} ticker keys with a LIVE strategic-alt/spin-off disclosure (≤${CATALYST_WINDOW_D}d, resolved filtered, class roots aliased)`);
+
   // ── 1. LOG new plays for upcoming reporters ──
   const seen = new Set<string>();
   const pool: any[] = [];
@@ -167,12 +208,28 @@ async function main() {
       entryCredit: +entry.toFixed(2),
       maxProfit: maxProfit != null ? +maxProfit.toFixed(2) : null,
       maxLoss: maxLoss != null ? +maxLoss.toFixed(2) : null,
+      // undefined (no live catalyst) is dropped by JSON.stringify — the field only appears when flagged
+      catalystFlag: flagFor(s.symbol),
       status: "awaiting_print",
     };
     byId.set(rec.id, rec);
     logged++;
   });
   console.log(`logged ${logged} new plays`);
+
+  // ── 1b. RE-STAMP the catalyst flag on already-logged recs ──
+  // Flags used to be entry-time-only, which systematically missed the FRESHEST disclosures: corp-events
+  // refreshes elsewhere in the nightly run, and an 8-K landing between logging and the print never got
+  // a second look. Re-check nightly: ADD (never clear) a flag whenever the disclosure DATE precedes the
+  // rec's print — provably pre-print regardless of when we notice it, so the annotation stays honest
+  // even when stamped onto an already-settled rec.
+  let restamped = 0;
+  for (const rec of byId.values()) {
+    if (rec.catalystFlag) continue;
+    const flag = flagFor(rec.symbol);
+    if (flag && Date.parse(flag.date) < Date.parse(rec.earningsDate)) { rec.catalystFlag = flag; restamped++; }
+  }
+  if (restamped) console.log(`catalyst overlay: re-stamped ${restamped} previously-logged recs (disclosure predates their print)`);
 
   // ── 2. SETTLE at the POST-PRINT (primary), then fill held-to-expiry (secondary) ──
   const openRecs = [...byId.values()].filter((r) => r.status !== "settled" || rec_needsExpiry(r));
