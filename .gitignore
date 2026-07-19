@@ -32,3 +32,8 @@ sql/views_local.sql
 # run-tick orchestrator lock (NAS/local ticks)
 .tick.lock
 .hf-cache/
+
+# Licensed sell-side research PDFs dropped in the repo root for ingestion (scripts/ingest-research.ts
+# reads them in place). NEVER committed — the corpus is licensed and this repo is PUBLIC.
+/*.pdf
+/*.PDF

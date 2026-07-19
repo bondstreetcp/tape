@@ -486,6 +486,16 @@ jobs:
         run: npm run refresh-preview-log
         continue-on-error: true
 
+      # Supabase pause guard: one trivial query so the research store's free tier never hits 7 idle
+      # days and auto-pauses (the 2026-07-19 outage). Redundant with the NAS tick's same step — either
+      # runner alone keeps it alive. Skips cleanly if the RESEARCH_DATABASE_URL secret isn't set.
+      - name: Keep the research DB alive
+        if: ${{ env.FULL == 'true' }}
+        env:
+          RESEARCH_DATABASE_URL: ${{ secrets.RESEARCH_DATABASE_URL }}
+        run: npm run ping-research-db
+        continue-on-error: true
+
       - name: Refresh options flow (S&P 500)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-flow

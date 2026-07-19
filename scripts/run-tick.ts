@@ -84,6 +84,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh earnings-play track record", cmd: "npm run refresh-trade-log", when: "full" },
   { name: "Refresh preview accuracy record (predicted prints)", cmd: "npm run refresh-preview-log", when: "full" }, // FLASH-tier forecasts + code-graded settles
+  // One trivial query so the Supabase free tier never sees 7 idle days and auto-pauses the research
+  // store (the 2026-07-19 outage — the corpus went dark for ~2 weeks). Skips cleanly without the env.
+  { name: "Keep the research DB alive (Supabase pause guard)", cmd: "npm run ping-research-db", when: "full" },
 
   { name: "Refresh options flow (S&P 500)", cmd: "npm run refresh-flow", when: "full" },
   { name: "Refresh Trump stock calls", cmd: "npm run refresh-trump-truth", when: "full" },
