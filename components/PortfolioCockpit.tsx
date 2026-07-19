@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
+import { buildHedge } from "@/lib/hedge";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
@@ -163,7 +164,6 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     () => computeCrowding(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.corr),
     [stats.holdings, risk.corr],
   );
-  const hedgeNotional = stats.beta == null ? null : stats.beta * stats.gross; // Σ value·β = $ SPY to short to flatten
   const anyFactor = tilts.some((t) => t.coverage > 0);
 
   // --- Predicted risk from the holdings' own return history (client-side; sizes never leave the browser). ---
@@ -205,6 +205,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     push("Momentum tilt", momentumOf(tilts), momentumOf(tiltsAfter), (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}σ`, null);
     return rows;
   }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter]);
+
+  // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
+  const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -534,14 +537,28 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
 
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-                    <div className="mb-1 text-[13px] font-semibold">Beta-neutral hedge <InfoDot term="Beta-neutral hedge" /></div>
-                    {hedgeNotional == null || Math.abs(hedgeNotional) < 1 ? (
-                      <p className="text-[12px] text-[var(--text-4)]">{stats.beta == null ? "No betas available for this book." : "Book is already ≈ market-neutral."}</p>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold">Suggested hedge <InfoDot term="Beta-neutral hedge" /></span>
+                      <span className="text-[11px] text-[var(--text-4)]">flatten β + top tilts</span>
+                    </div>
+                    {hedge.length === 0 ? (
+                      <p className="text-[12px] text-[var(--text-4)]">{stats.beta == null ? "No betas available for this book." : "Book is already ≈ market- and style-neutral."}</p>
                     ) : (
-                      <p className="text-[13px] leading-relaxed text-[var(--text-2)]">
-                        {hedgeNotional >= 0 ? "Short" : "Buy"} <span className="font-mono font-semibold">{money(Math.abs(hedgeNotional))}</span> of <span className="font-semibold">SPY</span> to flatten market risk
-                        <span className="text-[var(--text-4)]"> — nets out the book&apos;s {stats.beta!.toFixed(2)}β on {money(stats.gross)} gross.</span>
-                      </p>
+                      <>
+                        <div className="space-y-1">
+                          {hedge.map((l) => (
+                            <div key={l.etf} className="flex items-center gap-2 text-[12px]">
+                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.action === "Short" ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#22c55e]/15 text-[#22c55e]"}`}>{l.action}</span>
+                              <span className="w-12 shrink-0 font-mono font-semibold text-[var(--accent)]">{l.etf}</span>
+                              <span className="w-20 shrink-0 text-right font-mono tabular-nums text-[var(--text-2)]">{money(l.notional)}</span>
+                              <span className="truncate text-[var(--text-4)]" title={l.name}>cuts {l.cuts}{l.exact ? "" : " ≈"}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                          Market leg is exact (Σ value·β of SPY). Style legs are first-order (a factor ETF ≈ +1σ on its factor) — a starting basket to cut your biggest bets, not an optimizer&apos;s answer.
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>
