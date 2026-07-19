@@ -66,7 +66,7 @@ export async function GET(req: Request) {
     // optimizer's hedge legs can be applied in the what-if simulator.
     const etf = etfMeta[sym];
     if (etf && etf.price > 0) {
-      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: "ETF/Index", beta: etf.beta, ret: null };
+      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: "ETF/Index", beta: etf.beta, ret: etf.returns?.[tf] ?? null };
       continue;
     }
     missing.push(sym);

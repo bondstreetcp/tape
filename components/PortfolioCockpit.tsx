@@ -206,8 +206,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     }
     push("Top-name conc.", stats.concentration.top1, statsAfter.concentration.top1, (x) => `${(x * 100).toFixed(0)}%`, true);
     push("Momentum tilt", momentumOf(tilts), momentumOf(tiltsAfter), (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}σ`, null);
+    if (stats.ret != null && statsAfter.ret != null)
+      push(`Return (${tf.toUpperCase()})`, stats.ret, statsAfter.ret, (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`, null);
     return rows;
-  }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter]);
+  }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter, tf]);
 
   // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
   const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);

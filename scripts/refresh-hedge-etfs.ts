@@ -10,6 +10,18 @@ import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
 import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
+import { sliceSeries, seriesChangePct } from "../lib/compute";
+import { TIMEFRAME_KEYS } from "../lib/timeframes";
+
+/** Timeframe returns (%) from a daily series, via the app's canonical slice+change (lib/compute), so an
+ *  ETF's return reads the same way as a stock's. `now` = the last bar, so it's as-of the data date. */
+function etfReturns(daily: [number, number][]): Record<string, number | null> {
+  const pts = daily.map(([t, c]) => ({ t, c }));
+  const now = daily.length ? daily[daily.length - 1][0] : 0;
+  const out: Record<string, number | null> = {};
+  for (const tf of TIMEFRAME_KEYS) out[tf] = seriesChangePct(sliceSeries(pts, pts, tf, now));
+  return out;
+}
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
@@ -38,7 +50,7 @@ async function main() {
   const market = await loadMarket();
   if (!market) console.error("hedge-etfs: no data/market.json — ETF betas will be null (run refresh-betas first)");
 
-  const meta: Record<string, { name: string; price: number; beta: number | null }> = {};
+  const meta: Record<string, { name: string; price: number; beta: number | null; returns: Record<string, number | null> }> = {};
   let ok = 0, fail = 0;
   for (const { etf, name } of HEDGE_ETFS) {
     const daily = await fetchDaily(etf);
@@ -46,9 +58,9 @@ async function main() {
     await fs.writeFile(path.join(DIR, etf + ".json"), JSON.stringify({ daily, intraday: [] }));
     const price = daily[daily.length - 1][1];
     const beta = market ? computeBeta(bucketByDay(daily), market, 1300) : null;
-    meta[etf] = { name, price, beta: beta != null ? Math.round(beta * 1000) / 1000 : null };
+    meta[etf] = { name, price, beta: beta != null ? Math.round(beta * 1000) / 1000 : null, returns: etfReturns(daily) };
     ok++;
-    console.log(`hedge-etfs: ${etf} ${daily.length}d  px ${price.toFixed(2)}  β ${beta != null ? beta.toFixed(2) : "—"}`);
+    console.log(`hedge-etfs: ${etf} ${daily.length}d  px ${price.toFixed(2)}  β ${beta != null ? beta.toFixed(2) : "—"}  ytd ${meta[etf].returns.ytd?.toFixed(1) ?? "—"}%`);
   }
   if (ok > 0) await fs.writeFile(path.join(DATA, "etf-meta.json"), JSON.stringify({ generatedAt: new Date().toISOString(), etfs: meta }));
   console.log(`hedge-etfs: wrote ${ok}/${HEDGE_ETFS.length} series + etf-meta (${fail} failed)`);

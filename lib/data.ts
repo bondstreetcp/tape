@@ -17,7 +17,7 @@ export async function loadMarketSeries(): Promise<Daily | null> {
   }
 }
 
-export interface EtfMeta { name: string; price: number; beta: number | null }
+export interface EtfMeta { name: string; price: number; beta: number | null; returns?: Record<string, number | null> }
 
 /** Hedge-menu ETF price + beta (refresh-hedge-etfs) so /api/portfolio can price ETFs. {} if not built. */
 export async function loadEtfMeta(): Promise<Record<string, EtfMeta>> {
