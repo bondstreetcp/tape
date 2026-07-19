@@ -16,7 +16,9 @@ const BATCH = 200;
 
 async function main() {
   const syms = new Set<string>(HEDGE_ETFS.map((e) => e.etf));
-  for (const u of ["sp500", "nasdaq100", "russell1000"]) {
+  // Full US coverage (matches /api/portfolio's US_UNIVERSES) so small-caps beyond the Russell 1000 also
+  // get a liquidity read; russell3000 is the long tail, the others backfill the freshest names.
+  for (const u of ["sp500", "nasdaq100", "russell1000", "sp1500", "russell3000"]) {
     try {
       const j = JSON.parse(await fs.readFile(path.join(DATA, u, "snapshot.json"), "utf8"));
       for (const s of j.stocks ?? []) if (s.symbol) syms.add(String(s.symbol).toUpperCase());
