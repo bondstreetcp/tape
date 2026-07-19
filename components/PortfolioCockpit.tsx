@@ -39,6 +39,7 @@ const px = (n: number | null | undefined) => (n == null ? "—" : `$${n.toFixed(
 const pctAum = (frac: number | null | undefined, signed: boolean): string =>
   frac == null ? "—" : `${signed ? (frac >= 0 ? "+" : "−") : ""}${Math.abs(frac * 100).toFixed(0)}%`;
 const ymd = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
+const fmtDays = (d: number | null | undefined): string => (d == null ? "—" : d < 0.1 ? "<0.1d" : d < 10 ? `${d.toFixed(1)}d` : `${Math.round(d)}d`);
 
 const SHOCKS = [-10, -5, -2, 2, 5, 10];
 const pos = (n: number) => n >= 0;
@@ -208,6 +209,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     push("Momentum tilt", momentumOf(tilts), momentumOf(tiltsAfter), (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}σ`, null);
     if (stats.ret != null && statsAfter.ret != null)
       push(`Return (${tf.toUpperCase()})`, stats.ret, statsAfter.ret, (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`, null);
+    if (stats.liquidity && statsAfter.liquidity && (stats.liquidity.pctOver5d > 0.005 || statsAfter.liquidity.pctOver5d > 0.005))
+      push("% gross >5d exit", stats.liquidity.pctOver5d * 100, statsAfter.liquidity.pctOver5d * 100, (x) => `${x.toFixed(0)}%`, true);
     return rows;
   }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter, tf]);
   // Sectors whose net exposure (% of gross) shifts most under the trade — sector-ETF hedges land here.
@@ -586,6 +589,39 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Mega &gt;$200B · Large $10–200B · Mid $2–10B · Small $300M–2B · Micro &lt;$300M. ETFs use a representative bucket.
+                  </p>
+                </div>
+              )}
+
+              {/* Liquidity / exit */}
+              {stats.liquidity && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Liquidity <span className="text-[11px] font-normal text-[var(--text-4)]">(days to exit @ 20% ADV)</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">{stats.liquidity.coverage < 0.999 ? `${Math.round(stats.liquidity.coverage * 100)}% covered` : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <Stat label="Days to exit (p50)" value={fmtDays(stats.liquidity.daysP50)} />
+                    <Stat label="Days to exit (p95)" value={fmtDays(stats.liquidity.daysP95)} color={stats.liquidity.daysP95 != null && stats.liquidity.daysP95 > 5 ? "#ef4444" : undefined} />
+                    <Stat label="% gross >1 day" value={pct(stats.liquidity.pctOver1d * 100, 0)} />
+                    <Stat label="% gross >5 days" value={pct(stats.liquidity.pctOver5d * 100, 0)} color={stats.liquidity.pctOver5d > 0.1 ? "#ef4444" : undefined} />
+                  </div>
+                  {stats.liquidity.leastLiquid.filter((x) => x.days >= 0.25).length > 0 && (
+                    <div className="mt-2.5">
+                      <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Slowest to exit</div>
+                      <div className="space-y-0.5">
+                        {stats.liquidity.leastLiquid.filter((x) => x.days >= 0.25).map((x) => (
+                          <div key={x.symbol} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-16 shrink-0 font-mono font-semibold text-[var(--accent)]">{x.symbol}</span>
+                            <span className="font-mono tabular-nums text-[var(--text-3)]">{fmtDays(x.days)}</span>
+                            <span className="ml-auto font-mono tabular-nums text-[var(--text-4)]">{money(x.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                    Days to unwind each position trading ≤20% of its 3-month average daily volume; p95 = time to exit nearly the whole book. A liquid-ETF hedge cuts this.
                   </p>
                 </div>
               )}

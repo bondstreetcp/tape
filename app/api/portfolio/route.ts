@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
-import { loadSnapshot, loadEtfMeta } from "@/lib/data";
+import { loadSnapshot, loadEtfMeta, loadAdv } from "@/lib/data";
 import { HEDGE_ETF_SECTOR, HEDGE_ETF_CAP } from "@/lib/hedge";
 import type { NameData } from "@/lib/portfolio";
 import { parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
@@ -52,15 +52,16 @@ export async function GET(req: Request) {
 
   if (!symbols.length) return NextResponse.json({ data: {}, missing: [], tf, asOf: null });
 
-  const [names, betas, etfMeta] = await Promise.all([buildNameMap(tf), loadBetas(), loadEtfMeta()]);
+  const [names, betas, etfMeta, adv] = await Promise.all([buildNameMap(tf), loadBetas(), loadEtfMeta(), loadAdv()]);
 
   const data: Record<string, NameData> = {};
   const missing: string[] = [];
   for (const sym of new Set(symbols)) {
+    const advDollar = adv[sym] > 0 ? adv[sym] : undefined;
     const nd = names.get(sym);
     if (nd && nd.price > 0) {
       const beta = betas[sym];
-      data[sym] = { ...nd, beta: typeof beta === "number" && Number.isFinite(beta) ? beta : null };
+      data[sym] = { ...nd, beta: typeof beta === "number" && Number.isFinite(beta) ? beta : null, advDollar };
       continue;
     }
     // ETF fallback (hedge-menu names aren't in the stock snapshots): price them from etf-meta so the
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
     if (etf && etf.price > 0) {
       // Sector ETFs carry their GICS sector so a sector-ETF hedge nets against the book's own sector
       // exposure in the what-if; broad/style ETFs stay "ETF/Index" (they span sectors).
-      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: HEDGE_ETF_SECTOR[sym] ?? "ETF/Index", capBucket: HEDGE_ETF_CAP[sym], beta: etf.beta, ret: etf.returns?.[tf] ?? null };
+      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: HEDGE_ETF_SECTOR[sym] ?? "ETF/Index", capBucket: HEDGE_ETF_CAP[sym], beta: etf.beta, ret: etf.returns?.[tf] ?? null, advDollar };
       continue;
     }
     missing.push(sym);

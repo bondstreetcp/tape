@@ -17,6 +17,7 @@ export interface NameData {
   sector?: string;
   marketCap?: number;
   capBucket?: string; // explicit size bucket (ETFs); stocks are bucketed from marketCap
+  advDollar?: number; // 3-month average daily $ volume (liquidity)
   beta?: number | null; // vs the market (SPY), from the stored series
   ret?: number | null; // % return over the selected timeframe
 }
@@ -53,6 +54,16 @@ export interface CapExposure {
   weight: number; // net value / gross
 }
 
+/** Liquidity / exit read: how long to unwind the book at PARTICIPATION of each name's ADV. */
+export interface Liquidity {
+  coverage: number; // share of gross with ADV data
+  daysP50: number | null; // exposure-weighted median days-to-liquidate
+  daysP95: number | null; // 95th %ile — how long to get out of nearly all of it
+  pctOver1d: number; // share of gross in names that take > 1 day to exit
+  pctOver5d: number; // ... > 5 days
+  leastLiquid: { symbol: string; days: number; value: number }[]; // slowest to exit
+}
+
 /**
  * Exposures as fractions of account equity (AUM) — the way an allocator reads a book
  * ("133% net long") rather than a pod's dollar P&L. Signed like their $ counterparts;
@@ -82,6 +93,7 @@ export interface PortfolioStats {
   aum: number | null; // account equity (the % divisor); null when not provided or ≤ 0
   betaDollar: number | null; // Σ value·β — beta-adjusted net $ exposure (null if no betas)
   exposurePct: ExposurePct | null; // exposures as fractions of AUM; null without a usable AUM
+  liquidity: Liquidity | null; // days-to-liquidate read; null without ADV data
 }
 
 /**
@@ -124,6 +136,31 @@ export function mergePositions(base: Position[], delta: Position[]): Position[] 
 }
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+const PARTICIPATION = 0.2; // trade up to 20% of a name's ADV per day when unwinding
+
+/** Days-to-liquidate per holding (|value| / (20% · ADV)) rolled up into a book liquidity read. */
+export function computeLiquidity(holdings: Holding[], gross: number): Liquidity | null {
+  const liq = holdings
+    .filter((h) => typeof h.advDollar === "number" && (h.advDollar as number) > 0)
+    .map((h) => ({ symbol: h.symbol, value: h.value, days: Math.abs(h.value) / (PARTICIPATION * (h.advDollar as number)) }));
+  if (!liq.length || !gross) return null;
+  const liqGross = sum(liq.map((x) => Math.abs(x.value)));
+  const pctOver = (d: number) => sum(liq.filter((x) => x.days > d).map((x) => Math.abs(x.value))) / gross;
+  const sorted = [...liq].sort((a, b) => a.days - b.days);
+  let cum = 0, daysP50: number | null = null, daysP95: number | null = null;
+  for (const x of sorted) {
+    cum += Math.abs(x.value) / liqGross;
+    if (daysP50 == null && cum >= 0.5) daysP50 = x.days;
+    if (daysP95 == null && cum >= 0.95) daysP95 = x.days;
+  }
+  return {
+    coverage: liqGross / gross,
+    daysP50, daysP95,
+    pctOver1d: pctOver(1), pctOver5d: pctOver(5),
+    leastLiquid: [...liq].sort((a, b) => b.days - a.days).slice(0, 4),
+  };
+}
 
 export function computePortfolio(
   positions: Position[],
@@ -198,7 +235,7 @@ export function computePortfolio(
       }
     : null;
 
-  return { holdings, missing, gross, net, longValue, shortValue, bySector, byCap, concentration, beta, betaCoverage, ret, aum: usableAum, betaDollar, exposurePct };
+  return { holdings, missing, gross, net, longValue, shortValue, bySector, byCap, concentration, beta, betaCoverage, ret, aum: usableAum, betaDollar, exposurePct, liquidity: computeLiquidity(holdings, gross) };
 }
 
 /** Estimated $ P&L (and % of gross) from a broad market move, via each holding's beta: Σ value·beta·move. */

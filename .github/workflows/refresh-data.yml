@@ -277,6 +277,13 @@ jobs:
         run: npm run refresh-hedge-etfs
         continue-on-error: true
 
+      # Average daily $ volume for the cockpit's liquidity / days-to-liquidate read. One batched Yahoo
+      # quote pass over the US universe + hedge ETFs; the price series carry no volume, so this fills it.
+      - name: Refresh ADV (portfolio liquidity)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-adv
+        continue-on-error: true
+
       # Realized-vol cone screener — annualized RV cone (10/21/63/126/252d) + where current RV sits in each
       # name's own history, across EVERY universe. Pure local math off the stored series; no fetch, no LLM.
       - name: Refresh realized-vol cone

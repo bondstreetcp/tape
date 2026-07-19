@@ -17,6 +17,16 @@ export async function loadMarketSeries(): Promise<Daily | null> {
   }
 }
 
+/** Average daily $ volume per symbol (refresh-adv) for the liquidity read. {} if not built yet. */
+export async function loadAdv(): Promise<Record<string, number>> {
+  try {
+    const raw = await fs.readFile(path.join(DATA_DIR, "adv.json"), "utf8");
+    return ((JSON.parse(raw) as { adv?: Record<string, number> }).adv ?? {});
+  } catch {
+    return {};
+  }
+}
+
 export interface EtfMeta { name: string; price: number; beta: number | null; returns?: Record<string, number | null> }
 
 /** Hedge-menu ETF price + beta (refresh-hedge-etfs) so /api/portfolio can price ETFs. {} if not built. */

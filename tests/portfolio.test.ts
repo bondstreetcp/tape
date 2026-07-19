@@ -123,6 +123,23 @@ test("capBucketOf + byCap: bucket stocks by marketCap, ETFs by explicit capBucke
   assert.deepEqual(s.byCap.map((c) => c.bucket), ["Mega", "Mid", "Small"]); // CAP_ORDER, present-only
 });
 
+test("computeLiquidity: days-to-liquidate + exit concentration", () => {
+  const data = new Map<string, NameData>([
+    ["LIQ", { symbol: "LIQ", price: 100, advDollar: 100e6 }], // very liquid
+    ["ILLIQ", { symbol: "ILLIQ", price: 100, advDollar: 5e4 }], // thin
+    ["NOADV", { symbol: "NOADV", price: 100 }], // no ADV → excluded from the read
+  ]);
+  const s = computePortfolio(parsePositions("LIQ 1000\nILLIQ 1000\nNOADV 500"), data);
+  const L = s.liquidity!;
+  approx(L.coverage, 0.8); // $200k of $250k gross has ADV
+  assert.equal(L.leastLiquid[0].symbol, "ILLIQ");
+  approx(L.leastLiquid[0].days, 10); // $100k / (0.2 · $50k ADV)
+  approx(L.daysP50!, 100000 / (0.2 * 100e6)); // LIQ dominates the median (0.005d)
+  approx(L.daysP95!, 10); // ILLIQ is the tail
+  approx(L.pctOver5d, 0.4); // 40% of gross takes > 5 days to exit
+  assert.equal(computePortfolio(parsePositions("NOADV 500"), data).liquidity, null); // no ADV → null
+});
+
 test("mergePositions: sum deltas, drop net-zero, add new names (what-if)", () => {
   const base: Position[] = [{ symbol: "AAPL", shares: 100 }, { symbol: "MSFT", shares: 50 }, { symbol: "F", shares: 100 }];
   const after = mergePositions(base, [
