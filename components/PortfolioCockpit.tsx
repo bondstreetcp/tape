@@ -18,6 +18,7 @@ const STORE_KEY = "tape.portfolio.positions";
 const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
 const BASIS_KEY = "tape.portfolio.basis"; // "$" | "%"
 const WHATIF_KEY = "tape.portfolio.whatif"; // proposed trades (delta book) for the what-if sim
+const ADVANCED_KEY = "tape.portfolio.advanced"; // "1" = show the pro analytics cluster
 const EXAMPLE = `AAPL 100
 MSFT 60
 NVDA 40
@@ -69,6 +70,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [whatIfText, setWhatIfText] = useState(""); // proposed trades (SYMBOL SHARES; signed)
   const [hedgeNeutral, setHedgeNeutral] = useState(false); // optimizer: flatten market beta
   const [hedgeMaxLegs, setHedgeMaxLegs] = useState<number | null>(null); // optimizer: cap the basket size
+  const [advanced, setAdvanced] = useState(false); // progressive disclosure — hide the pro cluster by default
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -78,6 +80,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
       const savedAum = localStorage.getItem(AUM_KEY); if (savedAum != null) setAumText(savedAum);
       setShowPct(localStorage.getItem(BASIS_KEY) === "%");
       const savedWi = localStorage.getItem(WHATIF_KEY); if (savedWi) { setWhatIfText(savedWi); setWhatIf(true); }
+      setAdvanced(localStorage.getItem(ADVANCED_KEY) === "1");
     } catch { /* ignore */ }
     hydrated.current = true;
   }, []);
@@ -85,6 +88,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     if (!hydrated.current) return;
     try { localStorage.setItem(WHATIF_KEY, whatIfText); } catch { /* ignore */ }
   }, [whatIfText]);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(ADVANCED_KEY, advanced ? "1" : "0"); } catch { /* ignore */ }
+  }, [advanced]);
   useEffect(() => {
     if (!hydrated.current) return;
     try { localStorage.setItem(STORE_KEY, text); } catch { /* ignore */ }
@@ -368,8 +375,13 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
         {/* ---- Analytics ---- */}
         <div>
           {!hasBook ? (
-            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
-              Enter positions on the left (or hit <button onClick={() => setText(EXAMPLE)} className="text-[var(--accent)] underline">Example</button>) to see exposure, concentration, beta &amp; a market-shock scenario.
+            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-14 text-center">
+              <div className="text-lg font-semibold">See your portfolio&apos;s risk in one page</div>
+              <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--text-3)]">
+                Paste your holdings on the left — or <label className="cursor-pointer text-[var(--accent)] underline">import a CSV<input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} /></label> from Schwab, Fidelity, or Robinhood — and get a plain-English read: how concentrated you are, how much you&apos;d move with the market, what a crash would cost, and how to hedge it.
+              </p>
+              <button onClick={() => setText(EXAMPLE)} className="mt-4 rounded-lg border border-[var(--accent)] bg-[var(--accent)]/10 px-4 py-2 text-[13px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20">Try an example portfolio</button>
+              <p className="mt-3 text-[11px] text-[var(--text-4)]">Nothing leaves your browser — your book is saved locally.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -692,7 +704,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 </div>
               )}
 
-              {/* Risk decomposition: factor tilts + crowding + hedge */}
+              {/* Advanced analytics — collapsed by default for a retail-first view */}
+              <button onClick={() => setAdvanced((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-left text-[13px] font-semibold hover:border-[var(--border-strong)]">
+                <span>Advanced analytics <span className="ml-1 text-[11px] font-normal text-[var(--text-4)]">factor tilts · crowding · hedge optimizer</span></span>
+                <span className="text-[11px] text-[var(--text-4)]">{advanced ? "▾ hide" : "▸ show"}</span>
+              </button>
+              {advanced && (<>
               {risk.cappedFrom && (
                 <p className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-3 py-2 text-[12px] text-[#f59e0b]">
                   Factor tilts &amp; crowding cover your {risk.cap} largest positions — your book has {risk.cappedFrom} names. (Exposure, beta &amp; the shock scenario above still cover the whole book.)
@@ -837,6 +854,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                 </div>
               </div>
+              </>)}
 
               {/* Holdings */}
               <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
