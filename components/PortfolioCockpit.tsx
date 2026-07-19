@@ -6,6 +6,7 @@ import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressSc
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { parseBrokerCsv } from "@/lib/brokerImport";
+import { summarizeBook } from "@/lib/bookSummary";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -265,6 +266,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs],
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
+  // Retail TL;DR — a plain-English read of the numbers below (deterministic, no LLM).
+  const bookSummary = useMemo(() => summarizeBook({
+    stats, risk: portRisk, tilts,
+    marketDown10Dollar: hasBook ? scenarioPnL(stats, -10).dollar : null,
+    crashDollar: stress.find((s) => s.name === "GFC 2008")?.dollar ?? null,
+  }), [stats, portRisk, tilts, hasBook, stress]);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -366,6 +373,27 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Plain-English summary — the retail read */}
+              {bookSummary.headline.length > 0 && (
+                <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--surface)] p-4">
+                  <div className="mb-1.5 text-[13px] font-semibold">The read</div>
+                  <div className="space-y-1 text-[13px] leading-relaxed text-[var(--text-2)]">
+                    {bookSummary.headline.map((h, i) => <p key={i}>{h}</p>)}
+                  </div>
+                  {bookSummary.flags.length > 0 && (
+                    <div className="mt-2.5 space-y-1">
+                      {bookSummary.flags.map((f, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-[12px]">
+                          <span className="mt-[1px]">{f.level === "warn" ? "⚠️" : f.level === "ok" ? "✅" : "•"}</span>
+                          <span className="text-[var(--text-3)]">{f.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] text-[var(--text-4)]">A plain-language read of the numbers below — research, not advice.</p>
+                </div>
+              )}
+
               {/* Exposure summary */}
               <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
