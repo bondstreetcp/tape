@@ -57,6 +57,26 @@ test("computePortfolioRisk: perfect hedge → ~0 vol, full diversification", () 
   approx(risk.diversificationBenefit, 1, 1e-9);
 });
 
+test("alignDailyReturns: market series aligns to the same dates", () => {
+  const s = alignDailyReturns({ AAPL: series([100, 110, 99], 1000) }, 252, series([200, 210, 205], 1000));
+  assert.deepEqual(s.dates, [1001 * DAY, 1002 * DAY]);
+  assert.ok(s.market);
+  approx(s.market![0], 210 / 200 - 1);
+  approx(s.market![1], 205 / 210 - 1);
+});
+
+test("computePortfolioRisk: market split — fully systematic vs no market → null", () => {
+  const m = Array.from({ length: 40 }, (_, i) => ((i * 7) % 11 - 5) / 100);
+  const aligned = { dates: m.map((_, i) => (1000 + i) * DAY), returns: { AAPL: m }, market: m };
+  const sys = computePortfolioRisk([{ symbol: "AAPL", value: 10000 }], aligned)!; // moves exactly with market
+  approx(sys.factorShare!, 1, 1e-9); // R² = 1
+  assert.ok(sys.volSpecificDollar! < 1e-6 * sys.volAnnDollar, `specific ${sys.volSpecificDollar} ≈ 0`); // negligible vs total
+  approx(sys.volFactorDollar!, sys.volAnnDollar, 1e-3);
+  const none = computePortfolioRisk([{ symbol: "AAPL", value: 10000 }], mk({ AAPL: m }))!; // no market vector
+  assert.equal(none.factorShare, null);
+  assert.equal(none.volFactorDollar, null);
+});
+
 test("computePortfolioRisk: coverage < 1 without series; null when too short", () => {
   const r = Array.from({ length: 30 }, (_, i) => ((i * 7) % 11 - 5) / 100);
   const risk = computePortfolioRisk(

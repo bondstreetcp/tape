@@ -36,6 +36,11 @@ async function main() {
   if (market.length < 120) { console.error("betas: no ^GSPC market series — aborting (keep previous file)"); process.exit(1); }
   console.log(`betas: market (^GSPC) ${market.length} days`);
 
+  // Persist the market series too — the Portfolio cockpit's risk read splits the book's predicted
+  // volatility into systematic (market) vs stock-specific by regressing on this (lib/portfolioRisk).
+  const mw = await writeFeedGuarded("market.json", { generatedAt: new Date().toISOString(), symbol: "^GSPC", daily: market });
+  if (!mw.written) console.error(`refresh-betas: market.json write blocked — ${mw.reason}`);
+
   const syms = new Set<string>();
   for (const u of ["sp500", "nasdaq100", "russell1000"]) {
     try {

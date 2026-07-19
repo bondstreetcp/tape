@@ -9,7 +9,7 @@
  * unit-tested (tests/portfolioRisk.test.ts). Doctrine: code computes the stat, no LLM.
  */
 
-import { bucketByDay, type Daily } from "./pairs";
+import { bucketByDay, correlation, type Daily } from "./pairs";
 
 const TRADING_DAYS = 252;
 const mean = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
@@ -23,7 +23,25 @@ function std(x: number[]): number {
 export interface AlignedReturns {
   dates: number[]; // common day timestamps aligned to each return vector (ascending; length = nDays)
   returns: Record<string, number[]>; // SYMBOL(upper) -> simple daily returns on `dates`
+  market?: number[]; // market (^GSPC) simple daily returns on `dates` — enables the systematic split
 }
+
+const intersectDays = (acc: Set<number> | null, days: Set<number>): Set<number> => {
+  if (acc == null) return days;
+  const next = new Set<number>();
+  for (const d of days) if (acc.has(d)) next.add(d);
+  return next;
+};
+// Simple daily returns of a price map over `level` dates; null if any date is missing (keeps vectors aligned).
+const returnsOn = (m: Map<number, number>, level: number[]): number[] | null => {
+  const r: number[] = [];
+  for (let i = 1; i < level.length; i++) {
+    const p0 = m.get(level[i - 1]), p1 = m.get(level[i]);
+    if (p0 == null || p1 == null || p0 <= 0) return null;
+    r.push(p1 / p0 - 1);
+  }
+  return r;
+};
 
 /**
  * Align many daily [ts,price] series onto their SHARED trading days (last `lookback`) and return each
@@ -31,40 +49,37 @@ export interface AlignedReturns {
  * then intersects — every return vector is then the same length + same dates, which the joint-matrix
  * historical-sim VaR and risk-contribution math require. A name with no shared history is omitted.
  */
-export function alignDailyReturns(seriesBySymbol: Record<string, Daily>, lookback = TRADING_DAYS): AlignedReturns {
+export function alignDailyReturns(
+  seriesBySymbol: Record<string, Daily>,
+  lookback = TRADING_DAYS,
+  market?: Daily,
+): AlignedReturns {
   const syms = Object.keys(seriesBySymbol);
   const priceMaps: Record<string, Map<number, number>> = {};
   let common: Set<number> | null = null;
   for (const s of syms) {
     const bucket = bucketByDay(seriesBySymbol[s] || []);
     priceMaps[s] = new Map<number, number>(bucket);
-    if (bucket.length < 2) continue; // can't form a return — don't let it constrain the shared axis
-    const days = new Set<number>(bucket.map(([t]) => t));
-    if (common == null) {
-      common = days;
-    } else {
-      const next = new Set<number>();
-      for (const d of days) if (common.has(d)) next.add(d);
-      common = next;
-    }
+    // a name with <2 points can't form a return — don't let it constrain the shared axis
+    if (bucket.length >= 2) common = intersectDays(common, new Set<number>(bucket.map(([t]) => t)));
   }
+  // Fold the market series into the same shared axis (it trades every day, so it won't shrink the window).
+  const marketBucket = market ? bucketByDay(market) : null;
+  const marketMap = marketBucket && marketBucket.length >= 2 ? new Map<number, number>(marketBucket) : null;
+  if (marketMap) common = intersectDays(common, new Set<number>(marketBucket!.map(([t]) => t)));
+
   let level = common ? Array.from(common).sort((a, b) => a - b) : [];
   if (level.length > lookback + 1) level = level.slice(level.length - (lookback + 1));
 
   const returns: Record<string, number[]> = {};
-  for (const s of syms) {
-    const m = priceMaps[s];
-    if (level.length < 2 || m.size < 2) continue;
-    const r: number[] = [];
-    let ok = true;
-    for (let i = 1; i < level.length; i++) {
-      const p0 = m.get(level[i - 1]), p1 = m.get(level[i]);
-      if (p0 == null || p1 == null || p0 <= 0) { ok = false; break; }
-      r.push(p1 / p0 - 1);
+  if (level.length >= 2) {
+    for (const s of syms) {
+      const r = priceMaps[s].size >= 2 ? returnsOn(priceMaps[s], level) : null;
+      if (r && r.length) returns[s.toUpperCase()] = r;
     }
-    if (ok && r.length) returns[s.toUpperCase()] = r;
   }
-  return { dates: level.slice(1), returns };
+  const marketRet = marketMap && level.length >= 2 ? returnsOn(marketMap, level) : null;
+  return { dates: level.slice(1), returns, ...(marketRet ? { market: marketRet } : {}) };
 }
 
 export interface RiskContribution {
@@ -79,6 +94,9 @@ export interface PortfolioRisk {
   volAnnDollar: number; // daily × √252
   volAnnPct: number | null; // annualized $ vol / base
   baseIsAum: boolean; // true = % is of AUM, false = of gross
+  factorShare: number | null; // 0..1 — share of variance from the market (R² of P&L on ^GSPC); null if no market series
+  volFactorDollar: number | null; // systematic (market) annualized $ vol
+  volSpecificDollar: number | null; // stock-specific (idiosyncratic) annualized $ vol
   var95Dollar: number; // 1-day 95% historical-sim VaR, as a POSITIVE loss
   var99Dollar: number;
   es95Dollar: number; // expected shortfall (avg of the worst 5% of days), positive loss
@@ -146,6 +164,17 @@ export function computePortfolioRisk(
 
   const base = opts.aum && opts.aum > 0 ? opts.aum : totalGross;
   const volAnn = volDaily * Math.sqrt(TRADING_DAYS);
+
+  // Single-factor (market) decomposition: R² of the book's P&L on the market return is the systematic
+  // share of variance; the rest is stock-specific. Needs the market return vector (else all null).
+  let factorShare: number | null = null, volFactorDollar: number | null = null, volSpecificDollar: number | null = null;
+  if (aligned.market && aligned.market.length === nDays && volDaily > 0) {
+    const r = correlation(pnl, aligned.market);
+    factorShare = Math.max(0, Math.min(1, r * r));
+    volFactorDollar = volAnn * Math.sqrt(factorShare);
+    volSpecificDollar = volAnn * Math.sqrt(1 - factorShare);
+  }
+
   return {
     nDays,
     coverage,
@@ -153,6 +182,9 @@ export function computePortfolioRisk(
     volAnnDollar: volAnn,
     volAnnPct: base > 0 ? volAnn / base : null,
     baseIsAum: !!(opts.aum && opts.aum > 0),
+    factorShare,
+    volFactorDollar,
+    volSpecificDollar,
     var95Dollar: var95,
     var99Dollar: var99,
     es95Dollar: es95,

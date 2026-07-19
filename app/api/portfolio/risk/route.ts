@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
-import { loadSnapshot, loadManySymbolSeries } from "@/lib/data";
+import { loadSnapshot, loadManySymbolSeries, loadMarketSeries } from "@/lib/data";
 import { buildFactorModel, type FactorInput, type FactorKey, type PairCorr } from "@/lib/factors";
 import { corrOf, type Daily } from "@/lib/pairs";
 import { alignDailyReturns } from "@/lib/portfolioRisk";
@@ -89,7 +89,9 @@ export async function GET(req: Request) {
 
   // Aligned daily return matrix over the held names' shared history — the client combines it with the
   // position sizes it never uploads to get predicted vol / VaR / risk contribution (lib/portfolioRisk).
-  const aligned = alignDailyReturns(daily);
+  // The market (^GSPC) series rides along on the same axis so the client can split systematic vs specific.
+  const marketSeries = await loadMarketSeries();
+  const aligned = alignDailyReturns(daily, 252, marketSeries ?? undefined);
 
   return NextResponse.json({ factors, corr, aligned, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
 }

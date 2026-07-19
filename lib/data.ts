@@ -1,9 +1,21 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { Snapshot, StockSeries } from "./types";
+import type { Daily } from "./pairs";
 import { symbolFile } from "./symbolfile";
 
 const DATA_DIR = path.join(process.cwd(), "data");
+
+/** The market (^GSPC) daily [ts,price] series, persisted by refresh-betas. null if not built yet. */
+export async function loadMarketSeries(): Promise<Daily | null> {
+  try {
+    const raw = await fs.readFile(path.join(DATA_DIR, "market.json"), "utf8");
+    const j = JSON.parse(raw) as { daily?: Daily };
+    return Array.isArray(j.daily) && j.daily.length ? j.daily : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function loadSnapshot(universe: string): Promise<Snapshot | null> {
   try {

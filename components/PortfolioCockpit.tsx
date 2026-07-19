@@ -379,6 +379,19 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     <Stat label="Worst day" value={signMoney(portRisk.worstDayDollar)} sub={portRisk.worstDayDate ? ymd(portRisk.worstDayDate) : "—"} color="#ef4444" />
                     <Stat label="Diversification" value={pct(portRisk.diversificationBenefit * 100, 0)} sub="risk cut vs lockstep" color="#22c55e" />
                   </div>
+                  {portRisk.factorShare != null && (
+                    <div className="mt-3">
+                      <div className="mb-1 flex justify-between text-[11px]">
+                        <span className="text-[var(--accent)]">Market {Math.round(portRisk.factorShare * 100)}%{portRisk.volFactorDollar != null ? ` · ${money(portRisk.volFactorDollar)}` : ""}</span>
+                        <span className="text-[#f59e0b]">Stock-specific {Math.round((1 - portRisk.factorShare) * 100)}%{portRisk.volSpecificDollar != null ? ` · ${money(portRisk.volSpecificDollar)}` : ""}</span>
+                      </div>
+                      <div className="flex h-2 overflow-hidden rounded bg-[var(--bg)]">
+                        <div style={{ width: `${portRisk.factorShare * 100}%`, background: "var(--accent)" }} />
+                        <div style={{ width: `${(1 - portRisk.factorShare) * 100}%`, background: "#f59e0b" }} />
+                      </div>
+                      <div className="mt-1 text-[10px] text-[var(--text-4)]">share of variance — market vs stock-picking (R² of the book&apos;s P&amp;L on the S&amp;P 500)</div>
+                    </div>
+                  )}
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Applies the last {portRisk.nDays} trading days of your holdings&apos; joint returns to today&apos;s book. VaR = the loss a 1‑in‑20 (95%) / 1‑in‑100 (99%) day wouldn&apos;t exceed; shortfall = the average of the worst 5% of days. {aum ? "% figures are of account equity." : "Add account equity for % figures (now % of gross)."}
                   </p>
