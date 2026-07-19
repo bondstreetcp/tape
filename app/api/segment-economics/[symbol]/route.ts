@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSegmentSource } from "@/lib/segments";
-import { getCompanyStats } from "@/lib/companyStats";
+import { cachedStats } from "@/lib/companyCache";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   try {
     // stats supplies the reference revenue for the reconciliation gate below (best-effort — a
     // Yahoo blip must not take the feature down, so its failure just skips the gate).
-    const [src, stats] = await Promise.all([getSegmentSource(sym), getCompanyStats(sym).catch(() => null)]);
+    const [src, stats] = await Promise.all([getSegmentSource(sym), cachedStats(sym).catch(() => null)]);
     if (!src) return NextResponse.json({ configured: true, available: false });
 
     const SYSTEM =

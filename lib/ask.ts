@@ -5,10 +5,9 @@
  * GEMINI_API_KEY (https://aistudio.google.com/app/apikey); without it the route
  * reports unconfigured and the UI explains how to add one.
  */
-import { getCompanyStats } from "./companyStats";
-import { getCompanyProfile } from "./companyProfile";
+import { loadCompanyBundle } from "./companyCache";
 import { getNews } from "./news";
-import { getFinancials, type FinPeriod } from "./financials";
+import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
 import { recordUsage } from "./llmUsage";
 
@@ -28,12 +27,12 @@ const pct = (v: number | null) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%
 const r1 = (v: number | null) => (v == null ? "n/a" : v.toFixed(1));
 
 export async function gatherContext(symbol: string, name = ""): Promise<{ name: string; text: string }> {
-  const [stats, profile, news, fin] = await Promise.all([
-    getCompanyStats(symbol).catch(() => null),
-    getCompanyProfile(symbol).catch(() => null),
+  // stats/profile/financials from the baked per-stock cache (local on a hit); only news stays live.
+  const [bundle, news] = await Promise.all([
+    loadCompanyBundle(symbol),
     getNews(name || symbol, 8).catch(() => []),
-    getFinancials(symbol).catch(() => ({ annual: [] as FinPeriod[], quarterly: [] as FinPeriod[] })),
   ]);
+  const { stats, profile, financials: fin } = bundle;
   const display = name || symbol;
   let text = `Company: ${display} (${symbol})\n`;
   if (profile) {
@@ -80,10 +79,7 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
  *  with a filing's narrative when the filing's own financial-statement tables aren't in
  *  the extracted text. Returns "" if nothing useful is available. */
 export async function financialSnapshot(symbol: string): Promise<string> {
-  const [stats, fin] = await Promise.all([
-    getCompanyStats(symbol).catch(() => null),
-    getFinancials(symbol).catch(() => ({ annual: [] as FinPeriod[], quarterly: [] as FinPeriod[] })),
-  ]);
+  const { stats, financials: fin } = await loadCompanyBundle(symbol);
   let text = "";
   if (stats) {
     text += `Market cap ${big(stats.marketCap)}, EV ${big(stats.enterpriseValue)}. `;

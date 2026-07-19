@@ -60,6 +60,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh realized-vol cone", cmd: "npm run refresh-vol-cone", when: "full" },
   { name: "Refresh index valuation", cmd: "npm run refresh-index-valuation", when: "full" },
   { name: "Refresh estimate revisions", cmd: "npm run refresh-estimates", when: "full" },
+  { name: "Bake per-stock cache (stats+financials+profile)", cmd: "npm run refresh-company-cache", when: "full" }, // fetch-heavy: belongs on the fast pipe; budgeted here
   { name: "Refresh holdco NAV", cmd: "npm run refresh-holdco-nav", when: "full" },
   { name: "Refresh insider buys (Form 4)", cmd: "npm run refresh-insiders", when: "full" },
   { name: "Refresh congressional trades", cmd: "npm run refresh-congress", when: "full" },

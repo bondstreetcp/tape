@@ -76,6 +76,10 @@ const CORE = 30, EVENT = 96, SYNTH = 96;
 const FEEDS: FeedSpec[] = [
   // core — rewritten every FULL run; empty on the count-gated ones = definitely broken
   { file: "estimates.json", label: "Estimate revisions", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 100 },
+  // Per-stock cache (stats+financials+profile per symbol → data/company/*) so the NAS stock pages read
+  // local files instead of live-fetching Yahoo+SEC. `count` = cached files on disk; it only grows as
+  // the nightly fills in, so the floor guards against a wipe, not the ramp.
+  { file: "company-cache.json", label: "Per-stock cache", tier: "core", maxAgeHours: CORE, countPath: "count", minCount: 100 },
   { file: "valuation-history.json", label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500, origin: "sec" },
   { file: "buybacks.json", label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300, origin: "sec" },
   { file: "congress.json", label: "Congress trades", tier: "core", maxAgeHours: CORE, countPath: "trades", minCount: 100 },
@@ -161,6 +165,10 @@ function getPath(obj: any, dot: string): unknown {
 }
 function countOf(v: unknown): number | null {
   if (Array.isArray(v)) return v.length;
+  // A precomputed scalar count (e.g. company-cache's "count" = files on disk) IS the count — without
+  // this, countPath at a number returns null and the minCount floor silently no-ops in BOTH the
+  // freshness monitor and writeFeedGuarded (via feedCount).
+  if (typeof v === "number" && Number.isFinite(v)) return v;
   if (v && typeof v === "object") return Object.keys(v).length;
   return null;
 }

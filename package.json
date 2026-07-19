@@ -51,6 +51,7 @@
     "refresh-buybacks": "tsx scripts/refresh-buybacks.ts",
     "refresh-index-valuation": "tsx scripts/refresh-index-valuation.ts",
     "refresh-estimates": "tsx scripts/refresh-estimates.ts",
+    "refresh-company-cache": "tsx scripts/refresh-company-cache.ts",
     "refresh-insiders": "tsx scripts/refresh-insiders.ts",
     "ingest-slack": "tsx scripts/ingest-slack.ts",
     "refresh-congress": "tsx scripts/refresh-congress.ts",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCompanyStats } from "@/lib/companyStats";
+import { cachedStats } from "@/lib/companyCache";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import { getFilings, getFilingText } from "@/lib/edgar";
 import { loadEarningsMove } from "@/lib/earningsMove";
@@ -351,7 +351,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     if (part === "ai") {
       if (!(await llmConfigured())) return NextResponse.json({ ai: null });
       const [stats, news, transcript, quant] = await Promise.all([
-        getCompanyStats(sym).catch(() => null),
+        cachedStats(sym).catch(() => null),
         getNews(sym, 8).catch(() => []),
         // The transcript scrape (Google News) can be slow/flaky — time-bound it so it never blows the
         // function budget; if it doesn't return fast, the preview just skips "since last call".

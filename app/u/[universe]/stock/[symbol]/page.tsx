@@ -4,9 +4,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { peerCohort } from "@/lib/peerCohorts";
 import { xyToPoints } from "@/lib/compute";
-import { getCompanyStats } from "@/lib/companyStats";
-import { getFinancials } from "@/lib/financials";
-import { getCompanyProfile } from "@/lib/companyProfile";
+import { loadCompanyBundle } from "@/lib/companyCache";
 import FinancialsView from "@/components/FinancialsView";
 import SetupNotice from "@/components/SetupNotice";
 import { fetchLiveStock } from "@/lib/liveStock";
@@ -105,12 +103,14 @@ export default async function StockPage({
   }
   peers = [...peers].sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, 30);
 
-  const [xy, stats, financials, profile] = await Promise.all([
+  // stats + financials + profile come from the nightly per-stock cache (data/company/<SYM>.json) —
+  // a single local read instead of three live Yahoo+SEC fetches per render. A cold name / fresh
+  // deploy falls back to a live fetch inside loadCompanyBundle, so nothing shows empty.
+  const [xy, bundle] = await Promise.all([
     liveSeries ? Promise.resolve(liveSeries) : loadSymbolSeries(SYM),
-    getCompanyStats(SYM).catch(() => null),
-    getFinancials(SYM).catch(() => ({ annual: [], quarterly: [] })),
-    getCompanyProfile(SYM).catch(() => null),
+    loadCompanyBundle(SYM),
   ]);
+  const { stats, financials, profile } = bundle;
 
   return (
     <FinancialsView

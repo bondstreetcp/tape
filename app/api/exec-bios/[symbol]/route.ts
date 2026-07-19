@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCompanyProfile } from "@/lib/companyProfile";
+import { cachedProfile } from "@/lib/companyCache";
 import { tickerToCik, getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import type { ExecBio, ExecBiosResponse } from "@/lib/execBios";
@@ -111,7 +111,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ sym
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
 
-  const profile = await getCompanyProfile(sym).catch(() => null);
+  const profile = await cachedProfile(sym).catch(() => null);
   const roster = (profile?.officers ?? []).map((o) => o.name).filter((n): n is string => !!n);
   const base = (extra: Partial<ExecBiosResponse>): ExecBiosResponse => ({ symbol: sym, proxy: null, bios: {}, ...extra });
   const noStore = { headers: { "Cache-Control": "no-store" } };
