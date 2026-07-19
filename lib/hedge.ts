@@ -9,19 +9,26 @@
 
 import type { FactorKey, FactorTilt } from "./factors";
 
-/** Liquid ETF menu the risk-minimizing hedge optimizer solves over (market / style / sector). */
-export const HEDGE_ETFS: { etf: string; name: string }[] = [
+/** Liquid ETF menu the risk-minimizing hedge optimizer solves over (market / style / sector). Sector
+ *  ETFs carry their GICS sector (strings match the stock snapshots), so a sector-ETF hedge nets against
+ *  the book's own sector exposure; broad/style ETFs have none (they span sectors → "ETF/Index"). */
+export const HEDGE_ETFS: { etf: string; name: string; sector?: string }[] = [
   { etf: "SPY", name: "S&P 500" }, { etf: "QQQ", name: "Nasdaq 100" },
   { etf: "IWM", name: "Russell 2000" }, { etf: "MDY", name: "S&P MidCap 400" },
   { etf: "MTUM", name: "Momentum" }, { etf: "VLUE", name: "Value" },
   { etf: "QUAL", name: "Quality" }, { etf: "USMV", name: "Min Vol" },
   { etf: "IWF", name: "Growth" }, { etf: "IWD", name: "Value (R1000)" },
-  { etf: "XLK", name: "Technology" }, { etf: "XLF", name: "Financials" },
-  { etf: "XLE", name: "Energy" }, { etf: "XLV", name: "Health Care" },
-  { etf: "XLI", name: "Industrials" }, { etf: "XLY", name: "Cons. Disc." },
-  { etf: "XLP", name: "Cons. Staples" }, { etf: "XLU", name: "Utilities" },
+  { etf: "XLK", name: "Technology", sector: "Information Technology" },
+  { etf: "XLF", name: "Financials", sector: "Financials" },
+  { etf: "XLE", name: "Energy", sector: "Energy" },
+  { etf: "XLV", name: "Health Care", sector: "Health Care" },
+  { etf: "XLI", name: "Industrials", sector: "Industrials" },
+  { etf: "XLY", name: "Cons. Disc.", sector: "Consumer Discretionary" },
+  { etf: "XLP", name: "Cons. Staples", sector: "Consumer Staples" },
+  { etf: "XLU", name: "Utilities", sector: "Utilities" },
 ];
 export const HEDGE_ETF_NAME: Record<string, string> = Object.fromEntries(HEDGE_ETFS.map((e) => [e.etf, e.name]));
+export const HEDGE_ETF_SECTOR: Record<string, string> = Object.fromEntries(HEDGE_ETFS.map((e) => [e.etf, e.sector ?? "ETF/Index"]));
 
 export interface HedgeLeg {
   etf: string;

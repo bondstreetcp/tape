@@ -210,6 +210,17 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
       push(`Return (${tf.toUpperCase()})`, stats.ret, statsAfter.ret, (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`, null);
     return rows;
   }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter, tf]);
+  // Sectors whose net exposure (% of gross) shifts most under the trade — sector-ETF hedges land here.
+  const sectorShifts = useMemo(() => {
+    if (!whatIfActive) return [] as { sector: string; before: number; after: number; delta: number }[];
+    const bW = new Map(stats.bySector.map((s) => [s.sector, s.weight * 100]));
+    const aW = new Map(statsAfter.bySector.map((s) => [s.sector, s.weight * 100]));
+    return [...new Set([...bW.keys(), ...aW.keys()])]
+      .map((sec) => { const before = bW.get(sec) ?? 0, after = aW.get(sec) ?? 0; return { sector: sec, before, after, delta: after - before }; })
+      .filter((r) => Math.abs(r.delta) >= 1)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 5);
+  }, [whatIfActive, stats.bySector, statsAfter.bySector]);
 
   // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
   const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);
@@ -366,6 +377,22 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       ))}
                     </tbody>
                   </table>
+                  {sectorShifts.length > 0 && (
+                    <div className="mt-3 border-t border-[var(--border)] pt-2">
+                      <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Sector shifts (net % gross)</div>
+                      <div className="space-y-0.5">
+                        {sectorShifts.map((s) => (
+                          <div key={s.sector} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-40 shrink-0 truncate text-[var(--text-3)]" title={s.sector}>{s.sector}</span>
+                            <span className="font-mono tabular-nums text-[var(--text-4)]">{s.before.toFixed(0)}%</span>
+                            <span className="text-[var(--text-4)]">→</span>
+                            <span className="font-mono tabular-nums text-[var(--text-2)]">{s.after.toFixed(0)}%</span>
+                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "#22c55e" : "#ef4444" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {portRisk && !portRiskAfter && (
                     <p className="mt-2 text-[11px] text-[var(--text-4)]">Predicted vol / VaR after the trade update once the new name&apos;s history loads.</p>
                   )}

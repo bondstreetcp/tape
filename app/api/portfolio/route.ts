@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
 import { loadSnapshot, loadEtfMeta } from "@/lib/data";
+import { HEDGE_ETF_SECTOR } from "@/lib/hedge";
 import type { NameData } from "@/lib/portfolio";
 import { parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 
@@ -66,7 +67,9 @@ export async function GET(req: Request) {
     // optimizer's hedge legs can be applied in the what-if simulator.
     const etf = etfMeta[sym];
     if (etf && etf.price > 0) {
-      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: "ETF/Index", beta: etf.beta, ret: etf.returns?.[tf] ?? null };
+      // Sector ETFs carry their GICS sector so a sector-ETF hedge nets against the book's own sector
+      // exposure in the what-if; broad/style ETFs stay "ETF/Index" (they span sectors).
+      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: HEDGE_ETF_SECTOR[sym] ?? "ETF/Index", beta: etf.beta, ret: etf.returns?.[tf] ?? null };
       continue;
     }
     missing.push(sym);
