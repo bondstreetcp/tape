@@ -175,3 +175,23 @@ export function scenarioPnL(stats: PortfolioStats, marketMovePct: number): { dol
   for (const h of stats.holdings) if (typeof h.beta === "number" && Number.isFinite(h.beta)) dollar += h.value * (h.beta as number) * m;
   return { dollar, pct: stats.gross ? (dollar / stats.gross) * 100 : 0 };
 }
+
+/** Named historical market drawdowns/rallies (index peak-to-trough magnitudes) for the stress table. */
+export const HISTORICAL_EPISODES: { name: string; move: number; note: string }[] = [
+  { name: "GFC 2008", move: -55, note: "Oct '07 – Mar '09 peak-to-trough" },
+  { name: "COVID crash", move: -34, note: "Feb – Mar 2020, 33 days" },
+  { name: "2022 bear", move: -25, note: "Jan – Oct 2022" },
+  { name: "Black Monday '87", move: -22, note: "one day, Oct 19 1987" },
+  { name: "−10% correction", move: -10, note: "typical pullback" },
+  { name: "+10% rally", move: 10, note: "" },
+  { name: "+20% bull year", move: 20, note: "" },
+];
+
+export interface StressScenario { name: string; marketMovePct: number; dollar: number; note: string }
+
+/** Beta-propagated P&L for each historical episode — a first-order guide (crises expand betas). */
+export function stressScenarios(stats: PortfolioStats): StressScenario[] {
+  return HISTORICAL_EPISODES.map((e) => ({
+    name: e.name, marketMovePct: e.move, dollar: scenarioPnL(stats, e.move).dollar, note: e.note,
+  }));
+}

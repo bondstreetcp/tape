@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import { computePortfolio, scenarioPnL, parsePositions, mergePositions, type NameData } from "@/lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { buildHedge } from "@/lib/hedge";
@@ -208,6 +208,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
 
   // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
   const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);
+  const stress = useMemo(() => stressScenarios(stats), [stats]);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -425,6 +426,27 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     </>
                   );
                 })()}
+              </div>
+
+              {/* Historical stress */}
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[13px] font-semibold">Historical stress</span>
+                  <span className="text-[11px] text-[var(--text-4)]">beta-propagated · first-order</span>
+                </div>
+                <div className="grid grid-cols-1 gap-x-5 gap-y-0 sm:grid-cols-2 lg:grid-cols-3">
+                  {stress.map((s) => (
+                    <div key={s.name} className="flex items-baseline justify-between gap-2 border-b border-[var(--border)] py-1" title={s.note}>
+                      <span className="text-[12px] text-[var(--text-3)]">{s.name} <span className="text-[10px] text-[var(--text-4)]">{s.marketMovePct > 0 ? "+" : ""}{s.marketMovePct}%</span></span>
+                      <span className="whitespace-nowrap text-right font-mono text-[12px] tabular-nums" style={{ color: s.dollar >= 0 ? "#22c55e" : "#ef4444" }}>
+                        {signMoney(s.dollar)}{riskBase ? <span className="ml-1 text-[10px] text-[var(--text-4)]">{((s.dollar / riskBase) * 100).toFixed(0)}%</span> : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                  Each holding&apos;s beta applied to the index move{stats.betaCoverage < 0.999 ? ` (${Math.round(stats.betaCoverage * 100)}% of gross has a beta)` : ""}; % is of {aum ? "AUM" : "gross"}. Real crises expand betas and rotate factors, so treat these as a first-order guide, not a forecast.
+                </p>
               </div>
 
               {/* Sector tilts + concentration */}

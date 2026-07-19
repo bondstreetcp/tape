@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computePortfolio, scenarioPnL, parsePositions, mergePositions, type NameData, type Position } from "../lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, HISTORICAL_EPISODES, type NameData, type Position } from "../lib/portfolio";
 
 const approx = (a: number, b: number, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≈ ${b}`);
 
@@ -113,6 +113,17 @@ test("mergePositions: sum deltas, drop net-zero, add new names (what-if)", () =>
     { symbol: "NVDA", shares: -20 },
   ]);
   assert.deepEqual(mergePositions(base, []), base); // no-op delta
+});
+
+test("stressScenarios: each episode = beta-propagated P&L (Σ value·β·move)", () => {
+  const s = computePortfolio(positions, data); // Σ value·β = 36000 (AAPL 24k + MSFT 22k − TSLA 10k)
+  const stress = stressScenarios(s);
+  assert.equal(stress.length, HISTORICAL_EPISODES.length);
+  const gfc = stress.find((x) => x.name === "GFC 2008")!;
+  approx(gfc.dollar, 36000 * (-0.55)); // −19,800
+  const rally = stress.find((x) => x.name === "+10% rally")!;
+  approx(rally.dollar, 36000 * 0.1); // +3,600, matches scenarioPnL
+  approx(rally.dollar, scenarioPnL(s, 10).dollar);
 });
 
 test("computePortfolio: partial beta coverage is honest", () => {
