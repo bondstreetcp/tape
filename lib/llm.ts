@@ -73,6 +73,11 @@ export interface ChatOpts {
   temperature?: number;
   maxTokens?: number;
   retries?: number;
+  // Abort a SINGLE attempt after this many ms (default 120_000). Set SHORT on a LIVE /api route where
+  // a hung provider must fail fast — e.g. the self-hosted NAS, where Next's `maxDuration` is a no-op so
+  // there's no platform function ceiling. Nightly extraction leaves it at the generous default so a big
+  // 10-K/Q prompt isn't cut off. The route's own wall-clock guard should still be the outer ceiling.
+  timeoutMs?: number;
   // For reasoning models (e.g. Gemini 3.1 Pro): cap the thinking budget. "low" is much faster —
   // use it for LIVE, timeout-bound requests where a 40-50s deep-reasoning call risks the function
   // limit. Nightly scripts can leave it unset (full reasoning) since they aren't timeout-bound.
@@ -144,7 +149,8 @@ async function callChat(
     if (opts.reasoningEffort && !useLocal) body.reasoning = { effort: opts.reasoningEffort };
 
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 120_000); // a big 10-K/Q prompt can be slow; don't hang forever
+    const abortMs = opts.timeoutMs ?? 120_000; // a big 10-K/Q prompt can be slow; don't hang forever (LIVE routes pass a short bound)
+    const timer = setTimeout(() => ctrl.abort(), abortMs);
     try {
       const res = await fetch(`${useLocal ? LOCAL_URL : baseUrl()}/chat/completions`, {
         method: "POST",
@@ -169,7 +175,7 @@ async function callChat(
       if (content.trim()) return content;
       lastInfo = `${useLocal ? "local " : ""}empty content`; // transient (truncated/blank) → retry
     } catch (e: any) {
-      lastInfo = `${useLocal ? "local " : ""}${e?.name === "AbortError" ? "timeout (120s)" : e?.message || String(e)}`; // network/timeout → retry
+      lastInfo = `${useLocal ? "local " : ""}${e?.name === "AbortError" ? `timeout (${Math.round(abortMs / 1000)}s)` : e?.message || String(e)}`; // network/timeout → retry
     } finally {
       clearTimeout(timer);
     }

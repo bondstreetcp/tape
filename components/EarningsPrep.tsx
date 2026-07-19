@@ -238,11 +238,15 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     if (why[dateISO]) return; // cached
     setWhy((w) => ({ ...w, [dateISO]: { state: "loading" } }));
     // no-store so a redeploy's fresher answer isn't masked by a stale browser copy; the client-state
-    // guard above + the route's s-maxage already keep repeat clicks cheap.
-    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=why&d=${encodeURIComponent(dateISO.slice(0, 10))}`, { cache: "no-store" })
+    // guard above + the route's s-maxage already keep repeat clicks cheap. 75s abort → the error state
+    // (same no-platform-timeout reasoning as runAi — never spin forever on a hung self-hosted origin).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75_000);
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=why&d=${encodeURIComponent(dateISO.slice(0, 10))}`, { cache: "no-store", signal: ctrl.signal })
       .then((r) => r.json())
       .then((j) => setWhy((w) => ({ ...w, [dateISO]: { state: "done", why: j.why, confidence: j.confidence, grounded: j.grounded, filing: j.filing, headlines: j.headlines || [] } })))
-      .catch(() => setWhy((w) => ({ ...w, [dateISO]: { state: "error" } })));
+      .catch(() => setWhy((w) => ({ ...w, [dateISO]: { state: "error" } })))
+      .finally(() => clearTimeout(timer));
   };
 
   useEffect(() => {
@@ -279,10 +283,16 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     // part=data — a client-supplied signal string was spoofable via the URL (and the poisoned,
     // CDN-cached preview would serve every viewer). `e` keeps the straddle on the event expiry.
     const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate)}` : "";
-    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=ai${eParam}`)
+    // Abort after 75s: the server answers in ≲60s (its own wall-clock ceiling), but on the self-hosted
+    // origin there's no platform timeout backstopping a hung connection — without this the button spun
+    // "building…" forever ("the AI's not working"). Abort → catch → the "couldn't build / Try again" UI.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75_000);
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=ai${eParam}`, { signal: ctrl.signal })
       .then((r) => r.json())
       .then((d) => setAi(d.ai || null))
-      .catch(() => setAi(null));
+      .catch(() => setAi(null))
+      .finally(() => clearTimeout(timer));
   };
 
   if (!stats) return null;

@@ -21,6 +21,12 @@ export const maxDuration = 60;
 // Two parts: ?part=data (fast, no LLM — reaction history, options skew/max-pain; auto-loaded) and
 // ?part=ai (the StreetAccount-style preview; button-triggered, slow Gemini reasoning call).
 
+/** Race a live sub-fetch against a timeout so one slow source (the NAS home uplink) can't stall the
+ *  whole preview — returns `fallback` if `p` doesn't settle within `ms`. */
+function raceTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((res) => setTimeout(() => res(fallback), ms))]);
+}
+
 function optionsRead(chain: OptionChain | null) {
   if (!chain || !chain.underlying || (!chain.calls.length && !chain.puts.length)) return null;
   const u = chain.underlying;
@@ -350,16 +356,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // ── AI part: the StreetAccount-style preview (button-triggered) ──
     if (part === "ai") {
       if (!(await llmConfigured())) return NextResponse.json({ ai: null });
+      // EVERY live sub-fetch is time-bound. On Vercel the 60s function cap made a slow path fail fast,
+      // but `export const maxDuration` is a Vercel-only directive — under `next start` on the NAS there
+      // is NO platform ceiling, and this branch hung for minutes on the slow home uplink (news scrape +
+      // options-chain quant + a cloud reasoning call), reading as "the AI's not working". The bounds
+      // below + the outer wall-clock race are the ceiling the platform no longer provides.
       const [stats, news, transcript, quant] = await Promise.all([
-        cachedStats(sym).catch(() => null),
-        getNews(sym, 8).catch(() => []),
-        // The transcript scrape (Google News) can be slow/flaky — time-bound it so it never blows the
-        // function budget; if it doesn't return fast, the preview just skips "since last call".
-        Promise.race([
-          getLatestTranscript(sym).catch(() => null),
-          new Promise<null>((res) => setTimeout(() => res(null), 12000)),
-        ]),
-        computeQuant(sym, earningsISO).catch(() => null),
+        // Cache-first (local file for baked names); the live fallback on a cold/off-index name is one
+        // Yahoo call — bound it like the rest.
+        raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
+        raceTimeout(getNews(sym, 8).catch(() => []), 12_000, [] as Awaited<ReturnType<typeof getNews>>),
+        // The transcript scrape (Google News) can be slow/flaky — if it doesn't return fast, the
+        // preview just skips "since last call".
+        raceTimeout(getLatestTranscript(sym).catch(() => null), 12_000, null),
+        // Options chain + term structure + reactions — several Yahoo calls; degrade to a quant-less
+        // preview rather than stalling it.
+        raceTimeout(computeQuant(sym, earningsISO).catch(() => null), 20_000, null),
       ]);
       // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —
       // a client-supplied string was spoofable and the poisoned preview would be CDN-cached).
@@ -388,8 +400,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         "Use specific NUMBERS only from the supplied data; name segment/guidance items without fabricating precise figures. " +
         NO_ADVICE;
       const SCHEMA = 'Return ONLY JSON: {"moneyLine": string, "overview": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string, "fromLastCall": string}';
-      // Live request → cap Gemini's reasoning so it returns well within the function timeout.
-      const out = await chatJSON<any>(SYSTEM, ctx, { maxTokens: 4000, model: PRO_MODEL, reasoningEffort: "low" });
+      // Live request → cap Gemini's reasoning so it returns well within the function timeout, and cap
+      // the transport itself: retries 2 (not the default 4) with a 35s per-attempt abort, PLUS a 40s
+      // outer wall-clock race as the hard ceiling. Vercel's 60s function cap used to be the de-facto
+      // guard; under `next start` on the NAS maxDuration is a no-op, so a dead OpenRouter path hung
+      // this branch for minutes ("the AI's not working"). Now: ≤20s bounded pre-fetch + ≤40s LLM wait
+      // → the request always answers in ≲60s. chatJSON gives null on give-up; UI shows "Try again".
+      const out = await raceTimeout(
+        chatJSON<any>(SYSTEM, ctx, { maxTokens: 4000, model: PRO_MODEL, reasoningEffort: "low", retries: 2, timeoutMs: 35_000 }),
+        40_000,
+        null,
+      );
       const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 6) : []);
       const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
       const ai = out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
@@ -406,10 +427,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     if (part === "why") {
       const dISO = (() => { const dd = sp.get("d"); return dd && /^\d{4}-\d{2}-\d{2}/.test(dd) ? dd.slice(0, 10) : null; })();
       if (!dISO || !(await llmConfigured())) return NextResponse.json({ why: null });
+      // Same NAS-has-no-function-ceiling discipline as part=ai: every live fetch is time-bound.
       const [reactions, news, release] = await Promise.all([
-        getEarningsReactions(sym, 8).catch(() => []),
-        getNews(sym, 30).catch(() => []),
-        earningsReleaseText(sym, dISO).catch(() => null), // the actual 8-K press release (primary source)
+        raceTimeout(getEarningsReactions(sym, 8).catch(() => []), 15_000, [] as Awaited<ReturnType<typeof getEarningsReactions>>),
+        raceTimeout(getNews(sym, 30).catch(() => []), 12_000, [] as Awaited<ReturnType<typeof getNews>>),
+        raceTimeout(earningsReleaseText(sym, dISO).catch(() => null), 15_000, null), // the actual 8-K press release (primary source)
       ]);
       const eT = Date.parse(dISO);
       let rx: (typeof reactions)[number] | null = null, bestGap = Infinity;
@@ -435,7 +457,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         "CRITICAL ANTI-FABRICATION RULE: if NO press release is provided AND you do NOT have reliable specific knowledge of THIS exact report (very recent quarters after your training, or any you're unsure of), DO NOT invent a driver, numbers, or events — set confidence 'low', say plainly the specific catalyst isn't confirmed from the data here, and explain what the beat-but-fell / miss-but-rose pattern IMPLIES about what the market focused on. Never fabricate figures. " +
         NO_ADVICE;
       const SCHEMA = 'Return ONLY JSON: {"why": string, "confidence": "high"|"medium"|"low"}';
-      const out = await chatJSON<{ why?: string; confidence?: string }>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 1600, model: PRO_MODEL, reasoningEffort: "low" });
+      // Same transport caps + wall-clock ceiling as part=ai (maxDuration is a no-op on the NAS).
+      const out = await raceTimeout(
+        chatJSON<{ why?: string; confidence?: string }>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 1600, model: PRO_MODEL, reasoningEffort: "low", retries: 2, timeoutMs: 35_000 }),
+        40_000,
+        null,
+      );
       const why = out && typeof out.why === "string" && out.why.trim() ? out.why.trim() : null;
       return NextResponse.json(
         {
