@@ -7,6 +7,7 @@ import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type 
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { parseBrokerCsv } from "@/lib/brokerImport";
 import { summarizeBook } from "@/lib/bookSummary";
+import { encodeBook, decodeBook } from "@/lib/shareBook";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -75,9 +76,16 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
   useEffect(() => {
+    let fromHash = false;
     try {
-      const raw = localStorage.getItem(STORE_KEY); if (raw != null) setText(raw);
-      const savedAum = localStorage.getItem(AUM_KEY); if (savedAum != null) setAumText(savedAum);
+      const h = window.location.hash;
+      if (h.startsWith("#b=")) { const d = decodeBook(h.slice(3)); if (d) { setText(d.text); setAumText(d.aum); fromHash = true; setImportNote("Loaded a shared portfolio."); } }
+    } catch { /* ignore */ }
+    try {
+      if (!fromHash) {
+        const raw = localStorage.getItem(STORE_KEY); if (raw != null) setText(raw);
+        const savedAum = localStorage.getItem(AUM_KEY); if (savedAum != null) setAumText(savedAum);
+      }
       setShowPct(localStorage.getItem(BASIS_KEY) === "%");
       const savedWi = localStorage.getItem(WHATIF_KEY); if (savedWi) { setWhatIfText(savedWi); setWhatIf(true); }
       setAdvanced(localStorage.getItem(ADVANCED_KEY) === "1");
@@ -118,6 +126,14 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     };
     reader.onerror = () => setImportNote("⚠ Couldn't read that file.");
     reader.readAsText(file);
+  };
+
+  const handleShare = () => {
+    const url = `${window.location.origin}${window.location.pathname}#b=${encodeBook(text, aumText)}`;
+    try { window.history.replaceState(null, "", url); } catch { /* ignore */ }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => setImportNote("Share link copied to clipboard.")).catch(() => setImportNote("Link is in the address bar — copy it to share."));
+    } else setImportNote("Link is in the address bar — copy it to share.");
   };
 
   const positions = useMemo(() => parsePositions(text), [text]);
@@ -303,11 +319,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[13px] font-semibold">Your positions</span>
-              <div className="flex gap-1.5 text-[11px]">
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
                 <label className="cursor-pointer rounded border border-[var(--accent)]/50 px-2 py-0.5 text-[var(--accent)] hover:bg-[var(--accent)]/10" title="Upload a Schwab / Fidelity / Robinhood positions CSV">
                   Import CSV
                   <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} />
                 </label>
+                <button onClick={handleShare} disabled={!positions.length} title="Copy a link that loads this book (client-side; nothing sent to a server)" className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)] disabled:opacity-40">Share</button>
                 <button onClick={() => setText(EXAMPLE)} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Example</button>
                 <button onClick={() => { setText(""); setImportNote(null); }} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Clear</button>
               </div>
