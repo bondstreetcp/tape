@@ -4,6 +4,7 @@ import path from "path";
 import { loadSnapshot, loadManySymbolSeries } from "@/lib/data";
 import { buildFactorModel, type FactorInput, type FactorKey, type PairCorr } from "@/lib/factors";
 import { corrOf, type Daily } from "@/lib/pairs";
+import { alignDailyReturns } from "@/lib/portfolioRisk";
 import type { StockRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -86,5 +87,9 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ factors, corr, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
+  // Aligned daily return matrix over the held names' shared history — the client combines it with the
+  // position sizes it never uploads to get predicted vol / VaR / risk contribution (lib/portfolioRisk).
+  const aligned = alignDailyReturns(daily);
+
+  return NextResponse.json({ factors, corr, aligned, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
 }

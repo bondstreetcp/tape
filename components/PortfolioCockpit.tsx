@@ -4,6 +4,7 @@ import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
+import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
@@ -34,6 +35,7 @@ const px = (n: number | null | undefined) => (n == null ? "—" : `$${n.toFixed(
 // Exposure as a % of account equity (AUM). Signed like its $ counterpart; |frac|×100.
 const pctAum = (frac: number | null | undefined, signed: boolean): string =>
   frac == null ? "—" : `${signed ? (frac >= 0 ? "+" : "−") : ""}${Math.abs(frac * 100).toFixed(0)}%`;
+const ymd = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
 
 const SHOCKS = [-10, -5, -2, 2, 5, 10];
 const pos = (n: number) => n >= 0;
@@ -120,17 +122,17 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     () => (stats.holdings.length ? stats.holdings.map((h) => h.symbol).join(",") : symbolsKey),
     [stats.holdings, symbolsKey],
   );
-  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; cappedFrom: number | null; cap: number | null }>({ factors: {}, corr: [], cappedFrom: null, cap: null });
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; cappedFrom: number | null; cap: number | null }>({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null });
   const [riskLoading, setRiskLoading] = useState(false);
   useEffect(() => {
-    if (!riskSymbolsKey) { setRisk({ factors: {}, corr: [], cappedFrom: null, cap: null }); return; }
+    if (!riskSymbolsKey) { setRisk({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null }); return; }
     let cancelled = false;
     setRiskLoading(true);
     const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/portfolio/risk?symbols=${encodeURIComponent(riskSymbolsKey)}`).then((x) => x.json());
-        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
-      } catch { if (!cancelled) setRisk({ factors: {}, corr: [], cappedFrom: null, cap: null }); }
+        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
+      } catch { if (!cancelled) setRisk({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null }); }
       if (!cancelled) setRiskLoading(false);
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
@@ -146,6 +148,15 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   );
   const hedgeNotional = stats.beta == null ? null : stats.beta * stats.gross; // Σ value·β = $ SPY to short to flatten
   const anyFactor = tilts.some((t) => t.coverage > 0);
+
+  // --- Predicted risk from the holdings' own return history (client-side; sizes never leave the browser). ---
+  const portRisk = useMemo(
+    () => (risk.aligned ? computePortfolioRisk(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, { aum }) : null),
+    [stats.holdings, risk.aligned, aum],
+  );
+  const riskBase = aum ?? stats.gross; // % denominator for the risk figures (AUM if set, else gross)
+  const pctOf = (d: number): string => (riskBase ? `${((d / riskBase) * 100).toFixed(1)}% of ${aum ? "AUM" : "gross"}` : "");
+  const riskContribOf = useMemo(() => new Map((portRisk?.contributions ?? []).map((c) => [c.symbol, c.pctRisk])), [portRisk]);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -247,6 +258,29 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
                 </div>
               </div>
+
+              {/* Predicted risk — from the holdings' own return history */}
+              {portRisk && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold">Predicted risk</span>
+                    <span className="text-[11px] text-[var(--text-4)]">
+                      {riskLoading ? "measuring…" : `historical sim · ${portRisk.nDays}d${portRisk.coverage < 0.999 ? ` · ${Math.round(portRisk.coverage * 100)}% covered` : ""}`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+                    <Stat label="Volatility (ann.)" value={portRisk.volAnnPct != null ? pct(portRisk.volAnnPct * 100, 0) : money(portRisk.volAnnDollar)} sub={`${money(portRisk.volAnnDollar)}/yr`} />
+                    <Stat label="VaR 95% (1d)" value={money(portRisk.var95Dollar)} sub={pctOf(portRisk.var95Dollar)} color="#ef4444" />
+                    <Stat label="VaR 99% (1d)" value={money(portRisk.var99Dollar)} sub={pctOf(portRisk.var99Dollar)} color="#ef4444" />
+                    <Stat label="Exp. shortfall" value={money(portRisk.es95Dollar)} sub="avg worst 5%" color="#ef4444" />
+                    <Stat label="Worst day" value={signMoney(portRisk.worstDayDollar)} sub={portRisk.worstDayDate ? ymd(portRisk.worstDayDate) : "—"} color="#ef4444" />
+                    <Stat label="Diversification" value={pct(portRisk.diversificationBenefit * 100, 0)} sub="risk cut vs lockstep" color="#22c55e" />
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                    Applies the last {portRisk.nDays} trading days of your holdings&apos; joint returns to today&apos;s book. VaR = the loss a 1‑in‑20 (95%) / 1‑in‑100 (99%) day wouldn&apos;t exceed; shortfall = the average of the worst 5% of days. {aum ? "% figures are of account equity." : "Add account equity for % figures (now % of gross)."}
+                  </p>
+                </div>
+              )}
 
               {/* Market-shock scenario */}
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -434,6 +468,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       <th className="px-2 py-2 text-right font-medium">Price</th>
                       <th className="px-2 py-2 text-right font-medium">Value</th>
                       <th className="px-2 py-2 text-right font-medium">Weight</th>
+                      <th className="px-2 py-2 text-right font-medium" title="Share of the book's total risk (variance) — can exceed weight for a volatile/correlated name, or go negative for a diversifier">% Risk</th>
                       <th className="px-2 py-2 text-right font-medium">β</th>
                       <th className="px-3 py-2 text-right font-medium">{tf.toUpperCase()}</th>
                     </tr>
@@ -451,6 +486,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{px(h.price)}</td>
                         <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "#ef4444" }}>{pctMode ? pctAum(h.value / stats.aum!, true) : signMoney(h.value)}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{(h.weight * 100).toFixed(1)}%</td>
+                        <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">
+                          {(() => { const rc = riskContribOf.get(h.symbol); return rc == null ? "—" : `${rc < 0 ? "−" : ""}${Math.abs(rc * 100).toFixed(0)}%`; })()}
+                        </td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{typeof h.beta === "number" ? h.beta.toFixed(2) : "—"}</td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums" style={{ color: h.ret == null ? "var(--text-4)" : pos(h.ret) ? "#22c55e" : "#ef4444" }}>{pct(h.ret ?? null)}</td>
                       </tr>
