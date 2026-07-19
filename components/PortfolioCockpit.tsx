@@ -64,6 +64,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [showPct, setShowPct] = useState(false); // $ vs % of AUM
   const [whatIf, setWhatIf] = useState(false); // show the what-if trade panel
   const [whatIfText, setWhatIfText] = useState(""); // proposed trades (SYMBOL SHARES; signed)
+  const [hedgeNeutral, setHedgeNeutral] = useState(false); // optimizer: flatten market beta
+  const [hedgeMaxLegs, setHedgeMaxLegs] = useState<number | null>(null); // optimizer: cap the basket size
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -241,9 +243,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   // first-order `hedge` above is the fallback when that data isn't there yet.
   const optHedge = useMemo(
     () => (risk.aligned?.extra && stats.holdings.length
-      ? optimizeHedge(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, risk.aligned.extra, { maxGross: stats.gross })
+      ? optimizeHedge(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, risk.aligned.extra, { maxGross: stats.gross, marketNeutral: hedgeNeutral, maxLegs: hedgeMaxLegs })
       : null),
-    [risk.aligned, stats.holdings, stats.gross],
+    [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs],
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
 
@@ -708,6 +710,16 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     </div>
                     {optHedge && optHedge.legs.length ? (
                       <>
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <button onClick={() => setHedgeNeutral((v) => !v)}
+                            title="Add a constraint that flattens the book's market beta exactly"
+                            className={`rounded border px-2 py-0.5 ${hedgeNeutral ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>β-neutral{hedgeNeutral && optHedge.marketNeutral ? " ✓" : ""}</button>
+                          <span className="ml-1 text-[var(--text-4)]">legs</span>
+                          {[4, 6, null].map((n) => (
+                            <button key={String(n)} onClick={() => setHedgeMaxLegs(n)}
+                              className={`rounded border px-1.5 py-0.5 ${hedgeMaxLegs === n ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{n ?? "all"}</button>
+                          ))}
+                        </div>
                         <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
                           <span className="text-[var(--text-3)]">Predicted vol</span>
                           <span className="font-mono text-[var(--text-4)]">{money(optHedge.volBeforeDollar)}</span>

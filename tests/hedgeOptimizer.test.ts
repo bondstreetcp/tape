@@ -43,6 +43,30 @@ test("optimizeHedge: maxGross scales the overlay down", () => {
   assert.ok(capped.turnoverDollar <= 1000 + 1e-6);
 });
 
+test("optimizeHedge: market-neutral flattens the book's beta", () => {
+  const m = Array.from({ length: 80 }, (_, i) => ((i * 7) % 13 - 6) / 100);
+  const noise = Array.from({ length: 80 }, (_, i) => (((i * 29) % 17) - 8) / 200);
+  const etf = { SPY: m, QQQ: Array.from({ length: 80 }, (_, i) => ((i * 5) % 11 - 5) / 100) };
+  const a: AlignedReturns = { dates: m.map((_, i) => (1000 + i) * DAY), returns: { XYZ: m, ABC: noise }, market: m };
+  const opt = optimizeHedge([{ symbol: "XYZ", value: 10000 }, { symbol: "ABC", value: 8000 }], a, etf, { ridge: 0.02, marketNeutral: true })!;
+  assert.equal(opt.marketNeutral, true);
+  // Rebuild the hedged P&L from the legs and confirm its market beta is ~0 (vs ~10000 before).
+  const hOf = new Map(opt.legs.map((l) => [l.etf, l.notional]));
+  const mean = (x: number[]) => x.reduce((s, v) => s + v, 0) / x.length;
+  const cov = (x: number[], y: number[]) => { const mx = mean(x), my = mean(y); let s = 0; for (let t = 0; t < x.length; t++) s += (x[t] - mx) * (y[t] - my); return s / (x.length - 1); };
+  const hedged = m.map((_, t) => 10000 * m[t] + 8000 * noise[t] + [...hOf].reduce((s, [e, h]) => s + h * (etf as Record<string, number[]>)[e][t], 0));
+  const betaHedged = cov(hedged, m) / cov(m, m);
+  assert.ok(Math.abs(betaHedged) < 500, `hedged beta ${betaHedged} ≈ 0 (was ~10000)`);
+});
+
+test("optimizeHedge: maxLegs caps the basket size", () => {
+  const mk4 = (o: number) => Array.from({ length: 80 }, (_, i) => (((i * o) % 13) - 6) / 100);
+  const etf = { SPY: mk4(7), QQQ: mk4(5), IWM: mk4(11), XLK: mk4(3) };
+  const a: AlignedReturns = { dates: mk4(7).map((_, i) => (1000 + i) * DAY), returns: { BOOK: mk4(2) } };
+  const opt = optimizeHedge([{ symbol: "BOOK", value: 100000 }], a, etf, { ridge: 0.02, maxLegs: 2 })!;
+  assert.ok(opt.legs.length <= 2, `got ${opt.legs.length} legs`);
+});
+
 test("optimizeHedge: null when no ETF series or book too short", () => {
   const spy = Array.from({ length: 80 }, (_, i) => ((i * 7) % 13 - 6) / 100);
   assert.equal(optimizeHedge([{ symbol: "XYZ", value: 1 }], aligned({ XYZ: spy }), {}), null); // no ETFs
