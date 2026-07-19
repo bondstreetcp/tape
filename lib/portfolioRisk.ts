@@ -24,6 +24,7 @@ export interface AlignedReturns {
   dates: number[]; // common day timestamps aligned to each return vector (ascending; length = nDays)
   returns: Record<string, number[]>; // SYMBOL(upper) -> simple daily returns on `dates`
   market?: number[]; // market (^GSPC) simple daily returns on `dates` — enables the systematic split
+  extra?: Record<string, number[]>; // ETF menu returns on `dates` — for the hedge optimizer
 }
 
 const intersectDays = (acc: Set<number> | null, days: Set<number>): Set<number> => {
@@ -53,6 +54,7 @@ export function alignDailyReturns(
   seriesBySymbol: Record<string, Daily>,
   lookback = TRADING_DAYS,
   market?: Daily,
+  extra?: Record<string, Daily>,
 ): AlignedReturns {
   const syms = Object.keys(seriesBySymbol);
   const priceMaps: Record<string, Map<number, number>> = {};
@@ -63,11 +65,6 @@ export function alignDailyReturns(
     // a name with <2 points can't form a return — don't let it constrain the shared axis
     if (bucket.length >= 2) common = intersectDays(common, new Set<number>(bucket.map(([t]) => t)));
   }
-  // Fold the market series into the same shared axis (it trades every day, so it won't shrink the window).
-  const marketBucket = market ? bucketByDay(market) : null;
-  const marketMap = marketBucket && marketBucket.length >= 2 ? new Map<number, number>(marketBucket) : null;
-  if (marketMap) common = intersectDays(common, new Set<number>(marketBucket!.map(([t]) => t)));
-
   let level = common ? Array.from(common).sort((a, b) => a - b) : [];
   if (level.length > lookback + 1) level = level.slice(level.length - (lookback + 1));
 
@@ -78,8 +75,25 @@ export function alignDailyReturns(
       if (r && r.length) returns[s.toUpperCase()] = r;
     }
   }
-  const marketRet = marketMap && level.length >= 2 ? returnsOn(marketMap, level) : null;
-  return { dates: level.slice(1), returns, ...(marketRet ? { market: marketRet } : {}) };
+  // The market and the ETF menu align to the HOLDINGS' axis (dropped if they don't cover it), so a
+  // glitchy or short series never shrinks the window for everyone.
+  const alignOne = (ser: Daily): number[] | null => {
+    if (level.length < 2) return null;
+    const b = bucketByDay(ser || []);
+    return b.length >= 2 ? returnsOn(new Map<number, number>(b), level) : null;
+  };
+  const marketRet = market ? alignOne(market) : null;
+  const extraRet: Record<string, number[]> = {};
+  if (extra) for (const [e, ser] of Object.entries(extra)) {
+    const r = alignOne(ser);
+    if (r && r.length) extraRet[e.toUpperCase()] = r;
+  }
+  return {
+    dates: level.slice(1),
+    returns,
+    ...(marketRet ? { market: marketRet } : {}),
+    ...(Object.keys(extraRet).length ? { extra: extraRet } : {}),
+  };
 }
 
 export interface RiskContribution {

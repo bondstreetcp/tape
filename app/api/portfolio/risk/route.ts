@@ -5,6 +5,7 @@ import { loadSnapshot, loadManySymbolSeries, loadMarketSeries } from "@/lib/data
 import { buildFactorModel, type FactorInput, type FactorKey, type PairCorr } from "@/lib/factors";
 import { corrOf, type Daily } from "@/lib/pairs";
 import { alignDailyReturns } from "@/lib/portfolioRisk";
+import { HEDGE_ETFS } from "@/lib/hedge";
 import type { StockRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -89,9 +90,16 @@ export async function GET(req: Request) {
 
   // Aligned daily return matrix over the held names' shared history — the client combines it with the
   // position sizes it never uploads to get predicted vol / VaR / risk contribution (lib/portfolioRisk).
-  // The market (^GSPC) series rides along on the same axis so the client can split systematic vs specific.
+  // The market (^GSPC) series rides along on the same axis so the client can split systematic vs specific;
+  // the liquid ETF menu rides along too so the client can solve the risk-minimizing hedge overlay.
   const marketSeries = await loadMarketSeries();
-  const aligned = alignDailyReturns(daily, 252, marketSeries ?? undefined);
+  const etfSeriesMap = await loadManySymbolSeries(HEDGE_ETFS.map((e) => e.etf));
+  const etfDaily: Record<string, Daily> = {};
+  for (const e of HEDGE_ETFS) {
+    const d = etfSeriesMap[e.etf]?.daily;
+    if (Array.isArray(d) && d.length) etfDaily[e.etf] = d as Daily;
+  }
+  const aligned = alignDailyReturns(daily, 252, marketSeries ?? undefined, etfDaily);
 
   return NextResponse.json({ factors, corr, aligned, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
 }

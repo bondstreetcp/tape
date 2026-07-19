@@ -11,6 +11,7 @@
     "check-freshness": "tsx scripts/check-freshness.ts",
     "refresh-pairs": "tsx scripts/refresh-pairs.ts",
     "refresh-betas": "tsx scripts/refresh-betas.ts",
+    "refresh-hedge-etfs": "tsx scripts/refresh-hedge-etfs.ts",
     "refresh-gamma-board": "tsx scripts/refresh-gamma-board.ts",
     "refresh-vol-cone": "tsx scripts/refresh-vol-cone.ts",
     "alert-freshness": "tsx scripts/alert-freshness.ts",

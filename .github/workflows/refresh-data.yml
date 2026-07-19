@@ -270,6 +270,13 @@ jobs:
         run: npm run refresh-betas
         continue-on-error: true
 
+      # Hedge-menu ETF series (SPY/QQQ/sector/style) → data/series/symbols/<ETF>.json for the cockpit's
+      # risk-minimizing hedge optimizer. One Yahoo fetch per ETF; independent of the betas step above.
+      - name: Refresh hedge-menu ETF series (portfolio cockpit)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-hedge-etfs
+        continue-on-error: true
+
       # Realized-vol cone screener — annualized RV cone (10/21/63/126/252d) + where current RV sits in each
       # name's own history, across EVERY universe. Pure local math off the stored series; no fetch, no LLM.
       - name: Refresh realized-vol cone

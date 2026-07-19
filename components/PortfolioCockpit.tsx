@@ -5,7 +5,8 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
-import { buildHedge } from "@/lib/hedge";
+import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
+import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
@@ -208,6 +209,14 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
 
   // --- Suggested hedge basket: flatten market β (exact) + the largest style tilts (first-order). ---
   const hedge = useMemo(() => buildHedge(tilts, stats.betaDollar, stats.gross), [tilts, stats.betaDollar, stats.gross]);
+  // Risk-minimizing overlay over the ETF menu (needs the ETF return matrix from the risk route); the
+  // first-order `hedge` above is the fallback when that data isn't there yet.
+  const optHedge = useMemo(
+    () => (risk.aligned?.extra && stats.holdings.length
+      ? optimizeHedge(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, risk.aligned.extra, { maxGross: stats.gross })
+      : null),
+    [risk.aligned, stats.holdings, stats.gross],
+  );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
 
   const uni = UNIVERSE_BY_ID[universe];
@@ -574,9 +583,32 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-[13px] font-semibold">Suggested hedge <InfoDot term="Beta-neutral hedge" /></span>
-                      <span className="text-[11px] text-[var(--text-4)]">flatten β + top tilts</span>
+                      <span className="text-[11px] text-[var(--text-4)]">{optHedge && optHedge.legs.length ? `min-variance · ${optHedge.nEtfs} ETFs` : "flatten β + top tilts"}</span>
                     </div>
-                    {hedge.length === 0 ? (
+                    {optHedge && optHedge.legs.length ? (
+                      <>
+                        <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+                          <span className="text-[var(--text-3)]">Predicted vol</span>
+                          <span className="font-mono text-[var(--text-4)]">{money(optHedge.volBeforeDollar)}</span>
+                          <span className="text-[var(--text-4)]">→</span>
+                          <span className="font-mono font-semibold" style={{ color: "#22c55e" }}>{money(optHedge.volAfterDollar)}</span>
+                          <span className="font-mono text-[11px]" style={{ color: "#22c55e" }}>(−{Math.round(optHedge.volReduction * 100)}%)</span>
+                        </div>
+                        <div className="space-y-1">
+                          {optHedge.legs.slice(0, 6).map((l) => (
+                            <div key={l.etf} className="flex items-center gap-2 text-[12px]">
+                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.notional < 0 ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#22c55e]/15 text-[#22c55e]"}`}>{l.notional < 0 ? "Short" : "Buy"}</span>
+                              <span className="w-12 shrink-0 font-mono font-semibold text-[var(--accent)]">{l.etf}</span>
+                              <span className="w-20 shrink-0 text-right font-mono tabular-nums text-[var(--text-2)]">{money(Math.abs(l.notional))}</span>
+                              <span className="truncate text-[var(--text-4)]">{HEDGE_ETF_NAME[l.etf] ?? ""}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                          Risk-minimizing overlay (ridge least-squares on {optHedge.nEtfs} liquid ETFs&apos; daily returns), capped at your gross — minimizes the book&apos;s predicted variance. A hedge, not a trade recommendation.
+                        </p>
+                      </>
+                    ) : hedge.length === 0 ? (
                       <p className="text-[12px] text-[var(--text-4)]">{stats.beta == null ? "No betas available for this book." : "Book is already ≈ market- and style-neutral."}</p>
                     ) : (
                       <>
@@ -591,7 +623,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                           ))}
                         </div>
                         <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
-                          Market leg is exact (Σ value·β of SPY). Style legs are first-order (a factor ETF ≈ +1σ on its factor) — a starting basket to cut your biggest bets, not an optimizer&apos;s answer.
+                          Market leg is exact (Σ value·β of SPY). Style legs are first-order (a factor ETF ≈ +1σ on its factor) — a starting basket, not an optimizer&apos;s answer.
                         </p>
                       </>
                     )}

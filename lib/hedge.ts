@@ -9,6 +9,20 @@
 
 import type { FactorKey, FactorTilt } from "./factors";
 
+/** Liquid ETF menu the risk-minimizing hedge optimizer solves over (market / style / sector). */
+export const HEDGE_ETFS: { etf: string; name: string }[] = [
+  { etf: "SPY", name: "S&P 500" }, { etf: "QQQ", name: "Nasdaq 100" },
+  { etf: "IWM", name: "Russell 2000" }, { etf: "MDY", name: "S&P MidCap 400" },
+  { etf: "MTUM", name: "Momentum" }, { etf: "VLUE", name: "Value" },
+  { etf: "QUAL", name: "Quality" }, { etf: "USMV", name: "Min Vol" },
+  { etf: "IWF", name: "Growth" }, { etf: "IWD", name: "Value (R1000)" },
+  { etf: "XLK", name: "Technology" }, { etf: "XLF", name: "Financials" },
+  { etf: "XLE", name: "Energy" }, { etf: "XLV", name: "Health Care" },
+  { etf: "XLI", name: "Industrials" }, { etf: "XLY", name: "Cons. Disc." },
+  { etf: "XLP", name: "Cons. Staples" }, { etf: "XLU", name: "Utilities" },
+];
+export const HEDGE_ETF_NAME: Record<string, string> = Object.fromEntries(HEDGE_ETFS.map((e) => [e.etf, e.name]));
+
 export interface HedgeLeg {
   etf: string;
   name: string;
