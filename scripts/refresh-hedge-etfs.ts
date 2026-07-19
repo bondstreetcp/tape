@@ -1,17 +1,20 @@
 /**
- * ETF series for the Portfolio cockpit's hedge OPTIMIZER — fetch the liquid hedge menu
- * (lib/hedge.HEDGE_ETFS) and write each as a standard data/series/symbols/<ETF>.json so the risk route
- * loads them like any name and the client can solve the risk-minimizing overlay (lib/hedgeOptimizer).
- * Nightly-safe (a failed name keeps its previous file); flows to R2 with the rest of data/.
+ * ETF series + meta for the Portfolio cockpit's hedge optimizer AND what-if. Fetches the liquid hedge
+ * menu (lib/hedge.HEDGE_ETFS) → data/series/symbols/<ETF>.json (for the optimizer's return matrix) and
+ * writes data/etf-meta.json {symbol: {name, price, beta}} so /api/portfolio can PRICE the ETFs (they're
+ * not in the stock snapshots) — which lets the optimizer's legs apply to the what-if simulator. Betas are
+ * regressed on ^GSPC (data/market.json, written by refresh-betas which runs first). Flows to R2 with data/.
  */
 import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
+import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
-const DIR = path.join(process.cwd(), "data", "series", "symbols");
+const DATA = path.join(process.cwd(), "data");
+const DIR = path.join(DATA, "series", "symbols");
 
 async function fetchDaily(sym: string): Promise<[number, number][] | null> {
   const chart: any = await yf
@@ -23,17 +26,32 @@ async function fetchDaily(sym: string): Promise<[number, number][] | null> {
   return daily.length >= 120 ? daily : null;
 }
 
+async function loadMarket(): Promise<Daily | null> {
+  try {
+    const j = JSON.parse(await fs.readFile(path.join(DATA, "market.json"), "utf8"));
+    return Array.isArray(j?.daily) ? (j.daily as Daily) : null;
+  } catch { return null; }
+}
+
 async function main() {
   await fs.mkdir(DIR, { recursive: true });
+  const market = await loadMarket();
+  if (!market) console.error("hedge-etfs: no data/market.json — ETF betas will be null (run refresh-betas first)");
+
+  const meta: Record<string, { name: string; price: number; beta: number | null }> = {};
   let ok = 0, fail = 0;
-  for (const { etf } of HEDGE_ETFS) {
+  for (const { etf, name } of HEDGE_ETFS) {
     const daily = await fetchDaily(etf);
     if (!daily) { console.error(`hedge-etfs: ${etf} — no series (kept previous if any)`); fail++; continue; }
     await fs.writeFile(path.join(DIR, etf + ".json"), JSON.stringify({ daily, intraday: [] }));
+    const price = daily[daily.length - 1][1];
+    const beta = market ? computeBeta(bucketByDay(daily), market, 1300) : null;
+    meta[etf] = { name, price, beta: beta != null ? Math.round(beta * 1000) / 1000 : null };
     ok++;
-    console.log(`hedge-etfs: ${etf} ${daily.length} days`);
+    console.log(`hedge-etfs: ${etf} ${daily.length}d  px ${price.toFixed(2)}  β ${beta != null ? beta.toFixed(2) : "—"}`);
   }
-  console.log(`hedge-etfs: wrote ${ok}/${HEDGE_ETFS.length} (${fail} failed)`);
+  if (ok > 0) await fs.writeFile(path.join(DATA, "etf-meta.json"), JSON.stringify({ generatedAt: new Date().toISOString(), etfs: meta }));
+  console.log(`hedge-etfs: wrote ${ok}/${HEDGE_ETFS.length} series + etf-meta (${fail} failed)`);
   if (ok === 0) process.exit(1);
 }
 main();

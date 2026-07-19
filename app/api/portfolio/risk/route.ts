@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
-import { loadSnapshot, loadManySymbolSeries, loadMarketSeries } from "@/lib/data";
+import { loadSnapshot, loadManySymbolSeries, loadMarketSeries, loadEtfMeta } from "@/lib/data";
 import { buildFactorModel, type FactorInput, type FactorKey, type PairCorr } from "@/lib/factors";
 import { corrOf, type Daily } from "@/lib/pairs";
 import { alignDailyReturns } from "@/lib/portfolioRisk";
@@ -101,5 +101,10 @@ export async function GET(req: Request) {
   }
   const aligned = alignDailyReturns(daily, 252, marketSeries ?? undefined, etfDaily);
 
-  return NextResponse.json({ factors, corr, aligned, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
+  // ETF last prices so the client can turn the optimizer's $ hedge legs into shares for the what-if.
+  const etfMeta = await loadEtfMeta();
+  const etfPrices: Record<string, number> = {};
+  for (const [sym, m] of Object.entries(etfMeta)) if (m.price > 0) etfPrices[sym] = m.price;
+
+  return NextResponse.json({ factors, corr, aligned, etfPrices, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
 }

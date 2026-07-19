@@ -17,6 +17,18 @@ export async function loadMarketSeries(): Promise<Daily | null> {
   }
 }
 
+export interface EtfMeta { name: string; price: number; beta: number | null }
+
+/** Hedge-menu ETF price + beta (refresh-hedge-etfs) so /api/portfolio can price ETFs. {} if not built. */
+export async function loadEtfMeta(): Promise<Record<string, EtfMeta>> {
+  try {
+    const raw = await fs.readFile(path.join(DATA_DIR, "etf-meta.json"), "utf8");
+    return ((JSON.parse(raw) as { etfs?: Record<string, EtfMeta> }).etfs ?? {});
+  } catch {
+    return {};
+  }
+}
+
 export async function loadSnapshot(universe: string): Promise<Snapshot | null> {
   try {
     const raw = await fs.readFile(

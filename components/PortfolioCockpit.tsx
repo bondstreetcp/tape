@@ -141,20 +141,22 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const syms = new Set<string>([...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol));
     return syms.size ? [...syms].sort().join(",") : symbolsKey;
   }, [stats.holdings, statsAfter.holdings, symbolsKey]);
-  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; cappedFrom: number | null; cap: number | null }>({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null });
+  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, cappedFrom: null, cap: null };
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; cappedFrom: number | null; cap: number | null }>(emptyRisk);
   const [riskLoading, setRiskLoading] = useState(false);
   useEffect(() => {
-    if (!riskSymbolsKey) { setRisk({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null }); return; }
+    if (!riskSymbolsKey) { setRisk(emptyRisk); return; }
     let cancelled = false;
     setRiskLoading(true);
     const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/portfolio/risk?symbols=${encodeURIComponent(riskSymbolsKey)}`).then((x) => x.json());
-        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
-      } catch { if (!cancelled) setRisk({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null }); }
+        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, etfPrices: r.etfPrices || {}, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
+      } catch { if (!cancelled) setRisk(emptyRisk); }
       if (!cancelled) setRiskLoading(false);
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [riskSymbolsKey]);
 
   const tilts = useMemo(
@@ -604,6 +606,16 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                             </div>
                           ))}
                         </div>
+                        <button
+                          onClick={() => {
+                            const lines = optHedge.legs
+                              .map((l) => { const px = risk.etfPrices[l.etf]; if (!px) return null; const sh = Math.round(l.notional / px); return sh ? `${l.etf} ${sh}` : null; })
+                              .filter((x): x is string => x != null);
+                            if (lines.length) { setWhatIfText("# optimized hedge\n" + lines.join("\n")); setWhatIf(true); }
+                          }}
+                          disabled={!Object.keys(risk.etfPrices).length}
+                          className="mt-2 rounded-md border border-[var(--accent)]/50 px-2 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >Apply to what-if →</button>
                         <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                           Risk-minimizing overlay (ridge least-squares on {optHedge.nEtfs} liquid ETFs&apos; daily returns), capped at your gross — minimizes the book&apos;s predicted variance. A hedge, not a trade recommendation.
                         </p>

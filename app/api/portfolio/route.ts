@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
-import { loadSnapshot } from "@/lib/data";
+import { loadSnapshot, loadEtfMeta } from "@/lib/data";
 import type { NameData } from "@/lib/portfolio";
 import { parseTimeframe, type TimeframeKey } from "@/lib/timeframes";
 
@@ -51,18 +51,25 @@ export async function GET(req: Request) {
 
   if (!symbols.length) return NextResponse.json({ data: {}, missing: [], tf, asOf: null });
 
-  const [names, betas] = await Promise.all([buildNameMap(tf), loadBetas()]);
+  const [names, betas, etfMeta] = await Promise.all([buildNameMap(tf), loadBetas(), loadEtfMeta()]);
 
   const data: Record<string, NameData> = {};
   const missing: string[] = [];
   for (const sym of new Set(symbols)) {
     const nd = names.get(sym);
-    if (!nd || !(nd.price > 0)) {
-      missing.push(sym);
+    if (nd && nd.price > 0) {
+      const beta = betas[sym];
+      data[sym] = { ...nd, beta: typeof beta === "number" && Number.isFinite(beta) ? beta : null };
       continue;
     }
-    const beta = betas[sym];
-    data[sym] = { ...nd, beta: typeof beta === "number" && Number.isFinite(beta) ? beta : null };
+    // ETF fallback (hedge-menu names aren't in the stock snapshots): price them from etf-meta so the
+    // optimizer's hedge legs can be applied in the what-if simulator.
+    const etf = etfMeta[sym];
+    if (etf && etf.price > 0) {
+      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: "ETF/Index", beta: etf.beta, ret: null };
+      continue;
+    }
+    missing.push(sym);
   }
 
   return NextResponse.json({ data, missing, tf, asOf: new Date().toISOString() });
