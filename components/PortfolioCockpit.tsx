@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, CAP_ORDER, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
+import { parseBrokerCsv } from "@/lib/brokerImport";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -56,6 +57,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
 
 export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [text, setText] = useState("");
+  const [importNote, setImportNote] = useState<string | null>(null); // broker CSV import result
   const [tf, setTf] = useState<TimeframeKey>("ytd");
   const [resp, setResp] = useState<{ data: Record<string, NameData>; missing: string[]; asOf: string | null }>({ data: {}, missing: [], asOf: null });
   const [loading, setLoading] = useState(false);
@@ -94,6 +96,21 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     if (!hydrated.current) return;
     try { localStorage.setItem(BASIS_KEY, showPct ? "%" : "$"); } catch { /* ignore */ }
   }, [showPct]);
+
+  const handleImport = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = parseBrokerCsv(String(reader.result || ""));
+      if (!res) { setImportNote("⚠ Couldn't read that file — need a CSV with Symbol and Quantity columns."); return; }
+      setText(res.positions.map((p) => `${p.symbol} ${p.shares}`).join("\n"));
+      setImportNote(`Imported ${res.positions.length} position${res.positions.length === 1 ? "" : "s"} from ${res.broker}${res.skipped.length ? ` · skipped ${res.skipped.length} (options/cash)` : ""}.`);
+    };
+    reader.onerror = () => setImportNote("⚠ Couldn't read that file.");
+    reader.readAsText(file);
+  };
 
   const positions = useMemo(() => parsePositions(text), [text]);
   const whatIfPositions = useMemo(() => parsePositions(whatIfText), [whatIfText]);
@@ -273,8 +290,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[13px] font-semibold">Your positions</span>
               <div className="flex gap-1.5 text-[11px]">
+                <label className="cursor-pointer rounded border border-[var(--accent)]/50 px-2 py-0.5 text-[var(--accent)] hover:bg-[var(--accent)]/10" title="Upload a Schwab / Fidelity / Robinhood positions CSV">
+                  Import CSV
+                  <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} />
+                </label>
                 <button onClick={() => setText(EXAMPLE)} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Example</button>
-                <button onClick={() => setText("")} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Clear</button>
+                <button onClick={() => { setText(""); setImportNote(null); }} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Clear</button>
               </div>
             </div>
             <textarea
@@ -291,6 +312,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
             {resp.missing.length > 0 && (
               <p className="mt-1.5 text-[11px] text-[#f59e0b]">Not found (US names only): {resp.missing.join(", ")}</p>
             )}
+            {importNote && <p className={`mt-1.5 text-[11px] ${importNote.startsWith("⚠") ? "text-[#f59e0b]" : "text-[var(--text-3)]"}`}>{importNote}</p>}
             <div className="mt-2.5 border-t border-[var(--border)] pt-2.5">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-[12px] text-[var(--text-3)]">Account equity</span>
