@@ -884,17 +884,17 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     ))}
                   </div>
                 </div>
-                <table className="mt-2 w-full min-w-[720px] text-left text-[13px]">
+                <table className="mt-2 w-full text-left text-[13px] sm:min-w-[720px]">
                   <thead className="border-y border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
                     <tr>
                       <th className="px-3 py-2 font-medium">Symbol</th>
-                      <th className="px-2 py-2 font-medium">Sector</th>
-                      <th className="px-2 py-2 text-right font-medium">Shares</th>
-                      <th className="px-2 py-2 text-right font-medium">Price</th>
+                      <th className="hidden px-2 py-2 font-medium sm:table-cell">Sector</th>
+                      <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Shares</th>
+                      <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Price</th>
                       <th className="px-2 py-2 text-right font-medium">Value</th>
                       <th className="px-2 py-2 text-right font-medium">Weight</th>
                       <th className="px-2 py-2 text-right font-medium" title="Share of the book's total risk (variance) — can exceed weight for a volatile/correlated name, or go negative for a diversifier">% Risk</th>
-                      <th className="px-2 py-2 text-right font-medium">β</th>
+                      <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">β</th>
                       <th className="px-3 py-2 text-right font-medium">{tf.toUpperCase()}</th>
                     </tr>
                   </thead>
@@ -906,15 +906,15 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                           {h.value < 0 && <span className="ml-1 rounded bg-[#ef4444]/15 px-1 text-[9px] font-semibold text-[#ef4444]">SHORT</span>}
                           <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{h.name}</div>
                         </td>
-                        <td className="px-2 py-2 text-[12px] text-[var(--text-3)]">{h.sector ?? "—"}</td>
-                        <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{h.shares.toLocaleString()}</td>
-                        <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{px(h.price)}</td>
+                        <td className="hidden px-2 py-2 text-[12px] text-[var(--text-3)] sm:table-cell">{h.sector ?? "—"}</td>
+                        <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{h.shares.toLocaleString()}</td>
+                        <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{px(h.price)}</td>
                         <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "#ef4444" }}>{pctMode ? pctAum(h.value / stats.aum!, true) : signMoney(h.value)}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{(h.weight * 100).toFixed(1)}%</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">
                           {(() => { const rc = riskContribOf.get(h.symbol); return rc == null ? "—" : `${rc < 0 ? "−" : ""}${Math.abs(rc * 100).toFixed(0)}%`; })()}
                         </td>
-                        <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{typeof h.beta === "number" ? h.beta.toFixed(2) : "—"}</td>
+                        <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{typeof h.beta === "number" ? h.beta.toFixed(2) : "—"}</td>
                         <td className="px-3 py-2 text-right font-mono tabular-nums" style={{ color: h.ret == null ? "var(--text-4)" : pos(h.ret) ? "#22c55e" : "#ef4444" }}>{pct(h.ret ?? null)}</td>
                       </tr>
                     ))}
