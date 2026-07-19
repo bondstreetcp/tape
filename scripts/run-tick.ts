@@ -243,7 +243,11 @@ async function main() {
     }
 
     // ── Upload + gate + deploy (workflow tail) ────────────────────────────────────────────────────
-    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2");
+    // FULL propagates into data-to-r2's env so its FULL-only writes fire on the NAS pipeline too — the
+    // per-stock cache object (company.tar.gz) and the freshness heartbeat. In GitHub Actions `env.FULL`
+    // is set job-wide; run-tick only has `mode` locally, so pass it explicitly (else the NAS strips
+    // data/company from the tarball but never re-ships company.tar.gz, and never writes the heartbeat).
+    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", mode === "full" ? { FULL: "true" } : {});
     let gateOk = true;
     if (mode === "full") gateOk = step("Data-freshness gate", "npm run check-freshness");
 

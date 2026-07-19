@@ -14,6 +14,7 @@ import path from "path";
 import { getObject, r2Configured } from "../lib/r2";
 
 const KEY_TAR = "site-data/data.tar.gz";
+const KEY_COMPANY = "site-data/company.tar.gz";
 const haveCommitted = () => existsSync(path.join("data", "russell3000", "snapshot.json"));
 
 async function main() {
@@ -22,10 +23,20 @@ async function main() {
     console.error("data-from-r2: R2 not configured AND no committed data/ — cannot hydrate the site.");
     process.exit(1);
   }
+  const tmp = path.join("lake", ".tmp");
+  mkdirSync(tmp, { recursive: true });
+
+  // Two objects: the every-tick data tree (KEY_TAR) + the FULL-only per-stock cache (KEY_COMPANY, split
+  // out of the tarball so intraday ticks don't re-ship ~14 MB of unchanged cache). Fetch both in
+  // parallel; the trees are disjoint (data/company/* lives ONLY in company.tar.gz), so extraction order
+  // is moot. allSettled so a missing/failed company object can't reject the required data download.
+  const [dataRes, companyRes] = await Promise.allSettled([getObject(KEY_TAR), getObject(KEY_COMPANY)]);
+
+  // The main data tree is REQUIRED — unchanged fatal-with-committed-fallback contract. Extract is inside
+  // the guard too, so a corrupt download falls back to committed data/ exactly as before.
   try {
-    const buf = await getObject(KEY_TAR);
-    const tmp = path.join("lake", ".tmp");
-    mkdirSync(tmp, { recursive: true });
+    if (dataRes.status === "rejected") throw dataRes.reason;
+    const buf = dataRes.value;
     const tarPath = path.join(tmp, "site-data.tar.gz");
     writeFileSync(tarPath, buf);
     execFileSync("tar", ["-xzf", tarPath], { stdio: ["ignore", "ignore", "inherit"] }); // extracts data/ into cwd
@@ -36,6 +47,22 @@ async function main() {
     if (haveCommitted()) { console.warn(`data-from-r2: R2 download failed — falling back to committed data/. (${diag})`); return; }
     console.error(`data-from-r2: R2 download failed and no committed data/ — build cannot proceed. (${diag})`);
     process.exit(1);
+  }
+
+  // Per-stock cache: OPTIONAL, best-effort. A missing company.tar.gz (no FULL has shipped it yet) or a
+  // failed download/extract must NOT fail the build — lib/companyCache live-fetches on a miss until the
+  // next FULL bakes and ships it (degrade to live-fallback, never break the deploy).
+  if (companyRes.status === "fulfilled") {
+    try {
+      const cPath = path.join(tmp, "company.tar.gz");
+      writeFileSync(cPath, companyRes.value);
+      execFileSync("tar", ["-xzf", cPath], { stdio: ["ignore", "ignore", "inherit"] });
+      console.log(`data-from-r2: hydrated data/company/ from R2 (${(companyRes.value.length / 1e6).toFixed(1)} MB)`);
+    } catch (e: any) {
+      console.warn(`data-from-r2: per-stock cache extract failed (${String(e?.message || e).slice(0, 100)}) — stock pages live-fetch.`);
+    }
+  } else {
+    console.warn(`data-from-r2: per-stock cache not hydrated (${String(companyRes.reason?.message || companyRes.reason).slice(0, 100)}) — stock pages live-fetch until the next FULL ships it.`);
   }
 }
 

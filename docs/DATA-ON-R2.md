@@ -7,12 +7,17 @@ git stops carrying the churn. Done in stages so nothing breaks; the git-history 
 
 ## How it works
 
-- **Nightly** (`npm run data-to-r2`, wired into refresh-data.yml): tars the `data/` tree into ONE
-  object `s3://tape-lake/site-data/data.tar.gz` (+ a manifest). One write per run — trivial R2 usage.
-- **Vercel build** (`npm run vercel-build` = `data-from-r2` then `next build`): downloads that tarball
-  and extracts it into the project before building, so `next build` sees `data/` exactly as if it were
-  committed. Round-trip is byte-identical (verified). Falls back to committed `data/` if R2 is
-  unreachable (matters only during the safety phase below).
+- **Nightly** (`npm run data-to-r2`, wired into refresh-data.yml): tars the `data/` tree into
+  `s3://tape-lake/site-data/data.tar.gz` (+ a manifest) on **every** tick. The per-stock cache
+  (`data/company/*`) is **excluded** from that tarball and shipped as a **separate, FULL-only** object
+  `site-data/company.tar.gz` — it only changes on a FULL run, so keeping its ~14 MB out of the every-tick
+  tarball stops intraday quote ticks re-uploading (and the NAS re-downloading) unchanged cache.
+- **Vercel build** (`npm run vercel-build` = `data-from-r2` then `next build`): downloads **both**
+  objects in parallel and extracts them into the project before building, so `next build` sees `data/`
+  exactly as if it were committed. The data tree is required (byte-identical round-trip, verified); the
+  per-stock cache is best-effort — a missing/failed `company.tar.gz` just means stock pages live-fetch
+  (via `lib/companyCache`) until the next FULL ships it, and never fails the build. Falls back to
+  committed `data/` if R2 is unreachable (matters only during the safety phase below).
 
 The licensed `data/.research/` corpus is excluded (it's gitignored today too, so no change).
 
