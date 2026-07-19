@@ -6,11 +6,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SpinoffsData, SpinoffRow, SpinPipelineRow } from "@/lib/spinoffs";
-import { turnoverColor, regStage } from "@/lib/spinoffs";
+import { turnoverColor, regStage, pipelineParentTicker } from "@/lib/spinoffs";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import SpinoffBriefing from "./SpinoffBriefing";
+import SpinoffPreview from "./SpinoffPreview";
 
 type SortKey = "setup" | "turnover" | "recent" | "since";
 
@@ -63,11 +64,16 @@ function PipelineSection({ universe, pipeline }: { universe: string; pipeline: S
                     <a href={p.url} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] hover:underline">{p.ticker || p.spinco}</a>
                     {p.ticker && <div className="max-w-[220px] truncate text-[11px] text-[var(--text-4)]">{p.spinco}</div>}
                     {p.business && <div className="max-w-[260px] truncate text-[11px] text-[var(--text-4)]" title={p.business}>{p.business}</div>}
-                    <div className="mt-1"><SpinoffBriefing cik={p.cik} spinco={p.spinco} parent={p.parent} /></div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <SpinoffBriefing cik={p.cik} spinco={p.spinco} parent={p.parent} />
+                      {/* Two-entity read needs the PARENT's filings, so it only renders when the
+                          parent's ticker is grounded (extraction or the hand-verified override). */}
+                      {pipelineParentTicker(p) && <SpinoffPreview cik={p.cik} spinco={p.spinco} parent={p.parent} />}
+                    </div>
                   </td>
                   <td className="px-2 py-2.5 text-[12px] text-[var(--text-3)]">
                     {p.parent ?? <span className="text-[var(--text-4)]">—</span>}
-                    {p.parentTicker && <Link href={`/u/${universe}/stock/${encodeURIComponent(p.parentTicker)}`} className="ml-1 font-mono text-[var(--accent)] hover:underline">{p.parentTicker}</Link>}
+                    {pipelineParentTicker(p) && <Link href={`/u/${universe}/stock/${encodeURIComponent(pipelineParentTicker(p)!)}`} className="ml-1 font-mono text-[var(--accent)] hover:underline">{pipelineParentTicker(p)}</Link>}
                   </td>
                   <td className="px-2 py-2.5"><span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: stage.color, background: `color-mix(in oklab, ${stage.color} 15%, transparent)` }} title={`${p.daysInReg}d since first Form 10 · ${p.amendments} amendment${p.amendments === 1 ? "" : "s"}`}>{stage.label}</span></td>
                   <td className="px-2 py-2.5 whitespace-nowrap text-[12px] text-[var(--text-3)]">{fmtDate(p.filedDate)} <span className="text-[var(--text-4)]">· {p.daysInReg}d</span></td>

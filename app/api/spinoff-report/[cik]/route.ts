@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
+import { gatherForm10 } from "@/lib/spinoffFilings";
 import type { SpinoffReport, SpinoffFinancials } from "@/lib/spinoffReport";
 
 export const dynamic = "force-dynamic";
@@ -29,31 +29,8 @@ const SCHEMA =
   '"competitors":string[],"customers":string|null,"suppliers":string|null,"moats":string[],"risks":string[],"watchItems":string[],' +
   '"financials":{"revenue":string|null,"growth":string|null,"profitability":string|null,"note":string|null}|null}';
 
-/** Latest Form 10 for a CIK → the info statement text (primary doc + the largest HTML exhibit, which
- * is where a spin's real disclosure lives), full-length (htmlToText's default cap hides deep sections). */
-async function gatherForm10(cik: string): Promise<{ url: string; date: string; form: string; text: string; parent: string | null } | null> {
-  const sub = await getSubmissions(cik).catch(() => null);
-  const r = sub?.filings?.recent;
-  if (!r?.form) return null;
-  let idx = -1;
-  for (let i = 0; i < r.form.length; i++) if (r.form[i] === "10-12B" || r.form[i] === "10-12B/A") { idx = i; break; }
-  if (idx < 0) return null;
-  const acc = r.accessionNumber[idx].replace(/-/g, "");
-  const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}`;
-  let text = "";
-  try {
-    const dir = await (await fetchWithRetry(`${base}/index.json`, 2)).json();
-    const items: any[] = dir?.directory?.item || [];
-    const htmls = items.filter((f) => /\.html?$/i.test(f.name) && !/^R\d+\.htm/i.test(f.name)).sort((a, b) => (Number(b.size) || 0) - (Number(a.size) || 0));
-    const picks = [...new Set([r.primaryDocument[idx], htmls[0]?.name].filter(Boolean))].slice(0, 2);
-    for (const name of picks) {
-      const res = await fetchWithRetry(`${base}/${name}`, 2).catch(() => null);
-      if (res?.ok) text += "\n\n" + htmlToText(await res.text(), 1_200_000);
-    }
-  } catch { /* fall through */ }
-  if (text.replace(/\s/g, "").length < 4000) return null;
-  return { url: `${base}/${r.primaryDocument[idx]}`, date: r.filingDate[idx], form: r.form[idx], text, parent: null };
-}
+// gatherForm10 moved to lib/spinoffFilings.ts — shared with the two-entity preview route so both
+// read the identical documents.
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik: string }> }) {
   const { cik: cikRaw } = await params;

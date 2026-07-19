@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tickerToCik, getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
+import { tickerToCik } from "@/lib/edgar";
+import { gather10K } from "@/lib/spinoffFilings";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
 import type { CompanyBriefing } from "@/lib/companyBriefing";
@@ -25,27 +26,7 @@ const SCHEMA =
   'Return ONLY JSON: {"whatItIs":string|null,"howItMakesMoney":string|null,"industry":string|null,"competitivePosition":string|null,' +
   '"competitors":string[],"customers":string|null,"suppliers":string|null,"moats":string[],"risks":string[],"watchItems":string[]}';
 
-/** Latest 10-K for a CIK → its text (primary doc, full-length — htmlToText's default cap hides the
- * deep Item 1/1A/7 sections a 10-K buries hundreds of pages in). 10-K/A amendments count too. */
-async function gather10K(cik: string): Promise<{ url: string; date: string; form: string; text: string } | null> {
-  const sub = await getSubmissions(cik).catch(() => null);
-  const r = sub?.filings?.recent;
-  if (!r?.form) return null;
-  let idx = -1;
-  for (let i = 0; i < r.form.length; i++) if (r.form[i] === "10-K" || r.form[i] === "10-K/A" || r.form[i] === "20-F") { idx = i; break; }
-  if (idx < 0) return null;
-  const acc = r.accessionNumber[idx].replace(/-/g, "");
-  const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}`;
-  const doc = r.primaryDocument[idx];
-  if (!doc) return null;
-  try {
-    const res = await fetchWithRetry(`${base}/${doc}`, 2);
-    if (!res.ok) return null;
-    const text = htmlToText(await res.text(), 1_500_000);
-    if (text.replace(/\s/g, "").length < 4000) return null;
-    return { url: `${base}/${doc}`, date: r.filingDate[idx], form: r.form[idx], text };
-  } catch { return null; }
-}
+// gather10K moved to lib/spinoffFilings.ts — shared with the two-entity spin preview route.
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;

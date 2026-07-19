@@ -1700,6 +1700,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "A generalist's primer drilled from the SpinCo's Form 10 — what the business is and why it's being spun, how the industry works, the specifically-named competitors, the customer and supplier base, key risks, and a financial snapshot. It's the issuer's own account (its framing of its rivals), pulled from the filing with nothing added from outside — a fast way to get up to speed on an unfamiliar industry."
           },
           {
+            "term": "Two-entity preview →",
+            "plain": "The spin as TWO investable pieces, side by side: what stays with the parent (the RemainCo) versus what spins off, each with its financials, business-model economics, the case for owning it, and its risks — plus the distribution mechanics (ratio, record and distribution dates) and a head-to-head read on who gets the growth, the margin, and the balance-sheet load. Built from the SpinCo's Form 10 AND the parent's own 10-K (where the segment's numbers actually live); when broker or analyst-day notes have been ingested in the Research Desk, they enrich the read with standalone margin and return-on-capital framing the filings don't carry. Shown only when the parent's ticker is known."
+          },
+          {
             "term": "Spinco",
             "plain": "The newly independent company created by the spin-off (ticker and name)."
           },

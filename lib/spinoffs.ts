@@ -92,6 +92,16 @@ export interface SpinoffsData {
   pipeline?: SpinPipelineRow[]; // upcoming spins in registration (soonest-filed first)
 }
 
+// Parent tickers the Form 10 extraction couldn't ground (the filing names the parent COMPANY but not
+// its ticker). Hand-verified; keyed by SpinCo CIK. Unlocks the two-entity preview for these rows.
+export const PARENT_TICKER_OVERRIDES: Record<string, string> = {
+  "0002105139": "REZI", // ADI Global Distribution ← Resideo (record date Jul 20 2026, distribution Aug 3 — REZI's 8-K Ex-99.1)
+};
+/** The pipeline row's parent ticker: the grounded extraction when present, else the hand-verified
+ *  override. null = parent ticker unknown → the two-entity preview can't anchor the RemainCo side. */
+export const pipelineParentTicker = (r: { cik: string; parentTicker: string | null }): string | null =>
+  r.parentTicker ?? PARENT_TICKER_OVERRIDES[r.cik] ?? null;
+
 export const turnoverColor = (pct: number | null): string =>
   pct == null ? "var(--text-4)" : pct >= 100 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "var(--text-2)";
 
