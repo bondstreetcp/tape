@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
-import { computePortfolio, scenarioPnL, parsePositions, type NameData } from "@/lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
 import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -13,6 +13,7 @@ import InfoDot from "./InfoDot";
 const STORE_KEY = "tape.portfolio.positions";
 const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
 const BASIS_KEY = "tape.portfolio.basis"; // "$" | "%"
+const WHATIF_KEY = "tape.portfolio.whatif"; // proposed trades (delta book) for the what-if sim
 const EXAMPLE = `AAPL 100
 MSFT 60
 NVDA 40
@@ -58,6 +59,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [shock, setShock] = useState(-5);
   const [aumText, setAumText] = useState(""); // account equity ($); blank = read in dollars
   const [showPct, setShowPct] = useState(false); // $ vs % of AUM
+  const [whatIf, setWhatIf] = useState(false); // show the what-if trade panel
+  const [whatIfText, setWhatIfText] = useState(""); // proposed trades (SYMBOL SHARES; signed)
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -66,9 +69,14 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
       const raw = localStorage.getItem(STORE_KEY); if (raw != null) setText(raw);
       const savedAum = localStorage.getItem(AUM_KEY); if (savedAum != null) setAumText(savedAum);
       setShowPct(localStorage.getItem(BASIS_KEY) === "%");
+      const savedWi = localStorage.getItem(WHATIF_KEY); if (savedWi) { setWhatIfText(savedWi); setWhatIf(true); }
     } catch { /* ignore */ }
     hydrated.current = true;
   }, []);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(WHATIF_KEY, whatIfText); } catch { /* ignore */ }
+  }, [whatIfText]);
   useEffect(() => {
     if (!hydrated.current) return;
     try { localStorage.setItem(STORE_KEY, text); } catch { /* ignore */ }
@@ -83,7 +91,15 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   }, [showPct]);
 
   const positions = useMemo(() => parsePositions(text), [text]);
-  const symbolsKey = useMemo(() => [...new Set(positions.map((p) => p.symbol))].sort().join(","), [positions]);
+  const whatIfPositions = useMemo(() => parsePositions(whatIfText), [whatIfText]);
+  const afterPositions = useMemo(() => mergePositions(positions, whatIfPositions), [positions, whatIfPositions]);
+  const whatIfActive = whatIf && whatIfPositions.length > 0;
+  // Fetch price/beta/series for the UNION of current + proposed names, so the after-book prices and
+  // its predicted risk are fully computable even for a brand-new hedge instrument.
+  const symbolsKey = useMemo(
+    () => [...new Set([...positions, ...whatIfPositions].map((p) => p.symbol))].sort().join(","),
+    [positions, whatIfPositions],
+  );
 
   // Debounced fetch of per-name price/sector/beta/return whenever the book (or timeframe) changes.
   useEffect(() => {
@@ -106,6 +122,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [aumText]);
   const stats = useMemo(() => computePortfolio(positions, dataMap, aum), [positions, dataMap, aum]);
+  const statsAfter = useMemo(() => computePortfolio(afterPositions, dataMap, aum), [afterPositions, dataMap, aum]);
   const hasBook = stats.holdings.length > 0;
   const effN = stats.concentration.hhi > 0 ? 1 / stats.concentration.hhi : 0; // effective # of names
   const netPctGross = stats.gross ? (stats.net / stats.gross) * 100 : 0;
@@ -118,10 +135,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   // --- Risk decomposition (factor tilts + correlation) — a heavier, separately-fetched read. ---
   // Send priced names ordered by |exposure| desc (holdings are pre-sorted) so if the server caps the
   // list it keeps the most material positions; fall back to the raw symbol set before prices load.
-  const riskSymbolsKey = useMemo(
-    () => (stats.holdings.length ? stats.holdings.map((h) => h.symbol).join(",") : symbolsKey),
-    [stats.holdings, symbolsKey],
-  );
+  const riskSymbolsKey = useMemo(() => {
+    const syms = new Set<string>([...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol));
+    return syms.size ? [...syms].sort().join(",") : symbolsKey;
+  }, [stats.holdings, statsAfter.holdings, symbolsKey]);
   const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; cappedFrom: number | null; cap: number | null }>({ factors: {}, corr: [], aligned: null, cappedFrom: null, cap: null });
   const [riskLoading, setRiskLoading] = useState(false);
   useEffect(() => {
@@ -157,6 +174,37 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const riskBase = aum ?? stats.gross; // % denominator for the risk figures (AUM if set, else gross)
   const pctOf = (d: number): string => (riskBase ? `${((d / riskBase) * 100).toFixed(1)}% of ${aum ? "AUM" : "gross"}` : "");
   const riskContribOf = useMemo(() => new Map((portRisk?.contributions ?? []).map((c) => [c.symbol, c.pctRisk])), [portRisk]);
+
+  // --- What-if: the after-trade book's risk + factor tilts (for the before → after comparison). ---
+  const portRiskAfter = useMemo(
+    () => (whatIfActive && risk.aligned ? computePortfolioRisk(statsAfter.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, { aum }) : null),
+    [whatIfActive, statsAfter.holdings, risk.aligned, aum],
+  );
+  const tiltsAfter = useMemo(
+    () => computeFactorTilts(statsAfter.holdings.map((h) => ({ value: h.value, factors: risk.factors[h.symbol] }))),
+    [statsAfter.holdings, risk.factors],
+  );
+  const momentumOf = (ts: { key: FactorKey; tilt: number }[]) => ts.find((t) => t.key === "momentum")?.tilt ?? 0;
+  const cmpRows = useMemo(() => {
+    if (!whatIfActive) return [] as { label: string; before: string; after: string; delta: string; color: string }[];
+    const rows: { label: string; before: string; after: string; delta: string; color: string }[] = [];
+    const push = (label: string, b: number, a: number, fmt: (x: number) => string, lowerSafer: boolean | null) => {
+      const d = a - b;
+      const color = Math.abs(d) < 1e-9 || lowerSafer == null ? "var(--text-3)"
+        : lowerSafer ? (d < 0 ? "#22c55e" : "#ef4444") : (d < 0 ? "#ef4444" : "#22c55e");
+      rows.push({ label, before: fmt(b), after: fmt(a), delta: (d >= 0 ? "+" : "−") + fmt(Math.abs(d)), color });
+    };
+    push("Gross", stats.gross, statsAfter.gross, money, true);
+    push("Net", stats.net, statsAfter.net, (x) => money(x), null);
+    push("Beta-adj net", stats.betaDollar ?? 0, statsAfter.betaDollar ?? 0, (x) => money(x), null);
+    if (portRisk && portRiskAfter) {
+      push("Predicted vol (ann.)", portRisk.volAnnDollar, portRiskAfter.volAnnDollar, money, true);
+      push("VaR 95% (1d)", portRisk.var95Dollar, portRiskAfter.var95Dollar, money, true);
+    }
+    push("Top-name conc.", stats.concentration.top1, statsAfter.concentration.top1, (x) => `${(x * 100).toFixed(0)}%`, true);
+    push("Momentum tilt", momentumOf(tilts), momentumOf(tiltsAfter), (x) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}σ`, null);
+    return rows;
+  }, [whatIfActive, stats, statsAfter, portRisk, portRiskAfter, tilts, tiltsAfter]);
 
   const uni = UNIVERSE_BY_ID[universe];
 
@@ -223,6 +271,26 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
           <p className="mt-2 px-1 text-[11px] leading-relaxed text-[var(--text-4)]">
             Prices from the latest US snapshot; betas are 5-yr weekly-equivalent vs the S&amp;P 500. International tickers aren&apos;t priced here. Research tool, not advice.
           </p>
+          <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+            <button onClick={() => setWhatIf((v) => !v)} className="flex w-full items-center justify-between text-[13px] font-semibold">
+              <span>What-if · simulate trades</span>
+              <span className="text-[var(--text-4)]">{whatIf ? "▾" : "▸"}</span>
+            </button>
+            {whatIf && (
+              <>
+                <textarea
+                  value={whatIfText}
+                  onChange={(e) => setWhatIfText(e.target.value)}
+                  spellCheck={false}
+                  placeholder={"NVDA 50   buy\nSPY -100  short a hedge\nAAPL -50  trim"}
+                  className="mt-2 h-24 w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--bg)] p-2.5 font-mono text-[13px] leading-relaxed outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)]/60"
+                />
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-4)]">
+                  Same <span className="font-mono">SYMBOL SHARES</span> format — signed deltas (buy +, trim/short −). A before → after comparison appears on the right; new names get priced too.
+                </p>
+              </>
+            )}
+          </div>
         </div>
 
         {/* ---- Analytics ---- */}
@@ -258,6 +326,37 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
                 </div>
               </div>
+
+              {/* What-if: before → after */}
+              {whatIfActive && (
+                <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">What-if <span className="text-[11px] font-normal text-[var(--text-4)]">— {whatIfPositions.length} trade{whatIfPositions.length === 1 ? "" : "s"}, before → after</span></span>
+                    <button onClick={() => setWhatIfText("")} className="text-[11px] text-[var(--text-4)] hover:text-[var(--text-2)]">reset</button>
+                  </div>
+                  <table className="w-full text-[12px]">
+                    <thead className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+                      <tr><th className="py-1 text-left font-medium">Metric</th><th className="text-right font-medium">Before</th><th className="text-right font-medium">After</th><th className="pl-3 text-right font-medium">Δ</th></tr>
+                    </thead>
+                    <tbody>
+                      {cmpRows.map((r) => (
+                        <tr key={r.label} className="border-t border-[var(--border)]">
+                          <td className="py-1 text-[var(--text-3)]">{r.label}</td>
+                          <td className="text-right font-mono tabular-nums text-[var(--text-3)]">{r.before}</td>
+                          <td className="text-right font-mono tabular-nums text-[var(--text-2)]">{r.after}</td>
+                          <td className="pl-3 text-right font-mono tabular-nums" style={{ color: r.color }}>{r.delta}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {portRisk && !portRiskAfter && (
+                    <p className="mt-2 text-[11px] text-[var(--text-4)]">Predicted vol / VaR after the trade update once the new name&apos;s history loads.</p>
+                  )}
+                  {statsAfter.missing.filter((m) => !stats.missing.includes(m)).length > 0 && (
+                    <p className="mt-1 text-[11px] text-[#f59e0b]">Proposed name not priced: {statsAfter.missing.filter((m) => !stats.missing.includes(m)).join(", ")}</p>
+                  )}
+                </div>
+              )}
 
               {/* Predicted risk — from the holdings' own return history */}
               {portRisk && (

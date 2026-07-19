@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computePortfolio, scenarioPnL, parsePositions, type NameData, type Position } from "../lib/portfolio";
+import { computePortfolio, scenarioPnL, parsePositions, mergePositions, type NameData, type Position } from "../lib/portfolio";
 
 const approx = (a: number, b: number, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≈ ${b}`);
 
@@ -98,6 +98,21 @@ test("computePortfolio: betaAdj null when the book has no betas", () => {
   assert.equal(s.betaDollar, null);
   assert.equal(s.exposurePct!.betaAdj, null); // AUM set, but no beta → beta-adjusted % is null
   approx(s.exposurePct!.gross, 1000 / 5000); // dollar exposures still divide by AUM
+});
+
+test("mergePositions: sum deltas, drop net-zero, add new names (what-if)", () => {
+  const base: Position[] = [{ symbol: "AAPL", shares: 100 }, { symbol: "MSFT", shares: 50 }, { symbol: "F", shares: 100 }];
+  const after = mergePositions(base, [
+    { symbol: "AAPL", shares: 50 }, // add to a holding → 150
+    { symbol: "F", shares: -100 }, // close it → dropped
+    { symbol: "NVDA", shares: -20 }, // brand-new short
+  ]);
+  assert.deepEqual(after, [
+    { symbol: "AAPL", shares: 150 },
+    { symbol: "MSFT", shares: 50 },
+    { symbol: "NVDA", shares: -20 },
+  ]);
+  assert.deepEqual(mergePositions(base, []), base); // no-op delta
 });
 
 test("computePortfolio: partial beta coverage is honest", () => {

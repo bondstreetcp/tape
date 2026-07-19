@@ -85,6 +85,22 @@ export function parsePositions(text: string): Position[] {
   return order.map((symbol) => ({ symbol, shares: merged.get(symbol)! })).filter((p) => p.shares !== 0);
 }
 
+/**
+ * Merge a delta book into a base book (what-if): sum shares per symbol, drop net-zero lines. `delta`
+ * shares are signed — positive buys/covers, negative trims/shorts. Pure so the cockpit's before/after
+ * simulation and a unit test share it.
+ */
+export function mergePositions(base: Position[], delta: Position[]): Position[] {
+  const m = new Map<string, number>();
+  const order: string[] = [];
+  for (const p of [...base, ...delta]) {
+    const sym = p.symbol.toUpperCase();
+    if (!m.has(sym)) order.push(sym);
+    m.set(sym, (m.get(sym) ?? 0) + p.shares);
+  }
+  return order.map((symbol) => ({ symbol, shares: m.get(symbol)! })).filter((p) => p.shares !== 0);
+}
+
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 export function computePortfolio(
