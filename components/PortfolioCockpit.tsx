@@ -19,6 +19,7 @@ import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
 import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
 import InfoDot from "./InfoDot";
+import { PrismMark } from "@/components/PrismLogo";
 
 const STORE_KEY = "tape.portfolio.positions";
 const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
@@ -53,6 +54,17 @@ const fmtDays = (d: number | null | undefined): string => (d == null ? "—" : d
 
 const SHOCKS = [-10, -5, -2, 2, 5, 10];
 const pos = (n: number) => n >= 0;
+// Factor → Prism spectrum color (the same dispersion as the mark: one return splits into these bets).
+const FACTOR_COLOR: Record<string, string> = {
+  Market: "var(--spec-indigo)",
+  Size: "var(--spec-azure)",
+  Value: "var(--spec-teal)",
+  Momentum: "var(--spec-green)",
+  Quality: "var(--spec-amber)",
+  LowVol: "var(--spec-rose)",
+  Specific: "var(--spec-violet)",
+};
+const factorColor = (f: string): string => FACTOR_COLOR[f] ?? "var(--accent)";
 // Directional multi-factor shock presets (fractions) for the factor-shock what-if.
 const SHOCK_PRESETS: { label: string; shocks: Record<string, number> }[] = [
   { label: "risk-off", shocks: { Market: -0.05, Momentum: -0.03, LowVol: 0.02 } },
@@ -292,7 +304,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const push = (label: string, b: number, a: number, fmt: (x: number) => string, lowerSafer: boolean | null) => {
       const d = a - b;
       const color = Math.abs(d) < 1e-9 || lowerSafer == null ? "var(--text-3)"
-        : lowerSafer ? (d < 0 ? "#22c55e" : "#ef4444") : (d < 0 ? "#ef4444" : "#22c55e");
+        : lowerSafer ? (d < 0 ? "var(--pos)" : "var(--neg)") : (d < 0 ? "var(--neg)" : "var(--pos)");
       rows.push({ label, before: fmt(b), after: fmt(a), delta: (d >= 0 ? "+" : "−") + fmt(Math.abs(d)), color });
     };
     push("Gross", stats.gross, statsAfter.gross, money, true);
@@ -355,12 +367,16 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const uni = UNIVERSE_BY_ID[universe];
 
   return (
-    <main className="mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
+    <main className="prism mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {uni?.name ?? "Home"}</Link>
-          <h1 className="mt-1 text-2xl font-bold">Portfolio Risk Cockpit</h1>
-          <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
+          <div className="mt-2 flex items-center gap-2.5">
+            <PrismMark size={30} />
+            <span className="text-[26px] font-semibold leading-none tracking-[0.16em]" style={{ paddingLeft: "0.16em" }}>PRISM</span>
+            <span className="ml-1 hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-4)] sm:inline">Portfolio Intelligence</span>
+          </div>
+          <p className="mt-2 max-w-3xl text-[13px] text-[var(--text-3)]"><b className="text-[var(--text-2)]">See what your returns are made of.</b>
             Type your book (one <span className="font-mono">SYMBOL SHARES</span> per line; negatives = shorts) and get live <b>gross/net exposure</b> <InfoDot term="Gross exposure" />, <b>sector tilts</b>, <b>concentration</b> <InfoDot term="HHI concentration" />, portfolio <b>beta</b> <InfoDot term="Beta" />, and a <b>market-shock</b> P&amp;L. Nothing leaves your browser — the book is saved locally.
           </p>
         </div>
@@ -397,9 +413,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
               {loading && <span>pricing…</span>}
             </div>
             {resp.missing.length > 0 && (
-              <p className="mt-1.5 text-[11px] text-[#f59e0b]">Not found (US names only): {resp.missing.join(", ")}</p>
+              <p className="mt-1.5 text-[11px] text-[var(--warn)]">Not found (US names only): {resp.missing.join(", ")}</p>
             )}
-            {importNote && <p className={`mt-1.5 text-[11px] ${importNote.startsWith("⚠") ? "text-[#f59e0b]" : "text-[var(--text-3)]"}`}>{importNote}</p>}
+            {importNote && <p className={`mt-1.5 text-[11px] ${importNote.startsWith("⚠") ? "text-[var(--warn)]" : "text-[var(--text-3)]"}`}>{importNote}</p>}
             <div className="mt-2.5 border-t border-[var(--border)] pt-2.5">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-[12px] text-[var(--text-3)]">Account equity</span>
@@ -516,12 +532,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 </div>
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                   <Stat label="Gross" value={cardVal(stats.gross, ep?.gross, false)} sub="Σ |value|" />
-                  <Stat label="Net" value={cardVal(stats.net, ep?.net, true)} sub={`${pct(netPctGross, 0)} of gross`} color={pos(stats.net) ? "#22c55e" : "#ef4444"} />
-                  <Stat label="Long" value={cardVal(stats.longValue, ep?.long, false)} color="#22c55e" />
-                  <Stat label="Short" value={cardVal(stats.shortValue, ep?.short, true)} color="#ef4444" />
-                  <Stat label="Beta-adj net" value={cardVal(stats.betaDollar, ep?.betaAdj, true)} sub="Σ value·β" color={stats.betaDollar != null && stats.betaDollar < 0 ? "#ef4444" : undefined} />
-                  <Stat label="Net β" value={stats.beta == null ? "—" : stats.beta.toFixed(2)} sub={stats.betaCoverage < 0.999 ? `${Math.round(stats.betaCoverage * 100)}% covered` : "per $ gross"} color={stats.beta != null && stats.beta < 0 ? "#ef4444" : undefined} />
-                  <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
+                  <Stat label="Net" value={cardVal(stats.net, ep?.net, true)} sub={`${pct(netPctGross, 0)} of gross`} color={pos(stats.net) ? "var(--pos)" : "var(--neg)"} />
+                  <Stat label="Long" value={cardVal(stats.longValue, ep?.long, false)} color="var(--pos)" />
+                  <Stat label="Short" value={cardVal(stats.shortValue, ep?.short, true)} color="var(--neg)" />
+                  <Stat label="Beta-adj net" value={cardVal(stats.betaDollar, ep?.betaAdj, true)} sub="Σ value·β" color={stats.betaDollar != null && stats.betaDollar < 0 ? "var(--neg)" : undefined} />
+                  <Stat label="Net β" value={stats.beta == null ? "—" : stats.beta.toFixed(2)} sub={stats.betaCoverage < 0.999 ? `${Math.round(stats.betaCoverage * 100)}% covered` : "per $ gross"} color={stats.beta != null && stats.beta < 0 ? "var(--neg)" : undefined} />
+                  <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "var(--pos)" : "var(--neg)"} />
                 </div>
               </div>
 
@@ -531,8 +547,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[13px] font-semibold">Today <span className="text-[11px] font-normal text-[var(--text-4)]">what moved your book</span></span>
                     <span className="flex items-baseline gap-2">
-                      <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: today.totalPnl >= 0 ? "#22c55e" : "#ef4444" }}>{signMoney(today.totalPnl)}</span>
-                      {today.totalPct != null && <span className="font-mono text-[12px] tabular-nums" style={{ color: today.totalPnl >= 0 ? "#22c55e" : "#ef4444" }}>({pct(today.totalPct * 100)})</span>}
+                      <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: today.totalPnl >= 0 ? "var(--pos)" : "var(--neg)" }}>{signMoney(today.totalPnl)}</span>
+                      {today.totalPct != null && <span className="font-mono text-[12px] tabular-nums" style={{ color: today.totalPnl >= 0 ? "var(--pos)" : "var(--neg)" }}>({pct(today.totalPct * 100)})</span>}
                     </span>
                   </div>
                   <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
@@ -540,7 +556,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       <div key={c.symbol} className="flex items-center gap-2 text-[12px]">
                         <span className="w-14 shrink-0 font-mono font-semibold text-[var(--accent)]">{c.symbol}</span>
                         <span className="font-mono tabular-nums text-[var(--text-4)]">{pct(c.retPct)}</span>
-                        <span className="ml-auto font-mono tabular-nums" style={{ color: c.pnl >= 0 ? "#22c55e" : "#ef4444" }}>{signMoney(c.pnl)}</span>
+                        <span className="ml-auto font-mono tabular-nums" style={{ color: c.pnl >= 0 ? "var(--pos)" : "var(--neg)" }}>{signMoney(c.pnl)}</span>
                       </div>
                     ))}
                   </div>
@@ -580,7 +596,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                             <span className="font-mono tabular-nums text-[var(--text-4)]">{s.before.toFixed(0)}%</span>
                             <span className="text-[var(--text-4)]">→</span>
                             <span className="font-mono tabular-nums text-[var(--text-2)]">{s.after.toFixed(0)}%</span>
-                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "#22c55e" : "#ef4444" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
+                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "var(--pos)" : "var(--neg)" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
                           </div>
                         ))}
                       </div>
@@ -596,7 +612,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                             <span className="font-mono tabular-nums text-[var(--text-4)]">{s.before.toFixed(0)}%</span>
                             <span className="text-[var(--text-4)]">→</span>
                             <span className="font-mono tabular-nums text-[var(--text-2)]">{s.after.toFixed(0)}%</span>
-                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "#22c55e" : "#ef4444" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
+                            <span className="ml-auto font-mono tabular-nums" style={{ color: Math.abs(s.after) < Math.abs(s.before) ? "var(--pos)" : "var(--neg)" }}>{s.delta >= 0 ? "+" : "−"}{Math.abs(s.delta).toFixed(0)}pp</span>
                           </div>
                         ))}
                       </div>
@@ -606,7 +622,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     <p className="mt-2 text-[11px] text-[var(--text-4)]">Predicted vol / VaR after the trade update once the new name&apos;s history loads.</p>
                   )}
                   {statsAfter.missing.filter((m) => !stats.missing.includes(m)).length > 0 && (
-                    <p className="mt-1 text-[11px] text-[#f59e0b]">Proposed name not priced: {statsAfter.missing.filter((m) => !stats.missing.includes(m)).join(", ")}</p>
+                    <p className="mt-1 text-[11px] text-[var(--warn)]">Proposed name not priced: {statsAfter.missing.filter((m) => !stats.missing.includes(m)).join(", ")}</p>
                   )}
                 </div>
               )}
@@ -622,11 +638,11 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
                     <Stat label="Volatility (ann.)" value={portRisk.volAnnPct != null ? pct(portRisk.volAnnPct * 100, 0) : money(portRisk.volAnnDollar)} sub={`${money(portRisk.volAnnDollar)}/yr`} />
-                    <Stat label="VaR 95% (1d)" value={money(portRisk.var95Dollar)} sub={pctOf(portRisk.var95Dollar)} color="#ef4444" />
-                    <Stat label="VaR 99% (1d)" value={money(portRisk.var99Dollar)} sub={pctOf(portRisk.var99Dollar)} color="#ef4444" />
-                    <Stat label="Exp. shortfall" value={money(portRisk.es95Dollar)} sub="avg worst 5%" color="#ef4444" />
-                    <Stat label="Worst day" value={signMoney(portRisk.worstDayDollar)} sub={portRisk.worstDayDate ? ymd(portRisk.worstDayDate) : "—"} color="#ef4444" />
-                    <Stat label="Diversification" value={pct(portRisk.diversificationBenefit * 100, 0)} sub="risk cut vs lockstep" color="#22c55e" />
+                    <Stat label="VaR 95% (1d)" value={money(portRisk.var95Dollar)} sub={pctOf(portRisk.var95Dollar)} color="var(--neg)" />
+                    <Stat label="VaR 99% (1d)" value={money(portRisk.var99Dollar)} sub={pctOf(portRisk.var99Dollar)} color="var(--neg)" />
+                    <Stat label="Exp. shortfall" value={money(portRisk.es95Dollar)} sub="avg worst 5%" color="var(--neg)" />
+                    <Stat label="Worst day" value={signMoney(portRisk.worstDayDollar)} sub={portRisk.worstDayDate ? ymd(portRisk.worstDayDate) : "—"} color="var(--neg)" />
+                    <Stat label="Diversification" value={pct(portRisk.diversificationBenefit * 100, 0)} sub="risk cut vs lockstep" color="var(--pos)" />
                   </div>
                   {portRisk.factorShare != null && (() => {
                     const bd = portRisk.factorBreakdown;
@@ -637,17 +653,17 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       <div className="mt-3">
                         <div className="mb-1 flex justify-between text-[11px]">
                           <span className="text-[var(--accent)]">Systematic {Math.round(systematic * 100)}% · {money(portRisk.volAnnDollar * Math.sqrt(systematic))}</span>
-                          <span className="text-[#f59e0b]">Stock-specific {Math.round(specific * 100)}% · {money(portRisk.volAnnDollar * Math.sqrt(specific))}</span>
+                          <span className="text-[var(--warn)]">Stock-specific {Math.round(specific * 100)}% · {money(portRisk.volAnnDollar * Math.sqrt(specific))}</span>
                         </div>
                         <div className="flex h-2 overflow-hidden rounded bg-[var(--bg)]">
                           <div style={{ width: `${systematic * 100}%`, background: "var(--accent)" }} />
-                          <div style={{ width: `${specific * 100}%`, background: "#f59e0b" }} />
+                          <div style={{ width: `${specific * 100}%`, background: "var(--warn)" }} />
                         </div>
                         {factors.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
                             <span className="text-[var(--text-4)]">factors:</span>
                             {factors.map((f) => (
-                              <span key={f.factor} className="font-mono tabular-nums"><span className="text-[var(--text-3)]">{f.factor}</span> <span style={{ color: f.share >= 0 ? "var(--accent)" : "#22c55e" }}>{f.share >= 0 ? "" : "−"}{Math.abs(Math.round(f.share * 100))}%</span></span>
+                              <span key={f.factor} className="font-mono tabular-nums"><span style={{ color: factorColor(f.factor) }}>{f.factor}</span> <span style={{ color: f.share >= 0 ? "var(--accent)" : "var(--pos)" }}>{f.share >= 0 ? "" : "−"}{Math.abs(Math.round(f.share * 100))}%</span></span>
                             ))}
                           </div>
                         )}
@@ -675,8 +691,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                     <Stat label="Tracking error" value={`${(benchRisk.trackingErrorPct * 100).toFixed(0)}%`} sub="active vol / yr" />
                     <Stat label="Active β" value={benchRisk.activeBeta.toFixed(2)} sub={`ρ ${benchRisk.correlation.toFixed(2)}`} />
-                    <Stat label="Up capture" value={benchRisk.upCapture != null ? `${Math.round(benchRisk.upCapture * 100)}%` : "—"} color={benchRisk.upCapture != null && benchRisk.upCapture >= 1 ? "#22c55e" : undefined} />
-                    <Stat label="Down capture" value={benchRisk.downCapture != null ? `${Math.round(benchRisk.downCapture * 100)}%` : "—"} color={benchRisk.downCapture != null && benchRisk.downCapture > 1 ? "#ef4444" : "#22c55e"} />
+                    <Stat label="Up capture" value={benchRisk.upCapture != null ? `${Math.round(benchRisk.upCapture * 100)}%` : "—"} color={benchRisk.upCapture != null && benchRisk.upCapture >= 1 ? "var(--pos)" : undefined} />
+                    <Stat label="Down capture" value={benchRisk.downCapture != null ? `${Math.round(benchRisk.downCapture * 100)}%` : "—"} color={benchRisk.downCapture != null && benchRisk.downCapture > 1 ? "var(--neg)" : "var(--pos)"} />
                   </div>
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Your book vs {benchmark}: tracking error is how far you drift from it ({(benchRisk.trackingErrorPct * 100).toFixed(0)}%/yr, ρ {benchRisk.correlation.toFixed(2)}); capture = the share of {benchmark}&apos;s up / down days you get — ideally &gt;100% up, &lt;100% down.
@@ -700,7 +716,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                   <div className="mb-2 flex items-baseline justify-between">
                     <span className="text-[12px] text-[var(--text-4)]">Total return ({attribRead.windowDays}d)</span>
-                    <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: attribRead.totalRet >= 0 ? "#22c55e" : "#ef4444" }}>{(attribRead.totalRet >= 0 ? "+" : "−") + (Math.abs(attribRead.totalRet) * 100).toFixed(1) + "%"}</span>
+                    <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: attribRead.totalRet >= 0 ? "var(--pos)" : "var(--neg)" }}>{(attribRead.totalRet >= 0 ? "+" : "−") + (Math.abs(attribRead.totalRet) * 100).toFixed(1) + "%"}</span>
                   </div>
                   <div className="space-y-1">
                     {bars.map((f) => {
@@ -710,9 +726,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div key={f.factor} className="flex items-center gap-2 text-[12px]">
                           <span className="w-16 shrink-0 text-[var(--text-3)]">{f.factor}</span>
                           <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-[var(--border)]/40">
-                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: up ? "#22c55e" : "#ef4444", opacity: f.factor === "Specific" ? 0.55 : 0.85 }} />
+                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: factorColor(f.factor), opacity: up ? 0.92 : 0.48 }} />
                           </div>
-                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "#22c55e" : "#ef4444" }}>{(up ? "+" : "−") + (Math.abs(f.ret) * 100).toFixed(1) + "%"}</span>
+                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "var(--pos)" : "var(--neg)" }}>{(up ? "+" : "−") + (Math.abs(f.ret) * 100).toFixed(1) + "%"}</span>
                         </div>
                       );
                     })}
@@ -739,9 +755,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div key={e.factor} className="flex items-center gap-2 text-[12px]">
                           <span className="w-16 shrink-0 text-[var(--text-3)]">{e.factor}</span>
                           <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-[var(--border)]/40">
-                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: up ? "#3b82f6" : "#f59e0b" }} />
+                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: up ? "var(--accent)" : "var(--warn)" }} />
                           </div>
-                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "#3b82f6" : "#f59e0b" }}>{(up ? "+" : "−") + Math.abs(e.beta).toFixed(2)}</span>
+                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "var(--accent)" : "var(--warn)" }}>{(up ? "+" : "−") + Math.abs(e.beta).toFixed(2)}</span>
                         </div>
                       );
                     })}
@@ -792,7 +808,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   {shockPnl && (
                     <div className="mt-2.5 flex items-baseline justify-between border-t border-[var(--border)] pt-2">
                       <span className="text-[12px] text-[var(--text-4)]">Estimated book impact</span>
-                      <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: shockPnl.ret >= 0 ? "#22c55e" : "#ef4444" }}>
+                      <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: shockPnl.ret >= 0 ? "var(--pos)" : "var(--neg)" }}>
                         {(shockPnl.ret >= 0 ? "+" : "−") + (Math.abs(shockPnl.ret) * 100).toFixed(2) + "%"} <span className="text-[11px] font-normal text-[var(--text-4)]">{signMoney(shockPnl.dollar)}</span>
                       </span>
                     </div>
@@ -809,12 +825,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 </div>
                 {(() => {
                   const r = scenarioPnL(stats, shock);
-                  const c = pos(r.dollar) ? "#22c55e" : "#ef4444";
+                  const c = pos(r.dollar) ? "var(--pos)" : "var(--neg)";
                   return (
                     <>
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <span className="text-sm text-[var(--text-3)]">If the S&amp;P moves</span>
-                        <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: pos(shock) ? "#22c55e" : "#ef4444" }}>{shock > 0 ? "+" : ""}{shock}%</span>
+                        <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: pos(shock) ? "var(--pos)" : "var(--neg)" }}>{shock > 0 ? "+" : ""}{shock}%</span>
                         <span className="text-sm text-[var(--text-3)]">→ your book</span>
                         <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: c }}>{signMoney(r.dollar)}</span>
                         <span className="font-mono text-sm tabular-nums" style={{ color: c }}>({pctMode ? pctAum(r.dollar / stats.aum!, true) : pct(r.pct)})</span>
@@ -830,8 +846,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                           return (
                             <button key={s} onClick={() => setShock(s)}
                               className={`rounded-md border px-1 py-1.5 text-center transition-colors ${s === shock ? "border-[var(--accent)] bg-[var(--accent)]/10" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`}>
-                              <div className="font-mono text-[11px] font-semibold" style={{ color: pos(s) ? "#22c55e" : "#ef4444" }}>{s > 0 ? "+" : ""}{s}%</div>
-                              <div className="font-mono text-[11px] tabular-nums" style={{ color: pos(d) ? "#22c55e" : "#ef4444" }}>{signMoney(d)}</div>
+                              <div className="font-mono text-[11px] font-semibold" style={{ color: pos(s) ? "var(--pos)" : "var(--neg)" }}>{s > 0 ? "+" : ""}{s}%</div>
+                              <div className="font-mono text-[11px] tabular-nums" style={{ color: pos(d) ? "var(--pos)" : "var(--neg)" }}>{signMoney(d)}</div>
                             </button>
                           );
                         })}
@@ -854,7 +870,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   {stress.map((s) => (
                     <div key={s.name} className="flex items-baseline justify-between gap-2 border-b border-[var(--border)] py-1" title={s.note}>
                       <span className="text-[12px] text-[var(--text-3)]">{s.name} <span className="text-[10px] text-[var(--text-4)]">{s.marketMovePct > 0 ? "+" : ""}{s.marketMovePct}%</span></span>
-                      <span className="whitespace-nowrap text-right font-mono text-[12px] tabular-nums" style={{ color: s.dollar >= 0 ? "#22c55e" : "#ef4444" }}>
+                      <span className="whitespace-nowrap text-right font-mono text-[12px] tabular-nums" style={{ color: s.dollar >= 0 ? "var(--pos)" : "var(--neg)" }}>
                         {signMoney(s.dollar)}{riskBase ? <span className="ml-1 text-[10px] text-[var(--text-4)]">{((s.dollar / riskBase) * 100).toFixed(0)}%</span> : null}
                       </span>
                     </div>
@@ -876,10 +892,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div key={s.sector} className="flex items-center gap-2 text-[12px]">
                           <span className="w-28 shrink-0 truncate text-[var(--text-3)]" title={s.sector}>{s.sector}</span>
                           <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
-                            <div className="absolute top-0 h-4 rounded" style={{ background: pos(w) ? "#22c55e" : "#ef4444", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: pos(w) ? "50%" : undefined, right: pos(w) ? undefined : "50%" }} />
+                            <div className="absolute top-0 h-4 rounded" style={{ background: pos(w) ? "var(--pos)" : "var(--neg)", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: pos(w) ? "50%" : undefined, right: pos(w) ? undefined : "50%" }} />
                             <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
                           </div>
-                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: pos(w) ? "#22c55e" : "#ef4444" }}>{pct(w, 0)}</span>
+                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: pos(w) ? "var(--pos)" : "var(--neg)" }}>{pct(w, 0)}</span>
                         </div>
                       );
                     })}
@@ -913,10 +929,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div key={c.bucket} className="flex items-center gap-2 text-[12px]">
                           <span className="w-14 shrink-0 text-[var(--text-3)]">{c.bucket}</span>
                           <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
-                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "#22c55e" : "#ef4444", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
+                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "var(--pos)" : "var(--neg)", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
                             <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
                           </div>
-                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "#22c55e" : "#ef4444" }}>{pct(w, 0)}</span>
+                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "var(--pos)" : "var(--neg)" }}>{pct(w, 0)}</span>
                         </div>
                       );
                     })}
@@ -941,10 +957,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div key={r.theme} className="flex items-center gap-2 text-[12px]">
                           <span className="w-28 shrink-0 truncate text-[var(--text-3)]" title={`${r.theme} · ${r.names} name${r.names === 1 ? "" : "s"}`}>{r.theme}</span>
                           <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
-                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "#22c55e" : "#ef4444", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
+                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "var(--pos)" : "var(--neg)", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
                             <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
                           </div>
-                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "#22c55e" : "#ef4444" }}>{pct(w, 0)}</span>
+                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "var(--pos)" : "var(--neg)" }}>{pct(w, 0)}</span>
                         </div>
                       );
                     })}
@@ -962,9 +978,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                     <Stat label="Days to exit (p50)" value={fmtDays(stats.liquidity.daysP50)} />
-                    <Stat label="Days to exit (p95)" value={fmtDays(stats.liquidity.daysP95)} color={stats.liquidity.daysP95 != null && stats.liquidity.daysP95 > 5 ? "#ef4444" : undefined} />
+                    <Stat label="Days to exit (p95)" value={fmtDays(stats.liquidity.daysP95)} color={stats.liquidity.daysP95 != null && stats.liquidity.daysP95 > 5 ? "var(--neg)" : undefined} />
                     <Stat label="% gross >1 day" value={pct(stats.liquidity.pctOver1d * 100, 0)} />
-                    <Stat label="% gross >5 days" value={pct(stats.liquidity.pctOver5d * 100, 0)} color={stats.liquidity.pctOver5d > 0.1 ? "#ef4444" : undefined} />
+                    <Stat label="% gross >5 days" value={pct(stats.liquidity.pctOver5d * 100, 0)} color={stats.liquidity.pctOver5d > 0.1 ? "var(--neg)" : undefined} />
                   </div>
                   {stats.liquidity.leastLiquid.filter((x) => x.days >= 0.25).length > 0 && (
                     <div className="mt-2.5">
@@ -1000,15 +1016,15 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   </div>
                   <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     <Stat label="Avg realized vol" value={volRead.avgRv != null ? `${Math.round(volRead.avgRv * 100)}%` : "—"} sub="annualized, 20d" />
-                    <Stat label="Vol percentile" value={volRead.avgRvPct != null ? `${Math.round(volRead.avgRvPct)}th` : "—"} sub="in own history" color={volRead.avgRvPct != null && volRead.avgRvPct >= 75 ? "#ef4444" : volRead.avgRvPct != null && volRead.avgRvPct <= 25 ? "#22c55e" : undefined} />
-                    <Stat label="Earnings ≤2wk" value={`${Math.round(volRead.earningsGrossPct * 100)}%`} sub={`${volRead.earnings.length} name${volRead.earnings.length === 1 ? "" : "s"}`} color={volRead.earningsGrossPct > 0.15 ? "#f59e0b" : undefined} />
+                    <Stat label="Vol percentile" value={volRead.avgRvPct != null ? `${Math.round(volRead.avgRvPct)}th` : "—"} sub="in own history" color={volRead.avgRvPct != null && volRead.avgRvPct >= 75 ? "var(--neg)" : volRead.avgRvPct != null && volRead.avgRvPct <= 25 ? "var(--pos)" : undefined} />
+                    <Stat label="Earnings ≤2wk" value={`${Math.round(volRead.earningsGrossPct * 100)}%`} sub={`${volRead.earnings.length} name${volRead.earnings.length === 1 ? "" : "s"}`} color={volRead.earningsGrossPct > 0.15 ? "var(--warn)" : undefined} />
                   </div>
                   {volRead.elevated.length > 0 && (
                     <div className="mt-2.5">
                       <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Running hot (vol vs own history)</div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
                         {volRead.elevated.map((e) => (
-                          <span key={e.symbol} className="font-mono tabular-nums"><span className="font-semibold text-[var(--accent)]">{e.symbol}</span> <span className="text-[#ef4444]">{Math.round(e.rvPct)}th</span></span>
+                          <span key={e.symbol} className="font-mono tabular-nums"><span className="font-semibold text-[var(--accent)]">{e.symbol}</span> <span className="text-[var(--neg)]">{Math.round(e.rvPct)}th</span></span>
                         ))}
                       </div>
                     </div>
@@ -1033,7 +1049,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     <span className="text-[11px] text-[var(--text-4)]">as of {crowdRead.asOf}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
-                    <Stat label="In crowded themes" value={`${Math.round(crowdRead.overlapGrossPct * 100)}%`} sub="of gross" color={crowdRead.overlapGrossPct >= 0.5 ? "#f59e0b" : undefined} />
+                    <Stat label="In crowded themes" value={`${Math.round(crowdRead.overlapGrossPct * 100)}%`} sub="of gross" color={crowdRead.overlapGrossPct >= 0.5 ? "var(--warn)" : undefined} />
                     <Stat label="Names overlapping" value={`${crowdRead.totalNames}`} sub={`across ${crowdRead.themes.length} theme${crowdRead.themes.length === 1 ? "" : "s"}`} />
                   </div>
                   <div className="mt-2.5 space-y-1.5">
@@ -1051,7 +1067,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 </div>
               )}
               {risk.cappedFrom && (
-                <p className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-3 py-2 text-[12px] text-[#f59e0b]">
+                <p className="rounded-lg border border-[var(--warn)]/40 bg-[var(--warn)]/10 px-3 py-2 text-[12px] text-[var(--warn)]">
                   Factor tilts &amp; crowding cover your {risk.cap} largest positions — your book has {risk.cappedFrom} names. (Exposure, beta &amp; the shock scenario above still cover the whole book.)
                 </p>
               )}
@@ -1069,7 +1085,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       {tilts.map((t) => {
                         const meta = FACTOR_META.find((f) => f.key === t.key)!;
                         const w = Math.min(50, (Math.abs(t.tilt) / 2.5) * 50); // ±2.5σ = full half-width
-                        const c = t.tilt >= 0 ? "var(--accent)" : "#f59e0b";
+                        const c = t.tilt >= 0 ? "var(--accent)" : "var(--warn)";
                         const faded = t.coverage < 0.001;
                         return (
                           <div key={t.key} className={`flex items-center gap-2 text-[12px] ${faded ? "opacity-40" : ""}`} title={meta.hint + (t.coverage < 0.999 && t.coverage > 0 ? ` · ${Math.round(t.coverage * 100)}% covered` : "")}>
@@ -1098,12 +1114,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <span className="text-[11px] text-[var(--text-4)]">correlation-adjusted</span>
                       </div>
                       <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: concRead.independentBets < concRead.names * 0.4 ? "#ef4444" : concRead.independentBets < concRead.names * 0.7 ? "#f59e0b" : "#22c55e" }}>{concRead.independentBets.toFixed(1)}</span>
+                        <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: concRead.independentBets < concRead.names * 0.4 ? "var(--neg)" : concRead.independentBets < concRead.names * 0.7 ? "var(--warn)" : "var(--pos)" }}>{concRead.independentBets.toFixed(1)}</span>
                         <span className="text-[12px] text-[var(--text-3)]">real bets from {concRead.names} names — {concRead.independentBets < concRead.names * 0.4 ? "far less diversified than it looks" : concRead.independentBets < concRead.names * 0.7 ? "some overlap between names" : "genuinely spread out"}</span>
                       </div>
                       <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                         <Stat label="By size" value={concRead.effectiveNamesBySize.toFixed(1)} sub={`of ${concRead.names} names`} />
-                        <Stat label="Top factor" value={`${Math.round(concRead.topPcShare * 100)}%`} sub="of book variance" color={concRead.topPcShare >= 0.6 ? "#ef4444" : concRead.topPcShare >= 0.4 ? "#f59e0b" : undefined} />
+                        <Stat label="Top factor" value={`${Math.round(concRead.topPcShare * 100)}%`} sub="of book variance" color={concRead.topPcShare >= 0.6 ? "var(--neg)" : concRead.topPcShare >= 0.4 ? "var(--warn)" : undefined} />
                       </div>
                       <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">How many truly independent positions you hold once correlation is priced in (PCA of the exposure-weighted return covariance). {concRead.names} names → <b>{concRead.effectiveNamesBySize.toFixed(1)}</b> by size → <b>{concRead.independentBets.toFixed(1)}</b> once they move together; the top statistical factor drives {Math.round(concRead.topPcShare * 100)}% of your variance.</p>
                     </div>
@@ -1118,7 +1134,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     ) : (
                       <>
                         <div className="flex items-baseline gap-2">
-                          <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: crowding.avgCorr >= 0.6 ? "#ef4444" : crowding.avgCorr >= 0.35 ? "#f59e0b" : "#22c55e" }}>{crowding.avgCorr.toFixed(2)}</span>
+                          <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: crowding.avgCorr >= 0.6 ? "var(--neg)" : crowding.avgCorr >= 0.35 ? "var(--warn)" : "var(--pos)" }}>{crowding.avgCorr.toFixed(2)}</span>
                           <span className="text-[12px] text-[var(--text-3)]">avg pairwise ρ — {crowding.avgCorr >= 0.6 ? "names move together (hidden concentration)" : crowding.avgCorr >= 0.35 ? "moderately correlated" : "well diversified"}</span>
                         </div>
                         {crowding.topPairs.length > 0 && (
@@ -1129,7 +1145,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                                 <div key={p.a + p.b} className="flex items-center gap-2 text-[12px]">
                                   <span className="w-24 shrink-0 font-mono text-[var(--text-2)]">{p.a}·{p.b}</span>
                                   <div className="relative h-2.5 flex-1 rounded bg-[var(--bg)]">
-                                    <div className="absolute left-0 top-0 h-2.5 rounded" style={{ width: `${Math.max(0, Math.min(100, p.r * 100))}%`, background: p.r >= 0.6 ? "#ef4444" : "#f59e0b", opacity: 0.8 }} />
+                                    <div className="absolute left-0 top-0 h-2.5 rounded" style={{ width: `${Math.max(0, Math.min(100, p.r * 100))}%`, background: p.r >= 0.6 ? "var(--neg)" : "var(--warn)", opacity: 0.8 }} />
                                   </div>
                                   <span className="w-10 shrink-0 text-right font-mono tabular-nums text-[var(--text-3)]">{p.r.toFixed(2)}</span>
                                 </div>
@@ -1174,13 +1190,13 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                           <span className="text-[var(--text-3)]">Predicted vol</span>
                           <span className="font-mono text-[var(--text-4)]">{money(optHedge.volBeforeDollar)}</span>
                           <span className="text-[var(--text-4)]">→</span>
-                          <span className="font-mono font-semibold" style={{ color: "#22c55e" }}>{money(optHedge.volAfterDollar)}</span>
-                          <span className="font-mono text-[11px]" style={{ color: "#22c55e" }}>(−{Math.round(optHedge.volReduction * 100)}%)</span>
+                          <span className="font-mono font-semibold" style={{ color: "var(--pos)" }}>{money(optHedge.volAfterDollar)}</span>
+                          <span className="font-mono text-[11px]" style={{ color: "var(--pos)" }}>(−{Math.round(optHedge.volReduction * 100)}%)</span>
                         </div>
                         <div className="space-y-1">
                           {optHedge.legs.slice(0, 6).map((l) => (
                             <div key={l.etf} className="flex items-center gap-2 text-[12px]">
-                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.notional < 0 ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#22c55e]/15 text-[#22c55e]"}`}>{l.notional < 0 ? "Short" : "Buy"}</span>
+                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.notional < 0 ? "bg-[var(--neg)]/15 text-[var(--neg)]" : "bg-[var(--pos)]/15 text-[var(--pos)]"}`}>{l.notional < 0 ? "Short" : "Buy"}</span>
                               <span className="w-12 shrink-0 font-mono font-semibold text-[var(--accent)]">{l.etf}</span>
                               <span className="w-20 shrink-0 text-right font-mono tabular-nums text-[var(--text-2)]">{money(Math.abs(l.notional))}</span>
                               <span className="truncate text-[var(--text-4)]">{HEDGE_ETF_NAME[l.etf] ?? ""}</span>
@@ -1208,7 +1224,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <div className="space-y-1">
                           {hedge.map((l) => (
                             <div key={l.etf} className="flex items-center gap-2 text-[12px]">
-                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.action === "Short" ? "bg-[#ef4444]/15 text-[#ef4444]" : "bg-[#22c55e]/15 text-[#22c55e]"}`}>{l.action}</span>
+                              <span className={`w-11 shrink-0 rounded px-1 text-center text-[10px] font-semibold ${l.action === "Short" ? "bg-[var(--neg)]/15 text-[var(--neg)]" : "bg-[var(--pos)]/15 text-[var(--pos)]"}`}>{l.action}</span>
                               <span className="w-12 shrink-0 font-mono font-semibold text-[var(--accent)]">{l.etf}</span>
                               <span className="w-20 shrink-0 text-right font-mono tabular-nums text-[var(--text-2)]">{money(l.notional)}</span>
                               <span className="truncate text-[var(--text-4)]" title={l.name}>cuts {l.cuts}{l.exact ? "" : " ≈"}</span>
@@ -1255,19 +1271,19 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       <tr key={h.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                         <td className="px-3 py-2">
                           <Link href={`/u/${universe}/stock/${h.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{h.symbol}</Link>
-                          {h.value < 0 && <span className="ml-1 rounded bg-[#ef4444]/15 px-1 text-[9px] font-semibold text-[#ef4444]">SHORT</span>}
+                          {h.value < 0 && <span className="ml-1 rounded bg-[var(--neg)]/15 px-1 text-[9px] font-semibold text-[var(--neg)]">SHORT</span>}
                           <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{h.name}</div>
                         </td>
                         <td className="hidden px-2 py-2 text-[12px] text-[var(--text-3)] sm:table-cell">{h.sector ?? "—"}</td>
                         <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{h.shares.toLocaleString()}</td>
                         <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{px(h.price)}</td>
-                        <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "#ef4444" }}>{pctMode ? pctAum(h.value / stats.aum!, true) : signMoney(h.value)}</td>
+                        <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: pos(h.value) ? "var(--text-2)" : "var(--neg)" }}>{pctMode ? pctAum(h.value / stats.aum!, true) : signMoney(h.value)}</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{(h.weight * 100).toFixed(1)}%</td>
                         <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">
                           {(() => { const rc = riskContribOf.get(h.symbol); return rc == null ? "—" : `${rc < 0 ? "−" : ""}${Math.abs(rc * 100).toFixed(0)}%`; })()}
                         </td>
                         <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] sm:table-cell">{typeof h.beta === "number" ? h.beta.toFixed(2) : "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums" style={{ color: h.ret == null ? "var(--text-4)" : pos(h.ret) ? "#22c55e" : "#ef4444" }}>{pct(h.ret ?? null)}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums" style={{ color: h.ret == null ? "var(--text-4)" : pos(h.ret) ? "var(--pos)" : "var(--neg)" }}>{pct(h.ret ?? null)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -173,3 +173,50 @@ input,
 ::selection {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
 }
+
+/* ── Prism — the portfolio-intelligence surface inside Tape ──────────────────
+   Scoped to the cockpit subtree (a `.prism` wrapper) so the rest of Tape keeps
+   its own blue. Prism gets an indigo accent, the factor spectrum used by the mark
+   and the attribution/factor views, and a softer, more institutional pos/neg.
+   Semantic fallbacks live on :root/.light so var(--pos/--neg/--warn) still
+   resolve anywhere they're used. */
+:root {
+  --pos: #22c55e;
+  --neg: #ef4444;
+  --warn: #f59e0b;
+}
+.light {
+  --pos: #16a34a;
+  --neg: #dc2626;
+  --warn: #b45309;
+}
+.prism {
+  --accent: #5e6bec;
+  --accent-strong: #4b59e6;
+  --accent-soft: rgba(94, 107, 236, 0.16);
+  --pos: #46b27a;
+  --neg: #e76a78;
+  --warn: #c9a24e;
+  --spec-violet: #937ae6;
+  --spec-indigo: #5e6bec;
+  --spec-azure: #3e8fd6;
+  --spec-teal: #2fa79e;
+  --spec-green: #46b27a;
+  --spec-amber: #c9a24e;
+  --spec-rose: #c77d9e;
+}
+.light .prism {
+  --accent: #4f5ee8;
+  --accent-strong: #3f4ee0;
+  --accent-soft: rgba(79, 94, 232, 0.12);
+  --pos: #1c9a5f;
+  --neg: #d6485a;
+  --warn: #a9812f;
+  --spec-violet: #7a5fd0;
+  --spec-indigo: #4f5ee8;
+  --spec-azure: #2f7fc6;
+  --spec-teal: #1f8f86;
+  --spec-green: #2f9a63;
+  --spec-amber: #a9812f;
+  --spec-rose: #b06285;
+}
