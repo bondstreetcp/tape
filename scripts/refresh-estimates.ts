@@ -11,6 +11,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { UNIVERSES } from "../lib/universes";
 import { getCompanyStats, type CompanyStats } from "../lib/companyStats";
+import { writeFeedGuarded } from "../lib/feedGuard";
 import type { Snapshot } from "../lib/types";
 import type { EstSnap, EstimatesFile } from "../lib/revisions";
 
@@ -175,8 +176,15 @@ async function main() {
       /* no existing file */
     }
   }
-  await fs.writeFile(outPath, JSON.stringify(out));
-  console.log(`Wrote ${outPath} (${Object.keys(out.names).length} names)`);
+  // THE 2026-07-20 INCIDENT: Yahoo 429'd the whole runner IP, got 0/2601, and the bare write shipped an
+  // EMPTY estimates.json to R2 — blanking Revisions, Analyst-Upside, Short-Squeeze, Confluence and the
+  // guidance consensus gate at once. Degrade to STALE, never EMPTY (floor from the freshness registry).
+  const w = await writeFeedGuarded("estimates.json", out);
+  if (!w.written) {
+    console.error(`estimates: WRITE BLOCKED — ${w.reason}. Built ${Object.keys(out.names).length} names; keeping the prior file.`);
+    process.exit(1);
+  }
+  console.log(`Wrote ${outPath} (${Object.keys(out.names).length} names) [${w.reason}]`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

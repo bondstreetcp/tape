@@ -117,6 +117,10 @@ const FEEDS: FeedSpec[] = [
   // the forensics fields over nights (PANEL_SCHEMA bump forces re-pulls).
   { file: "forensics.json", label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 40 },
   { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
+  // Unregistered until 2026-07-20 — so when run-tick drifted and stopped refreshing them, NOTHING
+  // flagged it ("every nightly feed self-registers" exists precisely for this failure).
+  { file: "adv.json", label: "Portfolio ADV (liquidity)", tier: "core", maxAgeHours: CORE, countPath: "adv", minCount: 300 },
+  { file: "etf-meta.json", label: "Hedge-menu ETF meta", tier: "core", maxAgeHours: CORE, countPath: "etfs", minCount: 5 },
   { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
   { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
   // Parameter grid over the same signals (compute-over-owned-data, no fetches). Per-universe

@@ -248,6 +248,14 @@ jobs:
         run: npm run refresh-valuation-history
         continue-on-error: true
 
+      # Forensics board (Beneish/Altman/Piotroski/Sloan) — pure local math off the panel written just
+      # above; no network. Was NAS-only (run-tick) until 2026-07-20, when the drift left forensics.json
+      # 60h stale on a GH-run FULL and flunked the freshness gate. Mirrored in run-tick STEPS.
+      - name: Refresh fundamental forensics (Beneish/Altman/Piotroski/Sloan)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-forensics
+        continue-on-error: true
+
       # Buyback & Capital-Return board — S&P 500 capital return from SEC XBRL companyfacts (repurchase
       # cash, dividends, share count → buyback/total yield, net share-count change, payout/FCF). Same
       # SEC rate-limiter as above; no key, no LLM.

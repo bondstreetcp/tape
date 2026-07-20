@@ -9,6 +9,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
+import { writeFeedGuarded } from "../lib/feedGuard";
 import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
 import { sliceSeries, seriesChangePct } from "../lib/compute";
 import { TIMEFRAME_KEYS } from "../lib/timeframes";
@@ -62,8 +63,11 @@ async function main() {
     ok++;
     console.log(`hedge-etfs: ${etf} ${daily.length}d  px ${price.toFixed(2)}  β ${beta != null ? beta.toFixed(2) : "—"}  ytd ${meta[etf].returns.ytd?.toFixed(1) ?? "—"}%`);
   }
-  if (ok > 0) await fs.writeFile(path.join(DATA, "etf-meta.json"), JSON.stringify({ generatedAt: new Date().toISOString(), etfs: meta }));
-  console.log(`hedge-etfs: wrote ${ok}/${HEDGE_ETFS.length} series + etf-meta (${fail} failed)`);
-  if (ok === 0) process.exit(1);
+  // Guarded (floor from the freshness registry): a mostly-failed fetch night must not shrink the menu
+  // the optimizer prices from — degrade to STALE, never EMPTY (was a bare ok>0 check).
+  const w = ok > 0 ? await writeFeedGuarded("etf-meta.json", { generatedAt: new Date().toISOString(), etfs: meta }) : { written: false, reason: "0 ETFs fetched" };
+  if (!w.written) console.error(`hedge-etfs: etf-meta WRITE BLOCKED — ${w.reason}. Keeping the prior file.`);
+  console.log(`hedge-etfs: wrote ${ok}/${HEDGE_ETFS.length} series${w.written ? " + etf-meta" : ""} (${fail} failed)`);
+  if (ok === 0 || !w.written) process.exit(1);
 }
 main();

@@ -9,6 +9,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
+import { writeFeedGuarded } from "../lib/feedGuard";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -38,8 +39,9 @@ async function main() {
     }
     console.log(`adv: ${Math.min(i + BATCH, list.length)}/${list.length} scanned (${ok} priced)`);
   }
-  if (ok < 100) { console.error("adv: too few names priced — keeping previous file"); process.exit(1); }
-  await fs.writeFile(path.join(DATA, "adv.json"), JSON.stringify({ generatedAt: new Date().toISOString(), adv }));
-  console.log(`adv: wrote ${ok} names to adv.json`);
+  // Floor comes from the freshness registry via the guard (was a hand-rolled ok<100 — single-source it).
+  const w = await writeFeedGuarded("adv.json", { generatedAt: new Date().toISOString(), adv });
+  if (!w.written) { console.error(`adv: WRITE BLOCKED — ${w.reason}. Priced ${ok}; keeping the prior file.`); process.exit(1); }
+  console.log(`adv: wrote ${ok} names to adv.json [${w.reason}]`);
 }
 main();
