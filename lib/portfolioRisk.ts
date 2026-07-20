@@ -11,6 +11,7 @@
 
 import { bucketByDay, correlation, type Daily } from "./pairs";
 import { solveLinear } from "./hedgeOptimizer";
+import { factorSpreads as buildEtfFactors } from "./factorSpreads";
 
 const TRADING_DAYS = 252;
 const mean = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
@@ -40,27 +41,6 @@ const covAbout = (x: number[], y: number[], mx: number, my: number): number => {
   for (let t = 0; t < x.length; t++) s += (x[t] - mx) * (y[t] - my);
   return s / (x.length - 1);
 };
-
-/**
- * Long-short factor-mimicking spreads from the ETF menu (much less collinear than the raw ETFs): Market =
- * ^GSPC, Size = IWM−SPY (small−large), Value = IWD−IWF (value−growth), and Momentum/Quality/Low-Vol as
- * each factor ETF's excess over the market. Returns null if the market vector is missing.
- */
-function buildEtfFactors(extra: Record<string, number[]> | undefined, market: number[]): Record<string, number[]> | null {
-  const e = extra ?? {};
-  const n = market.length;
-  const ok = (a: string) => e[a]?.length === n;
-  const spread = (a: string, b: string) => (ok(a) && ok(b) ? e[a].map((x, i) => x - e[b][i]) : null);
-  const exMkt = (a: string) => (ok(a) ? e[a].map((x, i) => x - market[i]) : null);
-  const f: Record<string, number[]> = { Market: market };
-  const add = (name: string, v: number[] | null) => { if (v) f[name] = v; };
-  add("Size", spread("IWM", "SPY"));
-  add("Value", spread("IWD", "IWF"));
-  add("Momentum", exMkt("MTUM"));
-  add("Quality", exMkt("QUAL"));
-  add("LowVol", exMkt("USMV"));
-  return Object.keys(f).length ? f : null;
-}
 
 /**
  * Decompose Var(P&L) across factors: ridge OLS of the book's P&L on the factor spreads, then each factor's

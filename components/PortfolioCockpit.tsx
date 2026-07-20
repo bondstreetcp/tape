@@ -83,6 +83,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [whatIfText, setWhatIfText] = useState(""); // proposed trades (SYMBOL SHARES; signed)
   const [hedgeNeutral, setHedgeNeutral] = useState(false); // optimizer: flatten market beta
   const [hedgeMaxLegs, setHedgeMaxLegs] = useState<number | null>(null); // optimizer: cap the basket size
+  const [hedgeFactors, setHedgeFactors] = useState<string[]>([]); // optimizer: style factors to also neutralize
   const [advanced, setAdvanced] = useState(false); // progressive disclosure — hide the pro cluster by default
   const [themesText, setThemesText] = useState(""); // user ticker→theme tags
   const [themesOpen, setThemesOpen] = useState(false);
@@ -337,9 +338,9 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   // first-order `hedge` above is the fallback when that data isn't there yet.
   const optHedge = useMemo(
     () => (risk.aligned?.extra && stats.holdings.length
-      ? optimizeHedge(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, risk.aligned.extra, { maxGross: stats.gross, marketNeutral: hedgeNeutral, maxLegs: hedgeMaxLegs })
+      ? optimizeHedge(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, risk.aligned.extra, { maxGross: stats.gross, marketNeutral: hedgeNeutral, maxLegs: hedgeMaxLegs, neutralizeFactors: hedgeFactors })
       : null),
-    [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs],
+    [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs, hedgeFactors],
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
   const themeExp = useMemo(() => { const tags = parseTags(themesText); return tags.size ? themeExposure(stats.holdings, tags) : null; }, [themesText, stats.holdings]);
@@ -1156,6 +1157,18 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                             <button key={String(n)} onClick={() => setHedgeMaxLegs(n)}
                               className={`rounded border px-1.5 py-0.5 ${hedgeMaxLegs === n ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{n ?? "all"}</button>
                           ))}
+                        </div>
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span className="text-[var(--text-4)]" title="Also pin the hedged book's exposure to these style factors to zero">neutralize</span>
+                          {["Size", "Value", "Momentum", "Quality", "LowVol"].map((f) => {
+                            const on = hedgeFactors.includes(f);
+                            const solved = optHedge.neutralized.includes(f);
+                            return (
+                              <button key={f} onClick={() => setHedgeFactors((s) => (s.includes(f) ? s.filter((x) => x !== f) : [...s, f]))}
+                                title={`Add a constraint that flattens the book's ${f} exposure`}
+                                className={`rounded border px-2 py-0.5 ${on ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{f}{on && solved ? " ✓" : ""}</button>
+                            );
+                          })}
                         </div>
                         <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
                           <span className="text-[var(--text-3)]">Predicted vol</span>

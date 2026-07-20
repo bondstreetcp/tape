@@ -12,6 +12,7 @@
  */
 
 import type { AlignedReturns } from "./portfolioRisk";
+import { factorSpreads } from "./factorSpreads";
 
 const TRADING_DAYS = 252;
 const mean = (x: number[]): number => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : 0);
@@ -53,15 +54,17 @@ export interface HedgeOptResult {
   volReduction: number; // 1 − after/before (0..1)
   turnoverDollar: number; // Σ |notional| of the overlay
   nEtfs: number; // ETFs in the solved menu
-  marketNeutral: boolean; // true if solved under the flatten-beta constraint
+  marketNeutral: boolean; // true if solved under the flatten-market-beta constraint
+  neutralized: string[]; // every factor whose hedged-book beta was pinned to zero (incl. "Market")
 }
 
 /**
- * Min-variance ridge solve for the overlay over an ETF return matrix R. If `market` is given and
- * `marketNeutral`, add the equality constraint that the hedged book's market beta is zero (KKT: augment
- * the ridge normal equations with the beta row). Returns h (one notional per row of R) or null.
+ * Min-variance ridge solve for the overlay over an ETF return matrix R. For each factor vector in
+ * `constraints`, add the equality that the hedged book's beta to that factor is zero (KKT: augment the
+ * ridge normal equations with one beta row per factor). Market-neutral is just constraints = [market];
+ * factor-targeting adds Size/Value/Momentum/… rows the same way. Returns h (one notional per row of R).
  */
-function solveBasket(R: number[][], pnl: number[], market: number[] | undefined, ridge: number, marketNeutral: boolean): number[] | null {
+function solveBasket(R: number[][], pnl: number[], constraints: number[][], ridge: number): number[] | null {
   const k = R.length;
   if (!k) return null;
   const mR = R.map((r) => mean(r));
@@ -71,29 +74,32 @@ function solveBasket(R: number[][], pnl: number[], market: number[] | undefined,
   const lam = ridge * ((Sigma.reduce((a, row, i) => a + row[i], 0) / k) || 1);
   const A = Sigma.map((row, i) => row.map((v, j) => v + (i === j ? lam : 0)));
 
-  if (marketNeutral && market && market.length === pnl.length) {
-    const mM = mean(market);
-    const vM = covOf(market, market, mM, mM);
-    if (vM > 0) {
-      const betaK = R.map((rj, j) => covOf(rj, market, mR[j], mM) / vM); // each ETF's $ beta
-      const betaBook = covOf(pnl, market, mP, mM) / vM; // book beta-$
-      // KKT for min ½hᵀAh + cᵀh s.t. betaKᵀh = −betaBook  →  [A βK; βKᵀ 0][h; μ] = [−c; −betaBook]
-      const K = A.map((row, i) => [...row, betaK[i]]);
-      K.push([...betaK, 0]);
-      const sol = solveLinear(K, [...c.map((v) => -v), -betaBook]);
-      return sol ? sol.slice(0, k) : null;
-    }
-  }
-  return solveLinear(A, c.map((v) => -v)); // unconstrained: h* = −(Σ+λI)⁻¹ c
+  // Each factor f with Var(f)>0 gives one equality: betaK(f)ᵀh = −betaBook(f), zeroing the hedged beta to f.
+  const cons = constraints
+    .filter((f) => f.length === pnl.length)
+    .map((f) => {
+      const mF = mean(f), vF = covOf(f, f, mF, mF);
+      return vF > 0 ? { betaK: R.map((rj, j) => covOf(rj, f, mR[j], mF) / vF), betaBook: covOf(pnl, f, mP, mF) / vF } : null;
+    })
+    .filter((x): x is { betaK: number[]; betaBook: number } => x != null);
+
+  if (!cons.length) return solveLinear(A, c.map((v) => -v)); // unconstrained: h* = −(Σ+λI)⁻¹ c
+
+  // KKT block system: [A B; Bᵀ 0][h; μ] = [−c; −betaBook], B's columns = each factor's ETF-beta vector.
+  const p = cons.length;
+  const K: number[][] = A.map((row, i) => [...row, ...cons.map((cc) => cc.betaK[i])]);
+  for (let q = 0; q < p; q++) K.push([...cons[q].betaK, ...new Array(p).fill(0)]);
+  const sol = solveLinear(K, [...c.map((v) => -v), ...cons.map((cc) => -cc.betaBook)]);
+  return sol ? sol.slice(0, k) : null;
 }
 
 export function optimizeHedge(
   holdings: { symbol: string; value: number }[],
   aligned: AlignedReturns,
   etfReturns: Record<string, number[]>,
-  opts: { ridge?: number; maxGross?: number | null; marketNeutral?: boolean; maxLegs?: number | null } = {},
+  opts: { ridge?: number; maxGross?: number | null; marketNeutral?: boolean; maxLegs?: number | null; neutralizeFactors?: string[] } = {},
 ): HedgeOptResult | null {
-  const { ridge = 0.05, maxGross = null, marketNeutral = false, maxLegs = null } = opts;
+  const { ridge = 0.05, maxGross = null, marketNeutral = false, maxLegs = null, neutralizeFactors = [] } = opts;
   const { dates, returns, market } = aligned;
   const nDays = dates.length;
   const withSeries = holdings.filter((h) => returns[h.symbol.toUpperCase()]?.length === nDays);
@@ -109,23 +115,35 @@ export function optimizeHedge(
 
   const etfs = Object.keys(etfReturns).filter((e) => etfReturns[e]?.length === nDays);
   if (etfs.length === 0) return null;
-  const canNeutral = marketNeutral && !!market && market.length === nDays;
 
-  let h = solveBasket(etfs.map((e) => etfReturns[e]), pnl, market, ridge, canNeutral);
+  // Build the equality-constraint vectors: market (β-neutral toggle or "Market" in the list) + any chosen
+  // style factors, all resolved from the SAME spreads the attribution uses. Deduped, preserving order.
+  const hasMarket = !!market && market.length === nDays;
+  const wanted = [...(marketNeutral ? ["Market"] : []), ...neutralizeFactors].filter((v, i, a) => a.indexOf(v) === i);
+  const spreads = hasMarket ? factorSpreads(aligned.extra, market!) : null;
+  const constraints: number[][] = [];
+  const neutralized: string[] = [];
+  for (const name of wanted) {
+    const v = name === "Market" ? (hasMarket ? market! : null) : spreads?.[name] ?? null;
+    if (v && v.length === nDays) { constraints.push(v); neutralized.push(name); }
+  }
+  const constrained = constraints.length > 0;
+
+  let h = solveBasket(etfs.map((e) => etfReturns[e]), pnl, constraints, ridge);
   if (!h) return null;
 
   // Cap to the N biggest legs, then re-solve on just those ETFs for a clean, optimal small basket.
   if (maxLegs && maxLegs > 0 && etfs.filter((_e, j) => Math.abs(h![j]) > 1e-6).length > maxLegs) {
     const keep = etfs.map((e, j) => ({ e, j, w: Math.abs(h![j]) })).sort((a, b) => b.w - a.w).slice(0, maxLegs);
-    const sub = solveBasket(keep.map((x) => etfReturns[x.e]), pnl, market, ridge, canNeutral);
+    const sub = solveBasket(keep.map((x) => etfReturns[x.e]), pnl, constraints, ridge);
     if (sub) { h = etfs.map(() => 0); keep.forEach((x, i) => { h![x.j] = sub[i]; }); }
   }
 
   let hh = h;
-  // Gross cap scales the overlay down — but uniform scaling breaks the beta-neutral equality, so it is
-  // only applied in the unconstrained mode (ridge + max-legs already bound the constrained basket).
+  // Gross cap scales the overlay down — but uniform scaling breaks the neutrality equalities, so it is
+  // only applied in the unconstrained mode (ridge + max-legs already bound a constrained basket).
   const gross0 = hh.reduce((a, x) => a + Math.abs(x), 0);
-  if (!canNeutral && maxGross && gross0 > maxGross && gross0 > 0) hh = hh.map((x) => x * (maxGross / gross0));
+  if (!constrained && maxGross && gross0 > maxGross && gross0 > 0) hh = hh.map((x) => x * (maxGross / gross0));
 
   const hedged = pnl.map((p, t) => p + etfs.reduce((a, e, j) => a + hh[j] * etfReturns[e][t], 0));
   const volBefore = std(pnl) * Math.sqrt(TRADING_DAYS);
@@ -143,6 +161,7 @@ export function optimizeHedge(
     volReduction: volBefore > 0 ? Math.max(0, 1 - volAfter / volBefore) : 0,
     turnoverDollar: turnover,
     nEtfs: etfs.length,
-    marketNeutral: canNeutral,
+    marketNeutral: neutralized.includes("Market"),
+    neutralized,
   };
 }
