@@ -4,7 +4,7 @@ import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, CAP_ORDER, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
-import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
+import { computePortfolioRisk, benchmarkRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { parseBrokerCsv } from "@/lib/brokerImport";
 import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
@@ -76,6 +76,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [advanced, setAdvanced] = useState(false); // progressive disclosure — hide the pro cluster by default
   const [themesText, setThemesText] = useState(""); // user ticker→theme tags
   const [themesOpen, setThemesOpen] = useState(false);
+  const [benchmark, setBenchmark] = useState("SPY"); // benchmark for active-risk read
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -230,6 +231,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const riskBase = aum ?? stats.gross; // % denominator for the risk figures (AUM if set, else gross)
   const pctOf = (d: number): string => (riskBase ? `${((d / riskBase) * 100).toFixed(1)}% of ${aum ? "AUM" : "gross"}` : "");
   const riskContribOf = useMemo(() => new Map((portRisk?.contributions ?? []).map((c) => [c.symbol, c.pctRisk])), [portRisk]);
+  const benchRisk = useMemo(
+    () => (risk.aligned?.extra ? benchmarkRisk(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, benchmark, riskBase) : null),
+    [risk.aligned, stats.holdings, benchmark, riskBase],
+  );
 
   // --- What-if: the after-trade book's risk + factor tilts (for the before → after comparison). ---
   const portRiskAfter = useMemo(
@@ -588,6 +593,29 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   })()}
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Applies the last {portRisk.nDays} trading days of your holdings&apos; joint returns to today&apos;s book. VaR = the loss a 1‑in‑20 (95%) / 1‑in‑100 (99%) day wouldn&apos;t exceed; shortfall = the average of the worst 5% of days. {aum ? "% figures are of account equity." : "Add account equity for % figures (now % of gross)."}
+                  </p>
+                </div>
+              )}
+
+              {/* Benchmark-relative (active) risk */}
+              {benchRisk && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Vs benchmark</span>
+                    <div className="flex overflow-hidden rounded-md border border-[var(--border)] text-[11px] font-semibold">
+                      {["SPY", "QQQ"].map((b) => (
+                        <button key={b} onClick={() => setBenchmark(b)} className={`px-2 py-0.5 ${b === "QQQ" ? "border-l border-[var(--border)]" : ""} ${benchmark === b ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{b}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <Stat label="Tracking error" value={`${(benchRisk.trackingErrorPct * 100).toFixed(0)}%`} sub="active vol / yr" />
+                    <Stat label="Active β" value={benchRisk.activeBeta.toFixed(2)} sub={`ρ ${benchRisk.correlation.toFixed(2)}`} />
+                    <Stat label="Up capture" value={benchRisk.upCapture != null ? `${Math.round(benchRisk.upCapture * 100)}%` : "—"} color={benchRisk.upCapture != null && benchRisk.upCapture >= 1 ? "#22c55e" : undefined} />
+                    <Stat label="Down capture" value={benchRisk.downCapture != null ? `${Math.round(benchRisk.downCapture * 100)}%` : "—"} color={benchRisk.downCapture != null && benchRisk.downCapture > 1 ? "#ef4444" : "#22c55e"} />
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                    Your book vs {benchmark}: tracking error is how far you drift from it ({(benchRisk.trackingErrorPct * 100).toFixed(0)}%/yr, ρ {benchRisk.correlation.toFixed(2)}); capture = the share of {benchmark}&apos;s up / down days you get — ideally &gt;100% up, &lt;100% down.
                   </p>
                 </div>
               )}

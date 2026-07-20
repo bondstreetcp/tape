@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { alignDailyReturns, computePortfolioRisk, type AlignedReturns } from "../lib/portfolioRisk";
+import { alignDailyReturns, computePortfolioRisk, benchmarkRisk, type AlignedReturns } from "../lib/portfolioRisk";
 import type { Daily } from "../lib/pairs";
 
 const approx = (a: number, b: number, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} ≈ ${b}`);
@@ -94,6 +94,24 @@ test("computePortfolioRisk: factor breakdown attributes variance to ETF-proxy fa
   assert.ok(byF["Market"] > 0.3, `market ${byF["Market"]}`); // market dominates
   assert.ok(byF["Size"] > 0.001, `size ${byF["Size"]}`); // positive size loading detected
   assert.ok(Math.abs(byF["Specific"]) < 0.3, `specific ${byF["Specific"]}`); // little idiosyncratic
+});
+
+test("benchmarkRisk: a book that IS the benchmark → ~0 tracking error, β≈1, full capture", () => {
+  const spy = Array.from({ length: 60 }, (_, i) => ((i * 7) % 13 - 6) / 100);
+  const aligned = { dates: spy.map((_, i) => (1000 + i) * DAY), returns: { XYZ: spy }, extra: { SPY: spy } };
+  const b = benchmarkRisk([{ symbol: "XYZ", value: 100000 }], aligned, "SPY", 100000)!; // rBook == spy
+  approx(b.trackingErrorPct, 0, 1e-6);
+  approx(b.activeBeta, 1, 1e-9);
+  approx(b.correlation, 1, 1e-9);
+  approx(b.upCapture!, 1, 1e-9);
+  approx(b.downCapture!, 1, 1e-9);
+  approx(b.bookVolPct, b.benchVolPct, 1e-9);
+});
+
+test("benchmarkRisk: null when the benchmark series is absent", () => {
+  const r = Array.from({ length: 60 }, (_, i) => i / 100);
+  const aligned = { dates: r.map((_, i) => (1000 + i) * DAY), returns: { X: r } }; // no extra.SPY
+  assert.equal(benchmarkRisk([{ symbol: "X", value: 1000 }], aligned, "SPY", 1000), null);
 });
 
 test("computePortfolioRisk: coverage < 1 without series; null when too short", () => {

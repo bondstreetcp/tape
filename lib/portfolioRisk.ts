@@ -265,3 +265,62 @@ export function computePortfolioRisk(
     contributions,
   };
 }
+
+export interface BenchmarkRisk {
+  benchmark: string;
+  trackingErrorPct: number; // annualized std of (book − benchmark) return
+  activeBeta: number; // book beta vs the benchmark
+  correlation: number;
+  bookVolPct: number; // annualized book vol (return on `base`)
+  benchVolPct: number;
+  upCapture: number | null; // book vs benchmark on up days (1.2 = capture 120% of the upside)
+  downCapture: number | null; // ... on down days (0.8 = only 80% of the downside)
+}
+
+/**
+ * Benchmark-relative (active) risk: treat the book's daily P&L as a return on `base` (AUM or gross) and
+ * compare it to a benchmark ETF's return (from aligned.extra) — tracking error, active beta, correlation,
+ * and up/down capture. null if the benchmark series or book history is missing.
+ */
+export function benchmarkRisk(
+  holdings: { symbol: string; value: number }[],
+  aligned: AlignedReturns,
+  benchmark: string,
+  base: number,
+): BenchmarkRisk | null {
+  const { dates, returns, extra } = aligned;
+  const nDays = dates.length;
+  const bench = extra?.[benchmark];
+  if (!bench || bench.length !== nDays || nDays < 30 || !(base > 0)) return null;
+  const withSeries = holdings.filter((h) => returns[h.symbol.toUpperCase()]?.length === nDays);
+  if (!withSeries.length) return null;
+
+  const pnl = new Array<number>(nDays).fill(0);
+  for (const h of withSeries) {
+    const r = returns[h.symbol.toUpperCase()];
+    for (let t = 0; t < nDays; t++) pnl[t] += h.value * r[t];
+  }
+  const rBook = pnl.map((p) => p / base);
+  const mBk = mean(rBook), mBn = mean(bench);
+  const varBn = bench.reduce((a, x) => a + (x - mBn) * (x - mBn), 0) / (nDays - 1);
+  let cov = 0;
+  for (let t = 0; t < nDays; t++) cov += (rBook[t] - mBk) * (bench[t] - mBn);
+  cov /= nDays - 1;
+  const active = rBook.map((r, t) => r - bench[t]);
+
+  let upB = 0, upBk = 0, nUp = 0, dnB = 0, dnBk = 0, nDn = 0;
+  for (let t = 0; t < nDays; t++) {
+    if (bench[t] > 0) { upB += bench[t]; upBk += rBook[t]; nUp++; }
+    else if (bench[t] < 0) { dnB += bench[t]; dnBk += rBook[t]; nDn++; }
+  }
+  return {
+    benchmark,
+    trackingErrorPct: std(active) * Math.sqrt(TRADING_DAYS),
+    activeBeta: varBn > 0 ? cov / varBn : 0,
+    correlation: correlation(rBook, bench),
+    bookVolPct: std(rBook) * Math.sqrt(TRADING_DAYS),
+    benchVolPct: std(bench) * Math.sqrt(TRADING_DAYS),
+    upCapture: nUp && upB !== 0 ? upBk / upB : null,
+    downCapture: nDn && dnB !== 0 ? dnBk / dnB : null,
+  };
+}
