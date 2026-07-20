@@ -36,6 +36,7 @@ async function buildNameMap(tf: TimeframeKey): Promise<Map<string, NameData>> {
         sector: s.sector,
         marketCap: s.marketCap,
         ret: s.returns?.[tf] ?? null,
+        ret1d: s.returns?.["1d"] ?? null,
       });
     }
   }
@@ -70,7 +71,7 @@ export async function GET(req: Request) {
     if (etf && etf.price > 0) {
       // Sector ETFs carry their GICS sector so a sector-ETF hedge nets against the book's own sector
       // exposure in the what-if; broad/style ETFs stay "ETF/Index" (they span sectors).
-      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: HEDGE_ETF_SECTOR[sym] ?? "ETF/Index", capBucket: HEDGE_ETF_CAP[sym], beta: etf.beta, ret: etf.returns?.[tf] ?? null, advDollar };
+      data[sym] = { symbol: sym, name: etf.name, price: etf.price, sector: HEDGE_ETF_SECTOR[sym] ?? "ETF/Index", capBucket: HEDGE_ETF_CAP[sym], beta: etf.beta, ret: etf.returns?.[tf] ?? null, ret1d: etf.returns?.["1d"] ?? null, advDollar };
       continue;
     }
     missing.push(sym);

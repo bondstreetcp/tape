@@ -20,6 +20,7 @@ export interface NameData {
   advDollar?: number; // 3-month average daily $ volume (liquidity)
   beta?: number | null; // vs the market (SPY), from the stored series
   ret?: number | null; // % return over the selected timeframe
+  ret1d?: number | null; // % return today (for "what drove my book today")
 }
 
 export interface Holding extends NameData {

@@ -9,6 +9,7 @@ import { parseBrokerCsv } from "@/lib/brokerImport";
 import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
 import { parseTags, themeExposure } from "@/lib/themes";
+import { dayAttribution } from "@/lib/dayAttribution";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -304,6 +305,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
   const themeExp = useMemo(() => { const tags = parseTags(themesText); return tags.size ? themeExposure(stats.holdings, tags) : null; }, [themesText, stats.holdings]);
+  const today = useMemo(() => dayAttribution(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value, ret1d: h.ret1d, name: h.name })), riskBase), [stats.holdings, riskBase]);
   // Retail TL;DR — a plain-English read of the numbers below (deterministic, no LLM).
   const bookSummary = useMemo(() => summarizeBook({
     stats, risk: portRisk, tilts,
@@ -483,6 +485,29 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <Stat label={`Return (${tf.toUpperCase()})`} value={pct(stats.ret)} color={stats.ret == null ? undefined : pos(stats.ret) ? "#22c55e" : "#ef4444"} />
                 </div>
               </div>
+
+              {/* What drove my book today */}
+              {today && Math.abs(today.totalPnl) > 0 && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-[13px] font-semibold">Today <span className="text-[11px] font-normal text-[var(--text-4)]">what moved your book</span></span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-mono text-lg font-semibold tabular-nums" style={{ color: today.totalPnl >= 0 ? "#22c55e" : "#ef4444" }}>{signMoney(today.totalPnl)}</span>
+                      {today.totalPct != null && <span className="font-mono text-[12px] tabular-nums" style={{ color: today.totalPnl >= 0 ? "#22c55e" : "#ef4444" }}>({pct(today.totalPct * 100)})</span>}
+                    </span>
+                  </div>
+                  <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                    {today.contributors.slice(0, 6).map((c) => (
+                      <div key={c.symbol} className="flex items-center gap-2 text-[12px]">
+                        <span className="w-14 shrink-0 font-mono font-semibold text-[var(--accent)]">{c.symbol}</span>
+                        <span className="font-mono tabular-nums text-[var(--text-4)]">{pct(c.retPct)}</span>
+                        <span className="ml-auto font-mono tabular-nums" style={{ color: c.pnl >= 0 ? "#22c55e" : "#ef4444" }}>{signMoney(c.pnl)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--text-4)]">Each holding&apos;s same-day move × your position{today.coverage < 0.999 ? ` (covers the ${Math.round(today.coverage * 100)}% of gross with a print today)` : ""}.</p>
+                </div>
+              )}
 
               {/* What-if: before → after */}
               {whatIfActive && (
