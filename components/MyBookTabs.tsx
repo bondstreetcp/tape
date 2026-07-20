@@ -3,7 +3,7 @@ import Link from "next/link";
 // One switcher across the three "my book" tools — they all read the SAME pasted book from
 // localStorage, so jumping between them is seamless (paste once, see risk / catalysts / income).
 const TOOLS = [
-  { path: "/portfolio", label: "Cockpit", desc: "Risk, exposure & factor tilts" },
+  { path: "/portfolio", label: "Prism", desc: "Risk, exposure & factor attribution" },
   { path: "/portfolio-radar", label: "Radar", desc: "Forward catalysts in your names" },
   { path: "/portfolio-income", label: "Income", desc: "Covered-call yield on your longs" },
 ];

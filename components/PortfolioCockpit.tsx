@@ -376,8 +376,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
             <span className="text-[26px] font-semibold leading-none tracking-[0.16em]" style={{ paddingLeft: "0.16em" }}>PRISM</span>
             <span className="ml-1 hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-4)] sm:inline">Portfolio Intelligence</span>
           </div>
-          <p className="mt-2 max-w-3xl text-[13px] text-[var(--text-3)]"><b className="text-[var(--text-2)]">See what your returns are made of.</b>
-            Type your book (one <span className="font-mono">SYMBOL SHARES</span> per line; negatives = shorts) and get live <b>gross/net exposure</b> <InfoDot term="Gross exposure" />, <b>sector tilts</b>, <b>concentration</b> <InfoDot term="HHI concentration" />, portfolio <b>beta</b> <InfoDot term="Beta" />, and a <b>market-shock</b> P&amp;L. Nothing leaves your browser — the book is saved locally.
+          <p className="mt-2 max-w-3xl text-[13px] text-[var(--text-3)]"><b className="text-[var(--text-2)]">See what your returns are made of.</b>{" "}
+            Drop in your book — one <span className="font-mono">SYMBOL SHARES</span> per line, negatives are shorts — and read it the way a pod PM reads theirs: <b>exposure</b> <InfoDot term="Gross exposure" /> and <b>factor attribution</b> as a share of your AUM, predicted <b>vol &amp; VaR</b>, <b>concentration</b> <InfoDot term="HHI concentration" />, <b>crowding</b>, and a solved <b>hedge</b>. Nothing leaves your browser — the book is saved locally.
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -485,7 +485,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
         <div>
           {!hasBook ? (
             <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-14 text-center">
-              <div className="text-lg font-semibold">See your portfolio&apos;s risk in one page</div>
+              <div className="mb-4 flex justify-center"><PrismMark size={44} id="prismEmpty" /></div>
+              <div className="text-lg font-semibold">See what your returns are made of</div>
               <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--text-3)]">
                 Paste your holdings on the left — or <label className="cursor-pointer text-[var(--accent)] underline">import a CSV<input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} /></label> from Schwab, Fidelity, or Robinhood — and get a plain-English read: how concentrated you are, how much you&apos;d move with the market, what a crash would cost, and how to hedge it.
               </p>
@@ -1293,6 +1294,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
           )}
         </div>
       </div>
+
+      <footer className="mt-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-[var(--border)] pt-4 text-[11px] text-[var(--text-4)]">
+        <PrismMark size={15} id="prismFoot" />
+        <span className="font-semibold tracking-[0.18em] text-[var(--text-3)]" style={{ paddingLeft: "0.18em" }}>PRISM</span>
+        <span className="tracking-wide">Portfolio Intelligence · your book never leaves this browser</span>
+      </footer>
     </main>
   );
 }
