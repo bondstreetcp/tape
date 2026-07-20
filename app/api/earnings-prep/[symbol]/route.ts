@@ -8,6 +8,7 @@ import { computePreprint, narratePreprint, type PublicInputs } from "@/lib/resea
 import { listDocs, normTicker } from "@/lib/research/store";
 import { beatGuide } from "@/lib/guidance";
 import { cachedStats } from "@/lib/companyCache";
+import { memo } from "@/lib/memoCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -34,8 +35,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       // Every live sub-fetch inside assemblePreviewContext is time-bound, and the LLM call gets a 40s
       // outer wall-clock race — `export const maxDuration` is Vercel-only and a no-op under
       // `next start` on the NAS, so these bounds ARE the ceiling ("the AI's not working" fix).
-      const c = await assemblePreviewContext(sym, earningsISO);
-      const ai = await raceTimeout(buildAiPreview(c, { bounded: true }), 40_000, null);
+      // memo = the s-maxage the NAS has no CDN for; cacheIf mirrors "never cache {ai:null}".
+      const ai = await memo(
+        `ep:ai:${sym}:${earningsISO ?? ""}`,
+        10_800_000,
+        async () => {
+          const c = await assemblePreviewContext(sym, earningsISO);
+          return raceTimeout(buildAiPreview(c, { bounded: true }), 40_000, null);
+        },
+        { cacheIf: (v) => v != null },
+      );
       // Cache ONLY successes — a cached {ai:null} bricked the preview for every viewer for 3 hours.
       return NextResponse.json({ ai }, { headers: { "Cache-Control": ai ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
     }
@@ -44,35 +53,41 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     if (part === "preprint") {
       const docs = await listDocs(normTicker(sym)).catch(() => []);
       // No ingested research → say so honestly. NEVER manufacture a research edge; the client renders
-      // a "quant-only — ingest notes to light this up" state. no-store: the user may upload PDFs and
-      // click again a minute later.
+      // a "quant-only — ingest notes to light this up" state. no-store AND un-memoed: the user may
+      // upload PDFs and click again a minute later.
       if (!docs.length) return NextResponse.json({ preprint: null, hasResearch: false }, { headers: { "Cache-Control": "no-store" } });
-      const [stats, quant] = await Promise.all([
-        raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
-        raceTimeout(computeQuant(sym, earningsISO).catch(() => null), 20_000, null),
-      ]);
-      const guid = loadGuidance(sym);
-      const q0 = stats?.estimates?.find((e) => e.period === "0q") || stats?.estimates?.[0];
-      const bg = beatGuide(guid?.history);
-      const pub: PublicInputs = {
-        recommendationMean: stats?.recommendationMean ?? null,
-        targetMean: stats?.targetMean ?? null,
-        price: stats?.price ?? quant?.straddle?.price ?? null,
-        epsUp30d: q0?.epsUp30d ?? null,
-        epsDown30d: q0?.epsDown30d ?? null,
-        tradeLean: quant?.trade?.lean ?? null,
-        sandbagger: bg ? bg.total >= 3 && bg.beats / bg.total >= 0.7 : null,
-        richnessVerdict: (quant?.richness?.verdict as PublicInputs["richnessVerdict"]) ?? null,
-        putsBid: quant?.options?.skew != null ? quant.options.skew > 0.02 : null,
-      };
-      const read = computePreprint(docs, pub);
-      const sig = quant ? buildSig(quant, guid, loadSss(sym)) : "";
-      const narration = (await llmConfigured()) ? await raceTimeout(narratePreprint(sym, read, docs, sig, { bounded: true }), 40_000, null) : null;
-      return NextResponse.json(
-        { preprint: { ...read, narration }, hasResearch: true },
-        // Short cache: a fresh note upload should show up on the next click, not 3h later.
-        { headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" } },
+      // 30-min memo (mirrors the s-maxage the NAS has no CDN for) — keyed on the doc count so a fresh
+      // upload busts it on the next click instead of waiting out the TTL.
+      const payload = await memo(
+        `ep:pre:${sym}:${earningsISO ?? ""}:${docs.length}`,
+        1_800_000,
+        async () => {
+          const [stats, quant] = await Promise.all([
+            raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
+            raceTimeout(computeQuant(sym, earningsISO).catch(() => null), 20_000, null),
+          ]);
+          const guid = loadGuidance(sym);
+          const q0 = stats?.estimates?.find((e) => e.period === "0q") || stats?.estimates?.[0];
+          const bg = beatGuide(guid?.history);
+          const pub: PublicInputs = {
+            recommendationMean: stats?.recommendationMean ?? null,
+            targetMean: stats?.targetMean ?? null,
+            price: stats?.price ?? quant?.straddle?.price ?? null,
+            epsUp30d: q0?.epsUp30d ?? null,
+            epsDown30d: q0?.epsDown30d ?? null,
+            tradeLean: quant?.trade?.lean ?? null,
+            sandbagger: bg ? bg.total >= 3 && bg.beats / bg.total >= 0.7 : null,
+            richnessVerdict: (quant?.richness?.verdict as PublicInputs["richnessVerdict"]) ?? null,
+            putsBid: quant?.options?.skew != null ? quant.options.skew > 0.02 : null,
+          };
+          const read = computePreprint(docs, pub);
+          const sig = quant ? buildSig(quant, guid, loadSss(sym)) : "";
+          const narration = (await llmConfigured()) ? await raceTimeout(narratePreprint(sym, read, docs, sig, { bounded: true }), 40_000, null) : null;
+          return { preprint: { ...read, narration }, hasResearch: true };
+        },
+        { cacheIf: (v) => !!v.preprint?.narration }, // a narration-less read stays retryable
       );
+      return NextResponse.json(payload, { headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" } });
     }
 
     // ── "Why" part: explain a SINGLE past print's reaction (clicked from the reactions table) ──
@@ -81,6 +96,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     if (part === "why") {
       const dISO = (() => { const dd = sp.get("d"); return dd && /^\d{4}-\d{2}-\d{2}/.test(dd) ? dd.slice(0, 10) : null; })();
       if (!dISO || !(await llmConfigured())) return NextResponse.json({ why: null });
+      // 24h memo (mirrors the s-maxage) — a past print's explanation never changes intraday.
+      const whyPayload = await memo(`ep:why:${sym}:${dISO}`, 86_400_000, async () => {
       // Same NAS-has-no-function-ceiling discipline as part=ai: every live fetch is time-bound.
       const [reactions, news, release] = await Promise.all([
         raceTimeout(getEarningsReactions(sym, 8).catch(() => []), 15_000, [] as Awaited<ReturnType<typeof getEarningsReactions>>),
@@ -118,27 +135,34 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         null,
       );
       const why = out && typeof out.why === "string" && out.why.trim() ? out.why.trim() : null;
-      return NextResponse.json(
-        {
-          why,
-          // enum-coerce — the badge renders this raw, and models occasionally embellish the value
-          confidence: out?.confidence && ["high", "medium", "low"].includes(out.confidence) ? out.confidence : null,
-          grounded: !!release?.text, // whether the recap is backed by the actual 8-K release
-          filing: release ? { url: release.url, date: release.date } : null,
-          headlines: near.map((n) => ({ title: n.title, publisher: n.publisher, link: n.link, time: n.time })),
-          fact: rx ? { surprise: rx.surprise, move: rx.move, drift5: rx.drift5, timing: rx.timing } : null,
-        },
-        // Cache only successes — a cached {why:null} bricked the drill-down for 24h for everyone.
-        { headers: { "Cache-Control": why ? "public, s-maxage=86400, stale-while-revalidate=172800" : "no-store" } },
-      );
+      return {
+        why,
+        // enum-coerce — the badge renders this raw, and models occasionally embellish the value
+        confidence: out?.confidence && ["high", "medium", "low"].includes(out.confidence) ? out.confidence : null,
+        grounded: !!release?.text, // whether the recap is backed by the actual 8-K release
+        filing: release ? { url: release.url, date: release.date } : null,
+        headlines: near.map((n) => ({ title: n.title, publisher: n.publisher, link: n.link, time: n.time })),
+        fact: rx ? { surprise: rx.surprise, move: rx.move, drift5: rx.drift5, timing: rx.timing } : null,
+      };
+      // Cache only successes — a cached {why:null} bricked the drill-down for 24h for everyone.
+      }, { cacheIf: (v) => v.why != null });
+      return NextResponse.json(whyPayload, {
+        headers: { "Cache-Control": whyPayload.why ? "public, s-maxage=86400, stale-while-revalidate=172800" : "no-store" },
+      });
     }
 
-    // ── Data part: reaction history + implied move + options skew/max-pain (fast, auto-loaded) ──
-    const { closes, ...quant } = await computeQuant(sym, earningsISO);
-    const peerSympathy = await peerReadThrough(sym, closes);
+    // ── Data part: reaction history + implied move + options skew/max-pain (auto-loaded) ──
+    // THE hot path: ~6 live Yahoo calls, 12-17s from the NAS uplink. memo makes the single-process
+    // origin behave like the Vercel CDN did — one slow compute per symbol per 3h, then instant, with
+    // concurrent viewers sharing one in-flight compute and errors degrading to the stale entry.
+    const data = await memo(`ep:data:${sym}:${earningsISO ?? ""}`, 10_800_000, async () => {
+      const { closes, ...quant } = await computeQuant(sym, earningsISO);
+      const peerSympathy = await peerReadThrough(sym, closes);
+      return { ...quant, peerSympathy };
+    });
 
     return NextResponse.json(
-      { data: { ...quant, peerSympathy } },
+      { data },
       { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
     );
   } catch {
