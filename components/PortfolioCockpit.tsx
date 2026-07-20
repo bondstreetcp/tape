@@ -10,6 +10,7 @@ import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
 import { parseTags, themeExposure } from "@/lib/themes";
 import { dayAttribution } from "@/lib/dayAttribution";
+import { concentration } from "@/lib/concentration";
 import { volOverlay, type VolInfo } from "@/lib/volOverlay";
 import { crowd13fOverlap } from "@/lib/crowd13f";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
@@ -259,6 +260,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     () => (risk.aligned?.market ? factorBetas(holdingsVal, risk.aligned, riskBase) : null),
     [risk.aligned, holdingsVal, riskBase],
   );
+  const concRead = useMemo(() => (risk.aligned ? concentration(holdingsVal, risk.aligned) : null), [risk.aligned, holdingsVal]);
   const shockPnl = useMemo(() => {
     if (!factorExp) return null;
     const ret = factorExp.exposures.reduce((a, e) => a + e.beta * (shocks[e.factor] ?? 0), 0);
@@ -1088,6 +1090,23 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
 
                 {/* Crowding / correlation + hedge */}
                 <div className="space-y-4">
+                  {concRead && (
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[13px] font-semibold">Independent bets</span>
+                        <span className="text-[11px] text-[var(--text-4)]">correlation-adjusted</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: concRead.independentBets < concRead.names * 0.4 ? "#ef4444" : concRead.independentBets < concRead.names * 0.7 ? "#f59e0b" : "#22c55e" }}>{concRead.independentBets.toFixed(1)}</span>
+                        <span className="text-[12px] text-[var(--text-3)]">real bets from {concRead.names} names — {concRead.independentBets < concRead.names * 0.4 ? "far less diversified than it looks" : concRead.independentBets < concRead.names * 0.7 ? "some overlap between names" : "genuinely spread out"}</span>
+                      </div>
+                      <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                        <Stat label="By size" value={concRead.effectiveNamesBySize.toFixed(1)} sub={`of ${concRead.names} names`} />
+                        <Stat label="Top factor" value={`${Math.round(concRead.topPcShare * 100)}%`} sub="of book variance" color={concRead.topPcShare >= 0.6 ? "#ef4444" : concRead.topPcShare >= 0.4 ? "#f59e0b" : undefined} />
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">How many truly independent positions you hold once correlation is priced in (PCA of the exposure-weighted return covariance). {concRead.names} names → <b>{concRead.effectiveNamesBySize.toFixed(1)}</b> by size → <b>{concRead.independentBets.toFixed(1)}</b> once they move together; the top statistical factor drives {Math.round(concRead.topPcShare * 100)}% of your variance.</p>
+                    </div>
+                  )}
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-[13px] font-semibold">Crowding <InfoDot term="Crowding" /></span>
