@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { promises as fsp } from "fs";
 import path from "path";
-import { loadSnapshot, loadManySymbolSeries, loadMarketSeries, loadEtfMeta, loadVolCone, loadIvLatest } from "@/lib/data";
+import { loadSnapshot, loadManySymbolSeries, loadMarketSeries, loadEtfMeta, loadVolCone, loadIvLatest, loadCrowd13f } from "@/lib/data";
 import { buildFactorModel, type FactorInput, type FactorKey, type PairCorr } from "@/lib/factors";
 import { corrOf, type Daily } from "@/lib/pairs";
 import { alignDailyReturns } from "@/lib/portfolioRisk";
@@ -115,5 +115,9 @@ export async function GET(req: Request) {
     if (c || iv) vol[sym] = { rv: c?.cur20, rvPct: c?.pct20, daysToEarnings: iv?.daysToEarnings ?? null, expMovePct: iv?.movePct ?? null };
   }
 
-  return NextResponse.json({ factors, corr, aligned, etfPrices, vol, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
+  // Crowded 13F themes (this quarter's consensus buys, global ticker lists) so the client can flag how
+  // much of the book sits in trades the 13F roster piled into — the crowd that can unwind together.
+  const crowd13f = await loadCrowd13f();
+
+  return NextResponse.json({ factors, corr, aligned, etfPrices, vol, crowd13f, universe: SCORING_UNIVERSE, scored, cappedFrom, cap: MAX_SYMBOLS, asOf: new Date().toISOString() });
 }

@@ -11,6 +11,7 @@ import { encodeBook, decodeBook } from "@/lib/shareBook";
 import { parseTags, themeExposure } from "@/lib/themes";
 import { dayAttribution } from "@/lib/dayAttribution";
 import { volOverlay, type VolInfo } from "@/lib/volOverlay";
+import { crowd13fOverlap } from "@/lib/crowd13f";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -197,8 +198,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const syms = new Set<string>([...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol));
     return syms.size ? [...syms].sort().join(",") : symbolsKey;
   }, [stats.holdings, statsAfter.holdings, symbolsKey]);
-  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, vol: {}, cappedFrom: null, cap: null };
-  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; vol: Record<string, VolInfo>; cappedFrom: number | null; cap: number | null }>(emptyRisk);
+  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, vol: {}, crowd13f: null, cappedFrom: null, cap: null };
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; vol: Record<string, VolInfo>; crowd13f: { asOf: string; themes: { heading: string; tickers: string[] }[] } | null; cappedFrom: number | null; cap: number | null }>(emptyRisk);
   const [riskLoading, setRiskLoading] = useState(false);
   useEffect(() => {
     if (!riskSymbolsKey) { setRisk(emptyRisk); return; }
@@ -207,7 +208,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/portfolio/risk?symbols=${encodeURIComponent(riskSymbolsKey)}`).then((x) => x.json());
-        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, etfPrices: r.etfPrices || {}, vol: r.vol || {}, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
+        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, etfPrices: r.etfPrices || {}, vol: r.vol || {}, crowd13f: r.crowd13f ?? null, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
       } catch { if (!cancelled) setRisk(emptyRisk); }
       if (!cancelled) setRiskLoading(false);
     }, 400);
@@ -240,6 +241,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const volRead = useMemo(
     () => (Object.keys(risk.vol).length ? volOverlay(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.vol) : null),
     [risk.vol, stats.holdings],
+  );
+  const crowdRead = useMemo(
+    () => (risk.crowd13f ? crowd13fOverlap(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.crowd13f.themes, risk.crowd13f.asOf) : null),
+    [risk.crowd13f, stats.holdings],
   );
 
   // --- What-if: the after-trade book's risk + factor tilts (for the before → after comparison). ---
@@ -873,6 +878,30 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                     </div>
                   )}
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Exposure-weighted 20-day realized vol and where it sits in each name&apos;s own range (high percentile = jumpier than usual, so options cost more). Earnings/implied move cover the ~55 names with an IV feed.</p>
+                </div>
+              )}
+              {crowdRead && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">13F crowding <span className="text-[11px] font-normal text-[var(--text-4)]">overlap with this quarter&apos;s consensus buys</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">as of {crowdRead.asOf}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <Stat label="In crowded themes" value={`${Math.round(crowdRead.overlapGrossPct * 100)}%`} sub="of gross" color={crowdRead.overlapGrossPct >= 0.5 ? "#f59e0b" : undefined} />
+                    <Stat label="Names overlapping" value={`${crowdRead.totalNames}`} sub={`across ${crowdRead.themes.length} theme${crowdRead.themes.length === 1 ? "" : "s"}`} />
+                  </div>
+                  <div className="mt-2.5 space-y-1.5">
+                    {crowdRead.themes.map((t) => (
+                      <div key={t.heading} className="flex items-baseline justify-between gap-3 text-[12px]">
+                        <span className="min-w-0 flex-1">
+                          <span className="text-[var(--text-2)]">{t.heading}</span>{" "}
+                          <span className="font-mono text-[11px] text-[var(--text-4)]">{t.holdings.join(" · ")}</span>
+                        </span>
+                        <span className="shrink-0 font-mono tabular-nums text-[var(--text-3)]">{Math.round(t.grossPct * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Where your book overlaps the trades funds piled into last quarter (13F filings, as of {crowdRead.asOf}). Crowded names can unwind together — high overlap is a positioning risk, not a buy signal.</p>
                 </div>
               )}
               {risk.cappedFrom && (

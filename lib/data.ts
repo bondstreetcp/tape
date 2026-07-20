@@ -40,6 +40,22 @@ export async function loadIvLatest(): Promise<Record<string, { daysToEarnings: n
   } catch { return {}; }
 }
 
+/** Crowded 13F themes (heading + ticker list) from 13f-story. null if not built yet. */
+export async function loadCrowd13f(): Promise<{ asOf: string; themes: { heading: string; tickers: string[] }[] } | null> {
+  try {
+    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, "13f-story.json"), "utf8")) as {
+      asOf?: string;
+      themes?: Array<{ heading?: string; tickers?: string[] }>;
+    };
+    const themes = (j.themes ?? [])
+      .filter((t) => t?.heading && Array.isArray(t.tickers) && t.tickers.length)
+      .map((t) => ({ heading: t.heading as string, tickers: t.tickers as string[] }));
+    return themes.length ? { asOf: j.asOf ?? "", themes } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Average daily $ volume per symbol (refresh-adv) for the liquidity read. {} if not built yet. */
 export async function loadAdv(): Promise<Record<string, number>> {
   try {
