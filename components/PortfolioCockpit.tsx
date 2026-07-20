@@ -4,7 +4,7 @@ import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, CAP_ORDER, type NameData } from "@/lib/portfolio";
 import { computeFactorTilts, computeCrowding, FACTOR_META, type FactorKey, type PairCorr } from "@/lib/factors";
-import { computePortfolioRisk, benchmarkRisk, type AlignedReturns } from "@/lib/portfolioRisk";
+import { computePortfolioRisk, benchmarkRisk, returnAttribution, activeFactorExposure, factorBetas, type AlignedReturns } from "@/lib/portfolioRisk";
 import { parseBrokerCsv } from "@/lib/brokerImport";
 import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
@@ -52,6 +52,12 @@ const fmtDays = (d: number | null | undefined): string => (d == null ? "—" : d
 
 const SHOCKS = [-10, -5, -2, 2, 5, 10];
 const pos = (n: number) => n >= 0;
+// Directional multi-factor shock presets (fractions) for the factor-shock what-if.
+const SHOCK_PRESETS: { label: string; shocks: Record<string, number> }[] = [
+  { label: "risk-off", shocks: { Market: -0.05, Momentum: -0.03, LowVol: 0.02 } },
+  { label: "value rot.", shocks: { Value: 0.05, Momentum: -0.05 } },
+  { label: "melt-up", shocks: { Market: 0.05, Momentum: 0.03 } },
+];
 
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -80,6 +86,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [themesText, setThemesText] = useState(""); // user ticker→theme tags
   const [themesOpen, setThemesOpen] = useState(false);
   const [benchmark, setBenchmark] = useState("SPY"); // benchmark for active-risk read
+  const [attribWindow, setAttribWindow] = useState(63); // return-attribution lookback: 21=1m, 63=3m, 126=6m
+  const [shocks, setShocks] = useState<Record<string, number>>({}); // factor-shock scenario inputs (fraction, e.g. -0.05)
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -238,6 +246,24 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     () => (risk.aligned?.extra ? benchmarkRisk(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, benchmark, riskBase) : null),
     [risk.aligned, stats.holdings, benchmark, riskBase],
   );
+  const holdingsVal = useMemo(() => stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), [stats.holdings]);
+  const attribRead = useMemo(
+    () => (risk.aligned?.market ? returnAttribution(holdingsVal, risk.aligned, riskBase, attribWindow) : null),
+    [risk.aligned, holdingsVal, riskBase, attribWindow],
+  );
+  const activeFactors = useMemo(
+    () => (risk.aligned?.extra && risk.aligned?.market ? activeFactorExposure(holdingsVal, risk.aligned, benchmark, riskBase) : null),
+    [risk.aligned, holdingsVal, benchmark, riskBase],
+  );
+  const factorExp = useMemo(
+    () => (risk.aligned?.market ? factorBetas(holdingsVal, risk.aligned, riskBase) : null),
+    [risk.aligned, holdingsVal, riskBase],
+  );
+  const shockPnl = useMemo(() => {
+    if (!factorExp) return null;
+    const ret = factorExp.exposures.reduce((a, e) => a + e.beta * (shocks[e.factor] ?? 0), 0);
+    return { ret, dollar: ret * riskBase };
+  }, [factorExp, shocks, riskBase]);
   const volRead = useMemo(
     () => (Object.keys(risk.vol).length ? volOverlay(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.vol) : null),
     [risk.vol, stats.holdings],
@@ -652,6 +678,123 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Your book vs {benchmark}: tracking error is how far you drift from it ({(benchRisk.trackingErrorPct * 100).toFixed(0)}%/yr, ρ {benchRisk.correlation.toFixed(2)}); capture = the share of {benchmark}&apos;s up / down days you get — ideally &gt;100% up, &lt;100% down.
                   </p>
+                </div>
+              )}
+
+              {/* Factor RETURN attribution — where the return came from */}
+              {attribRead && (() => {
+                const bars = [...attribRead.factors, { factor: "Specific", ret: attribRead.specific }];
+                const bmax = Math.max(...bars.map((b) => Math.abs(b.ret)), 1e-9);
+                return (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Return attribution <span className="text-[11px] font-normal text-[var(--text-4)]">where your return came from</span></span>
+                    <div className="flex overflow-hidden rounded-md border border-[var(--border)] text-[11px] font-semibold">
+                      {([["1m", 21], ["3m", 63], ["6m", 126]] as const).map(([lbl, d]) => (
+                        <button key={lbl} onClick={() => setAttribWindow(d)} className={`px-2 py-0.5 ${lbl !== "1m" ? "border-l border-[var(--border)]" : ""} ${attribWindow === d ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <span className="text-[12px] text-[var(--text-4)]">Total return ({attribRead.windowDays}d)</span>
+                    <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: attribRead.totalRet >= 0 ? "#22c55e" : "#ef4444" }}>{(attribRead.totalRet >= 0 ? "+" : "−") + (Math.abs(attribRead.totalRet) * 100).toFixed(1) + "%"}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {bars.map((f) => {
+                      const w = Math.min(100, (Math.abs(f.ret) / bmax) * 100);
+                      const up = f.ret >= 0;
+                      return (
+                        <div key={f.factor} className="flex items-center gap-2 text-[12px]">
+                          <span className="w-16 shrink-0 text-[var(--text-3)]">{f.factor}</span>
+                          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-[var(--border)]/40">
+                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: up ? "#22c55e" : "#ef4444", opacity: f.factor === "Specific" ? 0.55 : 0.85 }} />
+                          </div>
+                          <span className="w-14 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "#22c55e" : "#ef4444" }}>{(up ? "+" : "−") + (Math.abs(f.ret) * 100).toFixed(1) + "%"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Your {attribRead.windowDays}-day return split into factor bets (Market, Size, Value, Momentum, Quality, Low-Vol) vs stock picking (<b>Specific</b> = what your names added beyond the factors). Book&apos;s daily return regressed on factor-proxy ETFs; the pieces add to the total. Covers {Math.round(attribRead.covered * 100)}% of gross.</p>
+                </div>
+                );
+              })()}
+
+              {/* Active factor exposures vs the benchmark */}
+              {activeFactors && (() => {
+                const amax = Math.max(...activeFactors.exposures.map((e) => Math.abs(e.beta)), 0.01);
+                return (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Active factor bets <span className="text-[11px] font-normal text-[var(--text-4)]">tilts vs {activeFactors.benchmark}</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">fit R² {Math.round(activeFactors.r2 * 100)}%</span>
+                  </div>
+                  <div className="space-y-1">
+                    {activeFactors.exposures.map((e) => {
+                      const w = Math.min(100, (Math.abs(e.beta) / amax) * 100);
+                      const up = e.beta >= 0;
+                      return (
+                        <div key={e.factor} className="flex items-center gap-2 text-[12px]">
+                          <span className="w-16 shrink-0 text-[var(--text-3)]">{e.factor}</span>
+                          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-[var(--border)]/40">
+                            <div className="h-full rounded-sm" style={{ width: `${w}%`, background: up ? "#3b82f6" : "#f59e0b" }} />
+                          </div>
+                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: up ? "#3b82f6" : "#f59e0b" }}>{(up ? "+" : "−") + Math.abs(e.beta).toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Where your book tilts relative to {activeFactors.benchmark} — a positive Momentum bar = more momentum-exposed than the index, etc. These active bets are what the tracking error above is actually made of. From the active (book − {activeFactors.benchmark}) return regressed on the factor proxies.</p>
+                </div>
+                );
+              })()}
+
+              {/* Factor-shock what-if (multi-factor, uses fitted betas) */}
+              {factorExp && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Factor shock <span className="text-[11px] font-normal text-[var(--text-4)]">what-if by factor</span></span>
+                    <div className="flex gap-1">
+                      {SHOCK_PRESETS.map((p) => (
+                        <button key={p.label} onClick={() => setShocks(p.shocks)} className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-4)] hover:text-[var(--text-2)]">{p.label}</button>
+                      ))}
+                      <button onClick={() => setShocks({})} className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-4)] hover:text-[var(--text-2)]">reset</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3">
+                    {factorExp.exposures.map((e) => (
+                      <label key={e.factor} className="flex items-center justify-between gap-1 text-[11px]">
+                        <span className="text-[var(--text-4)]">{e.factor} <span className="text-[10px] opacity-60">β{e.beta.toFixed(2)}</span></span>
+                        <span className="flex items-center">
+                          <input
+                            type="number"
+                            step={1}
+                            value={shocks[e.factor] != null ? Math.round(shocks[e.factor] * 100) : ""}
+                            placeholder="0"
+                            onChange={(ev) => {
+                              const v = ev.target.value;
+                              setShocks((s) => {
+                                const n = { ...s };
+                                if (v === "" || v === "-") delete n[e.factor];
+                                else n[e.factor] = Number(v) / 100;
+                                return n;
+                              });
+                            }}
+                            className="w-11 rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-right font-mono tabular-nums"
+                          />
+                          <span className="ml-0.5 text-[var(--text-4)]">%</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {shockPnl && (
+                    <div className="mt-2.5 flex items-baseline justify-between border-t border-[var(--border)] pt-2">
+                      <span className="text-[12px] text-[var(--text-4)]">Estimated book impact</span>
+                      <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: shockPnl.ret >= 0 ? "#22c55e" : "#ef4444" }}>
+                        {(shockPnl.ret >= 0 ? "+" : "−") + (Math.abs(shockPnl.ret) * 100).toFixed(2) + "%"} <span className="text-[11px] font-normal text-[var(--text-4)]">{signMoney(shockPnl.dollar)}</span>
+                      </span>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Move a factor and see the book&apos;s modeled return from your fitted betas (β above). A momentum-heavy book takes a bigger hit from Momentum −5%. Presets shock several at once. First-order estimate on {Math.round(factorExp.covered * 100)}% of gross — betas from the trailing year, so treat it as directional.</p>
                 </div>
               )}
 

@@ -324,3 +324,134 @@ export function benchmarkRisk(
     downCapture: nDn && dnB !== 0 ? dnBk / dnB : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Factor RETURN attribution + active factor exposures + factor betas.
+// These share one engine: ridge-OLS of a daily return vector on the ETF-spread
+// factor menu (buildEtfFactors), reused from the variance decomposition above.
+// ---------------------------------------------------------------------------
+
+/** Ridge OLS of `y` (a daily return vector) on the factor spreads → betas + fit R². null if unsolvable. */
+function ridgeFactorBetas(y: number[], factors: Record<string, number[]>): { names: string[]; b: number[]; r2: number } | null {
+  const names = Object.keys(factors);
+  const k = names.length;
+  if (!k || y.length < 2) return null;
+  const F = names.map((f) => factors[f]);
+  const mF = F.map(meanOf), mY = meanOf(y);
+  const FtF = F.map((fi, i) => F.map((fj, j) => covAbout(fi, fj, mF[i], mF[j])));
+  const Fty = F.map((fi, i) => covAbout(y, fi, mY, mF[i]));
+  const lam = 0.02 * ((FtF.reduce((a, row, i) => a + row[i], 0) / k) || 1);
+  const A = FtF.map((row, i) => row.map((v, j) => v + (i === j ? lam : 0)));
+  const b = solveLinear(A, Fty);
+  if (!b) return null;
+  const resid = y.map((yy, t) => yy - names.reduce((a, _f, i) => a + b[i] * F[i][t], 0));
+  const mE = meanOf(resid);
+  const varY = covAbout(y, y, mY, mY), varE = covAbout(resid, resid, mE, mE);
+  const r2 = varY > 0 ? Math.max(0, Math.min(1, 1 - varE / varY)) : 0;
+  return { names, b, r2 };
+}
+
+/** Book daily return on `base` + the factor spreads, both sliced to the last `windowDays` (all history if omitted). */
+function bookReturnAndFactors(
+  holdings: { symbol: string; value: number }[],
+  aligned: AlignedReturns,
+  base: number,
+  windowDays?: number,
+): { rBook: number[]; factors: Record<string, number[]>; start: number; covered: number } | null {
+  const nAll = aligned.dates.length;
+  if (!aligned.market || aligned.market.length !== nAll || !(base > 0)) return null;
+  const w = windowDays ? Math.min(windowDays, nAll) : nAll;
+  if (w < 20) return null;
+  const start = nAll - w;
+  const returns = aligned.returns;
+  const withSeries = holdings.filter((h) => returns[h.symbol.toUpperCase()]?.length === nAll);
+  if (!withSeries.length) return null;
+  const totalGross = holdings.reduce((a, h) => a + Math.abs(h.value), 0) || 1;
+  const covered = withSeries.reduce((a, h) => a + Math.abs(h.value), 0) / totalGross;
+  const rBook = new Array<number>(w).fill(0);
+  for (const h of withSeries) {
+    const r = returns[h.symbol.toUpperCase()];
+    for (let t = 0; t < w; t++) rBook[t] += (h.value / base) * r[start + t];
+  }
+  const extraSl: Record<string, number[]> = {};
+  for (const [k, v] of Object.entries(aligned.extra ?? {})) if (v.length === nAll) extraSl[k] = v.slice(start);
+  const factors = buildEtfFactors(extraSl, aligned.market.slice(start));
+  if (!factors) return null;
+  return { rBook, factors, start, covered };
+}
+
+export interface ReturnAttribution {
+  windowDays: number;
+  covered: number;
+  totalRet: number; // book arithmetic return over the window (Σ daily return on base)
+  factors: { factor: string; ret: number }[]; // additive factor return contributions
+  specific: number; // selection / stock-picking = totalRet − Σ factor contributions (the daily alpha × days)
+  r2: number; // how much of the daily variation the factors explain
+}
+
+/**
+ * Factor RETURN attribution over a window: regress the book's daily return on the factor spreads, then each
+ * factor's contribution = βₖ · (its summed return over the window); the plug (totalRet − Σ contributions)
+ * is the selection/alpha the factors don't explain. Additive by construction. The Omega-Point tearsheet
+ * question "where did my return come from" — vs the variance version in computePortfolioRisk. null if no
+ * market/factor series or < 20 shared days.
+ */
+export function returnAttribution(
+  holdings: { symbol: string; value: number }[],
+  aligned: AlignedReturns,
+  base: number,
+  windowDays: number,
+): ReturnAttribution | null {
+  const bf = bookReturnAndFactors(holdings, aligned, base, windowDays);
+  if (!bf) return null;
+  const fit = ridgeFactorBetas(bf.rBook, bf.factors);
+  if (!fit) return null;
+  const totalRet = bf.rBook.reduce((a, x) => a + x, 0);
+  const contrib = fit.names.map((f, i) => ({ factor: f, ret: fit.b[i] * bf.factors[f].reduce((a, x) => a + x, 0) }));
+  const specific = totalRet - contrib.reduce((a, c) => a + c.ret, 0);
+  return { windowDays: bf.rBook.length, covered: bf.covered, totalRet, factors: contrib, specific, r2: fit.r2 };
+}
+
+export interface FactorExposure { factor: string; beta: number }
+
+/** Book factor betas over the full aligned window (loading per unit factor move) — powers the shock scenario. */
+export function factorBetas(
+  holdings: { symbol: string; value: number }[],
+  aligned: AlignedReturns,
+  base: number,
+): { exposures: FactorExposure[]; covered: number; r2: number } | null {
+  const bf = bookReturnAndFactors(holdings, aligned, base);
+  if (!bf) return null;
+  const fit = ridgeFactorBetas(bf.rBook, bf.factors);
+  if (!fit) return null;
+  return { exposures: fit.names.map((f, i) => ({ factor: f, beta: fit.b[i] })), covered: bf.covered, r2: fit.r2 };
+}
+
+export interface ActiveFactorExposure {
+  benchmark: string;
+  covered: number;
+  exposures: FactorExposure[]; // active loading = book loading − benchmark loading (from the active return)
+  r2: number;
+}
+
+/**
+ * Active factor exposures vs a benchmark: regress the ACTIVE return (book − benchmark) on the factor spreads
+ * → the factor bets that differ from the benchmark (+Momentum = more momentum-tilted than SPY, etc.). This is
+ * what actually drives the tracking error benchmarkRisk reports as one number. null if the benchmark series
+ * or shared history is missing.
+ */
+export function activeFactorExposure(
+  holdings: { symbol: string; value: number }[],
+  aligned: AlignedReturns,
+  benchmark: string,
+  base: number,
+  windowDays?: number,
+): ActiveFactorExposure | null {
+  const bench = aligned.extra?.[benchmark];
+  const bf = bookReturnAndFactors(holdings, aligned, base, windowDays);
+  if (!bf || !bench || bench.length !== aligned.dates.length) return null;
+  const active = bf.rBook.map((r, t) => r - bench[bf.start + t]);
+  const fit = ridgeFactorBetas(active, bf.factors);
+  if (!fit) return null;
+  return { benchmark, covered: bf.covered, exposures: fit.names.map((f, i) => ({ factor: f, beta: fit.b[i] })), r2: fit.r2 };
+}
