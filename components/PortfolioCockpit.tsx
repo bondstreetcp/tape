@@ -8,6 +8,7 @@ import { computePortfolioRisk, type AlignedReturns } from "@/lib/portfolioRisk";
 import { parseBrokerCsv } from "@/lib/brokerImport";
 import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
+import { parseTags, themeExposure } from "@/lib/themes";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -20,6 +21,7 @@ const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from
 const BASIS_KEY = "tape.portfolio.basis"; // "$" | "%"
 const WHATIF_KEY = "tape.portfolio.whatif"; // proposed trades (delta book) for the what-if sim
 const ADVANCED_KEY = "tape.portfolio.advanced"; // "1" = show the pro analytics cluster
+const THEMES_KEY = "tape.portfolio.themes"; // user-defined ticker→theme tags
 const EXAMPLE = `AAPL 100
 MSFT 60
 NVDA 40
@@ -72,6 +74,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [hedgeNeutral, setHedgeNeutral] = useState(false); // optimizer: flatten market beta
   const [hedgeMaxLegs, setHedgeMaxLegs] = useState<number | null>(null); // optimizer: cap the basket size
   const [advanced, setAdvanced] = useState(false); // progressive disclosure — hide the pro cluster by default
+  const [themesText, setThemesText] = useState(""); // user ticker→theme tags
+  const [themesOpen, setThemesOpen] = useState(false);
 
   // Restore saved book + equity + basis on mount; persist each on edit after.
   const hydrated = useRef(false);
@@ -89,9 +93,14 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
       setShowPct(localStorage.getItem(BASIS_KEY) === "%");
       const savedWi = localStorage.getItem(WHATIF_KEY); if (savedWi) { setWhatIfText(savedWi); setWhatIf(true); }
       setAdvanced(localStorage.getItem(ADVANCED_KEY) === "1");
+      const savedThemes = localStorage.getItem(THEMES_KEY); if (savedThemes) { setThemesText(savedThemes); setThemesOpen(true); }
     } catch { /* ignore */ }
     hydrated.current = true;
   }, []);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try { localStorage.setItem(THEMES_KEY, themesText); } catch { /* ignore */ }
+  }, [themesText]);
   useEffect(() => {
     if (!hydrated.current) return;
     try { localStorage.setItem(WHATIF_KEY, whatIfText); } catch { /* ignore */ }
@@ -289,6 +298,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs],
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
+  const themeExp = useMemo(() => { const tags = parseTags(themesText); return tags.size ? themeExposure(stats.holdings, tags) : null; }, [themesText, stats.holdings]);
   // Retail TL;DR — a plain-English read of the numbers below (deterministic, no LLM).
   const bookSummary = useMemo(() => summarizeBook({
     stats, risk: portRisk, tilts,
@@ -383,6 +393,26 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 />
                 <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-4)]">
                   Same <span className="font-mono">SYMBOL SHARES</span> format — signed deltas (buy +, trim/short −). A before → after comparison appears on the right; new names get priced too.
+                </p>
+              </>
+            )}
+          </div>
+          <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+            <button onClick={() => setThemesOpen((v) => !v)} className="flex w-full items-center justify-between text-[13px] font-semibold">
+              <span>Themes · tag your names</span>
+              <span className="text-[var(--text-4)]">{themesOpen ? "▾" : "▸"}</span>
+            </button>
+            {themesOpen && (
+              <>
+                <textarea
+                  value={themesText}
+                  onChange={(e) => setThemesText(e.target.value)}
+                  spellCheck={false}
+                  placeholder={"NVDA AI\nNVDA Semis\nAMD AI\nXOM Energy"}
+                  className="mt-2 h-24 w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--bg)] p-2.5 font-mono text-[13px] leading-relaxed outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)]/60"
+                />
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-4)]">
+                  One <span className="font-mono">SYMBOL theme</span> per line — a name can carry several. Exposure grouped by theme appears on the right.
                 </p>
               </>
             )}
@@ -685,6 +715,32 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                     Mega &gt;$200B · Large $10–200B · Mid $2–10B · Small $300M–2B · Micro &lt;$300M. ETFs use a representative bucket.
                   </p>
+                </div>
+              )}
+
+              {/* Theme exposure (user tags) */}
+              {themeExp && themeExp.rows.length > 0 && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Theme exposure <span className="text-[11px] font-normal text-[var(--text-4)]">(net, % of gross)</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">{Math.round(themeExp.coverage * 100)}% tagged</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {themeExp.rows.slice(0, 10).map((r) => {
+                      const w = (r.net / (stats.gross || 1)) * 100;
+                      return (
+                        <div key={r.theme} className="flex items-center gap-2 text-[12px]">
+                          <span className="w-28 shrink-0 truncate text-[var(--text-3)]" title={`${r.theme} · ${r.names} name${r.names === 1 ? "" : "s"}`}>{r.theme}</span>
+                          <div className="relative h-4 flex-1 rounded bg-[var(--bg)]">
+                            <div className="absolute top-0 h-4 rounded" style={{ background: w >= 0 ? "#22c55e" : "#ef4444", opacity: 0.7, width: `${Math.min(100, Math.abs(w))}%`, left: w >= 0 ? "50%" : undefined, right: w >= 0 ? undefined : "50%" }} />
+                            <div className="absolute left-1/2 top-0 h-4 w-px bg-[var(--border-strong)]" />
+                          </div>
+                          <span className="w-12 shrink-0 text-right font-mono tabular-nums" style={{ color: w >= 0 ? "#22c55e" : "#ef4444" }}>{pct(w, 0)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--text-4)]">Your own themes; a name can sit in several, so themes overlap. Net exposure, {Math.round(themeExp.coverage * 100)}% of gross tagged.</p>
                 </div>
               )}
 
