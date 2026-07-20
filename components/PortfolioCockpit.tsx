@@ -10,6 +10,7 @@ import { summarizeBook } from "@/lib/bookSummary";
 import { encodeBook, decodeBook } from "@/lib/shareBook";
 import { parseTags, themeExposure } from "@/lib/themes";
 import { dayAttribution } from "@/lib/dayAttribution";
+import { volOverlay, type VolInfo } from "@/lib/volOverlay";
 import { buildHedge, HEDGE_ETF_NAME } from "@/lib/hedge";
 import { optimizeHedge } from "@/lib/hedgeOptimizer";
 import { TIMEFRAMES, type TimeframeKey } from "@/lib/timeframes";
@@ -196,8 +197,8 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const syms = new Set<string>([...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol));
     return syms.size ? [...syms].sort().join(",") : symbolsKey;
   }, [stats.holdings, statsAfter.holdings, symbolsKey]);
-  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, cappedFrom: null, cap: null };
-  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; cappedFrom: number | null; cap: number | null }>(emptyRisk);
+  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, vol: {}, cappedFrom: null, cap: null };
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; vol: Record<string, VolInfo>; cappedFrom: number | null; cap: number | null }>(emptyRisk);
   const [riskLoading, setRiskLoading] = useState(false);
   useEffect(() => {
     if (!riskSymbolsKey) { setRisk(emptyRisk); return; }
@@ -206,7 +207,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/portfolio/risk?symbols=${encodeURIComponent(riskSymbolsKey)}`).then((x) => x.json());
-        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, etfPrices: r.etfPrices || {}, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
+        if (!cancelled) setRisk({ factors: r.factors || {}, corr: r.corr || [], aligned: r.aligned ?? null, etfPrices: r.etfPrices || {}, vol: r.vol || {}, cappedFrom: r.cappedFrom ?? null, cap: r.cap ?? null });
       } catch { if (!cancelled) setRisk(emptyRisk); }
       if (!cancelled) setRiskLoading(false);
     }, 400);
@@ -235,6 +236,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const benchRisk = useMemo(
     () => (risk.aligned?.extra ? benchmarkRisk(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.aligned, benchmark, riskBase) : null),
     [risk.aligned, stats.holdings, benchmark, riskBase],
+  );
+  const volRead = useMemo(
+    () => (Object.keys(risk.vol).length ? volOverlay(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value })), risk.vol) : null),
+    [risk.vol, stats.holdings],
   );
 
   // --- What-if: the after-trade book's risk + factor tilts (for the before → after comparison). ---
@@ -836,6 +841,40 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 <span className="text-[11px] text-[var(--text-4)]">{advanced ? "▾ hide" : "▸ show"}</span>
               </button>
               {advanced && (<>
+              {volRead && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Volatility <span className="text-[11px] font-normal text-[var(--text-4)]">realized, vs each name&apos;s own history</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">{volRead.coverage < 0.999 ? `${Math.round(volRead.coverage * 100)}% covered` : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    <Stat label="Avg realized vol" value={volRead.avgRv != null ? `${Math.round(volRead.avgRv * 100)}%` : "—"} sub="annualized, 20d" />
+                    <Stat label="Vol percentile" value={volRead.avgRvPct != null ? `${Math.round(volRead.avgRvPct)}th` : "—"} sub="in own history" color={volRead.avgRvPct != null && volRead.avgRvPct >= 75 ? "#ef4444" : volRead.avgRvPct != null && volRead.avgRvPct <= 25 ? "#22c55e" : undefined} />
+                    <Stat label="Earnings ≤2wk" value={`${Math.round(volRead.earningsGrossPct * 100)}%`} sub={`${volRead.earnings.length} name${volRead.earnings.length === 1 ? "" : "s"}`} color={volRead.earningsGrossPct > 0.15 ? "#f59e0b" : undefined} />
+                  </div>
+                  {volRead.elevated.length > 0 && (
+                    <div className="mt-2.5">
+                      <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Running hot (vol vs own history)</div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+                        {volRead.elevated.map((e) => (
+                          <span key={e.symbol} className="font-mono tabular-nums"><span className="font-semibold text-[var(--accent)]">{e.symbol}</span> <span className="text-[#ef4444]">{Math.round(e.rvPct)}th</span></span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {volRead.earnings.length > 0 && (
+                    <div className="mt-2">
+                      <div className="mb-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">Earnings soon</div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+                        {volRead.earnings.map((e) => (
+                          <span key={e.symbol} className="font-mono tabular-nums"><span className="font-semibold text-[var(--accent)]">{e.symbol}</span> <span className="text-[var(--text-4)]">{e.days}d{e.expMovePct != null ? ` ±${e.expMovePct.toFixed(0)}%` : ""}</span></span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Exposure-weighted 20-day realized vol and where it sits in each name&apos;s own range (high percentile = jumpier than usual, so options cost more). Earnings/implied move cover the ~55 names with an IV feed.</p>
+                </div>
+              )}
               {risk.cappedFrom && (
                 <p className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-3 py-2 text-[12px] text-[#f59e0b]">
                   Factor tilts &amp; crowding cover your {risk.cap} largest positions — your book has {risk.cappedFrom} names. (Exposure, beta &amp; the shock scenario above still cover the whole book.)

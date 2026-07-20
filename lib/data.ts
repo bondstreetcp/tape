@@ -17,6 +17,29 @@ export async function loadMarketSeries(): Promise<Daily | null> {
   }
 }
 
+/** Current 20d realized vol + its history percentile per symbol (vol-cone). {} if not built. */
+export async function loadVolCone(): Promise<Record<string, { cur20: number; pct20: number }>> {
+  try {
+    const rows = (JSON.parse(await fs.readFile(path.join(DATA_DIR, "vol-cone.json"), "utf8")) as { rows?: Array<{ symbol?: string; cur20?: number; pct20?: number }> }).rows ?? [];
+    const out: Record<string, { cur20: number; pct20: number }> = {};
+    for (const r of rows) if (r?.symbol && typeof r.cur20 === "number") out[r.symbol.toUpperCase()] = { cur20: r.cur20, pct20: r.pct20 ?? 0 };
+    return out;
+  } catch { return {}; }
+}
+
+/** Latest days-to-earnings + implied move per symbol (iv-history; ~55 names). {} if not built. */
+export async function loadIvLatest(): Promise<Record<string, { daysToEarnings: number | null; movePct: number | null }>> {
+  try {
+    const byT = (JSON.parse(await fs.readFile(path.join(DATA_DIR, "iv-history.json"), "utf8")) as { byTicker?: Record<string, Array<{ daysToEarnings?: number; movePct?: number }>> }).byTicker ?? {};
+    const out: Record<string, { daysToEarnings: number | null; movePct: number | null }> = {};
+    for (const [sym, arr] of Object.entries(byT)) {
+      const last = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+      if (last) out[sym.toUpperCase()] = { daysToEarnings: last.daysToEarnings ?? null, movePct: last.movePct ?? null };
+    }
+    return out;
+  } catch { return {}; }
+}
+
 /** Average daily $ volume per symbol (refresh-adv) for the liquidity read. {} if not built yet. */
 export async function loadAdv(): Promise<Record<string, number>> {
   try {
