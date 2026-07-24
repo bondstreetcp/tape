@@ -52,6 +52,12 @@ export interface FeedSpec {
   /** upstream this feed fetches from — set only where the feed's health ⟺ that service's reachability
    *  (e.g. data.sec.gov). Drives the reachability probe that disambiguates environmental vs logic. */
   origin?: FeedOrigin;
+  /** nav paths (lib/nav FEATURES/TOP_LINKS) that RENDER this feed — so /status can answer the question
+   *  a feed name can't: which BOARDS are degraded right now. Paths are validated against the nav
+   *  registry by tests/statusAffects.test.ts, and the UI silently drops any it can't resolve rather
+   *  than inventing a feature name. Omit (or leave empty) for feeds that are inputs to other jobs
+   *  rather than a page — honest beats complete here. */
+  affects?: string[];
 }
 
 export interface FreshResult {
@@ -65,6 +71,8 @@ export interface FreshResult {
   minCount: number | null;
   detail: string;
   origin?: FeedOrigin;
+  /** carried through from the registry so /api/health/data consumers get the impact map too */
+  affects?: string[];
 }
 
 // ── The registry ────────────────────────────────────────────────────────────────────────────────
@@ -75,82 +83,82 @@ const CORE = 30, EVENT = 96, SYNTH = 96;
 
 const FEEDS: FeedSpec[] = [
   // core — rewritten every FULL run; empty on the count-gated ones = definitely broken
-  { file: "estimates.json", label: "Estimate revisions", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 100 },
+  { file: "estimates.json", affects: ["/revisions", "/analyst-upside", "/squeeze", "/confluence", "/warnings", "/guidance"], label: "Estimate revisions", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 100 },
   // Per-stock cache (stats+financials+profile per symbol → data/company/*) so the NAS stock pages read
   // local files instead of live-fetching Yahoo+SEC. `count` = cached files on disk; it only grows as
   // the nightly fills in, so the floor guards against a wipe, not the ramp.
   { file: "company-cache.json", label: "Per-stock cache", tier: "core", maxAgeHours: CORE, countPath: "count", minCount: 100 },
-  { file: "valuation-history.json", label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500, origin: "sec" },
-  { file: "buybacks.json", label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300, origin: "sec" },
-  { file: "congress.json", label: "Congress trades", tier: "core", maxAgeHours: CORE, countPath: "trades", minCount: 100 },
-  { file: "guidance.json", label: "Guidance", tier: "core", maxAgeHours: CORE, countPath: "byTicker", minCount: 20 },
-  { file: "catalysts.json", label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
-  { file: "options-flow.json", label: "Options flow", tier: "core", maxAgeHours: CORE },
-  { file: "gamma-board.json", label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
-  { file: "vol-cone.json", label: "Realized-vol cone", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
-  { file: "macro.json", label: "Macro (FRED)", tier: "core", maxAgeHours: CORE, stampKeys: ["asOf", "generatedAt"] },
-  { file: "cef.json", label: "Closed-end funds", tier: "core", maxAgeHours: CORE },
-  { file: "holdco-nav.json", label: "Holdco NAV", tier: "core", maxAgeHours: CORE },
-  { file: "superinvestors.json", label: "Super-investor 13F", tier: "core", maxAgeHours: CORE },
+  { file: "valuation-history.json", affects: ["/valuation-history", "/confluence", "/warnings"], label: "Discount-to-history", tier: "core", maxAgeHours: CORE, countPath: "names", minCount: 500, origin: "sec" },
+  { file: "buybacks.json", affects: ["/buybacks", "/confluence"], label: "Buyback & capital return", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 300, origin: "sec" },
+  { file: "congress.json", affects: ["/congress", "/smart-money", "/confluence"], label: "Congress trades", tier: "core", maxAgeHours: CORE, countPath: "trades", minCount: 100 },
+  { file: "guidance.json", affects: ["/guidance", "/earnings-desk", "/pead"], label: "Guidance", tier: "core", maxAgeHours: CORE, countPath: "byTicker", minCount: 20 },
+  { file: "catalysts.json", affects: ["", "/catalyst-calendar", "/binary-week", "/positioning", "/portfolio-radar"], label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
+  { file: "options-flow.json", affects: ["/flow", "/positioning", "/confluence", "/signal-record"], label: "Options flow", tier: "core", maxAgeHours: CORE },
+  { file: "gamma-board.json", affects: ["/gamma-board", "/coiled", "/signal-record", "/morning-desk"], label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
+  { file: "vol-cone.json", affects: ["/vol-cone", "/coiled", "/signal-record", "/portfolio"], label: "Realized-vol cone", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  { file: "macro.json", affects: ["/macro", "/rates", "/breadth", "/dispersion", "/morning-desk"], label: "Macro (FRED)", tier: "core", maxAgeHours: CORE, stampKeys: ["asOf", "generatedAt"] },
+  { file: "cef.json", affects: ["/cef", "/cef-hunter"], label: "Closed-end funds", tier: "core", maxAgeHours: CORE },
+  { file: "holdco-nav.json", affects: ["/holdco-nav"], label: "Holdco NAV", tier: "core", maxAgeHours: CORE },
+  { file: "superinvestors.json", affects: ["/superinvestors", "/distribution", "/smart-money", "/confluence", "/warnings"], label: "Super-investor 13F", tier: "core", maxAgeHours: CORE },
   { file: "index-valuation-history.json", label: "Index valuation", tier: "core", maxAgeHours: CORE },
-  { file: "apewisdom.json", label: "Reddit buzz", tier: "core", maxAgeHours: CORE },
-  { file: "iv-history.json", label: "IV history", tier: "core", maxAgeHours: CORE },
-  { file: "earnings-move.json", label: "Earnings expected-move", tier: "core", maxAgeHours: CORE },
-  { file: "putwrite.json", label: "Put-writing screen", tier: "core", maxAgeHours: CORE },
-  { file: "insiders.json", label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
-  { file: "spinoffs.json", label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
-  { file: "trade-log.json", label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
+  { file: "apewisdom.json", affects: ["/reddit-buzz"], label: "Reddit buzz", tier: "core", maxAgeHours: CORE },
+  { file: "iv-history.json", affects: ["/portfolio"], label: "IV history", tier: "core", maxAgeHours: CORE },
+  { file: "earnings-move.json", affects: ["/earnings-move", "/earnings-week", "/earnings-setup", "/earnings-desk", "/earnings"], label: "Earnings expected-move", tier: "core", maxAgeHours: CORE },
+  { file: "putwrite.json", affects: ["/put-writing", "/covered-call", "/credit-spreads", "/portfolio-income", "/vol-dislocation"], label: "Put-writing screen", tier: "core", maxAgeHours: CORE },
+  { file: "insiders.json", affects: ["/insiders", "/confluence", "/signal-record"], label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
+  { file: "spinoffs.json", affects: ["/spinoffs", "/confluence"], label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
+  { file: "trade-log.json", affects: ["/track-record"], label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
   // Forward-accumulating like the trade-log: no count floor (the log legitimately starts empty —
   // the bootstrap-floor trap would gate the deploy on a brand-new feed's first night).
-  { file: "earnings-preview-log.json", label: "Preview accuracy record", tier: "core", maxAgeHours: CORE },
-  { file: "same-store-sales.json", label: "Same-store sales", tier: "core", maxAgeHours: CORE },
-  { file: "trade-ideas.json", label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
-  { file: "vol-dislocation.json", label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  { file: "earnings-preview-log.json", affects: ["/preview-record"], label: "Preview accuracy record", tier: "core", maxAgeHours: CORE },
+  { file: "same-store-sales.json", affects: ["/comps"], label: "Same-store sales", tier: "core", maxAgeHours: CORE },
+  { file: "trade-ideas.json", affects: ["/trade-desk", "/earnings-desk"], label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
+  { file: "vol-dislocation.json", affects: ["/vol-dislocation", "/skew", "/term-structure", "/earnings-desk", "/trade-desk"], label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
   // biotech-vol / pead: age-only — zero forward binaries or an earnings-lull window are legitimate
-  { file: "biotech-vol.json", label: "Biotech event vol", tier: "core", maxAgeHours: CORE, countPath: "rows" },
-  { file: "pead.json", label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
-  { file: "dispersion.json", label: "Index dispersion", tier: "core", maxAgeHours: CORE },
-  { file: "guidance-board.json", label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
-  { file: "pairs.json", label: "Pairs stat-arb", tier: "core", maxAgeHours: CORE, countPath: "pairs" },
+  { file: "biotech-vol.json", affects: ["/biotech-vol", "/binary-week", "/confluence", "/morning-desk"], label: "Biotech event vol", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
+  { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
+  { file: "pairs.json", affects: ["/pairs", "/portfolio"], label: "Pairs stat-arb", tier: "core", maxAgeHours: CORE, countPath: "pairs" },
   // Compute-over-owned-data (no fetches) — reads the valuation panel; NOT origin:"sec", so the monitor
   // never blames a slow SEC night for a stale forensics board. Floor ramps up as the panel backfills
   // the forensics fields over nights (PANEL_SCHEMA bump forces re-pulls).
-  { file: "forensics.json", label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 40 },
-  { file: "betas.json", label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
+  { file: "forensics.json", affects: ["/forensics"], label: "Fundamental forensics", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 40 },
+  { file: "betas.json", affects: ["/portfolio"], label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   // Unregistered until 2026-07-20 — so when run-tick drifted and stopped refreshing them, NOTHING
   // flagged it ("every nightly feed self-registers" exists precisely for this failure).
-  { file: "adv.json", label: "Portfolio ADV (liquidity)", tier: "core", maxAgeHours: CORE, countPath: "adv", minCount: 300 },
-  { file: "etf-meta.json", label: "Hedge-menu ETF meta", tier: "core", maxAgeHours: CORE, countPath: "etfs", minCount: 5 },
-  { file: "signal-log.json", label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
-  { file: "signal-backtest.json", label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
+  { file: "adv.json", affects: ["/portfolio"], label: "Portfolio ADV (liquidity)", tier: "core", maxAgeHours: CORE, countPath: "adv", minCount: 300 },
+  { file: "etf-meta.json", affects: ["/portfolio"], label: "Hedge-menu ETF meta", tier: "core", maxAgeHours: CORE, countPath: "etfs", minCount: 5 },
+  { file: "signal-log.json", affects: ["/signal-record", "/confluence", "/warnings"], label: "Signal track record", tier: "core", maxAgeHours: CORE, countPath: "events", minCount: 1 },
+  { file: "signal-backtest.json", affects: ["/signal-record"], label: "Signal backtest", tier: "synthesis", maxAgeHours: SYNTH, countPath: "signals", minCount: 3 },
   // Parameter grid over the same signals (compute-over-owned-data, no fetches). Per-universe
   // carry-forward in the refresh script means a budget-truncated night keeps yesterday's universes
   // rather than dropping them, so the floor only has to catch a total collapse.
-  { file: "signal-grid.json", label: "Signal parameter grid", tier: "synthesis", maxAgeHours: SYNTH, countPath: "universes", minCount: 1 },
+  { file: "signal-grid.json", affects: ["/signal-record"], label: "Signal parameter grid", tier: "synthesis", maxAgeHours: SYNTH, countPath: "universes", minCount: 1 },
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
-  { file: "campaigns.json", label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },
-  { file: "corp-events.json", label: "Corporate events", tier: "event", maxAgeHours: EVENT, origin: "sec" },
-  { file: "biotech-catalysts.json", label: "Biotech catalysts", tier: "event", maxAgeHours: EVENT },
-  { file: "policy.json", label: "Policy & contracts", tier: "event", maxAgeHours: EVENT },
-  { file: "fed-watch.json", label: "Fed Watch", tier: "event", maxAgeHours: EVENT },
-  { file: "ipo-monitor.json", label: "IPOs & lockups", tier: "event", maxAgeHours: EVENT },
-  { file: "catalyst-vol.json", label: "Catalyst vol", tier: "event", maxAgeHours: EVENT },
-  { file: "trump-truth-stocks.json", label: "Trump stock calls", tier: "event", maxAgeHours: EVENT },
-  { file: "trump-trades.json", label: "Trump OGE trades", tier: "event", maxAgeHours: EVENT },
-  { file: "overnight-filings.json", label: "Overnight filings", tier: "event", maxAgeHours: EVENT, origin: "sec" },
+  { file: "campaigns.json", affects: ["/campaigns", "/confluence", "/warnings"], label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },
+  { file: "corp-events.json", affects: ["/corp-events", "/track-record"], label: "Corporate events", tier: "event", maxAgeHours: EVENT, origin: "sec" },
+  { file: "biotech-catalysts.json", affects: ["/biotech-catalysts", "/biotech-vol", "/binary-week", "/catalyst-calendar", "/portfolio-radar"], label: "Biotech catalysts", tier: "event", maxAgeHours: EVENT },
+  { file: "policy.json", affects: ["/policy"], label: "Policy & contracts", tier: "event", maxAgeHours: EVENT },
+  { file: "fed-watch.json", affects: ["/fed"], label: "Fed Watch", tier: "event", maxAgeHours: EVENT },
+  { file: "ipo-monitor.json", affects: ["/ipos", "/catalyst-calendar", "/binary-week", "/portfolio-radar"], label: "IPOs & lockups", tier: "event", maxAgeHours: EVENT },
+  { file: "catalyst-vol.json", affects: ["/catalyst-vol", "/binary-week", "/catalyst-calendar", "/earnings-desk", "/trade-desk"], label: "Catalyst vol", tier: "event", maxAgeHours: EVENT },
+  { file: "trump-truth-stocks.json", affects: ["/trump-stocks"], label: "Trump stock calls", tier: "event", maxAgeHours: EVENT },
+  { file: "trump-trades.json", affects: ["/congress"], label: "Trump OGE trades", tier: "event", maxAgeHours: EVENT },
+  { file: "overnight-filings.json", affects: ["/overnight"], label: "Overnight filings", tier: "event", maxAgeHours: EVENT, origin: "sec" },
   // Local-embedding index over the overnight-filings notes (compute-over-owned-data, no fetches) — NOT
   // origin:"sec". Accumulates over nights; the count only grows, so the floor protects the archive from
   // a broken-embed night collapsing it (degrade to STALE, never EMPTY).
-  { file: "filing-index.json", label: "Filing semantic index", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
+  { file: "filing-index.json", affects: ["/overnight"], label: "Filing semantic index", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
 
   // synthesis — skip-write when there's nothing notable, so a stale stamp is legitimate for days
-  { file: "desk-note.json", label: "Morning desk note", tier: "synthesis", maxAgeHours: SYNTH },
-  { file: "valuation-explain.json", label: "Cheap-vs-history verdicts", tier: "synthesis", maxAgeHours: SYNTH },
-  { file: "13f-story.json", label: "13F quarter story", tier: "synthesis", maxAgeHours: SYNTH },
-  { file: "congress-summary.json", label: "Congress summary", tier: "synthesis", maxAgeHours: SYNTH },
-  { file: "confluence.json", label: "Confluence engine", tier: "synthesis", maxAgeHours: SYNTH },
-  { file: "warnings.json", label: "Warning signs board", tier: "synthesis", maxAgeHours: SYNTH, countPath: "names" },
+  { file: "desk-note.json", affects: ["/morning-desk"], label: "Morning desk note", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "valuation-explain.json", affects: ["/valuation-history"], label: "Cheap-vs-history verdicts", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "13f-story.json", affects: ["/superinvestors", "/portfolio"], label: "13F quarter story", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "congress-summary.json", affects: ["/congress"], label: "Congress summary", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "confluence.json", affects: ["/confluence", "/signal-record"], label: "Confluence engine", tier: "synthesis", maxAgeHours: SYNTH },
+  { file: "warnings.json", affects: ["/warnings", "/signal-record"], label: "Warning signs board", tier: "synthesis", maxAgeHours: SYNTH, countPath: "names" },
 ];
 
 // Per-universe snapshot row-count floors — a snapshot below its floor is a partial-fetch / degraded
@@ -223,6 +231,7 @@ async function checkFeed(spec: FeedSpec, now: number): Promise<FreshResult> {
   const base: Omit<FreshResult, "status" | "ageHours" | "count" | "detail"> = {
     file: spec.file, label: spec.label, tier: spec.tier, maxAgeHours: spec.maxAgeHours, minCount: spec.minCount ?? null,
     ...(spec.origin ? { origin: spec.origin } : {}),
+    ...(spec.affects?.length ? { affects: spec.affects } : {}),
   };
   const full = path.join(DATA, spec.file);
   let raw: string;
@@ -290,6 +299,11 @@ async function checkSnapshots(now: number): Promise<FreshResult[]> {
 }
 
 export const FAILING: readonly FreshStatus[] = ["stale", "missing", "empty", "unreadable"];
+
+/** The registry itself, for tests only — tests/statusAffects.test.ts validates every `affects` path
+ *  against the nav registry so the /status impact map can't rot into naming boards that don't exist.
+ *  App code should call checkFreshness() / feedSpec() rather than reading this directly. */
+export const FEEDS_FOR_TEST: readonly FeedSpec[] = FEEDS;
 
 /** Result of pinging an upstream (currently only data.sec.gov) FROM THE HOST RUNNING THE CHECK.
  *  ⚠ vantage-specific: a probe from Vercel says nothing about whether the NAS can reach SEC. The

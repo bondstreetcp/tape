@@ -218,6 +218,38 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/status",
+        "title": "System Status",
+        "question": "Is everything actually working right now — and if something is broken, which boards does it affect?",
+        "how": "Every number on this site comes from a data feed that is rebuilt on a schedule. This page lists all of them with how long ago each was last rebuilt, flags any that have gone past their freshness window, and — the part that matters — names the specific boards that are degraded as a result, as links. It also shows which build of the site is live, and compares the server's clock to your own (a drifting server clock silently breaks signed connections to the data store, which once left the site serving two-day-old numbers while everything looked fine). Green means every feed is inside its window. 'Re-check now' re-runs the check live rather than showing a cached verdict.",
+        "metrics": [
+          {
+            "term": "Feeds healthy",
+            "plain": "How many of the tracked data feeds are inside their freshness window. Anything else is listed below with a reason."
+          },
+          {
+            "term": "Status: OK / STALE / EMPTY / MISSING",
+            "plain": "OK = rebuilt recently. STALE = older than its limit, so the job that builds it has probably stopped. EMPTY = the file rebuilt but produced almost no rows (usually an upstream that refused). MISSING = the file isn't there at all."
+          },
+          {
+            "term": "Age vs Limit",
+            "plain": "How long since the feed was last rebuilt, next to the maximum age it's allowed before it counts as stale. Limits differ by feed: daily market data is expected fresh, event feeds legitimately stay quiet for days."
+          },
+          {
+            "term": "Boards affected",
+            "plain": "The pages that read a broken feed — what is actually degraded for you, rather than a filename."
+          },
+          {
+            "term": "Server clock",
+            "plain": "The gap between the server's clock and your browser's. More than a few minutes of drift breaks authenticated calls to outside services, so it's worth seeing."
+          },
+          {
+            "term": "Live build",
+            "plain": "The commit currently deployed, so you can tell whether a change has actually shipped."
+          }
+        ]
+      },
+      {
         "path": "/heatmap",
         "title": "Market Heatmap",
         "question": "Where is the money moving across the whole market, visually, in one picture?",
