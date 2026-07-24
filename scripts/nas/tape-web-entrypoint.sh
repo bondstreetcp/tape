@@ -125,11 +125,34 @@ healthy() {
 trap 'log "SIGTERM — stopping"; stop_server; exit 0' TERM INT
 
 # ── boot ────────────────────────────────────────────────────────────────────────────────────────
+# ⚠ `prepare a` MUST be called under `if !`, never bare. A bare call is a failing command under
+# `set -e`, so any boot-time build failure kills the script → the container restart-loops → the site
+# is DOWN. That became reachable the moment a broken R2 hydrate turned fatal (2026-07-24): a bad
+# credential would take the whole site offline rather than leaving it stale. Doctrine is DEGRADE TO
+# STALE, NEVER EMPTY — so on a failed boot build, serve a slot that was built successfully before
+# (its data may be old, but the site answers) and let the update loop keep retrying. Only when NO
+# slot has ever built is there nothing to serve.
 log "boot — slot a is the first build; expect ~10-20 min on this box before the site answers"
-prepare a
-start_server a
-LAST_BUILD=$(date +%s)
-healthy || log "WARNING: slot a did not answer health — check the log above for a build/runtime error"
+if prepare a; then
+  start_server a
+  LAST_BUILD=$(date +%s)
+else
+  log "boot: slot a FAILED to build — looking for a previously built slot to serve"
+  alert "boot build FAILED (hydrate or build) — serving the last good build if one exists; data will be STALE until this is fixed"
+  for s in a b; do
+    if [ -d "$ROOT/$s/.next" ]; then
+      log "boot: serving slot $s's PREVIOUS build — data may be STALE; the update loop retries every ${CHECK_SECONDS}s"
+      start_server "$s"
+      break
+    fi
+  done
+  if [ -z "$SERVER_PID" ]; then
+    log "boot: no slot has ever built — nothing to serve; exiting so the container restarts"
+    exit 1
+  fi
+  LAST_BUILD=0 # force the update loop to retry the build on its very next check, not in an hour
+fi
+healthy || log "WARNING: the served slot did not answer health — check the log above for a build/runtime error"
 
 # ── update loop ─────────────────────────────────────────────────────────────────────────────────
 # Rebuild when main moves (deploy) OR every REBUILD_SECONDS (bake the tick's fresh R2 data — the same
