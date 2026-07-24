@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type ChangeEvent } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { computePortfolio, scenarioPnL, parsePositions, mergePositions, stressScenarios, CAP_ORDER, type NameData } from "@/lib/portfolio";
@@ -20,6 +20,7 @@ import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
 import InfoDot from "./InfoDot";
 import { PrismMark } from "@/components/PrismLogo";
+import { splitBook, summarizeOptions, deltaEquivalentShares, scenarioOptionsPnl } from "@/lib/optionsBook";
 
 const STORE_KEY = "tape.portfolio.positions";
 const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
@@ -27,14 +28,25 @@ const BASIS_KEY = "tape.portfolio.basis"; // "$" | "%"
 const WHATIF_KEY = "tape.portfolio.whatif"; // proposed trades (delta book) for the what-if sim
 const ADVANCED_KEY = "tape.portfolio.advanced"; // "1" = show the pro analytics cluster
 const THEMES_KEY = "tape.portfolio.themes"; // user-defined ticker→theme tags
-const EXAMPLE = `AAPL 100
+/** Third Friday ~6 months out — so the example option leg never goes stale. */
+function exampleExpiry(): string {
+  const now = new Date();
+  const first = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 6, 1));
+  const day = 1 + ((5 - first.getUTCDay() + 7) % 7) + 14; // 1st Friday + 2 weeks
+  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day)).toISOString().slice(0, 10);
+}
+/** Called on click (not module load) so the computed expiry can't cause a hydration mismatch. */
+const exampleBook = (): string => `AAPL 100
 MSFT 60
 NVDA 40
 JPM 80
 XOM 120
 KO 200
 # shorts are negative
-TSLA -50`;
+TSLA -50
+# options: SYMBOL C|P<strike> <expiry> x<contracts>  (negative = written)
+SPY P550 ${exampleExpiry()} x-3
+NVDA C200 ${exampleExpiry()} x5`;
 
 const money = (n: number): string => {
   const a = Math.abs(n), s = n < 0 ? "−" : "";
@@ -171,15 +183,23 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     } else setImportNote("Link is in the address bar — copy it to share.");
   };
 
-  const positions = useMemo(() => parsePositions(text), [text]);
+  // Risk state lives up here (ahead of the book) because the options legs price off each name's realized
+  // vol from `risk.vol` as an IV proxy, and their delta-equivalent shares feed the book below.
+  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, vol: {}, crowd13f: null, cappedFrom: null, cap: null };
+  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; vol: Record<string, VolInfo>; crowd13f: { asOf: string; themes: { heading: string; tickers: string[] }[] } | null; cappedFrom: number | null; cap: number | null }>(emptyRisk);
+  const [riskLoading, setRiskLoading] = useState(false);
+
+  // The book splits into share lines and option legs; each parser only ever sees its own lines.
+  const { legs: optionLegs, sharesText } = useMemo(() => splitBook(text), [text]);
+  const sharePositions = useMemo(() => parsePositions(sharesText), [sharesText]);
+  const optionSymbols = useMemo(() => [...new Set(optionLegs.map((l) => l.symbol))], [optionLegs]);
   const whatIfPositions = useMemo(() => parsePositions(whatIfText), [whatIfText]);
-  const afterPositions = useMemo(() => mergePositions(positions, whatIfPositions), [positions, whatIfPositions]);
   const whatIfActive = whatIf && whatIfPositions.length > 0;
-  // Fetch price/beta/series for the UNION of current + proposed names, so the after-book prices and
-  // its predicted risk are fully computable even for a brand-new hedge instrument.
+  // Fetch price/beta/series for the UNION of current + proposed names (option underlyings included, so a
+  // book that is ONLY options still prices), so the after-book and its predicted risk are computable.
   const symbolsKey = useMemo(
-    () => [...new Set([...positions, ...whatIfPositions].map((p) => p.symbol))].sort().join(","),
-    [positions, whatIfPositions],
+    () => [...new Set([...sharePositions.map((p) => p.symbol), ...optionSymbols, ...whatIfPositions.map((p) => p.symbol)])].sort().join(","),
+    [sharePositions, optionSymbols, whatIfPositions],
   );
 
   // Debounced fetch of per-name price/sector/beta/return whenever the book (or timeframe) changes.
@@ -202,6 +222,35 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const n = Number(aumText.replace(/[$,\s]/g, ""));
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [aumText]);
+  // Price the option legs: spot from the priced book, IV from each name's realized vol (the cone is broad;
+  // an explicit `@premium` on a leg overrides it by backing out that leg's own IV).
+  const options = useMemo(() => {
+    if (!optionLegs.length) return null;
+    // IV estimate: the vol cone first (stocks), else annualized realized vol straight off the aligned
+    // return matrix — that fallback is what lets ETF legs (a SPY protective put, the commonest hedge of
+    // all) price at all, since the cone only covers single stocks.
+    const al = risk.aligned;
+    const rvFromSeries = (sym: string): number | null => {
+      const v = al?.returns?.[sym] ?? al?.extra?.[sym];
+      if (!v || v.length < 20) return null;
+      const m = v.reduce((a, x) => a + x, 0) / v.length;
+      return Math.sqrt(v.reduce((a, x) => a + (x - m) * (x - m), 0) / (v.length - 1)) * Math.sqrt(252);
+    };
+    return summarizeOptions(
+      optionLegs,
+      (sym) => dataMap.get(sym)?.price ?? null,
+      (sym) => risk.vol[sym]?.rv ?? rvFromSeries(sym),
+      Date.now(),
+    );
+  }, [optionLegs, dataMap, risk.vol, risk.aligned]);
+  // Tier 1 — options fold into the EXISTING engine as delta-equivalent shares, so exposure, sector/size
+  // tilts, factor attribution, VaR, crowding and the hedge all account for them with no changes.
+  const positions = useMemo(() => {
+    if (!options?.legs.length) return sharePositions;
+    const eq = [...deltaEquivalentShares(options.legs)].map(([symbol, shares]) => ({ symbol, shares }));
+    return mergePositions(sharePositions, eq);
+  }, [sharePositions, options]);
+  const afterPositions = useMemo(() => mergePositions(positions, whatIfPositions), [positions, whatIfPositions]);
   const stats = useMemo(() => computePortfolio(positions, dataMap, aum), [positions, dataMap, aum]);
   const statsAfter = useMemo(() => computePortfolio(afterPositions, dataMap, aum), [afterPositions, dataMap, aum]);
   const hasBook = stats.holdings.length > 0;
@@ -217,12 +266,11 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   // Send priced names ordered by |exposure| desc (holdings are pre-sorted) so if the server caps the
   // list it keeps the most material positions; fall back to the raw symbol set before prices load.
   const riskSymbolsKey = useMemo(() => {
-    const syms = new Set<string>([...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol));
+    // Option underlyings are added explicitly: their vol is what PRICES the legs, so keying only off the
+    // resulting holdings would be circular (no vol → no delta → no holding → never requests the vol).
+    const syms = new Set<string>([...[...stats.holdings, ...statsAfter.holdings].map((h) => h.symbol), ...optionSymbols]);
     return syms.size ? [...syms].sort().join(",") : symbolsKey;
-  }, [stats.holdings, statsAfter.holdings, symbolsKey]);
-  const emptyRisk = { factors: {}, corr: [], aligned: null, etfPrices: {}, vol: {}, crowd13f: null, cappedFrom: null, cap: null };
-  const [risk, setRisk] = useState<{ factors: Record<string, Record<FactorKey, number | null>>; corr: PairCorr[]; aligned: AlignedReturns | null; etfPrices: Record<string, number>; vol: Record<string, VolInfo>; crowd13f: { asOf: string; themes: { heading: string; tickers: string[] }[] } | null; cappedFrom: number | null; cap: number | null }>(emptyRisk);
-  const [riskLoading, setRiskLoading] = useState(false);
+  }, [stats.holdings, statsAfter.holdings, optionSymbols, symbolsKey]);
   useEffect(() => {
     if (!riskSymbolsKey) { setRisk(emptyRisk); return; }
     let cancelled = false;
@@ -355,6 +403,23 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     [risk.aligned, stats.holdings, stats.gross, hedgeNeutral, hedgeMaxLegs, hedgeFactors],
   );
   const stress = useMemo(() => stressScenarios(stats), [stats]);
+  /**
+   * Tier 3 — the non-linear add-on for a market move. scenarioPnL already counts the options' DELTA
+   * (they're delta-equivalent holdings), so what's missing is convexity: gamma + the IV spike a selloff
+   * brings. Each underlying is shocked by beta×move to match scenarioPnL's own propagation, and legs whose
+   * underlying has no beta are skipped exactly as scenarioPnL skips them (they contribute $0 either way).
+   * Vol assumption: a fall of X% lifts IV by X/2 points (crashes bid vol — the reason puts beat delta).
+   */
+  const optionConvexity = useCallback((marketMovePct: number): { pnl: number; convexity: number; volPts: number } | null => {
+    if (!options?.legs.length) return null;
+    const m = marketMovePct / 100;
+    const volPts = Math.max(0, -marketMovePct) / 2;
+    const r = scenarioOptionsPnl(options.legs, (sym) => {
+      const b = dataMap.get(sym)?.beta;
+      return typeof b === "number" && Number.isFinite(b) ? b * m : NaN; // NaN → skipped, as in scenarioPnL
+    }, volPts);
+    return { pnl: r.pnl, convexity: r.convexity, volPts };
+  }, [options, dataMap]);
   const themeExp = useMemo(() => { const tags = parseTags(themesText); return tags.size ? themeExposure(stats.holdings, tags) : null; }, [themesText, stats.holdings]);
   const today = useMemo(() => dayAttribution(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value, ret1d: h.ret1d, name: h.name })), riskBase), [stats.holdings, riskBase]);
   // Retail TL;DR — a plain-English read of the numbers below (deterministic, no LLM).
@@ -397,7 +462,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} />
                 </label>
                 <button onClick={handleShare} disabled={!positions.length} title="Copy a link that loads this book (client-side; nothing sent to a server)" className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)] disabled:opacity-40">Share</button>
-                <button onClick={() => setText(EXAMPLE)} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Example</button>
+                <button onClick={() => setText(exampleBook())} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Example</button>
                 <button onClick={() => { setText(""); setImportNote(null); }} className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--text-3)] hover:text-[var(--text)]">Clear</button>
               </div>
             </div>
@@ -405,11 +470,13 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               spellCheck={false}
-              placeholder={"AAPL 100\nMSFT 60\nTSLA -50   (short)"}
+              placeholder={"AAPL 100\nMSFT 60\nTSLA -50            (short)\nSPY P550 2027-01-15 x-3   (option)"}
               className="h-56 w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--bg)] p-2.5 font-mono text-[13px] leading-relaxed outline-none placeholder:text-[var(--text-4)] focus:border-[var(--accent)]/60"
             />
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--text-4)]">
-              <span>{positions.length ? `${positions.length} position${positions.length === 1 ? "" : "s"}` : "one SYMBOL SHARES per line"}</span>
+              <span>{positions.length
+                ? `${positions.length} position${positions.length === 1 ? "" : "s"}${optionLegs.length ? ` · ${optionLegs.length} option leg${optionLegs.length === 1 ? "" : "s"}` : ""}`
+                : "SYMBOL SHARES — or SYMBOL C250 2027-01-15 x10 for options"}</span>
               {loading && <span>pricing…</span>}
             </div>
             {resp.missing.length > 0 && (
@@ -490,7 +557,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
               <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--text-3)]">
                 Paste your holdings on the left — or <label className="cursor-pointer text-[var(--accent)] underline">import a CSV<input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={handleImport} /></label> from Schwab, Fidelity, or Robinhood — and get a plain-English read: how concentrated you are, how much you&apos;d move with the market, what a crash would cost, and how to hedge it.
               </p>
-              <button onClick={() => setText(EXAMPLE)} className="mt-4 rounded-lg border border-[var(--accent)] bg-[var(--accent)]/10 px-4 py-2 text-[13px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20">Try an example portfolio</button>
+              <button onClick={() => setText(exampleBook())} className="mt-4 rounded-lg border border-[var(--accent)] bg-[var(--accent)]/10 px-4 py-2 text-[13px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20">Try an example portfolio</button>
               <p className="mt-3 text-[11px] text-[var(--text-4)]">Nothing leaves your browser — your book is saved locally.</p>
             </div>
           ) : (
@@ -825,7 +892,10 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   <span className="text-[11px] text-[var(--text-4)]">estimated via Σ position·β·move</span>
                 </div>
                 {(() => {
-                  const r = scenarioPnL(stats, shock);
+                  const lin = scenarioPnL(stats, shock);
+                  const cx = optionConvexity(shock);
+                  const total = lin.dollar + (cx?.convexity ?? 0);
+                  const r = { dollar: total, pct: stats.gross ? (total / stats.gross) * 100 : 0 };
                   const c = pos(r.dollar) ? "var(--pos)" : "var(--neg)";
                   return (
                     <>
@@ -836,6 +906,13 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                         <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: c }}>{signMoney(r.dollar)}</span>
                         <span className="font-mono text-sm tabular-nums" style={{ color: c }}>({pctMode ? pctAum(r.dollar / stats.aum!, true) : pct(r.pct)})</span>
                       </div>
+                      {cx && Math.abs(cx.convexity) > 1 && (
+                        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-[11px] text-[var(--text-4)]">
+                          <span>Options convexity</span>
+                          <span className="font-mono tabular-nums" style={{ color: cx.convexity >= 0 ? "var(--pos)" : "var(--neg)" }}>{signMoney(cx.convexity)}</span>
+                          <span>beyond delta{cx.volPts > 0 ? ` (repriced with IV +${cx.volPts.toFixed(1)}pts)` : ""} — {cx.convexity >= 0 ? "your legs cushion this move" : "short-gamma: losses accelerate"}</span>
+                        </div>
+                      )}
                       <input
                         type="range" min={-15} max={15} step={0.5} value={shock}
                         onChange={(e) => setShock(Number(e.target.value))}
@@ -843,7 +920,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       />
                       <div className="mt-2 grid grid-cols-6 gap-1.5">
                         {SHOCKS.map((s) => {
-                          const d = scenarioPnL(stats, s).dollar;
+                          const d = scenarioPnL(stats, s).dollar + (optionConvexity(s)?.convexity ?? 0);
                           return (
                             <button key={s} onClick={() => setShock(s)}
                               className={`rounded-md border px-1 py-1.5 text-center transition-colors ${s === shock ? "border-[var(--accent)] bg-[var(--accent)]/10" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`}>
@@ -865,17 +942,21 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[13px] font-semibold">Historical stress</span>
-                  <span className="text-[11px] text-[var(--text-4)]">beta-propagated · first-order</span>
+                  <span className="text-[11px] text-[var(--text-4)]">{options?.legs.length ? "beta-propagated · options repriced" : "beta-propagated · first-order"}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-x-5 gap-y-0 sm:grid-cols-2 lg:grid-cols-3">
-                  {stress.map((s) => (
-                    <div key={s.name} className="flex items-baseline justify-between gap-2 border-b border-[var(--border)] py-1" title={s.note}>
-                      <span className="text-[12px] text-[var(--text-3)]">{s.name} <span className="text-[10px] text-[var(--text-4)]">{s.marketMovePct > 0 ? "+" : ""}{s.marketMovePct}%</span></span>
-                      <span className="whitespace-nowrap text-right font-mono text-[12px] tabular-nums" style={{ color: s.dollar >= 0 ? "var(--pos)" : "var(--neg)" }}>
-                        {signMoney(s.dollar)}{riskBase ? <span className="ml-1 text-[10px] text-[var(--text-4)]">{((s.dollar / riskBase) * 100).toFixed(0)}%</span> : null}
-                      </span>
-                    </div>
-                  ))}
+                  {stress.map((s) => {
+                    const cx = optionConvexity(s.marketMovePct);
+                    const total = s.dollar + (cx?.convexity ?? 0);
+                    return (
+                      <div key={s.name} className="flex items-baseline justify-between gap-2 border-b border-[var(--border)] py-1" title={cx && Math.abs(cx.convexity) > 1 ? `${s.note} · includes ${signMoney(cx.convexity)} options convexity` : s.note}>
+                        <span className="text-[12px] text-[var(--text-3)]">{s.name} <span className="text-[10px] text-[var(--text-4)]">{s.marketMovePct > 0 ? "+" : ""}{s.marketMovePct}%</span></span>
+                        <span className="whitespace-nowrap text-right font-mono text-[12px] tabular-nums" style={{ color: total >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                          {signMoney(total)}{riskBase ? <span className="ml-1 text-[10px] text-[var(--text-4)]">{((total / riskBase) * 100).toFixed(0)}%</span> : null}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
                   Each holding&apos;s beta applied to the index move{stats.betaCoverage < 0.999 ? ` (${Math.round(stats.betaCoverage * 100)}% of gross has a beta)` : ""}; % is of {aum ? "AUM" : "gross"}. Real crises expand betas and rotate factors, so treat these as a first-order guide, not a forecast.
@@ -1009,6 +1090,48 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                 <span className="text-[11px] text-[var(--text-4)]">{advanced ? "▾ hide" : "▸ show"}</span>
               </button>
               {advanced && (<>
+              {options && options.legs.length > 0 && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[13px] font-semibold">Options <span className="text-[11px] font-normal text-[var(--text-4)]">greeks across {options.legs.length} leg{options.legs.length === 1 ? "" : "s"}</span></span>
+                    <span className="text-[11px] text-[var(--text-4)]">{options.legs.some((l) => !l.ivFromPremium) ? "IV ≈ realized vol" : "IV from premium"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <Stat label="Delta" value={pctAum(riskBase ? options.deltaDollar / riskBase : null, true)} sub={`${signMoney(options.deltaDollar)} equiv.`} color={options.deltaDollar >= 0 ? "var(--pos)" : "var(--neg)"} />
+                    <Stat label="Gamma" value={signMoney(options.gammaDollar)} sub="Δdelta per 1% move" color={options.gammaDollar >= 0 ? "var(--pos)" : "var(--neg)"} />
+                    <Stat label="Vega" value={signMoney(options.vegaDollar)} sub="per +1 vol pt" color={options.vegaDollar >= 0 ? "var(--pos)" : "var(--neg)"} />
+                    <Stat label="Theta" value={signMoney(options.thetaDollar)} sub="per day" color={options.thetaDollar >= 0 ? "var(--pos)" : "var(--neg)"} />
+                  </div>
+                  <div className="mt-2.5 overflow-x-auto">
+                    <table className="w-full text-[12px]">
+                      <thead className="text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+                        <tr className="border-b border-[var(--border)]">
+                          <th className="py-1 text-left font-medium">Leg</th>
+                          <th className="py-1 text-right font-medium">Qty</th>
+                          <th className="py-1 text-right font-medium">IV</th>
+                          <th className="py-1 text-right font-medium">Value</th>
+                          <th className="py-1 text-right font-medium">Delta $</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono tabular-nums">
+                        {options.legs.map((p, i) => (
+                          <tr key={`${p.leg.symbol}${p.leg.kind}${p.leg.strike}${p.leg.expiry}${i}`} className="border-b border-[var(--border)]/50 last:border-0">
+                            <td className="py-1 text-left"><span className="font-semibold text-[var(--accent)]">{p.leg.symbol}</span> <span className="text-[var(--text-3)]">{p.leg.kind === "call" ? "C" : "P"}{p.leg.strike}</span> <span className="text-[var(--text-4)]">{p.leg.expiry}</span></td>
+                            <td className="py-1 text-right" style={{ color: p.leg.contracts >= 0 ? "var(--text-2)" : "var(--neg)" }}>{p.leg.contracts > 0 ? "+" : ""}{p.leg.contracts}</td>
+                            <td className="py-1 text-right text-[var(--text-3)]">{Math.round(p.iv * 100)}%{p.ivFromPremium ? "*" : ""}</td>
+                            <td className="py-1 text-right" style={{ color: p.marketValue >= 0 ? "var(--text-2)" : "var(--neg)" }}>{signMoney(p.marketValue)}</td>
+                            <td className="py-1 text-right" style={{ color: p.deltaDollar >= 0 ? "var(--pos)" : "var(--neg)" }}>{signMoney(p.deltaDollar)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {options.unpriced.length > 0 && (
+                    <p className="mt-2 text-[11px] text-[var(--warn)]">Couldn&apos;t price (no US price or vol history): {options.unpriced.map((l) => `${l.symbol} ${l.kind === "call" ? "C" : "P"}${l.strike}`).join(", ")}</p>
+                  )}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Your legs&apos; delta-equivalent exposure is already folded into every number above — a 0.6-delta call on 10 contracts counts as 600 shares. <b>Gamma</b> is how much that delta shifts per 1% move, <b>vega</b> your P&amp;L per vol point, <b>theta</b> your daily decay. Priced with Black-Scholes off each name&apos;s realized vol as an IV estimate (add <span className="font-mono">@premium</span> to a leg to use its true implied vol<span className="font-mono">*</span>) — directional, not a broker quote.</p>
+                </div>
+              )}
               {volRead && (
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
                   <div className="mb-2 flex items-center justify-between">

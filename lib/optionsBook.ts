@@ -177,20 +177,33 @@ export function deltaEquivalentShares(legs: PricedLeg[]): Map<string, number> {
 }
 
 /**
- * Non-linear scenario: reprice every leg with the underlying shocked by `move` (e.g. −0.10) and vol shocked
- * by `volShock` VOL POINTS (a selloff raises IV — Prism passes a positive number for down moves), holding
- * time fixed. Returns the options book's P&L, vs. what a delta-only (linear) read would have predicted —
- * the difference IS the convexity a linear model misses.
+ * Non-linear scenario: reprice every leg with its underlying shocked and vol shocked by `volShockPoints`
+ * VOL POINTS (a selloff raises IV — Prism passes a positive number for down moves), holding time fixed.
+ *
+ * `move` is either a flat underlying move (−0.10) or a per-symbol function. The per-symbol form matters
+ * for the market-shock scenario: the cockpit's scenarioPnL propagates a MARKET move through each name's
+ * beta (value·β·move), so options must be shocked by that same beta-adjusted move — otherwise `convexity`
+ * (which the caller ADDS to the linear scenario) would be measured against the wrong baseline.
+ *
+ * Returns the options book's true P&L, what a delta-only model predicts, and the difference — the
+ * convexity a linear model misses (a protective put's crash payoff, a short strangle's blow-up risk).
  */
-export function scenarioOptionsPnl(legs: PricedLeg[], move: number, volShockPoints = 0): { pnl: number; linearPnl: number; convexity: number } {
+export function scenarioOptionsPnl(
+  legs: PricedLeg[],
+  move: number | ((symbol: string) => number),
+  volShockPoints = 0,
+): { pnl: number; linearPnl: number; convexity: number } {
+  const moveOf = typeof move === "function" ? move : () => move;
   let pnl = 0, linearPnl = 0;
   for (const p of legs) {
+    const m = moveOf(p.leg.symbol);
+    if (!Number.isFinite(m)) continue;
     const qty = p.leg.contracts * CONTRACT_MULTIPLIER;
-    const S2 = p.spot * (1 + move);
+    const S2 = Math.max(0.01, p.spot * (1 + m));
     const iv2 = Math.max(0.01, p.iv + volShockPoints / 100);
     const price2 = bsPrice(p.leg.kind, S2, p.leg.strike, p.T, iv2);
     pnl += (price2 - p.price) * qty;
-    linearPnl += p.deltaDollar * move; // what a delta-only model predicts
+    linearPnl += p.deltaDollar * m; // what a delta-only model predicts
   }
   return { pnl, linearPnl, convexity: pnl - linearPnl };
 }

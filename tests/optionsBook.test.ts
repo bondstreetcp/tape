@@ -115,6 +115,25 @@ test("scenarioOptionsPnl: a protective put shows POSITIVE convexity in a crash",
   assert.ok(rally.pnl > -legs[0].marketValue - 1e-6, "cannot lose more than the premium paid");
 });
 
+test("scenarioOptionsPnl: per-symbol (beta-adjusted) moves shock each underlying differently", () => {
+  const legs = [
+    priceLeg({ symbol: "HIBETA", kind: "call", strike: 100, expiry: IN_1Y, contracts: 5 }, 100, 0.3, NOW)!,
+    priceLeg({ symbol: "LOBETA", kind: "call", strike: 100, expiry: IN_1Y, contracts: 5 }, 100, 0.3, NOW)!,
+  ];
+  const beta: Record<string, number> = { HIBETA: 2, LOBETA: 0.5 };
+  const mkt = -0.10;
+  const perSym = scenarioOptionsPnl(legs, (s) => beta[s] * mkt);
+  // Equivalent to shocking each leg on its own beta-adjusted move — and strictly worse than the
+  // low-beta name alone taking the hit.
+  const hiOnly = scenarioOptionsPnl([legs[0]], 2 * mkt);
+  const loOnly = scenarioOptionsPnl([legs[1]], 0.5 * mkt);
+  assert.ok(Math.abs(perSym.pnl - (hiOnly.pnl + loOnly.pnl)) < 1e-9);
+  assert.ok(Math.abs(perSym.linearPnl - (hiOnly.linearPnl + loOnly.linearPnl)) < 1e-9);
+  assert.ok(hiOnly.pnl < loOnly.pnl, "the high-beta call loses more in a market selloff");
+  // A flat move is the same as a constant function (the two forms agree).
+  assert.ok(Math.abs(scenarioOptionsPnl(legs, mkt).pnl - scenarioOptionsPnl(legs, () => mkt).pnl) < 1e-12);
+});
+
 test("scenarioOptionsPnl: a vol spike helps long options, and short gamma is concave", () => {
   const longCall = [priceLeg({ symbol: "X", kind: "call", strike: 100, expiry: IN_1Y, contracts: 5 }, 100, 0.3, NOW)!];
   const flatWithVol = scenarioOptionsPnl(longCall, 0, 10); // +10 vol points, no move
