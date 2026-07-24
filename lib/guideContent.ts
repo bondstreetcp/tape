@@ -2640,14 +2640,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "9% used to value future cash for comparability; 2.5% assumed long-run growth after the first 5 years."
           }
         ]
-      }
-    ]
-  },
-  {
-    "key": "research-ownership",
-    "title": "Research, Ownership & Portfolio",
-    "blurb": "Dig into one company, see who owns and trades it, and X-ray your own book.",
-    "features": [
+      },
       {
         "path": "/cef",
         "title": "Closed-End Fund Screener",
@@ -2756,7 +2749,14 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "Each holding's live value and share of total NAV; a stake that is itself a tracked holdco shows a 'double discount' badge."
           }
         ]
-      },
+      }
+    ]
+  },
+  {
+    "key": "research-ownership",
+    "title": "Research, Ownership & Portfolio",
+    "blurb": "Dig into one company, see who owns and trades it, and X-ray your own book.",
+    "features": [
       {
         "path": "/compare-stocks",
         "title": "Compare stocks",

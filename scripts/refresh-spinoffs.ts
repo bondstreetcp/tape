@@ -106,8 +106,14 @@ async function distributedOn(spinco: string, ticker: string | null): Promise<str
 // Versigent/Atrium that have already distributed. Compare on the name CORE (suffixes stripped).
 const stripSuffix = (s: string) =>
   norm(s).replace(/\b(inc|incorporated|ltd|limited|corp|corporation|plc|company|co|holdings?|group|the|ii|iii)\b/g, " ").replace(/\s+/g, " ").trim();
-const ROSTER_TICKERS = new Set(SPINOFF_ROSTER.map((s) => s.ticker));
-const ROSTER_CORES = SPINOFF_ROSTER.map((s) => stripSuffix(s.name)).filter((c) => c.length >= 4);
+// Only seeds whose spinDate has PASSED suppress the pipeline row. A seed may be added ahead of the
+// distribution (ADIG, added 2026-07-24 for an ~Aug-3 spin) so the flip is automatic on the day — until
+// then the "upcoming" row, its briefing and the two-entity preview must keep rendering. String compare
+// is safe: both sides are YYYY-MM-DD calendar squares (the calendar-date-vs-instant doctrine).
+const todayISO = new Date().toISOString().slice(0, 10);
+const DISTRIBUTED = SPINOFF_ROSTER.filter((s) => s.spinDate.slice(0, 10) <= todayISO);
+const ROSTER_TICKERS = new Set(DISTRIBUTED.map((s) => s.ticker));
+const ROSTER_CORES = DISTRIBUTED.map((s) => stripSuffix(s.name)).filter((c) => c.length >= 4);
 function isCompleted(spinco: string, ticker: string | null): boolean {
   if (ticker && ROSTER_TICKERS.has(ticker)) return true;
   const core = stripSuffix(spinco);

@@ -2,12 +2,13 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import type { PreviewRec } from "@/lib/earningsPreviewLog";
-import { summarizePreviews } from "@/lib/earningsPreviewLog";
+import { summarizePreviews, actualDirection } from "@/lib/earningsPreviewLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 
-const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+// earningsDate is an instant (the report datetime) — pin zone + locale so SSR and every viewer agree.
+const dateLabel = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 const GREEN = "#22c55e", RED = "#ef4444";
 const hitMark = (h: boolean | null | undefined) =>
   h == null ? <span className="text-[var(--text-4)]">—</span> : h ? <span style={{ color: GREEN }}>✓</span> : <span style={{ color: RED }}>✗</span>;
@@ -76,11 +77,19 @@ export default function PreviewRecordView({
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
-        <span><b className="text-[var(--text-2)]">Pred EPS</b> = the desk&apos;s own forecast, committed the night before · <b className="text-[var(--text-2)]">Cons</b> = the consensus bar at logging</span>
-        <span><b className="text-[var(--text-2)]">B/M/I</b> = the beat / miss / inline call vs consensus — graded against the reported surprise</span>
-        <span><b className="text-[var(--text-2)]">Rx</b> = predicted 1-day reaction direction — graded against the realized move (|move| &lt; 0.5% = flat, ungraded)</span>
-        <span>Click a row for the qualitative calls — recorded, not auto-graded.</span>
+      <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          <span><b className="text-[var(--text-2)]">Left block</b> = committed the night before the print · <b className="text-[var(--text-2)]">right block</b> = what actually happened, graded by code</span>
+          <span><b className="text-[var(--text-2)]">Call</b> = predicted <b>B</b>eat / <b>M</b>iss / <b>I</b>nline vs consensus · <b className="text-[var(--text-2)]">Result</b> = how the print actually landed vs consensus (|surprise| ≤ 0.5% = inline) · <b className="text-[var(--text-2)]">Call ✓</b> grades Call against Result</span>
+          <span><b className="text-[var(--text-2)]">EPS ✓</b> = predicted EPS within ±2¢ or ±5% of actual · <b className="text-[var(--text-2)]">Rx ✓</b> = predicted reaction direction vs the realized move (|move| &lt; 0.5% = flat, ungraded)</span>
+          <span>Click a row for the qualitative calls — recorded, not auto-graded.</span>
+        </div>
+        <details className="mt-1.5">
+          <summary className="cursor-pointer font-medium text-[var(--text-2)] hover:text-[var(--text)]">How Pred EPS is made</summary>
+          <p className="mt-1 max-w-5xl leading-relaxed">
+            Pred EPS / the Call are the desk model&apos;s own forecast (a fast LLM pass, not a human and not the Street), generated the night before from one assembled dossier per name: the consensus and its range + analyst count, 30-day estimate revisions, recent rating changes and price targets, valuation and short interest, recent headlines, the company&apos;s <i>own standing guidance quoted verbatim</i>, the desk&apos;s recomputed options/reaction quant signals (implied vs historical print move, IV term structure, skew, post-earnings drift and sell-the-news patterns, guide-beating history, momentum into the print), the prior quarter&apos;s 8-K release excerpt, and the latest earnings-call transcript. Consensus is explicitly an input — the model is instructed to deviate from it only where it can name a reason (recorded as a qualitative call). Forecasts are logged <b>before</b> the print and graded only by code; two guards delete any forecast that could have seen the answer (a print inside the last 10 days at log time, or a filing dated before the forecast at settle time).
+          </p>
+        </details>
       </div>
 
       {/* filters */}
@@ -106,19 +115,28 @@ export default function PreviewRecordView({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <table className="w-full min-w-[980px] text-left text-[13px]">
-            <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
-              <tr>
+          <table className="w-full min-w-[1120px] text-left text-[13px]">
+            <thead className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+              {/* Sam (Jul 24): ex-ante and ex-post were interleaved and two cells fused a call with its
+                  grade — unreadable. Two blocks now: what we committed, then what actually happened. */}
+              <tr className="border-b border-[var(--border)]/60">
+                <th colSpan={7} className="px-2 pb-1 pt-2 text-left font-semibold normal-case text-[var(--text-3)]">Committed before the print</th>
+                <th colSpan={7} className="border-l border-[var(--border)] px-2 pb-1 pt-2 text-left font-semibold normal-case text-[var(--text-3)]">Graded against the actuals</th>
+              </tr>
+              <tr className="border-b border-[var(--border)]">
                 <th className="px-2 py-2 font-medium">Ticker</th>
                 <th className="px-2 py-2 font-medium">Report</th>
-                <th className="px-2 py-2 text-right font-medium">Pred EPS</th>
-                <th className="px-2 py-2 text-right font-medium">Cons</th>
-                <th className="px-2 py-2 text-right font-medium">Actual</th>
-                <th className="px-2 py-2 text-center font-medium" title="predicted EPS within ±2c or ±5% of actual">EPS ✓</th>
-                <th className="px-2 py-2 text-center font-medium">B/M/I call</th>
+                <th className="px-2 py-2 text-right font-medium" title="the desk model's own EPS forecast — see 'How Pred EPS is made' above">Pred EPS</th>
+                <th className="px-2 py-2 text-right font-medium" title="the consensus bar when the forecast was logged">Cons</th>
+                <th className="px-2 py-2 text-center font-medium" title="predicted Beat / Miss / Inline vs consensus">Call</th>
                 <th className="px-2 py-2 text-center font-medium" title="predicted 1-day reaction direction">Rx</th>
-                <th className="px-2 py-2 text-right font-medium">Move</th>
                 <th className="px-2 py-2 text-center font-medium">Conf</th>
+                <th className="border-l border-[var(--border)] px-2 py-2 text-right font-medium">Actual</th>
+                <th className="px-2 py-2 text-center font-medium" title="predicted EPS within ±2c or ±5% of actual">EPS ✓</th>
+                <th className="px-2 py-2 text-center font-medium" title="how the print actually landed vs consensus (|surprise| ≤ 0.5% = inline)">Result</th>
+                <th className="px-2 py-2 text-center font-medium" title="did the predicted B/M/I call match the result">Call ✓</th>
+                <th className="px-2 py-2 text-right font-medium" title="realized 1-day reaction">Move</th>
+                <th className="px-2 py-2 text-center font-medium" title="did the predicted direction match the move (flat prints ungraded)">Rx ✓</th>
                 <th className="px-2 py-2 text-center font-medium">Status</th>
               </tr>
             </thead>
@@ -134,20 +152,23 @@ export default function PreviewRecordView({
                         <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap text-[var(--text-2)]">{dateLabel(r.earningsDate)}</td>
+                      {/* ── ex-ante: committed before the print ── */}
                       <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text)]">{r.predEps ?? "—"}</td>
                       <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{r.consEps ?? "—"}</td>
-                      <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{r.actualEps ?? "—"}</td>
+                      <td className="px-2 py-2 text-center font-mono text-[12px] uppercase text-[var(--text-2)]">{r.vsConsensus.slice(0, 1)}</td>
+                      <td className="px-2 py-2 text-center font-mono text-[12px] text-[var(--text-2)]">{r.reactionDir === "up" ? "↑" : "↓"}</td>
+                      <td className="px-2 py-2 text-center text-[11px] text-[var(--text-3)]">{r.confidence}</td>
+                      {/* ── ex-post: graded against the actuals ── */}
+                      <td className="border-l border-[var(--border)] px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{r.actualEps ?? "—"}</td>
                       <td className="px-2 py-2 text-center" title={r.epsErrPct != null ? `error ${r.epsErrPct}% of actual` : undefined}>{hitMark(r.epsHit)}</td>
-                      <td className="px-2 py-2 text-center">
-                        <span className="font-mono text-[12px] uppercase text-[var(--text-2)]">{r.vsConsensus.slice(0, 1)}</span> {hitMark(r.dirHit)}
+                      <td className="px-2 py-2 text-center font-mono text-[12px] uppercase text-[var(--text-2)]">
+                        {(() => { const d = actualDirection(r.actualSurprise ?? null); return d ? d.slice(0, 1) : "—"; })()}
                       </td>
-                      <td className="px-2 py-2 text-center">
-                        <span className="font-mono text-[12px] text-[var(--text-2)]">{r.reactionDir === "up" ? "↑" : "↓"}</span> {hitMark(r.reactionHit)}
-                      </td>
+                      <td className="px-2 py-2 text-center">{hitMark(r.dirHit)}</td>
                       <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.actualMovePct == null ? "var(--text-4)" : r.actualMovePct >= 0 ? GREEN : RED }}>
                         {r.actualMovePct == null ? "—" : `${r.actualMovePct >= 0 ? "+" : "−"}${Math.abs(r.actualMovePct).toFixed(1)}%`}
                       </td>
-                      <td className="px-2 py-2 text-center text-[11px] text-[var(--text-3)]">{r.confidence}</td>
+                      <td className="px-2 py-2 text-center">{hitMark(r.reactionHit)}</td>
                       <td className="px-2 py-2 text-center whitespace-nowrap">
                         {r.status === "settled" ? (
                           <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-3)]">GRADED</span>
@@ -158,7 +179,7 @@ export default function PreviewRecordView({
                     </tr>
                     {expanded && r.calls.length > 0 && (
                       <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]/60 last:border-0">
-                        <td colSpan={11} className="px-4 py-2.5">
+                        <td colSpan={14} className="px-4 py-2.5">
                           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Qualitative calls (recorded, not auto-graded — judge against the report)</div>
                           <ul className="space-y-1 text-[12.5px]">
                             {r.calls.map((c, i) => (

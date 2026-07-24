@@ -47,3 +47,30 @@ test("tradeIdea: cheap verdict owns the move regardless of skew", () => {
   assert.equal(cheap?.structure, "Long straddle / strangle");
   assert.ok(cheap?.legsData?.every((l) => l.side === "long"));
 });
+
+// ── catalyst withholding (2026-07-24, Sam): a rich verdict with a LIVE strategic-alt/spin-off must
+// NOT emit any short-premium structure — the elevated implied move is priced event risk. ──
+const CATALYST = { kind: "strategic-alt" as const, headline: "Board initiates review of strategic alternatives", date: "2026-07-01" };
+
+test("rich + live catalyst → play withheld: no legs to log, no short-premium alt, flag carried", () => {
+  const t = tradeIdea(richness, null, straddle, chainWith(0.1), 6, null, CATALYST);
+  assert.ok(t, "still returns an idea object (the card must explain, not go blank)");
+  assert.equal(t!.legsData, undefined, "no priced legs — the nightly logger logs nothing");
+  assert.equal(t!.alt, null, "short-premium alts suppressed too");
+  assert.match(t!.structure, /No play/i);
+  assert.match(t!.rationale, /strategic-alternatives/);
+  assert.equal(t!.catalystWithheld?.date, "2026-07-01");
+});
+
+test("cheap + live catalyst → long-vol play unaffected (owning the move into a binary is not the trap)", () => {
+  const t = tradeIdea({ verdict: "cheap", avgRealized: 9 }, null, straddle, chainWith(0.1), 6, null, CATALYST);
+  assert.ok(t?.legsData, "long straddle still fully priced");
+  assert.equal(t!.structure, "Long straddle / strangle");
+  assert.equal(t!.catalystWithheld, undefined, "nothing withheld on the long side");
+});
+
+test("rich + NO catalyst → behavior unchanged (regression guard for the new parameter)", () => {
+  const t = tradeIdea(richness, null, straddle, chainWith(0.1), 6, null, null);
+  assert.ok(t?.legsData, "short structure still emitted when no catalyst is live");
+  assert.match(t!.structure, /Iron condor|Short strangle/);
+});

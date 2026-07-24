@@ -22,6 +22,12 @@ export interface SpinoffSeed {
 // (the Corp Events board's spin-off announcements are the upstream pipeline). Seeded 2026-07-02 from
 // KEDM Vol.280's "Completed Domestic Spin-offs" table cross-checked against completion press releases.
 export const SPINOFF_ROSTER: SpinoffSeed[] = [
+  // Added PRE-distribution (2026-07-24): the pipeline dedup is spinDate-aware, so the "upcoming" row
+  // keeps rendering until Aug 3, then the turnover tracker takes over automatically. ratio 0.5 =
+  // 1 ADIG per 2 REZI, from REZI's 8-K Ex-99.1 (record date Jul 20 2026). If Yahoo's firstTradeDate
+  // lands on a different session than the distribution date, correct spinDate from the nightly
+  // "⚑ first traded" log line.
+  { ticker: "ADIG", name: "ADI Global Distribution", parent: "Resideo", parentTicker: "REZI", spinDate: "2026-08-03", ratio: 0.5 },
   { ticker: "MBGL", name: "Mobility Global", parent: "S&P Global", parentTicker: "SPGI", spinDate: "2026-07-01", ratio: 1 }, // 1 MBGL per SPGI
   { ticker: "HONA", name: "Honeywell Aerospace", parent: "Honeywell", parentTicker: "HON", spinDate: "2026-06-29" },
   // spinDate is the tape's first regular-way session (Yahoo firstTradeDate), not a press release.

@@ -9,6 +9,7 @@
  */
 import { getOptions, type OptionChain, type Opt } from "@/lib/options";
 import { getEarningsReactions } from "@/lib/earningsReaction";
+import type { CatalystFlag } from "@/lib/catalystOverlay";
 
 export interface TradeLegSpec {
   type: "C" | "P";
@@ -27,6 +28,9 @@ export interface TradeIdea {
   legsData?: TradeLegSpec[]; // structured legs WITH premiums — present only when every leg has a usable quote
   lean?: "bullish" | "bearish" | null; // positioning read (skew + max-pain + walls) — informational, not a call
   alt?: { structure: string; legs: string; rationale: string; kind: "directional" | "calendar" } | null; // one conditional alternative
+  /** Set when a RICH verdict was withheld because a hard catalyst is live — the card explains instead
+   *  of suggesting short premium, and (having no legsData) the nightly logger logs nothing to grade. */
+  catalystWithheld?: CatalystFlag | null;
 }
 
 const midOf = (o: Opt | undefined): number | null => {
@@ -105,6 +109,7 @@ export function tradeIdea(
   chain: OptionChain | null,
   impliedMove: number | null,
   term?: { crushRatio: number; frontDte: number; backDte: number } | null,
+  catalyst?: CatalystFlag | null,
 ): TradeIdea | null {
   if (!richness || !straddle || !chain || impliedMove == null) return null;
   // Skew is computed HERE from the (event) chain both callers pass — it drives the condor-vs-strangle
@@ -158,6 +163,25 @@ export function tradeIdea(
     return null;
   })();
   if (richness.verdict === "rich") {
+    // A LIVE hard catalyst (strategic review, spin in motion) means the elevated implied move is priced
+    // EVENT risk, not a vol mispricing — the naive "implied > realized → sell" read is exactly how you
+    // end up short the strategic-review outcome (Sam, Jul 24: "you'll get killed if you fall into those
+    // traps"). Withhold every short-premium expression — primary AND the short alts — and say why.
+    // No legsData → the nightly logger logs nothing (the desk abstains; there is no play to grade).
+    if (catalyst) {
+      const kindLabel = catalyst.kind === "spin-off" ? "spin-off in motion" : "strategic-alternatives review";
+      return {
+        verdict: "rich",
+        structure: "No play — live catalyst",
+        legs: "stand aside",
+        rationale: `Implied ±${impliedMove.toFixed(1)}% screens rich vs ~±${richness.avgRealized.toFixed(1)}% realized — but a ${kindLabel} is live ("${catalyst.headline}", ${catalyst.date}), so the premium is priced event risk, not mispriced vol. Selling this move is short the catalyst outcome; the desk stands aside.`,
+        expiry: exp,
+        dte,
+        lean,
+        alt: null,
+        catalystWithheld: catalyst,
+      };
+    }
     const skewRich = skew != null && skew > 0.03; // puts notably bid on the EVENT chain → prefer defined risk
     const wing = Math.max(strikes.find((s) => s > callK) ? near(callK + (callK - putK)) - callK : 0, (callK - putK) / 2) || 5;
     const legsData = skewRich
@@ -216,7 +240,7 @@ export interface BuiltTrade {
 // One-call orchestration for the nightly logger: reproduce EXACTLY what the card computes for the
 // suggested play. Returns null when there's no clean, near-dated, priced structure to log (no chain,
 // far-dated straddle, no reaction history, fairly priced, or missing leg quotes).
-export async function buildEarningsTrade(sym: string, earningsISO: string | null): Promise<BuiltTrade | null> {
+export async function buildEarningsTrade(sym: string, earningsISO: string | null, catalyst?: CatalystFlag | null): Promise<BuiltTrade | null> {
   const [base, reactions] = await Promise.all([getOptions(sym).catch(() => null), getEarningsReactions(sym, 8).catch(() => [])]);
   const sm = await straddleMove(sym, base, earningsISO);
   if (!sm) return null;
@@ -235,7 +259,9 @@ export async function buildEarningsTrade(sym: string, earningsISO: string | null
   const richness = { verdict, avgRealized: avgRealizedPct };
   const straddle = { lowerBE: sm.lowerBE, upperBE: sm.upperBE, price: sm.price, expiry: sm.expiry, dte: sm.dte };
   // Skew (the condor/strangle switch) is derived inside tradeIdea from sm.chain — identical to the card.
-  const trade = tradeIdea(richness, null, straddle, sm.chain, impliedMove);
-  if (!trade || !trade.legsData) return null; // need priced legs to settle later
+  const trade = tradeIdea(richness, null, straddle, sm.chain, impliedMove, null, catalyst);
+  // No priced legs → nothing to settle later. This is also how a catalyst-withheld rich name exits:
+  // the desk abstains, so the logger records no play (there is no trade to grade).
+  if (!trade || !trade.legsData) return null;
   return { spot: sm.price, impliedMovePct: impliedMove, verdict: verdict as "rich" | "cheap", richnessRatio: ratio, avgRealizedPct, trade };
 }

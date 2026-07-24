@@ -9,6 +9,7 @@ import { getEarningsReactions } from "./earningsReaction";
 import { loadEarningsMove } from "./earningsMove";
 import { getOptions, getTermStructure, type OptionChain, type Opt } from "./options";
 import { straddleMove, tradeIdea } from "./earningsTrade";
+import { loadCatalystOverlay } from "./catalystOverlay";
 import { peerCohort } from "./peerCohorts";
 import { yahoo } from "./yahooClient";
 import { beatGuide, type GuidanceData, type GuidanceTicker } from "./guidance";
@@ -166,12 +167,13 @@ export function loadSss(sym: string): SssTicker | null {
 // The full options + reaction-history quant read — shared by the card (part=data), the AI preview's
 // QUANT SIGNALS line (part=ai), and the nightly preview logger, so every consumer sees the SAME numbers.
 export async function computeQuant(sym: string, earningsISO: string | null) {
-  const [reactions, emove, chain, ts, closes] = await Promise.all([
+  const [reactions, emove, chain, ts, closes, catalystOverlay] = await Promise.all([
     getEarningsReactions(sym, 8).catch(() => []),
     loadEarningsMove().catch(() => null),
     getOptions(sym).catch(() => null),
     getTermStructure(sym, 6).catch(() => null),
     dailyCloses(sym),
+    loadCatalystOverlay().catch(() => null),
   ]);
   const term = termRead(ts);
   const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
@@ -240,7 +242,9 @@ export async function computeQuant(sym: string, earningsISO: string | null) {
   const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
   // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
   // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
-  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove, term);
+  // The catalyst overlay withholds short-premium structures when a strategic-alt/spin-off is live —
+  // same lookup the nightly trade logger uses, so the card and the record can never diverge on it.
+  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove, term, catalystOverlay?.flagFor(sym) ?? null);
   // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
   const ivScenario = ivScenarioFrom(sm, chain, term);
   // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if

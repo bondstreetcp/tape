@@ -22,7 +22,7 @@ interface DataPart {
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
-  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; lean?: "bullish" | "bearish" | null; alt?: { structure: string; legs: string; rationale: string; kind: string } | null } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; lean?: "bullish" | "bearish" | null; alt?: { structure: string; legs: string; rationale: string; kind: string } | null; catalystWithheld?: { kind: "strategic-alt" | "spin-off"; headline: string; date: string } | null } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
@@ -527,7 +527,12 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           {d?.trade && (
             <div className="mt-2.5 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px]" title="A structure consistent with the rich/cheap + skew read, at the expected-move strikes from the live chain. Decision-support, not advice.">
               <span className="font-semibold text-[var(--text)]">Play</span><InfoDot text="A suggested options structure consistent with the rich/cheap + skew read. Decision-support, not advice." />{" "}
-              <b style={{ color: d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              <b style={{ color: d.trade.catalystWithheld ? "#f59e0b" : d.trade.verdict === "rich" ? "#ef4444" : "#22c55e" }}>{d.trade.structure}</b>
+              {d.trade.catalystWithheld && (
+                <span className="ml-1.5 rounded bg-[color-mix(in_oklab,#f59e0b_18%,transparent)] px-1.5 py-0.5 text-[11px] font-semibold text-[#f59e0b]" title={`${d.trade.catalystWithheld.headline} (disclosed ${d.trade.catalystWithheld.date})`}>
+                  ⚠ {d.trade.catalystWithheld.kind === "spin-off" ? "SPIN-OFF LIVE" : "STRATEGIC REVIEW LIVE"}
+                </span>
+              )}
               {d.trade.lean && <span className={"ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold " + (d.trade.lean === "bullish" ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-[#ef4444]/15 text-[#ef4444]")} title="Positioning lean from the options — skew (which side's bid), the max-pain pull, and OI-wall placement. A soft read, not a directional call.">{d.trade.lean === "bullish" ? "▲ leans bull" : "▼ leans bear"}</span>}{d.trade.lean && <InfoDot text="A soft directional lean read from the options — skew, the max-pain pull, and OI-wall placement. Not a directional call." />}
               {d.trade.expiry && (
                 <span className="ml-1 rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-3)]" title="The option expiry these legs are priced on — the first one after the earnings date, so it captures the event.">
