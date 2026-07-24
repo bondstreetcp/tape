@@ -27,9 +27,26 @@ HEALTH_TRIES="${TAPE_WEB_HEALTH_TRIES:-45}"        # × 2s = 90s for a new slot 
 
 log() { echo "[tape-web] $(date -u +%FT%TZ) $*"; }
 
+# The web container never runs the embedder (refresh-filing-index runs in the COMPUTE container), so
+# skip onnxruntime-node's CUDA-EP download — without this, EVERY hourly `npm ci` re-downloads the CUDA
+# binaries from the vendor CDN (npm's cache can't help; it's the package's own install script), and a
+# slow/failed download fails the whole slot build. Mirrors tape-entrypoint.sh; the CPU runtime bundled
+# with the package is all `next start` could ever need.
+export ONNXRUNTIME_NODE_INSTALL=skip
+
+# Best-effort ops ping (Slack {text} / Discord {content} — each ignores the other's key). Inert unless
+# ALERT_WEBHOOK_URL is set in tape.env. This is the "green watchdog, stale site" fix: R2-side freshness
+# alerts stay green when THIS container's rebuilds fail, so the failure must page from here.
+alert() {
+  [ -n "$ALERT_WEBHOOK_URL" ] || return 0
+  curl -sS -m 10 -X POST -H 'Content-Type: application/json' \
+    -d "{\"text\":\"[tape-web] $1\",\"content\":\"[tape-web] $1\"}" "$ALERT_WEBHOOK_URL" >/dev/null 2>&1 || true
+}
+
 SERVER_PID=""
 LIVE=""
 LAST_BUILD=0
+FAILS=0
 
 git config --global --add safe.directory '*' 2>/dev/null || true
 
@@ -137,9 +154,14 @@ while true; do
   idle=$([ "$LIVE" = "a" ] && echo b || echo a)
   log "update: $reason — building slot $idle"
   if ! prepare "$idle"; then
-    log "slot $idle FAILED to build — slot $LIVE stays live, retrying next cycle"
+    FAILS=$((FAILS + 1))
+    log "slot $idle FAILED to build (consecutive failures: $FAILS) — slot $LIVE stays live, retrying next cycle"
+    # Fire ONCE at the threshold (not every retry); a later success resets the counter. Three failures
+    # ≈ 45 min of a stuck pipeline — past transient npm/network noise, into served-data-drifting-stale.
+    [ "$FAILS" -eq 3 ] && alert "3 consecutive slot-build failures — served data is drifting stale; check the tape-web container log for the failing step"
     continue
   fi
+  FAILS=0
 
   prev="$LIVE"
   stop_server
@@ -151,6 +173,6 @@ while true; do
     log "slot $idle built but will not serve — ROLLING BACK to slot $prev"
     stop_server
     start_server "$prev"
-    healthy || log "CRITICAL: rollback slot $prev is also unhealthy — the container will be restarted by its healthcheck"
+    healthy || { log "CRITICAL: rollback slot $prev is also unhealthy — the container will be restarted by its healthcheck"; alert "CRITICAL: new slot won't serve AND the rollback slot is unhealthy — site may be down"; }
   fi
 done

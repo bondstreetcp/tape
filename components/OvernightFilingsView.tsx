@@ -31,10 +31,14 @@ const surpriseChip: Record<string, { cls: string; label: string }> = {
   na: { cls: "", label: "" },
 };
 
+// filedAt is EDGAR's acceptanceDateTime — a TRUE UTC instant (verified: submissions JSON 14:36:56Z
+// = the index page's "Accepted 10:36:56" ET). Render PINNED to America/New_York with an ET label:
+// filing times are market-clock facts, and an unpinned toLocaleString showed the NAS container's UTC
+// during SSR / the viewer's zone after hydration — both read as "wrong time" for a filing.
 const fmtTime = (iso: string): string => {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return "";
-  return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `${new Date(ms).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET`;
 };
 
 type FormFilter = "all" | "8-K" | "10-Q" | "10-K" | "deals";
