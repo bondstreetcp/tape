@@ -1,0 +1,45 @@
+# Served-site health monitor — the layer every other alert misses.
+#
+# freshness-alert.yml watches the R2-side FULL heartbeat; the freshness gate runs inside the pipeline.
+# BOTH stay green when the NAS web container's rebuild loop fails and the SERVED site drifts stale
+# (the 2026-07-24 incident: ~45h stale, zero alerts). This asks the live origin what it is actually
+# serving, every 2 hours, and pages ALERT_WEBHOOK_URL when it's unreachable or red.
+#
+# Safe to run 7 days: /api/health/data is weekend-schedule-aware (lib/dataFreshness
+# scheduleAllowanceHours), so the designed Fri-night→Mon-night data gap no longer reads as failure.
+name: Site health (served origin)
+
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      # No embedder here — skip onnxruntime's CUDA download on npm ci (12 installs/day otherwise).
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Probe the served origin
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: npm run check-site-health

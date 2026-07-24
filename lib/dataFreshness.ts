@@ -201,6 +201,24 @@ function stampFrom(obj: any, keys: readonly string[]): number | null {
   return null;
 }
 
+/** Hours of staleness the SCHEDULE itself explains. FULL runs exist only Mon-Fri ~22:47 UTC, so from
+ *  Friday night to Monday night every core feed ages 72h+ BY DESIGN — with fixed thresholds the site
+ *  503'd every single weekend, which (a) cried wolf and (b) made a served-side uptime monitor
+ *  impossible to wire (it would false-page weekly). Allowance = hours since the most recent scheduled
+ *  FULL slot + slack for the run+hydrate to land. Weekdays this stays under the tier thresholds
+ *  (no weakening); weekends it grows with the designed gap and resets at Monday's FULL. */
+const FULL_SLOT_UTC = { hour: 22, minute: 47 } as const;
+const FULL_SLACK_HOURS = 8; // run ~3h + NAS hourly hydrate + margin
+export function scheduleAllowanceHours(nowMs: number): number {
+  const d = new Date(nowMs);
+  for (let back = 0; back <= 4; back++) {
+    const slot = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back, FULL_SLOT_UTC.hour, FULL_SLOT_UTC.minute);
+    const dow = new Date(slot).getUTCDay();
+    if (dow >= 1 && dow <= 5 && slot <= nowMs) return (nowMs - slot) / H + FULL_SLACK_HOURS;
+  }
+  return FULL_SLACK_HOURS; // unreachable: any 5-day window contains a weekday
+}
+
 async function checkFeed(spec: FeedSpec, now: number): Promise<FreshResult> {
   const base: Omit<FreshResult, "status" | "ageHours" | "count" | "detail"> = {
     file: spec.file, label: spec.label, tier: spec.tier, maxAgeHours: spec.maxAgeHours, minCount: spec.minCount ?? null,
@@ -233,8 +251,9 @@ async function checkFeed(spec: FeedSpec, now: number): Promise<FreshResult> {
   if (ageHours == null) {
     return { ...base, status: "unreadable", ageHours, count, detail: "no readable timestamp" };
   }
-  if (ageHours > spec.maxAgeHours) {
-    return { ...base, status: "stale", ageHours, count, detail: `${ageHours}h old (max ${spec.maxAgeHours}h) — feed likely dead` };
+  const effMax = Math.max(spec.maxAgeHours, scheduleAllowanceHours(now));
+  if (ageHours > effMax) {
+    return { ...base, status: "stale", ageHours, count, detail: `${ageHours}h old (max ${effMax.toFixed(0)}h${effMax > spec.maxAgeHours ? ", incl. weekend-schedule allowance" : ""}) — feed likely dead` };
   }
   return { ...base, status: "ok", ageHours, count, detail: `${ageHours}h old${count != null ? `, ${count} rows` : ""}` };
 }
@@ -264,7 +283,7 @@ async function checkSnapshots(now: number): Promise<FreshResult[]> {
     if (count == null) out.push({ ...base, status: "unreadable", ageHours, count, detail: "no stocks[] array" });
     else if (count < floor) out.push({ ...base, status: "empty", ageHours, count, detail: `only ${count} stocks (floor ${floor}) — partial fetch / degraded` });
     else if (ageHours == null) out.push({ ...base, status: "unreadable", ageHours, count, detail: "no readable timestamp" });
-    else if (ageHours > SNAPSHOT_MAX_AGE) out.push({ ...base, status: "stale", ageHours, count, detail: `${ageHours}h old (max ${SNAPSHOT_MAX_AGE}h)` });
+    else if (ageHours > Math.max(SNAPSHOT_MAX_AGE, scheduleAllowanceHours(now))) out.push({ ...base, status: "stale", ageHours, count, detail: `${ageHours}h old (max ${Math.max(SNAPSHOT_MAX_AGE, scheduleAllowanceHours(now)).toFixed(0)}h)` });
     else out.push({ ...base, status: "ok", ageHours, count, detail: `${ageHours}h old, ${count} stocks` });
   }
   return out;

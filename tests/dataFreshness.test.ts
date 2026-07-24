@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { secDiagnosis, type FreshResult, type SecProbe } from "../lib/dataFreshness";
+import { secDiagnosis, scheduleAllowanceHours, type FreshResult, type SecProbe } from "../lib/dataFreshness";
 
 const feed = (file: string, status: FreshResult["status"], origin?: "sec"): FreshResult => ({
   file, label: file, tier: "core", status, ageHours: 99, maxAgeHours: 30, count: 0, minCount: null,
@@ -51,4 +51,30 @@ test("secDiagnosis: only the FAILING sec feeds are named, healthy ones excluded"
   const v = secDiagnosis(results, down);
   assert.match(v, /\(buybacks, insiders\)/);
   assert.doesNotMatch(v, /corp-events/);
+});
+
+// ── scheduleAllowanceHours: the weekend-503-by-design fix (2026-07-24) ────────────────────────────
+// FULL runs exist only Mon-Fri ~22:47 UTC; fixed thresholds made /api/health/data go red EVERY
+// Sun/Mon, which blocked wiring any served-side uptime monitor. Worked instants, exact by hand.
+const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.02, `${a} !~ ${b}`);
+
+test("weekday: allowance stays under the CORE threshold (no weakening)", () => {
+  // Tue 2026-07-21 10:00Z — last slot Mon 20th 22:47Z → 11.22h + 8h slack
+  close(scheduleAllowanceHours(Date.parse("2026-07-21T10:00:00Z")), 11.2167 + 8);
+});
+
+test("Sunday: allowance spans back to Friday's slot", () => {
+  // Sun 2026-07-19 12:00Z — last slot Fri 17th 22:47Z → 37.2167h + 8
+  close(scheduleAllowanceHours(Date.parse("2026-07-19T12:00:00Z")), 37.2167 + 8);
+});
+
+test("Monday pre-FULL: the whole weekend gap is allowed; post-FULL it resets", () => {
+  // Mon 2026-07-20 12:00Z — still Friday's slot → 61.2167h + 8
+  close(scheduleAllowanceHours(Date.parse("2026-07-20T12:00:00Z")), 61.2167 + 8);
+  // Mon 2026-07-20 23:00Z — Monday's own 22:47 slot has passed → 0.2167h + 8
+  close(scheduleAllowanceHours(Date.parse("2026-07-20T23:00:00Z")), 0.2167 + 8);
+});
+
+test("Saturday early: Friday's slot, small allowance", () => {
+  close(scheduleAllowanceHours(Date.parse("2026-07-18T02:00:00Z")), 3.2167 + 8);
 });
