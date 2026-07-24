@@ -55,7 +55,10 @@ async function main() {
     // trailing \r from a CRLF-saved env file) is obvious. NO fallback: see the header — R2 was
     // configured, so a failure here is a real breakage, and silently serving the volume's stale data/
     // is the failure mode this exit exists to prevent.
-    const diag = `${String(e?.message || e).slice(0, 140)} [endpoint="${process.env.LAKE_S3_ENDPOINT || ""}"]`;
+    // 400, not 140: lib/r2 now appends R2's XML error CODE plus both clocks, and truncating at 140
+    // threw away the only two fields that tell InvalidAccessKeyId / SignatureDoesNotMatch / clock
+    // skew apart — all of which arrive as a bare 403.
+    const diag = `${String(e?.message || e).slice(0, 400)} [endpoint="${process.env.LAKE_S3_ENDPOINT || ""}"]`;
     console.error(`data-from-r2: R2 IS configured but the download failed — refusing to build on stale local data/. Fix the LAKE_S3_* creds/endpoint (or unset them to fall back deliberately). (${diag})`);
     if (haveCommitted()) console.error("data-from-r2: a local data/ tree EXISTS but is NOT trusted — its age is unknown and it may be days old.");
     // exitCode + return, NOT process.exit(): exiting from inside a settled fetch promise trips libuv's

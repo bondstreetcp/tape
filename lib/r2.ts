@@ -33,9 +33,22 @@ export async function putObject(key: string, body: Uint8Array, contentType = "ap
   if (!res.ok) throw new Error(`R2 PUT ${key} → ${res.status} ${(await res.text().catch(() => "")).slice(0, 160)}`);
 }
 
-/** GET one object as a Buffer. Throws on non-2xx. */
+/** GET one object as a Buffer. Throws on non-2xx.
+ *
+ *  The failure message carries R2's own XML error CODE and both clocks, because a bare "→ 403" is
+ *  undiagnosable: InvalidAccessKeyId (wrong key), SignatureDoesNotMatch (wrong secret, or a stray
+ *  \r from a CRLF-saved env file), AccessDenied (token lacks the bucket) and RequestTimeTooSkewed
+ *  (host clock drifted >15min — SigV4 signs a timestamp) ALL surface as 403. The Date header is the
+ *  server's real UTC; comparing it to ours names a skew instantly. No secret is ever in the body —
+ *  S3-style errors echo only the access-key ID, never the signing key. */
 export async function getObject(key: string): Promise<Buffer> {
   const res = await client().fetch(objUrl(key), { method: "GET" });
-  if (!res.ok) throw new Error(`R2 GET ${key} → ${res.status}`);
+  if (!res.ok) {
+    const body = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    const serverDate = res.headers.get("date");
+    const skew = serverDate ? Math.round((Date.now() - Date.parse(serverDate)) / 1000) : null;
+    const clocks = serverDate ? ` [r2 clock="${serverDate}" ours="${new Date().toUTCString()}" skew=${skew}s]` : "";
+    throw new Error(`R2 GET ${key} → ${res.status} ${body}${clocks}`);
+  }
   return Buffer.from(await res.arrayBuffer());
 }
