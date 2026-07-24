@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import ThemeManager from "@/components/ThemeManager";
 import VersionBadge from "@/components/VersionBadge";
+import FeedbackWidget from "@/components/FeedbackWidget";
 
 export const metadata: Metadata = {
   title: "Tape — Equity Research",
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body className="min-h-screen">
         <ThemeManager />
         {children}
+        <FeedbackWidget />
         <VersionBadge />
       </body>
     </html>

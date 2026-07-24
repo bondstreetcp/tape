@@ -114,6 +114,47 @@ a {
   }
 }
 
+/* Feedback affordance (components/FeedbackWidget.tsx). Sits just LEFT of the build stamp so the two
+   ops controls live together; same subtle-until-hovered treatment so it never competes with the data. */
+.feedback-fab {
+  position: fixed;
+  right: max(74px, calc(env(safe-area-inset-right) + 74px));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  z-index: 40;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text-4);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--border);
+  opacity: 0.55;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.feedback-fab:hover {
+  opacity: 1;
+  color: var(--text-2);
+}
+.feedback-panel {
+  position: fixed;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(30px, calc(env(safe-area-inset-bottom) + 26px));
+  z-index: 50;
+  width: min(360px, calc(100vw - 16px));
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+}
+@media print {
+  .feedback-fab,
+  .feedback-panel {
+    display: none;
+  }
+}
+
 /* thin scrollbars */
 ::-webkit-scrollbar {
   width: 10px;
