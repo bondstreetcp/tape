@@ -4,9 +4,18 @@
  * data/ from the local filesystem exactly as it does today — the difference is the data came from R2,
  * not a git checkout. This is what lets data/ eventually leave the repo. See docs/DATA-ON-R2.md.
  *
- * Fail-safe: if R2 is unreachable/unset BUT a committed data/ is present (the migration's safety phase,
- * where we still commit data/), fall back to it rather than shipping an empty site. Only when there's
- * neither R2 nor committed data does the build hard-fail (better than deploying with no data).
+ * Fail-safe: if R2 is NOT CONFIGURED but a local data/ is present (the migration's safety phase, and
+ * local dev without creds), fall back to it rather than shipping an empty site. With no R2 and no
+ * local data the build hard-fails (better than deploying with no data).
+ *
+ * ⚠ A CONFIGURED-BUT-FAILED download is FATAL — it must never fall back (2026-07-24 incident). That
+ * fallback was written when data/ lived in git, where "stale" meant "the commit's data". On the NAS
+ * the slot's data/ PERSISTS in a docker volume, so falling back means serving the last successful
+ * hydrate — for days — while `npm run data-from-r2` exits 0, prepare() succeeds, the A/B slot swaps,
+ * and every signal stays green. That is precisely how the site served 47h-old data under FRESH code
+ * with no alert. Failing here is the safe outcome everywhere it runs: the NAS keeps the live slot up
+ * and retries next cycle (and now pages after 3 failures), the nightly workflow refuses to compute on
+ * and re-upload a stale tree (the 07-04 clobber lesson), and CI surfaces it as a red run.
  */
 import { execFileSync } from "child_process";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
@@ -42,11 +51,17 @@ async function main() {
     execFileSync("tar", ["-xzf", tarPath], { stdio: ["ignore", "ignore", "inherit"] }); // extracts data/ into cwd
     console.log(`data-from-r2: hydrated data/ from R2 (${(buf.length / 1e6).toFixed(1)} MB)`);
   } catch (e: any) {
-    // Endpoint (account host) is not a secret — log it so a bad value (e.g. a pasted scheme) is obvious.
+    // Endpoint (account host) is not a secret — log it so a bad value (e.g. a pasted scheme, or a
+    // trailing \r from a CRLF-saved env file) is obvious. NO fallback: see the header — R2 was
+    // configured, so a failure here is a real breakage, and silently serving the volume's stale data/
+    // is the failure mode this exit exists to prevent.
     const diag = `${String(e?.message || e).slice(0, 140)} [endpoint="${process.env.LAKE_S3_ENDPOINT || ""}"]`;
-    if (haveCommitted()) { console.warn(`data-from-r2: R2 download failed — falling back to committed data/. (${diag})`); return; }
-    console.error(`data-from-r2: R2 download failed and no committed data/ — build cannot proceed. (${diag})`);
-    process.exit(1);
+    console.error(`data-from-r2: R2 IS configured but the download failed — refusing to build on stale local data/. Fix the LAKE_S3_* creds/endpoint (or unset them to fall back deliberately). (${diag})`);
+    if (haveCommitted()) console.error("data-from-r2: a local data/ tree EXISTS but is NOT trusted — its age is unknown and it may be days old.");
+    // exitCode + return, NOT process.exit(): exiting from inside a settled fetch promise trips libuv's
+    // UV_HANDLE_CLOSING assertion and reports 127 instead of 1 (the same trap as the old healthcheck).
+    process.exitCode = 1;
+    return;
   }
 
   // Per-stock cache: OPTIONAL, best-effort. A missing company.tar.gz (no FULL has shipped it yet) or a
@@ -66,4 +81,4 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error("data-from-r2:", String(e?.message || e)); process.exit(1); });
+main().catch((e) => { console.error("data-from-r2:", String(e?.message || e)); process.exitCode = 1; });
