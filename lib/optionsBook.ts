@@ -56,6 +56,64 @@ export function parseOptionLine(line: string): OptionLeg | null {
   };
 }
 
+/** A contract identified from a broker export — everything but the quantity. */
+export type OptionContract = Pick<OptionLeg, "symbol" | "kind" | "strike" | "expiry">;
+
+// OCC-style: root + YYMMDD + C/P + strike. The canonical OCC strike is 8 digits in THOUSANDTHS
+// (00250000 = $250); Fidelity writes it plain (C250 / C250.5), so both are accepted.
+// (the root allows . / - so share classes survive: BRK.B, BRK/B → BRK-B)
+const OCC_RE = /^([A-Za-z][A-Za-z./\-]{0,5})(\d{6})([CP])(\d+(?:\.\d+)?)$/;
+// Schwab-style spaced: "AAPL 01/16/2026 250.00 C". The required \s after the root stops it eating the date.
+const SPACED_RE = /^([A-Za-z][A-Za-z./\-]{0,5})\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d+(?:\.\d+)?)\s+([CP])$/i;
+
+const pad = (n: number | string) => String(n).padStart(2, "0");
+
+/**
+ * Parse a broker's option symbol into a contract. Handles the OCC symbol brokers export
+ * (`AAPL260116C00250000`), Fidelity's leading-dash variant (`-AAPL260116C250`), and Schwab's spaced
+ * form (`AAPL 01/16/2026 250.00 C`). Returns null for anything that isn't an option — callers use that
+ * to fall through to plain-share handling. Quantity is NOT parsed here (it's a separate CSV column).
+ */
+export function parseOptionSymbol(raw: string): OptionContract | null {
+  const s = raw.replace(/["*]/g, "").trim().replace(/^-/, ""); // Fidelity marks options with a leading '-'
+  if (!s) return null;
+
+  const occ = OCC_RE.exec(s);
+  if (occ) {
+    const [, root, ymd, cp, strikeRaw] = occ;
+    const yy = Number(ymd.slice(0, 2)), mm = Number(ymd.slice(2, 4)), dd = Number(ymd.slice(4, 6));
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+    // 8 all-digit strike = OCC thousandths; anything else is a plain price.
+    const strike = /^\d{8}$/.test(strikeRaw) ? Number(strikeRaw) / 1000 : Number(strikeRaw);
+    if (!(strike > 0)) return null;
+    return {
+      symbol: root.toUpperCase().replace(/[./]/g, "-"),
+      kind: cp.toUpperCase() === "C" ? "call" : "put",
+      strike,
+      expiry: `20${pad(yy)}-${pad(mm)}-${pad(dd)}`,
+    };
+  }
+
+  const sp = SPACED_RE.exec(s);
+  if (sp) {
+    const [, root, mm, dd, yr, strike, cp] = sp;
+    const year = yr.length === 4 ? Number(yr) : 2000 + Number(yr);
+    if (Number(mm) < 1 || Number(mm) > 12 || Number(dd) < 1 || Number(dd) > 31 || !(Number(strike) > 0)) return null;
+    return {
+      symbol: root.toUpperCase().replace(/[./]/g, "-"),
+      kind: cp.toUpperCase() === "C" ? "call" : "put",
+      strike: Number(strike),
+      expiry: `${year}-${pad(mm)}-${pad(dd)}`,
+    };
+  }
+  return null;
+}
+
+/** Render a leg back to Prism's book syntax (`AAPL C250 2026-01-16 x10`) — the canonical book format. */
+export function formatLeg(leg: OptionLeg): string {
+  return `${leg.symbol} ${leg.kind === "call" ? "C" : "P"}${leg.strike} ${leg.expiry} x${leg.contracts}`;
+}
+
 /**
  * Split a pasted book into option legs and the remaining (share) text. Option lines are removed from the
  * text so the caller can hand what's left to parsePositions untouched — the two parsers never see each
@@ -162,6 +220,84 @@ export function summarizeOptions(
     vegaDollar: sum((p) => p.vegaDollar),
     thetaDollar: sum((p) => p.thetaDollar),
     netContracts: priced.reduce((a, p) => a + p.leg.contracts, 0),
+  };
+}
+
+export interface PayoffPoint { spot: number; expiry: number; today: number }
+export interface PayoffCurve {
+  symbol: string;
+  spot: number; // current underlying price
+  shares: number; // share position in the same name (included in the curve)
+  points: PayoffPoint[];
+  breakevens: number[]; // spots where the AT-EXPIRY P&L crosses zero
+  maxProfit: number | null; // null = unbounded within the plotted range
+  maxLoss: number | null;
+  strikes: number[]; // distinct strikes, for gridlines
+}
+
+/**
+ * P&L-at-expiry curve for one underlying: every option leg on that name PLUS any share position, priced
+ * across a range of spots. `expiry` is intrinsic value at expiration (the classic hockey-stick); `today`
+ * is the mark-to-market curve now (Black-Scholes at the current time to expiry) — the gap between them is
+ * the time value still to decay. P&L is measured from TODAY's value, so it starts at 0 at the current spot.
+ *
+ * Only legs sharing the earliest expiry are settled at expiration; later-dated legs are marked with their
+ * remaining time. `range` is the ± fraction of spot to plot (default ±35%).
+ */
+export function payoffCurve(
+  symbol: string,
+  legs: PricedLeg[],
+  shares: number,
+  range = 0.35,
+  steps = 81,
+): PayoffCurve | null {
+  const mine = legs.filter((p) => p.leg.symbol === symbol);
+  if (!mine.length) return null;
+  const spot = mine[0].spot;
+  if (!(spot > 0)) return null;
+  const tExp = Math.min(...mine.map((p) => p.T)); // the nearest expiry defines "at expiry"
+
+  const valueAt = (S: number, atExpiry: boolean): number => {
+    let v = shares * S;
+    for (const p of mine) {
+      const qty = p.leg.contracts * CONTRACT_MULTIPLIER;
+      // At the nearest expiry: legs expiring then settle to intrinsic; longer-dated ones keep (T − tExp).
+      const T = atExpiry ? Math.max(0, p.T - tExp) : p.T;
+      v += bsPrice(p.leg.kind, S, p.leg.strike, T, p.iv) * qty;
+    }
+    return v;
+  };
+  const base = valueAt(spot, false); // today's mark — P&L is relative to this
+
+  const lo = spot * (1 - range), hi = spot * (1 + range);
+  const points: PayoffPoint[] = [];
+  for (let i = 0; i < steps; i++) {
+    const S = lo + ((hi - lo) * i) / (steps - 1);
+    points.push({ spot: S, expiry: valueAt(S, true) - base, today: valueAt(S, false) - base });
+  }
+
+  // Breakevens: sign changes of the at-expiry curve, linearly interpolated.
+  const breakevens: number[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    if ((a.expiry <= 0 && b.expiry > 0) || (a.expiry >= 0 && b.expiry < 0)) {
+      const t = Math.abs(a.expiry) / (Math.abs(a.expiry) + Math.abs(b.expiry) || 1);
+      breakevens.push(a.spot + (b.spot - a.spot) * t);
+    }
+  }
+  const ys = points.map((p) => p.expiry);
+  const maxY = Math.max(...ys), minY = Math.min(...ys);
+  // Flag "unbounded" when the extreme sits on a plot edge and the curve is still moving that way.
+  const risingAtEdge = ys[ys.length - 1] > ys[ys.length - 2], fallingAtEdge = ys[ys.length - 1] < ys[ys.length - 2];
+  return {
+    symbol,
+    spot,
+    shares,
+    points,
+    breakevens,
+    maxProfit: maxY === ys[ys.length - 1] && risingAtEdge ? null : maxY,
+    maxLoss: minY === ys[ys.length - 1] && fallingAtEdge ? null : minY,
+    strikes: [...new Set(mine.map((p) => p.leg.strike))].sort((a, b) => a - b),
   };
 }
 

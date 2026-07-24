@@ -20,7 +20,8 @@ import UniverseSwitcher from "./UniverseSwitcher";
 import MyBookTabs from "./MyBookTabs";
 import InfoDot from "./InfoDot";
 import { PrismMark } from "@/components/PrismLogo";
-import { splitBook, summarizeOptions, deltaEquivalentShares, scenarioOptionsPnl } from "@/lib/optionsBook";
+import { splitBook, summarizeOptions, deltaEquivalentShares, scenarioOptionsPnl, formatLeg, payoffCurve } from "@/lib/optionsBook";
+import PayoffChart from "@/components/PayoffChart";
 
 const STORE_KEY = "tape.portfolio.positions";
 const AUM_KEY = "tape.portfolio.aum"; // account equity — persisted apart from the book
@@ -108,6 +109,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   const [hedgeNeutral, setHedgeNeutral] = useState(false); // optimizer: flatten market beta
   const [hedgeMaxLegs, setHedgeMaxLegs] = useState<number | null>(null); // optimizer: cap the basket size
   const [hedgeFactors, setHedgeFactors] = useState<string[]>([]); // optimizer: style factors to also neutralize
+  const [payoffSym, setPayoffSym] = useState<string | null>(null); // which underlying's payoff diagram is shown
   const [advanced, setAdvanced] = useState(false); // progressive disclosure — hide the pro cluster by default
   const [themesText, setThemesText] = useState(""); // user ticker→theme tags
   const [themesOpen, setThemesOpen] = useState(false);
@@ -168,8 +170,12 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     reader.onload = () => {
       const res = parseBrokerCsv(String(reader.result || ""));
       if (!res) { setImportNote("⚠ Couldn't read that file — need a CSV with Symbol and Quantity columns."); return; }
-      setText(res.positions.map((p) => `${p.symbol} ${p.shares}`).join("\n"));
-      setImportNote(`Imported ${res.positions.length} position${res.positions.length === 1 ? "" : "s"} from ${res.broker}${res.skipped.length ? ` · skipped ${res.skipped.length} (options/cash)` : ""}.`);
+      const shareLines = res.positions.map((p) => `${p.symbol} ${p.shares}`);
+      const optLines = res.options.length ? ["# options", ...res.options.map(formatLeg)] : [];
+      setText([...shareLines, ...optLines].join("\n"));
+      const bits = [`${res.positions.length} position${res.positions.length === 1 ? "" : "s"}`];
+      if (res.options.length) bits.push(`${res.options.length} option leg${res.options.length === 1 ? "" : "s"}`);
+      setImportNote(`Imported ${bits.join(" + ")} from ${res.broker}${res.skipped.length ? ` · skipped ${res.skipped.length} (cash/unrecognized)` : ""}.`);
     };
     reader.onerror = () => setImportNote("⚠ Couldn't read that file.");
     reader.readAsText(file);
@@ -250,6 +256,14 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     const eq = [...deltaEquivalentShares(options.legs)].map(([symbol, shares]) => ({ symbol, shares }));
     return mergePositions(sharePositions, eq);
   }, [sharePositions, options]);
+  // Payoff diagram: one underlying at a time (default = the one carrying the most option exposure).
+  const payoffUnderlyings = useMemo(() => [...new Set((options?.legs ?? []).map((p) => p.leg.symbol))], [options]);
+  const payoffSymbol = payoffSym && payoffUnderlyings.includes(payoffSym) ? payoffSym : payoffUnderlyings[0];
+  const payoff = useMemo(() => {
+    if (!options?.legs.length || !payoffSymbol) return null;
+    const sharesOf = sharePositions.find((p) => p.symbol === payoffSymbol)?.shares ?? 0;
+    return payoffCurve(payoffSymbol, options.legs, sharesOf);
+  }, [options, payoffSymbol, sharePositions]);
   const afterPositions = useMemo(() => mergePositions(positions, whatIfPositions), [positions, whatIfPositions]);
   const stats = useMemo(() => computePortfolio(positions, dataMap, aum), [positions, dataMap, aum]);
   const statsAfter = useMemo(() => computePortfolio(afterPositions, dataMap, aum), [afterPositions, dataMap, aum]);
@@ -1126,6 +1140,18 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                       </tbody>
                     </table>
                   </div>
+                  {payoffUnderlyings.length > 0 && (
+                    <div className="mt-3 border-t border-[var(--border)] pt-3">
+                      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="mr-1 text-[11px] uppercase tracking-wide text-[var(--text-4)]">P&amp;L at expiry</span>
+                        {payoffUnderlyings.map((s) => (
+                          <button key={s} onClick={() => setPayoffSym(s)}
+                            className={`rounded border px-2 py-0.5 font-mono text-[11px] ${s === payoffSymbol ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-4)] hover:text-[var(--text-2)]"}`}>{s}</button>
+                        ))}
+                      </div>
+                      {payoff ? <PayoffChart curve={payoff} money={money} /> : null}
+                    </div>
+                  )}
                   {options.unpriced.length > 0 && (
                     <p className="mt-2 text-[11px] text-[var(--warn)]">Couldn&apos;t price (no US price or vol history): {options.unpriced.map((l) => `${l.symbol} ${l.kind === "call" ? "C" : "P"}${l.strike}`).join(", ")}</p>
                   )}

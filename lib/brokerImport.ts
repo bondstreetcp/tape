@@ -7,11 +7,13 @@
  */
 
 import type { Position } from "./portfolio";
+import { parseOptionSymbol, type OptionLeg } from "./optionsBook";
 
 export interface BrokerImport {
   broker: string; // "Schwab" | "Fidelity" | "Robinhood" | "CSV"
   positions: Position[]; // merged; net-zero dropped
-  skipped: string[]; // human-readable notes (options, cash, unrecognized)
+  options: OptionLeg[]; // option legs (quantity in CONTRACTS, signed); merged by contract
+  skipped: string[]; // human-readable notes (cash, unrecognized)
 }
 
 /** Parse one CSV line into fields, honouring quoted fields with embedded commas and "" escapes. */
@@ -62,6 +64,9 @@ export function parseBrokerCsv(text: string): BrokerImport | null {
   const map = new Map<string, number>();
   const order: string[] = [];
   const skipped: string[] = [];
+  // Option legs keyed by contract so a split position (two rows, same contract) nets out.
+  const optMap = new Map<string, OptionLeg>();
+  const optOrder: string[] = [];
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const cells = parseCsvLine(lines[i]);
     if (cells.length <= Math.max(symCol, qtyCol)) continue; // footer disclaimer / short rows
@@ -69,6 +74,19 @@ export function parseBrokerCsv(text: string): BrokerImport | null {
     const desc = descCol >= 0 ? (cells[descCol] ?? "").toLowerCase() : "";
     const qty = Number((cells[qtyCol] ?? "").replace(/[$,"\s]/g, ""));
     if (!rawSym || /^(account total|pending activity|total|subtotal)$/i.test(rawSym)) continue;
+
+    // Options first: brokers export them in the Symbol column (OCC, Fidelity's -ROOT…, or Schwab's
+    // spaced form). Quantity is in CONTRACTS, which is exactly what an OptionLeg wants. Some brokers
+    // only spell the contract out in Description, so fall back to that.
+    const contract = parseOptionSymbol(rawSym) ?? (descCol >= 0 ? parseOptionSymbol(cells[descCol] ?? "") : null);
+    if (contract) {
+      if (!Number.isFinite(qty) || qty === 0) continue;
+      const key = `${contract.symbol}|${contract.kind}|${contract.strike}|${contract.expiry}`;
+      const prev = optMap.get(key);
+      if (prev) prev.contracts += qty;
+      else { optMap.set(key, { ...contract, contracts: qty }); optOrder.push(key); }
+      continue;
+    }
 
     const sym = rawSym.toUpperCase().replace(/[./]/g, "-"); // BRK.B / BRK/B → BRK-B (Yahoo/snapshot form)
     if (/\s/.test(rawSym) || sym.length > 10) { skipped.push(`${rawSym} — option/derivative`); continue; }
@@ -80,5 +98,6 @@ export function parseBrokerCsv(text: string): BrokerImport | null {
   }
 
   const positions = order.map((symbol) => ({ symbol, shares: map.get(symbol)! })).filter((p) => p.shares !== 0);
-  return positions.length ? { broker, positions, skipped } : null;
+  const options = optOrder.map((k) => optMap.get(k)!).filter((l) => l.contracts !== 0);
+  return positions.length || options.length ? { broker, positions, options, skipped } : null;
 }

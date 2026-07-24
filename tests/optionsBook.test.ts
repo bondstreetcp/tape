@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseOptionLine, timeToExpiry, priceLeg, summarizeOptions, deltaEquivalentShares, scenarioOptionsPnl,
-  splitBook, CONTRACT_MULTIPLIER, type OptionLeg,
+  splitBook, payoffCurve, CONTRACT_MULTIPLIER, type OptionLeg,
 } from "../lib/optionsBook";
 import { parsePositions } from "../lib/portfolio";
 
@@ -101,6 +101,52 @@ test("summarizeOptions + deltaEquivalentShares: aggregates and splits by underly
   // AAPL nets the long call and the short put (both bullish → both positive)
   assert.ok(eq.get("AAPL")! > 0);
   assert.ok(Math.abs(eq.get("MSFT")! - s.legs.find((p) => p.leg.symbol === "MSFT")!.deltaShares) < 1e-9);
+});
+
+test("payoffCurve: a long call is a hockey stick — capped loss, unbounded upside, breakeven above strike", () => {
+  const leg = priceLeg({ symbol: "X", kind: "call", strike: 100, expiry: IN_1Y, contracts: 1 }, 100, 0.3, NOW)!;
+  const c = payoffCurve("X", [leg], 0)!;
+  const prem = leg.marketValue; // what we paid
+  const first = c.points[0], last = c.points[c.points.length - 1];
+  assert.ok(Math.abs(first.expiry + prem) < 1e-6, "far below the strike you lose exactly the premium");
+  assert.ok(last.expiry > 0 && last.expiry > first.expiry, "upside runs with the stock");
+  assert.equal(c.maxProfit, null, "unbounded upside within the plotted range");
+  assert.ok(c.maxLoss != null && Math.abs(c.maxLoss + prem) < 1e-6, "loss is capped at the premium");
+  assert.equal(c.breakevens.length, 1);
+  assert.ok(c.breakevens[0] > 100, "breakeven sits above the strike by the premium paid");
+  assert.deepEqual(c.strikes, [100]);
+  // P&L is measured from today's mark, so it is 0 at the current spot.
+  const atSpot = c.points.reduce((a, p) => (Math.abs(p.spot - 100) < Math.abs(a.spot - 100) ? p : a));
+  assert.ok(Math.abs(atSpot.today) < 1e-6);
+});
+
+test("payoffCurve: a covered call — capped upside, and the share leg is included", () => {
+  const leg = priceLeg({ symbol: "X", kind: "call", strike: 110, expiry: IN_1Y, contracts: -1 }, 100, 0.3, NOW)!;
+  const c = payoffCurve("X", [leg], 100)!; // long 100 shares + 1 written call
+  const last = c.points[c.points.length - 1];
+  assert.ok(c.maxProfit != null, "upside is capped once the call is assigned");
+  // Above the strike the curve flattens: the last two points are (nearly) equal.
+  const prev = c.points[c.points.length - 2];
+  assert.ok(Math.abs(last.expiry - prev.expiry) < Math.abs(c.points[1].expiry - c.points[0].expiry) / 10);
+  assert.ok(c.maxLoss != null && c.maxLoss < 0, "still exposed to the downside on the shares");
+});
+
+test("payoffCurve: a long straddle has two breakevens straddling the strike", () => {
+  const call = priceLeg({ symbol: "X", kind: "call", strike: 100, expiry: IN_1Y, contracts: 1 }, 100, 0.3, NOW)!;
+  const put = priceLeg({ symbol: "X", kind: "put", strike: 100, expiry: IN_1Y, contracts: 1 }, 100, 0.3, NOW)!;
+  const c = payoffCurve("X", [call, put], 0, 0.6)!;
+  assert.equal(c.breakevens.length, 2);
+  assert.ok(c.breakevens[0] < 100 && c.breakevens[1] > 100);
+  assert.ok(c.maxLoss != null && c.maxLoss < 0, "max loss at the strike = total premium");
+});
+
+test("payoffCurve: only the named underlying's legs count; null when it has none", () => {
+  const a = priceLeg({ symbol: "AAA", kind: "call", strike: 100, expiry: IN_1Y, contracts: 1 }, 100, 0.3, NOW)!;
+  const b = priceLeg({ symbol: "BBB", kind: "call", strike: 50, expiry: IN_1Y, contracts: 9 }, 50, 0.3, NOW)!;
+  const c = payoffCurve("AAA", [a, b], 0)!;
+  assert.deepEqual(c.strikes, [100]);
+  assert.equal(c.spot, 100);
+  assert.equal(payoffCurve("ZZZ", [a, b], 0), null);
 });
 
 test("scenarioOptionsPnl: a protective put shows POSITIVE convexity in a crash", () => {
