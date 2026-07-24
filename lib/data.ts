@@ -3,91 +3,83 @@ import path from "path";
 import type { Snapshot, StockSeries } from "./types";
 import type { Daily } from "./pairs";
 import { symbolFile } from "./symbolfile";
+import { cachedFile } from "./jsonCache";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
+// Every loader below reads a NIGHTLY-BAKED file that is rewritten at most once a tick, but was being
+// re-read and re-parsed on EVERY request by ~47 importers (see lib/jsonCache for the measured cost).
+// cachedFile keys on mtime+size, so a rebuilt feed is picked up on the very next call with no TTL to
+// tune — and a `stat` replaces a multi-MB parse. The null/{} "not built yet" contracts are unchanged.
+
 /** The market (^GSPC) daily [ts,price] series, persisted by refresh-betas. null if not built yet. */
 export async function loadMarketSeries(): Promise<Daily | null> {
-  try {
-    const raw = await fs.readFile(path.join(DATA_DIR, "market.json"), "utf8");
+  return cachedFile(path.join(DATA_DIR, "market.json"), (raw) => {
     const j = JSON.parse(raw) as { daily?: Daily };
-    return Array.isArray(j.daily) && j.daily.length ? j.daily : null;
-  } catch {
-    return null;
-  }
+    if (!Array.isArray(j.daily) || !j.daily.length) throw new Error("no daily"); // → null, as before
+    return j.daily;
+  });
 }
 
 /** Current 20d realized vol + its history percentile per symbol (vol-cone). {} if not built. */
 export async function loadVolCone(): Promise<Record<string, { cur20: number; pct20: number }>> {
-  try {
-    const rows = (JSON.parse(await fs.readFile(path.join(DATA_DIR, "vol-cone.json"), "utf8")) as { rows?: Array<{ symbol?: string; cur20?: number; pct20?: number }> }).rows ?? [];
-    const out: Record<string, { cur20: number; pct20: number }> = {};
-    for (const r of rows) if (r?.symbol && typeof r.cur20 === "number") out[r.symbol.toUpperCase()] = { cur20: r.cur20, pct20: r.pct20 ?? 0 };
-    return out;
-  } catch { return {}; }
+  return (
+    (await cachedFile(path.join(DATA_DIR, "vol-cone.json"), (raw) => {
+      const rows = (JSON.parse(raw) as { rows?: Array<{ symbol?: string; cur20?: number; pct20?: number }> }).rows ?? [];
+      const out: Record<string, { cur20: number; pct20: number }> = {};
+      for (const r of rows) if (r?.symbol && typeof r.cur20 === "number") out[r.symbol.toUpperCase()] = { cur20: r.cur20, pct20: r.pct20 ?? 0 };
+      return out;
+    })) ?? {}
+  );
 }
 
 /** Latest days-to-earnings + implied move per symbol (iv-history; ~55 names). {} if not built. */
 export async function loadIvLatest(): Promise<Record<string, { daysToEarnings: number | null; movePct: number | null }>> {
-  try {
-    const byT = (JSON.parse(await fs.readFile(path.join(DATA_DIR, "iv-history.json"), "utf8")) as { byTicker?: Record<string, Array<{ daysToEarnings?: number; movePct?: number }>> }).byTicker ?? {};
-    const out: Record<string, { daysToEarnings: number | null; movePct: number | null }> = {};
-    for (const [sym, arr] of Object.entries(byT)) {
-      const last = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
-      if (last) out[sym.toUpperCase()] = { daysToEarnings: last.daysToEarnings ?? null, movePct: last.movePct ?? null };
-    }
-    return out;
-  } catch { return {}; }
+  return (
+    (await cachedFile(path.join(DATA_DIR, "iv-history.json"), (raw) => {
+      const byT = (JSON.parse(raw) as { byTicker?: Record<string, Array<{ daysToEarnings?: number; movePct?: number }>> }).byTicker ?? {};
+      const out: Record<string, { daysToEarnings: number | null; movePct: number | null }> = {};
+      for (const [sym, arr] of Object.entries(byT)) {
+        const last = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+        if (last) out[sym.toUpperCase()] = { daysToEarnings: last.daysToEarnings ?? null, movePct: last.movePct ?? null };
+      }
+      return out;
+    })) ?? {}
+  );
 }
 
 /** Crowded 13F themes (heading + ticker list) from 13f-story. null if not built yet. */
 export async function loadCrowd13f(): Promise<{ asOf: string; themes: { heading: string; tickers: string[] }[] } | null> {
-  try {
-    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, "13f-story.json"), "utf8")) as {
-      asOf?: string;
-      themes?: Array<{ heading?: string; tickers?: string[] }>;
-    };
+  return cachedFile(path.join(DATA_DIR, "13f-story.json"), (raw) => {
+    const j = JSON.parse(raw) as { asOf?: string; themes?: Array<{ heading?: string; tickers?: string[] }> };
     const themes = (j.themes ?? [])
       .filter((t) => t?.heading && Array.isArray(t.tickers) && t.tickers.length)
       .map((t) => ({ heading: t.heading as string, tickers: t.tickers as string[] }));
-    return themes.length ? { asOf: j.asOf ?? "", themes } : null;
-  } catch {
-    return null;
-  }
+    if (!themes.length) throw new Error("no themes"); // → null, as before
+    return { asOf: j.asOf ?? "", themes };
+  });
 }
 
 /** Average daily $ volume per symbol (refresh-adv) for the liquidity read. {} if not built yet. */
 export async function loadAdv(): Promise<Record<string, number>> {
-  try {
-    const raw = await fs.readFile(path.join(DATA_DIR, "adv.json"), "utf8");
-    return ((JSON.parse(raw) as { adv?: Record<string, number> }).adv ?? {});
-  } catch {
-    return {};
-  }
+  return (
+    (await cachedFile(path.join(DATA_DIR, "adv.json"), (raw) => (JSON.parse(raw) as { adv?: Record<string, number> }).adv ?? {})) ?? {}
+  );
 }
 
 export interface EtfMeta { name: string; price: number; beta: number | null; returns?: Record<string, number | null> }
 
 /** Hedge-menu ETF price + beta (refresh-hedge-etfs) so /api/portfolio can price ETFs. {} if not built. */
 export async function loadEtfMeta(): Promise<Record<string, EtfMeta>> {
-  try {
-    const raw = await fs.readFile(path.join(DATA_DIR, "etf-meta.json"), "utf8");
-    return ((JSON.parse(raw) as { etfs?: Record<string, EtfMeta> }).etfs ?? {});
-  } catch {
-    return {};
-  }
+  return (
+    (await cachedFile(path.join(DATA_DIR, "etf-meta.json"), (raw) => (JSON.parse(raw) as { etfs?: Record<string, EtfMeta> }).etfs ?? {})) ?? {}
+  );
 }
 
+/** THE hot one: /api/portfolio loops this over 5 US universes (~7.8 MB) per request, and the polled
+ *  industry routes hit it every 40-60s per open tab. */
 export async function loadSnapshot(universe: string): Promise<Snapshot | null> {
-  try {
-    const raw = await fs.readFile(
-      path.join(DATA_DIR, universe, "snapshot.json"),
-      "utf8",
-    );
-    return JSON.parse(raw) as Snapshot;
-  } catch {
-    return null;
-  }
+  return cachedFile(path.join(DATA_DIR, universe, "snapshot.json"), (raw) => JSON.parse(raw) as Snapshot);
 }
 
 export async function loadSymbolSeries(
