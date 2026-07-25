@@ -20,12 +20,17 @@
 
 interface Entry {
   at: number; // when the value was cached
+  ttl: number; // the caller's TTL, kept so eviction can tell dead entries from live ones
   v: unknown;
 }
 
 const store = new Map<string, Entry>();
 const inflight = new Map<string, Promise<unknown>>();
 const MAX_ENTRIES = 800;
+/** How long an EXPIRED entry is kept as the serve-stale-on-error reservoir before eviction may reap it. */
+const STALE_GRACE_MS = 15 * 60_000;
+/** Hard ceiling on serve-stale: past this, a failure is reported rather than answered with old data. */
+const STALE_MAX_AGE_MS = 6 * 3_600_000;
 
 export async function memo<T>(
   key: string,
@@ -45,19 +50,42 @@ export async function memo<T>(
     try {
       const v = await fn();
       if (!opts.cacheIf || opts.cacheIf(v)) {
-        store.set(key, { at: Date.now(), v });
+        store.set(key, { at: Date.now(), v, ttl: ttlMs });
         if (store.size > MAX_ENTRIES) {
-          // Evict oldest-cached first (Map preserves insertion order; re-set on refresh keeps this ~LRU).
-          let oldestKey: string | null = null, oldestAt = Infinity;
-          for (const [k, e] of store) if (e.at < oldestAt) { oldestAt = e.at; oldestKey = k; }
-          if (oldestKey) store.delete(oldestKey);
+          // Drop EXPIRED entries before any live one. Without this, oldest-first eviction is biased
+          // against long-TTL keys purely because they were cached longer: a 250-symbol industry poll
+          // (30-120s TTLs, constantly re-cached) would evict the 10-minute chart entries that are
+          // still perfectly valid, and the most expensive caches would be the first to go. Expired
+          // entries are dead weight anyway — reclaiming them usually makes room without any loss.
+          // Eviction is TIERED, because two things compete for the same bytes and a single rule gets
+          // one of them wrong:
+          //   tier 1 — entries past their TTL *and* the grace window: genuinely abandoned, free them all.
+          //   tier 2 — expired but still in grace: the serve-stale-on-error reservoir. Evictable, but
+          //            only after tier 1, and oldest-first.
+          //   tier 3 — live entries: evict the oldest only when nothing else can be reclaimed.
+          // Sweeping ALL expired entries (the first attempt) emptied the reservoir and turned vendor
+          // outages from STALE into EMPTY; evicting purely oldest-first (the original) let a churning
+          // 250-symbol poll push out the expensive long-TTL chart entries. Tiering fixes both, and
+          // makes the honest tradeoff explicit: under sustained pressure the reservoir IS reclaimable,
+          // because a bounded cache beats an unbounded one.
+          const now = Date.now();
+          let freed = false;
+          for (const [k, e] of store) if (now - e.at >= e.ttl + STALE_GRACE_MS) { store.delete(k); freed = true; }
+          if (!freed) {
+            let victim: string | null = null, victimAt = Infinity;
+            for (const [k, e] of store) if (now - e.at >= e.ttl && e.at < victimAt) { victimAt = e.at; victim = k; }
+            if (!victim) for (const [k, e] of store) if (e.at < victimAt) { victimAt = e.at; victim = k; }
+            if (victim) store.delete(victim);
+          }
         }
       }
       return v;
     } catch (e) {
-      // Degrade to STALE, never EMPTY: an expired entry beats a thrown error.
+      // Degrade to STALE, never EMPTY: an expired entry beats a thrown error — but not at ANY age.
+      // Serving a six-hour-old option chain as if it were live is worse than admitting failure, so
+      // the reservoir has a hard ceiling; past it the error propagates to the caller's own handling.
       const stale = store.get(key);
-      if (stale) return stale.v as T;
+      if (stale && Date.now() - stale.at < STALE_MAX_AGE_MS) return stale.v as T;
       throw e;
     } finally {
       inflight.delete(key);

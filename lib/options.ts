@@ -1,4 +1,5 @@
 import { yahoo } from "./yahooClient";
+import { memo } from "./memoCache";
 
 const n = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -32,7 +33,28 @@ const map = (x: any): Opt => ({
   itm: !!x.inTheMoney,
 });
 
+/**
+ * THE options choke point. Opening a stock's Options tab fans out to ~26 chain fetches across four
+ * routes (/api/options in three modes incl. the 8-expiry term structure, /api/iv-surface's 8, and
+ * /api/gamma's 4 — requested TWICE concurrently by two mounted cards), and every one of them lands
+ * here. On Vercel the CDN absorbed the repeat views; the NAS origin has no CDN, so memoizing this ONE
+ * function is what makes the tab quick — and the in-flight dedup collapses the concurrent duplicates
+ * into a single request instead of racing Yahoo with two identical bursts.
+ *
+ * 5-minute TTL: chains move intraday, but not within one tab-open. cacheIf skips the empty shape so a
+ * throttled response never pins "no chain" for five minutes. Nightly scripts share the memo harmlessly
+ * — each runs in a short-lived process, so it only ever dedups within that run.
+ */
 export async function getOptions(symbol: string, date?: string): Promise<OptionChain> {
+  return memo(
+    `opt:${symbol.toUpperCase()}:${date || "near"}`,
+    300_000,
+    () => fetchOptions(symbol, date),
+    { cacheIf: (c) => c.underlying != null && (c.calls.length > 0 || c.puts.length > 0) },
+  );
+}
+
+async function fetchOptions(symbol: string, date?: string): Promise<OptionChain> {
   const opts: any = {};
   if (date) opts.date = new Date(date + "T00:00:00Z");
   const r: any = await yahoo.options(symbol, opts, { validateResult: false });

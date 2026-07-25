@@ -4,6 +4,7 @@ import { loadSnapshot } from "@/lib/data";
 import { ETF_TO_SECTOR } from "@/lib/sectors";
 import { buildIndustryIndex } from "@/lib/aggregate";
 import type { XY } from "@/lib/types";
+import { memo } from "@/lib/memoCache";
 
 /**
  * LIVE intraday sub-industry indices for a sector. The static per-symbol intraday series only
@@ -22,7 +23,22 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 let gate: Promise<void> = Promise.resolve();
 const throttle = (gap = 200): Promise<void> => { const p = gate.then(() => sleep(gap)); gate = p; return p; };
 
+// Per-symbol memo — see the note in app/api/intraday/route.ts. ⚠ DISTINCT key prefix from that
+// route: the two have different fetch semantics (this one does not retry; its throttle gap is 200ms
+// vs 100ms), so sharing a namespace would let whichever route populated the key first silently
+// decide the other's retry behaviour. This route re-fetches ~61 chains per
+// poll tick (60 constituents + the ETF); sharing them per symbol also means the /compare and /industry
+// views stop duplicating each other's work when both are open.
 async function intradayOf(symbol: string, interval: string, days: number): Promise<XY[]> {
+  return memo(
+    `ind-intraday:${symbol}:${interval}:${days}`,
+    interval === "5m" ? 30_000 : 120_000,
+    () => fetchIntraday(symbol, interval, days),
+    { cacheIf: (xy) => xy.length > 0 },
+  );
+}
+
+async function fetchIntraday(symbol: string, interval: string, days: number): Promise<XY[]> {
   await throttle();
   try {
     const ch: any = await yahoo.chart(symbol, { period1: new Date(Date.now() - days * DAY), interval, includePrePost: false } as any, { validateResult: false });

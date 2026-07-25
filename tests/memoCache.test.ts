@@ -79,3 +79,28 @@ test("eviction: the store stays bounded and evicts the OLDEST entry first", asyn
   await memo("fill:799", 60_000, async () => { recomputedRecent = true; return -1; });
   assert.equal(recomputedRecent, false, "recent keys survive eviction");
 });
+
+test("eviction: a flood of expired short-TTL keys must not evict a LIVE long-TTL entry", async () => {
+  // The mixed-TTL hazard the poller rollout introduces: ~250 short-TTL intraday keys churning
+  // alongside 10-minute chart keys. Oldest-first eviction alone throws away the expensive long-lived
+  // entries purely for being older, so expired keys must be reclaimed first.
+  const longKey = "chart:AAPL";
+  let longBuilds = 0;
+  await memo(longKey, 600_000, async () => { longBuilds++; return "chart"; });
+  for (let i = 0; i < 850; i++) await memo(`poll:${i}`, 1, async () => i); // expire instantly, force overflow
+  await memo(longKey, 600_000, async () => { longBuilds++; return "chart"; });
+  assert.equal(longBuilds, 1, "the live long-TTL entry must outlive a flood of expired short-TTL keys");
+});
+
+test("serve-stale-on-error survives ordinary eviction pressure (the reservoir isn't swept wholesale)", async () => {
+  // My first eviction fix deleted EVERY expired entry on overflow — precisely the set serve-stale
+  // draws from, turning a vendor outage from STALE into EMPTY. Expired entries are now only the
+  // SECOND eviction tier, so a reservoir entry survives while anything staler exists to reclaim.
+  let calls = 0;
+  const fn = async () => { calls++; if (calls > 1) throw new Error("yahoo down"); return "good"; };
+  await memo("precious", 5, fn);
+  await new Promise((r) => setTimeout(r, 20));
+  for (let i = 0; i < 300; i++) await memo(`live:${i}`, 600_000, async () => i); // live keys, no overflow
+  assert.equal(await memo("precious", 5, fn), "good", "the expired entry must still serve stale on error");
+  assert.equal(calls, 2, "and the refetch was genuinely attempted first");
+});
