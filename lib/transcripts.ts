@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { deadline } from "./deadline";
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
@@ -42,7 +43,7 @@ export async function getTranscriptLinks(query: string, symbol = "", count = 8):
     return !new RegExp(`\\b${nameKw}\\s+(hospitality|realty|reit|trust|financial|bancorp|holdings|industries|properties|partners|capital)\\b`, "i").test(title);
   };
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" } });
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" }, signal: deadline(12_000) });
     if (!res.ok) return [];
     const $ = cheerio.load(await res.text(), { xmlMode: true });
     const out: TranscriptLink[] = [];
@@ -135,7 +136,7 @@ async function transcriptCandidates(symbol: string, name: string): Promise<{ url
   try {
     let paths: string[] = [];
     for (const ex of ["nasdaq", "nyse", "nysemkt"]) {
-      const r = await fetch(`https://www.fool.com/quote/${ex}/${sym}/`, { headers: { "User-Agent": BROWSER_UA } });
+      const r = await fetch(`https://www.fool.com/quote/${ex}/${sym}/`, { headers: { "User-Agent": BROWSER_UA }, signal: deadline(12_000) });
       if (!r.ok) continue;
       paths = [...(await r.text()).matchAll(/\/earnings\/call-transcripts\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9-]+/g)].map((m) => m[0]);
       if (paths.length) break;
@@ -157,7 +158,7 @@ async function transcriptCandidates(symbol: string, name: string): Promise<{ url
 
 async function fetchTranscript(symbol: string, c: { url: string; date: string }): Promise<FullTranscript | null> {
   try {
-    const pres = await fetch(c.url, { headers: { "User-Agent": BROWSER_UA } });
+    const pres = await fetch(c.url, { headers: { "User-Agent": BROWSER_UA }, signal: deadline(12_000) });
     if (!pres.ok) return null;
     const $ = cheerio.load(await pres.text());
     const body = $(".article-body").first();

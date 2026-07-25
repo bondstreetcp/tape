@@ -1,5 +1,6 @@
 import { yahoo } from "./yahooClient";
 import { tickerToCik } from "./edgar";
+import { deadline } from "./deadline";
 
 /**
  * Long-run shares-outstanding history (10+ years) from SEC EDGAR XBRL companyfacts —
@@ -67,7 +68,7 @@ export async function getSharesHistory(symbol: string): Promise<SharesHistory> {
     if (!cik) return empty;
     const padded = cik.replace(/\D/g, "").padStart(10, "0");
     const [res, splits] = await Promise.all([
-      fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`, { headers: { "User-Agent": UA }, next: { revalidate: 86400 } } as any),
+      fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`, { signal: deadline(), headers: { "User-Agent": UA }, next: { revalidate: 86400 } } as any),
       getSplits(symbol),
     ]);
     if (!res.ok) return empty;

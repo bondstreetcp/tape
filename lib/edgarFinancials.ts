@@ -1,5 +1,6 @@
 import { tickerToCik } from "./edgar";
 import type { FinPeriod } from "./financials";
+import { deadline } from "./deadline";
 
 /**
  * Deep QUARTERLY financials from SEC EDGAR XBRL companyfacts — Yahoo only serves
@@ -118,6 +119,7 @@ export async function getEdgarQuarterly(symbol: string): Promise<FinPeriod[]> {
     if (!cik) return [];
     const padded = cik.replace(/\D/g, "").padStart(10, "0");
     const res = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`, {
+      signal: deadline(),
       headers: { "User-Agent": UA },
       cache: "no-store",
     });

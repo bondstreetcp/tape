@@ -14,6 +14,7 @@
  * or a hard IP block / rate-limit, which need a proxy or a nightly bake instead).
  */
 import YahooFinance from "yahoo-finance2";
+import { withDeadline, isDeadline, VENDOR_TIMEOUT_MS } from "./deadline";
 
 type YF = InstanceType<typeof YahooFinance>; // the default export is the CLASS (a value) — index its instance
 
@@ -63,6 +64,10 @@ const detail = (e: unknown) => `${(e as any)?.code != null ? `[${(e as any).code
  *  blip ("fetch failed", timeouts, socket hangups) or a 5xx. A 429/403 (rate-limit/block) or a
  *  404/"no data" (definitive) is NOT worth a fresh-crumb retry. Exported for the unit test. */
 export function recoverable(e: unknown): boolean {
+  // A TIMEOUT is not a stale-crumb symptom (that fails fast with a 401) — it means the endpoint isn't
+  // answering. Retrying on a fresh client just doubles the wall clock the caller waits, so the ~20s
+  // ceiling stays a ceiling instead of quietly becoming ~40s.
+  if (isDeadline(e)) return false;
   const code = (e as any)?.code;
   if (code === 429 || code === 403 || code === 404) return false;
   return !/not found|no data|invalid.*(symbol|ticker)/i.test(String((e as any)?.message || e));
@@ -75,10 +80,15 @@ const STAGE: Record<"skip" | "retry" | "fail", string> = {
 };
 
 function heal<T>(op: string, symbol: unknown, fn: (c: YF) => Promise<T>): Promise<T> {
+  // yahoo-finance2 accepts no AbortSignal, so the bound is a wall-clock race. Applied INSIDE the heal
+  // wrapper so each attempt gets its own ceiling and a hung call can't sit past it — before this, the
+  // only limit was undici's ~300s headers timeout (and a trickling body reset even that indefinitely),
+  // which on a single-process origin blocks the shared event loop for every other viewer.
+  const bounded = (c: YF) => withDeadline(fn(c), VENDOR_TIMEOUT_MS, `yahoo ${op} ${String(symbol)}`);
   return callWithHeal(
     shared,
     make,
-    fn,
+    bounded,
     (c) => { shared = c; },
     (stage, err) => console.warn(`yahoo ${op} ${String(symbol)}: ${STAGE[stage]} — ${detail(err)}`),
     recoverable,

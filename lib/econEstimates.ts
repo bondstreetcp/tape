@@ -1,3 +1,4 @@
+import { deadline } from "./deadline";
 /**
  * Consensus economist estimates for the current week's US economic releases, from
  * ForexFactory's free weekly calendar JSON (faireconomy CDN — no API key). Each
@@ -38,7 +39,7 @@ let cache: { at: number; data: FFEvent[] } | null = null;
 export async function getEconEstimates(): Promise<FFEvent[]> {
   if (cache && Date.now() - cache.at < 30 * 60 * 1000) return cache.data;
   try {
-    const r = await fetch(FF_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const r = await fetch(FF_URL, { headers: { "User-Agent": "Mozilla/5.0" }, signal: deadline(12_000) });
     if (!r.ok) return cache?.data ?? [];
     const j = await r.json();
     const us = (Array.isArray(j) ? j : []).filter((e: any) => e.country === "USD" && e.forecast) as FFEvent[];

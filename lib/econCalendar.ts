@@ -1,3 +1,4 @@
+import { deadline } from "./deadline";
 /**
  * Upcoming US economic releases from FRED's releases/dates API. Needs a free
  * FRED API key in the FRED_API_KEY env var (the no-key fredgraph CSV used by
@@ -90,7 +91,7 @@ export async function getEconCalendar(days = 45): Promise<EconEvent[]> {
     const url =
       `https://api.stlouisfed.org/fred/releases/dates?api_key=${KEY}&file_type=json` +
       `&realtime_start=${today}&include_release_dates_with_no_data=true&sort_order=asc&limit=1000`;
-    const res = await fetch(url, { headers: { "User-Agent": "stock-chart-screener" } });
+    const res = await fetch(url, { headers: { "User-Agent": "stock-chart-screener" }, signal: deadline(12_000) });
     if (!res.ok) return [];
     const j: any = await res.json();
     const seen = new Set<string>();

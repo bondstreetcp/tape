@@ -11,6 +11,7 @@
  * "open the filings directly" when it can't isolate the section confidently.
  */
 import { tickerToCik } from "./edgar";
+import { deadline } from "./deadline";
 
 const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 const MIN = 14000;
@@ -148,7 +149,7 @@ function diffSentences(aOrig: string[], bOrig: string[]): { blocks: RedlineBlock
 
 async function fetchSection(url: string, form: string): Promise<string> {
   try {
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetch(url, { headers: HEADERS, signal: deadline() });
     if (!res.ok) return "";
     return extractRiskFactors(strip(await res.text()), form);
   } catch {
@@ -193,7 +194,7 @@ export async function getRedline(symbol: string, form: "10-K" | "10-Q" = "10-K")
   const cik = await tickerToCik(symbol);
   if (!cik) return { ...base, note: "No SEC filings found for this ticker." };
   try {
-    const sub: any = await (await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS })).json();
+    const sub: any = await (await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, { headers: HEADERS, signal: deadline() })).json();
     const r = sub.filings?.recent;
     const mk = (i: number) => {
       const acc = r.accessionNumber[i].replace(/-/g, "");

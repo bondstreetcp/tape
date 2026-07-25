@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { deadline } from "./deadline";
 
 export interface NewsItem {
   title: string;
@@ -109,7 +110,7 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
   for (const q of queries) {
     const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
     try {
-      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" } });
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" }, signal: deadline(12_000) });
       if (res.ok) parseFeed(await res.text(), out, seen);
     } catch {
       /* skip this query */

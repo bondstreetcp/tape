@@ -8,6 +8,7 @@
  */
 import * as cheerio from "cheerio";
 import { tickerToCik, getFilings } from "./edgar";
+import { deadline } from "./deadline";
 
 const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 
@@ -66,7 +67,7 @@ function parseTable(html: string): { periods: string[]; rows: SegmentRow[]; tota
 
 async function fetchReportTable(base: string, file: string, title: string): Promise<SegmentBreakdown | null> {
   try {
-    const html = await (await fetch(`${base}/${file}`, { headers: HEADERS })).text();
+    const html = await (await fetch(`${base}/${file}`, { headers: HEADERS, signal: deadline() })).text();
     const { periods, rows, total } = parseTable(html);
     // Need at least two named segments to be meaningful.
     if (rows.length < 2) return null;
@@ -87,7 +88,7 @@ export async function getSegmentSource(symbol: string): Promise<{ form: string; 
     if (!filing) return null;
     const accNo = filing.acc.replace(/-/g, "");
     const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}`;
-    const fs = await (await fetch(`${base}/FilingSummary.xml`, { headers: HEADERS })).text();
+    const fs = await (await fetch(`${base}/FilingSummary.xml`, { headers: HEADERS, signal: deadline() })).text();
     const reports = [...fs.matchAll(/<Report[^>]*>([\s\S]*?)<\/Report>/g)].map((r) => ({
       name: (r[1].match(/<ShortName>([^<]+)/) || [])[1] || "",
       file: (r[1].match(/<HtmlFileName>([^<]+)/) || [])[1] || "",
@@ -98,7 +99,7 @@ export async function getSegmentSource(symbol: string): Promise<{ form: string; 
     let text = "";
     for (const r of segFiles) {
       try {
-        const html = await (await fetch(`${base}/${r.file}`, { headers: HEADERS })).text();
+        const html = await (await fetch(`${base}/${r.file}`, { headers: HEADERS, signal: deadline() })).text();
         const $ = cheerio.load(html);
         const t = $("table").text().replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
         if (t) text += `\n\n### ${r.name}\n${t}`;
@@ -122,7 +123,7 @@ export async function getSegments(symbol: string): Promise<Segments | null> {
     const accNo = filing.acc.replace(/-/g, "");
     const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}`;
 
-    const fs = await (await fetch(`${base}/FilingSummary.xml`, { headers: HEADERS })).text();
+    const fs = await (await fetch(`${base}/FilingSummary.xml`, { headers: HEADERS, signal: deadline() })).text();
     const reports = [...fs.matchAll(/<Report[^>]*>([\s\S]*?)<\/Report>/g)].map((r) => ({
       name: (r[1].match(/<ShortName>([^<]+)/) || [])[1] || "",
       file: (r[1].match(/<HtmlFileName>([^<]+)/) || [])[1] || "",

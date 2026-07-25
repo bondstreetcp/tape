@@ -9,6 +9,7 @@
  * page of filings with a small concurrency pool.
  */
 import * as cheerio from "cheerio";
+import { deadline, VENDOR_TIMEOUT_MS, VENDOR_BUDGET_MS } from "./deadline";
 
 export const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 
@@ -49,14 +50,23 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // [] / null), silently dropping a symbol from a scan or a filing's text from a digest.
 // Retry transient throttling/5xx with backoff; fail fast on 4xx (404/403 are real
 // "not found"/"blocked", not worth retrying).
-export async function fetchWithRetry(url: string, retries = 5): Promise<Response> {
+export async function fetchWithRetry(url: string, retries = 5, budgetMs = VENDOR_BUDGET_MS): Promise<Response> {
   let lastErr: any;
+  // TWO bounds, because one alone is insufficient. The per-attempt signal stops a single hung socket
+  // (undici's default is ~300s of headers, and a trickling body resets its own timeout forever); the
+  // overall budget stops the LOOP — 5 attempts with exponential backoff could otherwise run minutes
+  // past the point where Cloudflare already 524'd the viewer, spending SEC's rate limit on a response
+  // nobody is waiting for. This is the highest fan-in fetch in the codebase (~10 modules).
+  const started = Date.now();
   for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0 && Date.now() - started > budgetMs) {
+      throw lastErr ?? new Error(`${url} -> exceeded ${budgetMs}ms budget after ${attempt} attempts`);
+    }
     let res: Response | null = null;
     try {
-      res = await fetch(url, { headers: HEADERS });
+      res = await fetch(url, { headers: HEADERS, signal: deadline(VENDOR_TIMEOUT_MS) });
     } catch (e) {
-      lastErr = e; // network/DNS blip → retry
+      lastErr = e; // network/DNS blip or per-attempt timeout → retry (within the budget)
     }
     if (res) {
       if (res.ok) return res;
@@ -173,7 +183,7 @@ export async function parseForm4(cik: string, f: F4Filing): Promise<InsiderTx[]>
   const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accNo}/${rawDoc}`;
   let xml: string;
   try {
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetch(url, { headers: HEADERS, signal: deadline() });
     if (!res.ok) return [];
     xml = await res.text();
   } catch {

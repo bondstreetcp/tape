@@ -10,6 +10,7 @@ import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
 import { recordUsage } from "./llmUsage";
+import { deadline } from "./deadline";
 
 const KEY = process.env.GEMINI_API_KEY;
 // gemini-3.1-pro-preview — sharpest model in the bake-off (more sources, segment-level
@@ -138,8 +139,13 @@ export async function askGemini(
     ]),
     { role: "user", parts: [{ text: question }] },
   ];
+  // ⚠ The slowest call in the app BY DESIGN — Google Search grounding plus an unbounded thinking
+  // budget — and until now the only thing bounding it was `export const maxDuration = 60` in its four
+  // callers, which is a Vercel directive and enforces NOTHING under `next start`. Behind the tunnel
+  // the viewer got a 524 at ~100s while this kept running to completion with the answer discarded.
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
     method: "POST",
+    signal: deadline(50_000), // under the ~60s the routes advertise, well under Cloudflare's patience
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },

@@ -7,6 +7,7 @@
  * context snippet from the matched document on demand.
  */
 import { tickerToCik } from "./edgar";
+import { deadline } from "./deadline";
 
 const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 
@@ -62,7 +63,7 @@ async function fetchEfts(query: string, ciks: string | null, forms: string | und
   if (from) params.set("from", String(from));
   // URLSearchParams encodes spaces as '+', which EFTS rejects inside q.
   const qs = params.toString().replace(/\+/g, "%20");
-  const res = await fetch(`https://efts.sec.gov/LATEST/search-index?${qs}`, { headers: HEADERS });
+  const res = await fetch(`https://efts.sec.gov/LATEST/search-index?${qs}`, { headers: HEADERS, signal: deadline(15_000) });
   if (!res.ok) return { total: 0, hits: [] };
   const j: any = await res.json();
   const total: number = j?.hits?.total?.value ?? 0;
@@ -141,7 +142,7 @@ export async function getDocSnippet(url: string, q: string): Promise<string | nu
   const term = q.replace(/(^["']|["']$)/g, "").trim();
   if (!term) return null;
   try {
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetch(url, { headers: HEADERS, signal: deadline(15_000) });
     if (!res.ok) return null;
     const text = strip(await res.text());
     const low = text.toLowerCase();

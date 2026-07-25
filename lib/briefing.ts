@@ -1,4 +1,5 @@
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { deadline } from "./deadline";
 
 /**
  * Daily briefing from Reuters/LSEG's "Morning News Call" (US) and "The Day Ahead"
@@ -275,7 +276,7 @@ function parse(text: string): { date: string | null; sections: BriefSection[] } 
 
 async function fetchOne(src: (typeof SOURCES)[number]): Promise<Briefing | null> {
   try {
-    const res = await fetch(src.url, { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" });
+    const res = await fetch(src.url, { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store", signal: deadline(12_000) });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     const data = await pdfParse(buf);

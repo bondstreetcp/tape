@@ -1,3 +1,4 @@
+import { deadline } from "./deadline";
 /**
  * SERVER-ONLY. Fetch a UK issuer's latest RNS results / trading-statement text from Investegate
  * (a free, server-rendered RNS aggregator). The company page at /company/<LSE-ticker> lists every
@@ -39,7 +40,7 @@ export async function getLatestUkResults(lseTicker: string, take = 1): Promise<I
   const ticker = lseTicker.toUpperCase();
   let page = "";
   try {
-    const r = await fetch(`https://www.investegate.co.uk/company/${ticker}`, { headers: { "User-Agent": UA }, redirect: "follow" });
+    const r = await fetch(`https://www.investegate.co.uk/company/${ticker}`, { headers: { "User-Agent": UA }, redirect: "follow", signal: deadline(12_000) });
     if (!r.ok) return [];
     page = await r.text();
   } catch {
@@ -60,7 +61,7 @@ export async function getLatestUkResults(lseTicker: string, take = 1): Promise<I
   const docs: IrDoc[] = [];
   for (const c of cands.slice(0, take)) {
     try {
-      const r = await fetch(c.url, { headers: { "User-Agent": UA }, redirect: "follow" });
+      const r = await fetch(c.url, { headers: { "User-Agent": UA }, redirect: "follow", signal: deadline(12_000) });
       if (!r.ok) continue;
       const text = strip(await r.text());
       if (text.length > 500) docs.push({ title: c.title, url: c.url, id: c.id, text });

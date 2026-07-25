@@ -1,3 +1,4 @@
+import { deadline } from "./deadline";
 /**
  * Shared alert delivery for the ops monitors (data freshness + LLM credits). POSTs a message to
  * ALERT_WEBHOOK_URL, auto-detecting Slack `{text}` / Discord `{content}` / ntfy.sh (raw body +
@@ -13,6 +14,7 @@ export async function notifyAlert(msg: string, title = "Tape alert", urlOverride
   const isNtfy = /(^|\/\/)ntfy\.sh\//.test(url) || /\/\/ntfy\./.test(url);
   try {
     const res = await fetch(url, {
+      signal: deadline(10_000),
       method: "POST",
       headers: isNtfy
         ? { Title: title, Priority: "high", Tags: "warning" }

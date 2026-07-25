@@ -6,6 +6,7 @@
  */
 import { AwsClient } from "aws4fetch";
 import { loadLocalEnv } from "./localEnv";
+import { deadline } from "./deadline";
 
 loadLocalEnv();
 
@@ -29,7 +30,7 @@ const objUrl = (key: string) => `https://${EP}/${BUCKET}/${key.replace(/^\/+/, "
 export async function putObject(key: string, body: Uint8Array, contentType = "application/octet-stream"): Promise<void> {
   // aws4fetch accepts a Uint8Array body (smoke-verified); the DOM BodyInit type is stricter about the
   // ArrayBuffer generic than reality, so cast rather than copy the ~35 MB into a Blob.
-  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType } });
+  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType }, signal: deadline(180_000) });
   if (!res.ok) throw new Error(`R2 PUT ${key} → ${res.status} ${(await res.text().catch(() => "")).slice(0, 160)}`);
 }
 
@@ -42,7 +43,7 @@ export async function putObject(key: string, body: Uint8Array, contentType = "ap
  *  server's real UTC; comparing it to ours names a skew instantly. No secret is ever in the body —
  *  S3-style errors echo only the access-key ID, never the signing key. */
 export async function getObject(key: string): Promise<Buffer> {
-  const res = await client().fetch(objUrl(key), { method: "GET" });
+  const res = await client().fetch(objUrl(key), { method: "GET", signal: deadline(180_000) });
   if (!res.ok) {
     const body = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
     const serverDate = res.headers.get("date");
