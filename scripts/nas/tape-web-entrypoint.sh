@@ -34,6 +34,14 @@ log() { echo "[tape-web] $(date -u +%FT%TZ) $*"; }
 # with the package is all `next start` could ever need.
 export ONNXRUNTIME_NODE_INSTALL=skip
 
+# This container has NO legitimate "run without R2 credentials" mode — every byte of data/ comes from
+# the lake. Without this flag, scripts/data-from-r2.ts treats unset LAKE_S3_* as "local dev" and exits
+# 0 reusing whatever data/ is already in the docker volume. That volume SURVIVES restarts, so a
+# truncated tape.env or a container recreated without env_file would freeze the served data while
+# every refresh reported success, the 3-failure alert never fired, and the freshness monitor watched
+# R2 (which is fine) rather than this box. Exactly the shape of the 47h-stale-data incident.
+export LAKE_REQUIRE_R2=1
+
 # Best-effort ops ping (Slack {text} / Discord {content} — each ignores the other's key). Inert unless
 # ALERT_WEBHOOK_URL is set in tape.env. This is the "green watchdog, stale site" fix: R2-side freshness
 # alerts stay green when THIS container's rebuilds fail, so the failure must page from here.
@@ -83,6 +91,15 @@ prepare() {
   npm run data-from-r2 || return 1
   log "slot $slot: next build (this is the slow part — the live slot is still serving)"
   npm run build || return 1
+  # ⚠ Stamp WHICH COMMIT THIS BUILD CAME FROM, and only after the build succeeds.
+  #
+  # A slot's git HEAD is NOT evidence of what is built. `git reset --hard origin/main` above runs
+  # BEFORE npm ci, the R2 hydrate and the build — and `git clean -fd` deliberately preserves the
+  # ignored .next/ — so any failure in between (the 2026-07-24 bad-R2-credential incident, an npm
+  # registry blip, an OOM-killed build) leaves the slot at the NEW commit with the OLD build. Every
+  # consumer that asks `git rev-parse HEAD` then believes that slot is up to date when it is not.
+  # This file is the only place that knows the difference, so it records it.
+  git rev-parse HEAD > "$dir/.next/BUILT_FROM" || return 1
   log "slot $slot: build OK @ $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
   return 0
 }
@@ -124,35 +141,100 @@ healthy() {
 
 trap 'log "SIGTERM — stopping"; stop_server; exit 0' TERM INT
 
+# A slot is serveable only once `next build` has COMPLETED.
+#
+# ⚠ BUILD_ID, not `-d .next`. next build writes .next incrementally and stamps BUILD_ID last, so a
+# build that was killed midway (OOM, `docker stop`, a DSM reboot) leaves a .next directory that
+# `next start` refuses to run. Testing the directory is exactly what makes a half-built slot look
+# serveable, and it was the old boot fallback's test.
+built() { [ -f "$ROOT/$1/.next/BUILD_ID" ]; }
+
+# The commit a slot's CURRENT BUILD came from — empty if unknown. Empty is the safe answer: it never
+# equals origin/main, so an unstamped slot is ranked last at boot and reads as "behind" in the update
+# loop, which costs exactly one rebuild and re-establishes the stamp. That is what lets this change
+# deploy onto the two already-built slots on the NAS without forcing a cold 10-20 min build.
+#
+# Deliberately NOT folded into built(): serveability and up-to-dateness are different questions, and
+# conflating them is the bug this whole stamp exists to fix.
+built_rev() { cat "$ROOT/$1/.next/BUILT_FROM" 2>/dev/null || echo ""; }
+
+# A single fast liveness probe (vs healthy(), which waits up to 90s for a slot that is starting up).
+alive() {
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:${PORT}/" 2>/dev/null || true)
+  case "$code" in [1-4]*) return 0 ;; esac
+  return 1
+}
+
 # ── boot ────────────────────────────────────────────────────────────────────────────────────────
-# ⚠ `prepare a` MUST be called under `if !`, never bare. A bare call is a failing command under
-# `set -e`, so any boot-time build failure kills the script → the container restart-loops → the site
-# is DOWN. That became reachable the moment a broken R2 hydrate turned fatal (2026-07-24): a bad
+# Boot's job is to make the site ANSWER, not to make it FRESH — those are different goals, and the
+# old boot conflated them. It ran a full `prepare a` (npm ci + R2 hydrate + a ~1200-page build)
+# BEFORE start_server, so every container restart cost 10-20 minutes of hard downtime even when a
+# perfectly good build was already sitting on disk from the last cycle. That is the tax on every
+# `docker restart` — and since this file is bind-mounted, restart is the ONLY way to deploy it.
+#
+# So: if any slot has a completed build, serve it NOW and let the update loop close the gap. A slot
+# already at origin/main just needs its data refreshed, which the loop now does in place; a slot
+# behind origin/main takes the normal build-into-idle-then-swap path with the site UP throughout.
+# The blocking build is reserved for the one case that genuinely has nothing to serve.
+#
+# ⚠ `prepare a` MUST stay under `if !`, never bare. A bare call is a failing command under `set -e`,
+# so a boot-time build failure would kill the script → the container restart-loops → the site is
+# DOWN. That became reachable the moment a broken R2 hydrate turned fatal (2026-07-24): a bad
 # credential would take the whole site offline rather than leaving it stale. Doctrine is DEGRADE TO
-# STALE, NEVER EMPTY — so on a failed boot build, serve a slot that was built successfully before
-# (its data may be old, but the site answers) and let the update loop keep retrying. Only when NO
-# slot has ever built is there nothing to serve.
-log "boot — slot a is the first build; expect ~10-20 min on this box before the site answers"
-if prepare a; then
-  start_server a
-  LAST_BUILD=$(date +%s)
+# STALE, NEVER EMPTY.
+# ⚠ TIMEOUT. Boot must not block on the network: without it, a hung DNS/TLS handshake (the tunnel
+# flapping, DSM still bringing up the network stack) stalls the whole fast path and the site stays
+# DOWN for the length of the hang — the exact failure this section exists to remove. On timeout the
+# pipeline still exits 0 through `cut`, so boot_remote is simply empty and we serve any completed
+# build, which is the correct degraded answer.
+boot_remote=$(timeout 20 git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | cut -f1)
+[ -n "$boot_remote" ] || log "boot: could not reach origin (offline or slow) — serving whatever is built and letting the loop sort it out"
+
+# Try a slot whose BUILD is already at origin/main first (it needs no rebuild at all), then any other
+# completed build. Unquoted on purpose — this is a word-split list of slot names.
+boot_order=""
+for s in a b; do
+  built "$s" || continue
+  if [ -n "$boot_remote" ] && [ "$(built_rev "$s")" = "$boot_remote" ]; then
+    boot_order="$s $boot_order"
+  else
+    boot_order="$boot_order $s"
+  fi
+done
+
+LIVE=""
+for s in $boot_order; do
+  if [ "$(built_rev "$s")" = "$boot_remote" ] && [ -n "$boot_remote" ]; then why="its build is at origin/main"; else why="its build is BEHIND origin/main — the loop will rebuild with the site up"; fi
+  log "boot: serving slot $s NOW ($why)"
+  start_server "$s"
+  if healthy; then break; fi
+  log "boot: slot $s built but will not serve — trying the next candidate"
+  stop_server
+  LIVE=""
+done
+
+if [ -n "$LIVE" ]; then
+  # Age the data from the hydrated tree itself rather than assuming the worst, so a double restart
+  # doesn't re-pull the whole lake for nothing. Falls back to "due now" if it can't be stat'd.
+  LAST_BUILD=$(stat -c %Y "$ROOT/$LIVE/data" 2>/dev/null || echo 0)
 else
-  log "boot: slot a FAILED to build — looking for a previously built slot to serve"
-  alert "boot build FAILED (hydrate or build) — serving the last good build if one exists; data will be STALE until this is fixed"
-  for s in a b; do
-    if [ -d "$ROOT/$s/.next" ]; then
-      log "boot: serving slot $s's PREVIOUS build — data may be STALE; the update loop retries every ${CHECK_SECONDS}s"
-      start_server "$s"
-      break
-    fi
-  done
-  if [ -z "$SERVER_PID" ]; then
-    log "boot: no slot has ever built — nothing to serve; exiting so the container restarts"
+  # Build into a slot that ISN'T holding a completed build, so a slot that merely failed its health
+  # probe survives as a rollback instead of being destroyed by the `git reset --hard` + npm ci below.
+  # Losing the last build on the box and THEN failing to build is how a container starts restart-
+  # looping with nothing to serve.
+  cold=a
+  for s in a b; do built "$s" || { cold="$s"; break; }; done
+  log "boot: no slot has a serveable build — full build of slot $cold; expect ~10-20 min before the site answers"
+  if prepare "$cold"; then
+    start_server "$cold"
+    LAST_BUILD=$(date +%s)
+    healthy || log "WARNING: the freshly built slot did not answer health — check the log above for a runtime error"
+  else
+    log "boot: slot $cold FAILED to build and no previous build exists — exiting so the container restarts"
+    alert "boot build FAILED (hydrate or build) and NO previous build exists — the site is DOWN"
     exit 1
   fi
-  LAST_BUILD=0 # force the update loop to retry the build on its very next check, not in an hour
 fi
-healthy || log "WARNING: the served slot did not answer health — check the log above for a build/runtime error"
 
 # ── update loop ─────────────────────────────────────────────────────────────────────────────────
 # TWO paths, because the two triggers need completely different work:
@@ -170,10 +252,12 @@ healthy || log "WARNING: the served slot did not answer health — check the log
 # re-hydrated file gets a new stamp and invalidates itself on the very next read, with no restart and
 # no TTL to wait out. Cache design and deploy design agreeing is the whole trick.
 #
-# HONEST COST: tar overwrites data/ under a live reader, so for the ~10s of extraction a request can
-# catch a half-written file. Those loaders already treat unparseable as "not built yet" and the
-# mtime key re-reads the moment tar finishes the file, so the blast radius is a few requests seeing
-# one board briefly empty — against a hard 3s outage for EVERY request, hourly, today.
+# The write is ATOMIC PER FILE: scripts/data-from-r2.ts extracts to a staging dir and rename(2)s each
+# feed into place, so a concurrent reader sees either the whole old file or the whole new one, never a
+# truncated one. That matters more here than it looks — an empty render does not just affect the
+# request that hit the window, it gets pinned into Next's ISR route cache for the full revalidate
+# period. lib/jsonCache also carries the last good parse across a brief unparseable window as a second
+# line of defence. Neither is optional now that the refresh happens under a live server.
 refresh_data_in_place() {
   slot="$1"
   log "data refresh: hydrating slot $slot in place — no npm ci, no build, no restart"
@@ -184,8 +268,36 @@ refresh_data_in_place() {
 while true; do
   sleep "$CHECK_SECONDS" & wait $! || true
   now=$(date +%s)
-  remote=$(git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | cut -f1)
-  current=$(cd "$ROOT/$LIVE" && git rev-parse HEAD 2>/dev/null || echo "")
+
+  # ── supervisor ────────────────────────────────────────────────────────────────────────────────
+  # Nothing else restarts a dead `next start`. That used to be handled by ACCIDENT: the old loop tore
+  # the server down and brought it back every hour, so a process killed by the OOM killer was
+  # resurrected within the hour. Splitting the rebuild out removed that side effect, so the liveness
+  # check it was silently providing has to become explicit — otherwise a crashed server means the site
+  # is down until someone pushes a commit.
+  #
+  # Probes the PORT rather than `kill -0 $SERVER_PID`: a child the shell has not reaped is a zombie,
+  # and kill -0 reports a zombie as alive. It also catches a process that is up but wedged.
+  if [ -n "$LIVE" ] && ! alive; then
+    log "supervisor: slot $LIVE is not answering — restarting it"
+    stop_server
+    start_server "$LIVE"
+    if healthy; then
+      log "supervisor: slot $LIVE is answering again"
+      alert "the web server had stopped answering and was restarted (slot $LIVE) — check the log for an OOM or crash"
+    else
+      log "supervisor: slot $LIVE STILL not answering after a restart"
+      alert "CRITICAL: the web server will not answer even after a restart (slot $LIVE) — the site is DOWN"
+    fi
+  fi
+
+  remote=$(timeout 20 git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | cut -f1)
+  # ⚠ The BUILT commit, not the CHECKED-OUT one. prepare() advances the worktree to origin/main before
+  # npm ci / hydrate / build, so a half-failed prepare leaves HEAD at origin/main with an older build.
+  # Asking git here would make this test read "up to date" forever and the rebuild below unreachable —
+  # the site would serve stale CODE indefinitely while logging "data refresh OK" hourly. An unstamped
+  # slot yields "" which never matches, so it heals via the rebuild path. See built_rev().
+  current=$(built_rev "$LIVE")
   age=$((now - LAST_BUILD))
 
   if [ -n "$remote" ] && [ "$remote" = "$current" ] && [ "$age" -lt "$REBUILD_SECONDS" ]; then

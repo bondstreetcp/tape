@@ -145,3 +145,79 @@ test("REVIEW #2: an in-flight read is only shared with callers that saw the SAME
   assert.equal(second!.n, 22, "a caller that saw the newer file must not be handed the older read");
   assert.equal(builds, 2, "different file states must not dedup into one read");
 });
+
+// ── stale-carry across an in-place hydrate ──────────────────────────────────────────────────────
+// The NAS refreshes data/ underneath a live server. scripts/data-from-r2 now promotes each feed with
+// an atomic rename so a truncated read should be impossible — these pin the reader-side backstop for
+// when it happens anyway (a partial write from any other source, a feed a loader rejects mid-swap).
+// Returning null there is NOT cheap: Next's ISR pins the empty render for the whole revalidate period,
+// so ~10s of bad file becomes ~10 min of an empty board.
+
+test("a feed that goes unparseable keeps serving its LAST GOOD parse, not an empty board", async () => {
+  const dir = await tmp(), f = path.join(dir, "a.json");
+  await fs.writeFile(f, JSON.stringify({ rows: [1, 2, 3] }));
+  const build = (raw: string) => JSON.parse(raw) as { rows: number[] };
+  assert.deepEqual(await cachedFile(f, build), { rows: [1, 2, 3] });
+
+  await fs.writeFile(f, '{"rows":[1,2'); // truncated, as a reader mid-write would see
+  assert.deepEqual(await cachedFile(f, build), { rows: [1, 2, 3] }, "must degrade to STALE, not to EMPTY");
+});
+
+test("…and the moment the file is whole again, the new value wins", async () => {
+  const dir = await tmp(), f = path.join(dir, "a.json");
+  const build = (raw: string) => JSON.parse(raw) as { rows: number[] };
+  await fs.writeFile(f, JSON.stringify({ rows: [1] }));
+  assert.deepEqual(await cachedFile(f, build), { rows: [1] });
+  await fs.writeFile(f, '{"rows":[9,9');
+  assert.deepEqual(await cachedFile(f, build), { rows: [1] }, "carried");
+  await fs.writeFile(f, JSON.stringify({ rows: [9, 9, 9] }));
+  assert.deepEqual(await cachedFile(f, build), { rows: [9, 9, 9] }, "the completed write must take over immediately");
+});
+
+test("a feed that NEVER parsed is still null — the carry needs something good to carry", async () => {
+  const dir = await tmp(), f = path.join(dir, "a.json");
+  await fs.writeFile(f, "{ not json");
+  assert.equal(await cachedFile(f, (raw) => JSON.parse(raw) as unknown), null);
+});
+
+test("the carry is BOUNDED — a permanently broken feed stops being masked and surfaces as null", async () => {
+  // An unbounded carry would serve a corrupt feed forever AND hide it from the freshness monitor:
+  // trading a visible outage for an invisible one, which is the trap this codebase keeps re-learning.
+  const dir = await tmp(), f = path.join(dir, "a.json");
+  const build = (raw: string) => JSON.parse(raw) as { rows: number[] };
+  const realNow = Date.now;
+  try {
+    await fs.writeFile(f, JSON.stringify({ rows: [1] }));
+    assert.deepEqual(await cachedFile(f, build), { rows: [1] });
+
+    await fs.writeFile(f, '{"rows":[1'); // broken, and it stays broken
+    const t0 = realNow();
+    Date.now = () => t0 + 6 * 60_000; // past STALE_CARRY_MS (5 min)
+    assert.equal(await cachedFile(f, build), null, "after the window a broken feed must read as not-built");
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test("the carry window runs from the last GOOD parse — repeated failures don't renew it", async () => {
+  // The subtle half: `at` is INHERITED by a carried entry. If each failed parse re-stamped it, a feed
+  // rewritten every minute by a broken producer would be masked indefinitely.
+  const dir = await tmp(), f = path.join(dir, "a.json");
+  const build = (raw: string) => JSON.parse(raw) as { rows: number[] };
+  const realNow = Date.now;
+  try {
+    await fs.writeFile(f, JSON.stringify({ rows: [1] }));
+    assert.deepEqual(await cachedFile(f, build), { rows: [1] });
+    const t0 = realNow();
+
+    Date.now = () => t0 + 60_000;      // 1 min later: inside the window, carries
+    await fs.writeFile(f, '{"rows":[1');
+    assert.deepEqual(await cachedFile(f, build), { rows: [1] }, "still inside the window");
+
+    Date.now = () => t0 + 6 * 60_000;  // 6 min after the GOOD parse, not after the last failure
+    await fs.writeFile(f, '{"rows":[1,');
+    assert.equal(await cachedFile(f, build), null, "the window must not have been renewed by the first failure");
+  } finally {
+    Date.now = realNow;
+  }
+});

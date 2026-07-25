@@ -21,13 +21,32 @@ import { execFileSync } from "child_process";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 import { getObject, r2Configured } from "../lib/r2";
+import { extractAtomic } from "../lib/atomicExtract";
 
 const KEY_TAR = "site-data/data.tar.gz";
 const KEY_COMPANY = "site-data/company.tar.gz";
 const haveCommitted = () => existsSync(path.join("data", "russell3000", "snapshot.json"));
 
+/** Untar into a staging dir, then rename each file into place — see lib/atomicExtract for why. The
+ *  staging dir sits under lake/.tmp, inside the same slot as data/, so renames never cross a mount. */
+function hydrate(tarPath: string, stage: string, label: string): void {
+  const moved = extractAtomic(tarPath, stage, ".", (tp, into) =>
+    execFileSync("tar", ["-xzf", tp, "-C", into], { stdio: ["ignore", "ignore", "inherit"] }));
+  console.log(`data-from-r2: ${label} — ${moved} files swapped into place atomically`);
+}
+
 async function main() {
   if (!r2Configured()) {
+    // ⚠ On a SERVER this fallback is the silent-staleness trap, not a safety net. The NAS keeps data/
+    // in a docker volume that survives restarts, so an unset LAKE_S3_* (a truncated tape.env, a
+    // container recreated without env_file) would let every hourly refresh exit 0 while the served
+    // data froze — the entrypoint would log "data refresh OK" forever and the 3-failure alert could
+    // never fire. LAKE_REQUIRE_R2=1 (set by tape-web-entrypoint.sh) says "this context has no
+    // legitimate no-creds mode": fail loudly instead. Local dev and the migration path are unchanged.
+    if (process.env.LAKE_REQUIRE_R2 === "1") {
+      console.error("data-from-r2: LAKE_REQUIRE_R2=1 but R2 is NOT CONFIGURED — refusing to silently reuse the existing data/ tree. Check LAKE_S3_* in the environment.");
+      process.exit(1);
+    }
     if (haveCommitted()) { console.log("data-from-r2: R2 not configured — using committed data/."); return; }
     console.error("data-from-r2: R2 not configured AND no committed data/ — cannot hydrate the site.");
     process.exit(1);
@@ -48,7 +67,7 @@ async function main() {
     const buf = dataRes.value;
     const tarPath = path.join(tmp, "site-data.tar.gz");
     writeFileSync(tarPath, buf);
-    execFileSync("tar", ["-xzf", tarPath], { stdio: ["ignore", "ignore", "inherit"] }); // extracts data/ into cwd
+    hydrate(tarPath, path.join(tmp, "stage-data"), "data/");
     console.log(`data-from-r2: hydrated data/ from R2 (${(buf.length / 1e6).toFixed(1)} MB)`);
   } catch (e: any) {
     // Endpoint (account host) is not a secret — log it so a bad value (e.g. a pasted scheme, or a
@@ -74,7 +93,7 @@ async function main() {
     try {
       const cPath = path.join(tmp, "company.tar.gz");
       writeFileSync(cPath, companyRes.value);
-      execFileSync("tar", ["-xzf", cPath], { stdio: ["ignore", "ignore", "inherit"] });
+      hydrate(cPath, path.join(tmp, "stage-company"), "data/company/");
       console.log(`data-from-r2: hydrated data/company/ from R2 (${(companyRes.value.length / 1e6).toFixed(1)} MB)`);
     } catch (e: any) {
       console.warn(`data-from-r2: per-stock cache extract failed (${String(e?.message || e).slice(0, 100)}) — stock pages live-fetch.`);
