@@ -155,9 +155,32 @@ fi
 healthy || log "WARNING: the served slot did not answer health — check the log above for a build/runtime error"
 
 # ── update loop ─────────────────────────────────────────────────────────────────────────────────
-# Rebuild when main moves (deploy) OR every REBUILD_SECONDS (bake the tick's fresh R2 data — the same
-# cadence the Vercel deploy hook fires at today). ISR (revalidate=600) already re-reads data/ from
-# disk, but only the slot's OWN data/, so a rebuild is what actually pulls the new tarball in.
+# TWO paths, because the two triggers need completely different work:
+#
+#   CODE moved  → full A/B rebuild + swap. Unavoidable: new code needs npm ci and a next build.
+#   DATA is due → hydrate the LIVE slot IN PLACE. No npm ci, no build, no restart.
+#
+# The old loop did the full rebuild for BOTH, once an hour, forever — a ~1200-page build competing
+# with the live server for a 4-core box, ~3s of hard downtime per swap (24×/day), and every
+# in-process cache wiped each time, purely to pick up a new data tarball. The entrypoint's own
+# comment already conceded ISR re-reads data/ from disk; the rebuild was never what made data fresh,
+# it was just the only thing that replaced the FILES.
+#
+# What makes the in-place path safe is lib/jsonCache keying its entries on file mtime+size: a
+# re-hydrated file gets a new stamp and invalidates itself on the very next read, with no restart and
+# no TTL to wait out. Cache design and deploy design agreeing is the whole trick.
+#
+# HONEST COST: tar overwrites data/ under a live reader, so for the ~10s of extraction a request can
+# catch a half-written file. Those loaders already treat unparseable as "not built yet" and the
+# mtime key re-reads the moment tar finishes the file, so the blast radius is a few requests seeing
+# one board briefly empty — against a hard 3s outage for EVERY request, hourly, today.
+refresh_data_in_place() {
+  slot="$1"
+  log "data refresh: hydrating slot $slot in place — no npm ci, no build, no restart"
+  (cd "$ROOT/$slot" && npm run data-from-r2) || return 1
+  return 0
+}
+
 while true; do
   sleep "$CHECK_SECONDS" & wait $! || true
   now=$(date +%s)
@@ -168,12 +191,22 @@ while true; do
   if [ -n "$remote" ] && [ "$remote" = "$current" ] && [ "$age" -lt "$REBUILD_SECONDS" ]; then
     continue # code unchanged and the data bake is still fresh — nothing to do
   fi
-  if [ -n "$remote" ] && [ "$remote" != "$current" ]; then
-    reason="main moved → $(echo "$remote" | cut -c1-7)"
-  else
-    reason="scheduled data rebuild (${age}s since last)"
+
+  # DATA-ONLY path: code is where we left it, only the hourly data refresh is due.
+  if [ -n "$remote" ] && [ "$remote" = "$current" ]; then
+    if refresh_data_in_place "$LIVE"; then
+      FAILS=0
+      LAST_BUILD=$(date +%s)
+      log "data refresh OK — slot $LIVE serving fresh data (caches self-invalidate on mtime)"
+    else
+      FAILS=$((FAILS + 1))
+      log "data refresh FAILED (consecutive failures: $FAILS) — slot $LIVE keeps serving what it has, retrying next cycle"
+      [ "$FAILS" -eq 3 ] && alert "3 consecutive data refreshes failed — served data is drifting stale; check the tape-web log (R2 creds/clock?)"
+    fi
+    continue
   fi
 
+  reason="main moved → $(echo "$remote" | cut -c1-7)"
   idle=$([ "$LIVE" = "a" ] && echo b || echo a)
   log "update: $reason — building slot $idle"
   if ! prepare "$idle"; then
