@@ -281,15 +281,34 @@ boot_remote=$(timeout 20 git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null |
 
 # Try a slot whose BUILD is already at origin/main first (it needs no rebuild at all), then any other
 # completed build. Unquoted on purpose — this is a word-split list of slot names.
-boot_order=""
+boot_pref=""
+boot_rest=""
 for s in a b; do
   built "$s" || continue
   if [ -n "$boot_remote" ] && [ "$(built_rev "$s")" = "$boot_remote" ]; then
-    boot_order="$s $boot_order"
+    boot_pref="$boot_pref $s"
   else
-    boot_order="$boot_order $s"
+    boot_rest="$boot_rest $s"
   fi
 done
+
+# ⚠ Among slots that are NOT at origin/main — which includes the case where origin was unreachable and
+# we cannot tell — break the tie on DATA FRESHNESS, not on the alphabet. Only the LIVE slot gets
+# hydrated in place, so "newest data/" identifies the slot that was actually serving before the
+# restart, which is also the one carrying the newer build.
+#
+# OBSERVED IN PRODUCTION 2026-07-26 13:36Z, which is why this exists: after a deploy moved origin ahead
+# of BOTH slots, boot served slot a (no BUILT_FROM at all, data 11:55Z) over slot b (built 632925c,
+# data 12:33Z) purely because "a" sorts first — demoting a good slot to the stale rollback and serving
+# 38-minute-older data until the loop rebuilt. The BUILT_FROM stamp alone does not cover this: it
+# answers "is this slot CURRENT?", and when the answer is no for everything, something still has to
+# choose between the losers.
+if [ "$boot_rest" = " a b" ]; then
+  a_at=$(stat -c %Y "$ROOT/a/data" 2>/dev/null || echo 0)
+  b_at=$(stat -c %Y "$ROOT/b/data" 2>/dev/null || echo 0)
+  if [ "$b_at" -gt "$a_at" ]; then boot_rest=" b a"; fi
+fi
+boot_order="$boot_pref$boot_rest"
 
 LIVE=""
 for s in $boot_order; do
