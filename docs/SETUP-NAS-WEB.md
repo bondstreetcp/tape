@@ -105,15 +105,23 @@ because it isn't a secret).
 
 ## 5. Steady state
 
-Every 15 min the container checks for work and rebuilds when either is true:
+Every 5 min the container checks for work. What it does then depends on WHICH trigger fired:
 
-- **`main` moved** → your push is live within ~15 min + build time. This is your deploy pipeline now.
-- **an hour has passed** → rebuilds to bake the tick's fresh R2 data (the same cadence
-  `VERCEL_DEPLOY_HOOK` fires at today).
+- **`main` moved** → full A/B rebuild + swap; your push is live within ~5 min + build time. This is your deploy pipeline now. `docker kill -s HUP tape-web` skips the wait and checks immediately.
+- **an hour has passed** → hydrates the LIVE slot's `data/` **in place**: no `npm ci`, no build, no
+  restart, no downtime, and the in-process caches survive. ISR re-reads `data/` from disk, and
+  `lib/jsonCache` keys entries on mtime+size, so a re-hydrated file invalidates itself on the next
+  read. The rebuild this used to do was never what made data fresh — it was just the only thing that
+  replaced the files.
+- **the server stopped answering** → the supervisor restarts it in place and pages
+  `ALERT_WEBHOOK_URL`. (Bounded by the 5-min tick, which is why that interval is what it is.)
 
-Each rebuild goes into the **idle** slot; the live slot serves throughout; the switch is a ~3s
-restart; a failed build or a slot that won't answer rolls back automatically. Tune with
-`TAPE_WEB_CHECK_SECONDS` / `TAPE_WEB_REBUILD_SECONDS` in the compose.
+A rebuild goes into the **idle** slot; the live slot serves throughout; the switch is a ~3s restart;
+a failed build or a slot that won't answer rolls back automatically. Before each swap the outgoing
+build's `.next/static` is carried into the incoming slot, so tabs already open keep resolving their
+content-hashed chunks instead of 404ing. Tune with `TAPE_WEB_CHECK_SECONDS` /
+`TAPE_WEB_REBUILD_SECONDS` in the compose — ⚠ an `environment:` change needs the container
+**recreated** (Build+Run), not Stop→Run, the same trap as `env_file` edits.
 
 **Disk:** ~5 GB (two slots × repo + node_modules + 150 MB data + `.next`). **CPU:** a build is a few
 minutes of the box's 4c/8t, ~once an hour. It coexists with `tape-tick` fine on 64 GB.

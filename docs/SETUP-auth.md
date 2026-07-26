@@ -29,11 +29,13 @@ Creates `watchlist`, `saved_screens`, `alert_rules`, `alert_events`, all with Ro
 
 ## 3. Auth redirect URLs
 Supabase → **Auth → URL Configuration**:
-- **Site URL:** your production URL (e.g. `https://tape.vercel.app`).
+- **Site URL:** the production origin — `https://tape.truporchhomesvm.com` (the NAS behind the Cloudflare Tunnel). The old Vercel deployment is dead (`DEPLOYMENT_DISABLED`), so any `*.vercel.app` value here would send every magic link to a host that no longer answers.
 - **Redirect URLs** (add both): `https://<your-domain>/auth/callback` and `http://localhost:3000/auth/callback`.
 
 ## 4. Env vars
-Add to **Vercel** (Project → Settings → Environment Variables) and your local `.env.local`:
+Add to the NAS's `tape.env` (read by both containers via `env_file`) and your local `.env.local`.
+⚠ Synology: an `env_file` edit needs a container **delete + re-run** — Stop→Run silently keeps the old
+environment. Vercel is no longer a deploy target.
 
 | Var | Value |
 |---|---|

@@ -25,8 +25,13 @@ services:
       # tailwind, @types/*) is silently skipped and boot restart-loops on `tsx: not found`.
       - NODE_ENV=production
       - PORT=3000
-      - TAPE_WEB_CHECK_SECONDS=900 # look for work every 15 min
-      - TAPE_WEB_REBUILD_SECONDS=3600 # force a rebuild hourly to bake the tick's fresh R2 data
+      # 300s: this interval also bounds how long a DEAD `next start` stays dead before the
+      # entrypoint's supervisor notices. MUST track the entrypoint's own default — an explicit pin
+      # here overrides it, so a change there alone is INERT in production.
+      - TAPE_WEB_CHECK_SECONDS=300 # look for work every 5 min
+      # Data refresh cadence — hourly, and gated on THIS, not on CHECK_SECONDS, so a shorter tick
+      # does not mean more R2 pulls. The refresh is now in-place: no rebuild, no restart.
+      - TAPE_WEB_REBUILD_SECONDS=3600 # refresh the tick's R2 data hourly
     volumes:
       # Docker-managed named volume, NOT a host bind mount — same reasoning as the compute container:
       # it starts truly empty (so the first clone can't trip on Synology @eaDir metadata) and both A/B

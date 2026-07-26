@@ -21,7 +21,11 @@ set -e
 REPO_URL="https://github.com/bondstreetcp/tape.git"
 ROOT=/app
 PORT="${PORT:-3000}"
-CHECK_SECONDS="${TAPE_WEB_CHECK_SECONDS:-900}"     # how often to look for work (15 min)
+# 300s, not 900: this interval also bounds how long a DEAD server stays dead before the supervisor
+# notices, and 15 minutes of downtime waiting for a liveness probe is too long. Cheap — a tick is one
+# `git ls-remote` plus a localhost curl. The hourly data refresh is gated on REBUILD_SECONDS, not this,
+# so a shorter tick does NOT mean more R2 pulls. SIGHUP short-circuits the wait entirely.
+CHECK_SECONDS="${TAPE_WEB_CHECK_SECONDS:-300}"     # how often to look for work (5 min)
 REBUILD_SECONDS="${TAPE_WEB_REBUILD_SECONDS:-3600}" # force a rebuild this often, to bake fresh R2 data (1 h)
 HEALTH_TRIES="${TAPE_WEB_HEALTH_TRIES:-45}"        # × 2s = 90s for a new slot to answer
 
@@ -84,13 +88,45 @@ prepare() {
   # silently skips the entire build toolchain — tsx (which runs data-from-r2), typescript, tailwind,
   # @types/*. The symptom is `sh: 1: tsx: not found` right after "hydrating data/ from R2", then a
   # boot restart-loop. Do not "simplify" this flag away.
-  log "slot $slot: npm ci (incl. devDependencies — needed to build)"
-  npm ci --include=dev --no-audit --no-fund || return 1
+  # Reinstall only when the lockfile actually changed. `npm ci` DELETES node_modules and refetches all
+  # ~1,100 packages — minutes on this box — and most deploys here are app-code commits that don't touch
+  # a single dependency. The stamp lives INSIDE node_modules on purpose: wipe the tree and the stamp
+  # goes with it, so the two can never disagree.
+  #
+  # ⚠ PROBE A DEV BINARY, and note WHY it is `tsx` and not just `next`. Skipping the install removes the
+  # self-heal the unconditional `npm ci` used to provide for a damaged tree, so the guard has to fail
+  # CLOSED. `next` is a PRODUCTION dependency, so it survives exactly the corruption that matters here:
+  # an out-of-band `npm install`/`npm prune` in this container dev-prunes the tree (NODE_ENV=production)
+  # WITHOUT wiping node_modules, so the stamp survives and still matches. `next` is present, the install
+  # is skipped, and the very next step dies with `tsx: not found` — deterministically, every cycle,
+  # forever, because the lockfile never changes. `tsx` is the exact binary that step invokes and the
+  # first devDependency to disappear, so testing it restores the self-heal.
+  lock_now=$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+  lock_had=$(cat node_modules/.installed-from 2>/dev/null || echo "")
+  if [ -n "$lock_now" ] && [ "$lock_now" = "$lock_had" ] && [ -x node_modules/.bin/next ] && [ -x node_modules/.bin/tsx ]; then
+    log "slot $slot: package-lock unchanged and node_modules intact — skipping npm ci"
+  else
+    log "slot $slot: npm ci (incl. devDependencies — needed to build)"
+    npm ci --include=dev --no-audit --no-fund || return 1
+    # AFTER the install (npm ci wipes node_modules, which would take the stamp with it).
+    [ -n "$lock_now" ] && echo "$lock_now" > node_modules/.installed-from
+  fi
   # The SAME hydrate Vercel's build runs — data/ comes from R2, never from git (data/ is gitignored).
   log "slot $slot: hydrating data/ from R2"
   npm run data-from-r2 || return 1
+  # nice'd: the build shares 4 cores with the LIVE server, and a logged-in user waiting on a stock page
+  # matters more than shaving a minute off a deploy nobody is watching. Only affects CPU contention —
+  # on an idle box the build runs at full speed.
   log "slot $slot: next build (this is the slow part — the live slot is still serving)"
-  npm run build || return 1
+  # Marker for merge_static's generation test — see there for why. It lives OUTSIDE the worktree
+  # ($ROOT/<slot>.build-started, not inside $dir) because `next build` cleans distDir and `git clean -fd`
+  # runs on every prepare: anywhere inside the slot, it would be deleted before it could be read.
+  # Backdated a minute on purpose: merge_static prunes with `find ! -newer`, which means "older OR
+  # EQUAL". A build output landing in the same second as the marker would be treated as the previous
+  # generation and retired. The build takes minutes so this is already unlikely, but a one-minute skew
+  # makes "this build's own output is strictly newer than its marker" true by construction.
+  touch -d '1 minute ago' "$ROOT/$slot.build-started" 2>/dev/null || touch "$ROOT/$slot.build-started"
+  nice -n 19 npm run build || return 1
   # ⚠ Stamp WHICH COMMIT THIS BUILD CAME FROM, and only after the build succeeds.
   #
   # A slot's git HEAD is NOT evidence of what is built. `git reset --hard origin/main` above runs
@@ -116,6 +152,17 @@ stop_server() {
   [ -n "$SERVER_PID" ] || return 0
   kill "$SERVER_PID" 2>/dev/null || true
   wait "$SERVER_PID" 2>/dev/null || true
+  # ⚠ `wait` returns EARLY when a TRAPPED signal arrives while it is waiting — and SIGHUP ("deploy
+  # now") is trappable as of this file's instant-deploy support. Returning here with `next start` still
+  # bound to $PORT would make the caller's start_server fail EADDRINUSE, the health probe fail, and a
+  # perfectly good swap look broken. So confirm the process is actually gone. Bounded at ~20s, then
+  # SIGKILL, so a wedged process cannot hang the update loop forever.
+  i=0
+  while kill -0 "$SERVER_PID" 2>/dev/null && [ "$i" -lt 20 ]; do
+    wait "$SERVER_PID" 2>/dev/null || sleep 1
+    i=$((i + 1))
+  done
+  kill -9 "$SERVER_PID" 2>/dev/null || true
   SERVER_PID=""
 }
 
@@ -141,6 +188,13 @@ healthy() {
 
 trap 'log "SIGTERM — stopping"; stop_server; exit 0' TERM INT
 
+# SIGHUP = "stop waiting, look for work NOW". The loop sleeps with `sleep & wait $!` precisely so a
+# caught signal cuts the wait short, so this turns a deploy from "push, then wait up to CHECK_SECONDS"
+# into "push, then `docker kill -s HUP tape-web`". The handler does nothing on purpose — interrupting
+# `wait` is the entire effect; doing the work here would run it on the signal stack, concurrently with
+# whatever the loop was already doing.
+trap 'log "SIGHUP — checking for work now"' HUP
+
 # A slot is serveable only once `next build` has COMPLETED.
 #
 # ⚠ BUILD_ID, not `-d .next`. next build writes .next incrementally and stamps BUILD_ID last, so a
@@ -157,6 +211,41 @@ built() { [ -f "$ROOT/$1/.next/BUILD_ID" ]; }
 # Deliberately NOT folded into built(): serveability and up-to-dateness are different questions, and
 # conflating them is the bug this whole stamp exists to fix.
 built_rev() { cat "$ROOT/$1/.next/BUILT_FROM" 2>/dev/null || echo ""; }
+
+# Carry the OUTGOING build's static assets into the INCOMING slot before swapping to it.
+#
+# Next fingerprints every chunk by content, and a page already open in someone's browser holds the OLD
+# filenames. Swap slots without this and that tab's next navigation requests
+# /_next/static/chunks/<old-hash>.js from a slot that never built it — a hard 404, and the app breaks
+# until the user reloads. Vercel never had this problem because old deployments stay fetchable; an A/B
+# slot swap is a hard cutover, so the assets have to be carried across by hand.
+#
+# ⚠ `cp -a`, NOT `cp -r`. Preserving mtimes is what makes the generation test below work at all.
+# ⚠ `-n` (no-clobber) so the incoming build's own files always win — we are only ADDING old hashes.
+#
+# ⚠ RETIRE BY GENERATION, NOT BY WALL-CLOCK AGE. The obvious `find -mtime +2 -delete` is WRONG here and
+# fails silently: `cp -a` gives every carried file the mtime of the build that PRODUCED it, so the clock
+# starts when the assets were built rather than when they left service. A slot that had been live longer
+# than the window — one quiet weekend is enough — has all of its assets deleted milliseconds after being
+# copied, while this function still logs success. The 404 it exists to prevent comes back, now disguised
+# as handled. Widening the window cannot fix it either, because the gap between deploys is unbounded.
+#
+# The generation test instead: every file the INCOMING build produced, and every file the OUTGOING build
+# produced, is newer than the moment the outgoing slot's build STARTED. Anything older than that marker
+# is what the outgoing slot had itself inherited — generation N-2, off the wire for a full deploy cycle.
+# So the destination always holds exactly two generations, with no dependence on the clock.
+merge_static() {
+  from="$ROOT/$1/.next/static"; to="$ROOT/$2/.next/static"
+  [ -d "$from" ] && [ -d "$to" ] || return 0
+  cp -a -n "$from/." "$to/" 2>/dev/null || true
+  # Guarded: on the first swap after this ships the marker doesn't exist yet, and `! -newer <missing>`
+  # is unpredictable. Skipping costs one extra generation, once.
+  if [ -f "$ROOT/$1.build-started" ]; then
+    find "$to" -type f ! -newer "$ROOT/$1.build-started" -delete 2>/dev/null || true
+    find "$to" -type d -empty -delete 2>/dev/null || true
+  fi
+  log "carried slot $1's static assets into slot $2 (open tabs keep resolving their old chunks)"
+}
 
 # A single fast liveness probe (vs healthy(), which waits up to 90s for a slot that is starting up).
 alive() {
@@ -266,7 +355,14 @@ refresh_data_in_place() {
 }
 
 while true; do
-  sleep "$CHECK_SECONDS" & wait $! || true
+  # `sleep &` + `wait` rather than a bare `sleep`, so a caught signal (SIGHUP = "deploy now") cuts the
+  # wait short — verified in the container's actual dash, not assumed.
+  # The kill afterwards REAPS the sleep: when a signal ends the wait early the child is still sleeping
+  # out its full term, so without this every HUP leaks a process that lingers for up to CHECK_SECONDS.
+  # Harmless no-op when the sleep simply ran to completion.
+  sleep "$CHECK_SECONDS" & SLEEP_PID=$!
+  wait "$SLEEP_PID" || true
+  kill "$SLEEP_PID" 2>/dev/null || true
   now=$(date +%s)
 
   # ── supervisor ────────────────────────────────────────────────────────────────────────────────
@@ -324,14 +420,19 @@ while true; do
   if ! prepare "$idle"; then
     FAILS=$((FAILS + 1))
     log "slot $idle FAILED to build (consecutive failures: $FAILS) — slot $LIVE stays live, retrying next cycle"
-    # Fire ONCE at the threshold (not every retry); a later success resets the counter. Three failures
-    # ≈ 45 min of a stuck pipeline — past transient npm/network noise, into served-data-drifting-stale.
+    # Fire ONCE at the threshold (not every retry); a later success resets the counter. Three
+    # CONSECUTIVE failures ≈ 15 min at the 300s tick — a single npm/registry blip resets the counter on
+    # the next success, so reaching three means genuinely stuck, not noisy. (Was ~45 min when the tick
+    # was 900s; the arithmetic moves with CHECK_SECONDS, so re-read it if that changes again.)
     [ "$FAILS" -eq 3 ] && alert "3 consecutive slot-build failures — served data is drifting stale; check the tape-web container log for the failing step"
     continue
   fi
   FAILS=0
 
   prev="$LIVE"
+  # Before the cutover, not after: a tab that requests an old chunk during the swap must already find
+  # it on the incoming slot. Doing this afterwards leaves a window where the 404 is still reachable.
+  merge_static "$prev" "$idle"
   stop_server
   start_server "$idle"
   if healthy; then
