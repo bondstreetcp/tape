@@ -2624,6 +2624,19 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/debates",
+        "title": "Key Debates",
+        "question": "What are the big arguments in the market right now, what evidence has actually landed on each side, and which way has it been running?",
+        "how": "Each debate is DECLARED, not discovered: a question, two poles stated as claims someone could be wrong about, and a roster of companies where every name carries a role sign — +1 if it does well when the bull pole is right, −1 if it does well when the bear pole is right. Then code does the rest. Every dated item we already collect (the overnight SEC filing digest, published short-seller theses) is tested against two gates: the ticker must be on the roster, and the item must be about the argument rather than routine business — measured as similarity to the debate's anchor text or an explicit anchor phrase. What survives is filed under a pole by simple arithmetic: the filing's own direction times the roster role. That inversion is the whole trick — good news at a name the thesis is short is evidence FOR the bear pole. It matters because only about 3% of filings in a typical overnight window are bearish (companies file voluntary 8-Ks mostly to announce good things), so a ledger keyed on raw sentiment would be one-sided however well it read them. No LLM writes any of this; the only judgement is the debate declaration itself, which lives in a reviewable commit. The debates are hand-declared, so the framing is one person's judgement rather than a consensus — the roster and the poles are editorial, and everything downstream inherits them. Evidence accumulates forward from the day a debate opens, so a new debate starts sparse and fills over weeks; an empty ledger renders empty rather than reaching back for older material to look busy. A company that is not on the roster is never admitted, however on-topic its news — a name with no declared role has no defined relationship to either pole, and guessing one would be fabrication. US filers only. Decision-support, not advice.",
+        "metrics": [
+          { "term": "Pole", "plain": "One side of the argument. Every entry is filed under the bull pole or the bear pole — items with no directional content are dropped, not counted as neutral filler." },
+          { "term": "Role (+1 / −1)", "plain": "Where a company sits in the argument. +1 does well if the bull pole is right; −1 does well if the bear pole is right. A roster with every name at +1 is a theme, not a debate." },
+          { "term": "Admitted by", "plain": "Which gate let a row in — 'similarity 0.42' means the embedding cleared the relevance bar, 'an anchor phrase' means an explicit phrase did. Shown on every row so you can see why it qualified." },
+          { "term": "Evidence balance", "plain": "Weighted bull minus bear evidence, bucketed by week. Weight comes from the filing's own impact rating, so a guidance change counts more than a routine disclosure." },
+          { "term": "Standing today", "plain": "A separate SNAPSHOT from the Confluence and Warnings boards, read through the same role signs. Kept apart from the ledger because those boards are undated — mixing them into a dated stream would present current state as news." }
+        ],
+      },
+      {
         "path": "/forensics",
         "title": "Forensics & Quality",
         "question": "Which companies' financial statements carry red flags — earnings that look manipulated, a balance sheet edging toward distress, deteriorating fundamentals, or profit not backed by cash?",

@@ -69,6 +69,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh President's OGE trades", cmd: "npm run refresh-trump", when: "full" },
   { name: "Refresh overnight filings (SuperAnalyst)", cmd: "npm run refresh-overnight-filings", when: "full", env: { SCAN_BROAD: "1" } },
   { name: "Refresh filing semantic index (local embeddings)", cmd: "npm run refresh-filing-index", when: "full" }, // reads the window just written; no network
+  // MUST follow the filing index: it joins overnight-filings (sentiment) to the index (vectors) on
+  // accession. No network and no LLM — four anchor embeddings and a cosine per candidate.
+  { name: "Refresh key debates (evidence ledger)", cmd: "npm run refresh-debates", when: "full" },
   { name: "Refresh same-store sales (comps)", cmd: "npm run refresh-sss", when: "full" },
   { name: "Refresh intl same-store sales (UK/EU comps)", cmd: "npm run refresh-sss-intl", when: "full" },
   { name: "Refresh guidance (forward outlook)", cmd: "npm run refresh-guidance", when: "full", env: { LIMIT: "150" } },

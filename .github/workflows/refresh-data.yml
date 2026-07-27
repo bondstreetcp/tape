@@ -387,6 +387,13 @@ jobs:
         run: npm run refresh-filing-index
         continue-on-error: true
 
+      # Key Debates evidence ledger — joins the overnight digest (sentiment) to the semantic index
+      # (vectors) on accession, so it MUST run after both. Mirrored in run-tick STEPS.
+      - name: Refresh key debates (evidence ledger)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-debates
+        continue-on-error: true
+
       # Same-store / comparable sales for restaurants + retail — extracted from the night's earnings
       # 8-K press releases, spliced into the income statement + the Comps Board. Incremental: only a
       # name that reported a NEW quarter since the last run costs an LLM call (steady-state a handful).
