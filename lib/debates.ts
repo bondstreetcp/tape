@@ -70,6 +70,11 @@ export interface EvidenceEntry {
   headline: string;
   detail: string;
   url: string;
+  /** Stable identity for dedup across runs. A filing's URL is unique (it carries the accession) but a
+   *  synthesised link is not — every analyst action on one ticker shares a quote page, so keying on the
+   *  URL silently collapsed 23 distinct dated revisions into a handful. Sources supply their own
+   *  natural key; url is only the fallback. */
+  key: string;
   /** Cosine against the debate anchor — printed, so a reader can see the gate that admitted the row. */
   score: number;
   /** How RELEVANCE was met: the embedding cleared the bar ("roster"), or an anchor phrase did. */
@@ -88,6 +93,8 @@ export interface Candidate {
   detail: string;
   url: string;
   weight: number;
+  /** Natural identity, if the source has one better than its URL (see EvidenceEntry.key). */
+  key?: string;
   /** 384-d embedding of the item, when the upstream feed has one. */
   vec?: ArrayLike<number> | null;
 }
@@ -175,6 +182,7 @@ export function assignEvidence(
       headline: c.headline,
       detail: c.detail,
       url: c.url,
+      key: c.key || c.url,
       score: Number(score.toFixed(3)),
       via: score >= tau ? "roster" : "phrase", // how RELEVANCE was satisfied; attachment is always the roster
       weight: c.weight,
@@ -198,7 +206,7 @@ export function assignEvidence(
  * retroactively purges what would no longer qualify. Self-healing beats a migration script.
  */
 export function mergeLedgerAccumulate(prior: EvidenceEntry[], fresh: EvidenceEntry[], keep: number, minScore = 0): EvidenceEntry[] {
-  const key = (e: EvidenceEntry) => `${e.debateId}|${e.source}|${e.url}|${e.ticker}`;
+  const key = (e: EvidenceEntry) => `${e.debateId}|${e.key || e.url}`;
   const by = new Map<string, EvidenceEntry>();
   for (const e of prior) if (e?.debateId && (e.score ?? 0) >= minScore) by.set(key(e), e);
   for (const e of fresh) if (e?.debateId) by.set(key(e), e); // fresh wins on a duplicate

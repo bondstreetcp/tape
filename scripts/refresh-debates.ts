@@ -21,10 +21,13 @@ import { decodeVec, cosineSim, type FilingVec } from "../lib/filingIndex";
 import { embedMany, EMBED_MODEL } from "../lib/embedLocal";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { daysUntil } from "../lib/calendar";
+import { getAnalystActions } from "../lib/analystActions";
 import { DEBATES } from "../lib/debateRegistry";
 import { assignEvidence, mergeLedgerAccumulate, summarise, DEFAULT_TAU, type Candidate, type EvidenceEntry, type Standing } from "../lib/debates";
 
 const DATA = path.join(process.cwd(), "data");
+// The universe the analyst pull is keyed to — the same headline US set refresh-desk-note uses.
+const BASE = "sp500";
 const WINDOW_DAYS = Number(process.env.DEBATE_WINDOW_DAYS || 120); // how far back a candidate may be
 const KEEP = Number(process.env.DEBATE_KEEP || 4000);              // ledger rows retained per file
 
@@ -35,7 +38,7 @@ interface OvernightItem {
   ticker: string; accession: string; form: string; filedAt: string; headline: string;
   decisionTakeaway: string; url: string; sentiment: "bullish" | "neutral" | "bearish"; impact: "high" | "medium" | "low";
 }
-interface Campaign { ticker: string; date: string; type: string; campaigner: string; company: string; summary?: string; ask?: string; url: string; }
+interface Campaign { id?: string; ticker: string; date: string; type: string; campaigner: string; company: string; summary?: string; ask?: string; url: string; }
 
 /** impact → weight. A high-impact disclosure should not count the same as a routine one. */
 const IMPACT_W: Record<string, number> = { high: 3, medium: 1.5, low: 0.75 };
@@ -70,7 +73,7 @@ async function main() {
     candidates.push({
       at: it.filedAt, ticker: it.ticker, direction: direction as -1 | 0 | 1,
       source: `filing ${it.form}`, headline: it.headline, detail: it.decisionTakeaway, url: it.url,
-      weight: IMPACT_W[it.impact] ?? 1, vec: vecByAcc.get(it.accession) ?? null,
+      weight: IMPACT_W[it.impact] ?? 1, key: it.accession, vec: vecByAcc.get(it.accession) ?? null,
     });
   }
   // A published short thesis is unambiguous bear evidence and is properly dated. Activist 13Ds are
@@ -86,7 +89,45 @@ async function main() {
     candidates.push({
       at: c.date, ticker: c.ticker, direction: -1,
       source: "short campaign", headline: `${c.campaigner} published a short thesis on ${c.company}`,
-      detail: (c.summary || c.ask || "").slice(0, 200), url: c.url, weight: 2, vec: shortVecs[i] ?? null,
+      detail: (c.summary || c.ask || "").slice(0, 200), url: c.url, weight: 2, key: `campaign|${c.id || c.url}`, vec: shortVecs[i] ?? null,
+    });
+  });
+
+  // ANALYST ACTIONS — the intake that actually reaches these rosters.
+  //
+  // MEASURED 2026-07-27, and it is why this source exists: across the four declared rosters the
+  // overnight filing scan produced ~4 candidate rows, because it covers 308 tickers on a given night
+  // and a mega-cap files an 8-K only occasionally. The analyst feed touched the same names 37 times.
+  //
+  // But the DIRECTION cannot come from the rating alone: of 250 rows only 11 are up/down — almost all
+  // analyst activity is "maintains". The signal is in the PRICE TARGET. 242 rows carry both a from and
+  // a to, and 215 of those moved: 157 raised, 58 cut. A raised target is a bullish revision by the
+  // analyst who set it, which is exactly the dated directional evidence a debate ledger wants.
+  const analyst = await getAnalystActions(BASE).catch(() => [] as any[]);
+  const directionOf = (a: { action: string; targetFrom: number | null; targetTo: number | null }) =>
+    a.action === "up" ? 1 : a.action === "down" ? -1
+    : a.targetFrom && a.targetTo && a.targetTo !== a.targetFrom ? (a.targetTo > a.targetFrom ? 1 : -1) : 0;
+  const analystDated = analyst.filter((a: any) => a?.date && a?.symbol && directionOf(a) !== 0);
+  const aVecs = analystDated.length
+    ? await embedMany(analystDated.map((a: any) =>
+        `${a.name || a.symbol}: ${a.firm} ${a.action === "up" ? "upgrade" : a.action === "down" ? "downgrade" : "price target revision"} ` +
+        `${a.fromGrade || ""} to ${a.toGrade || ""}, target ${a.targetFrom ?? "?"} to ${a.targetTo ?? "?"}`))
+    : [];
+  analystDated.forEach((a: any, i: number) => {
+    const ratingChange = a.action === "up" || a.action === "down";
+    candidates.push({
+      at: a.date, ticker: a.symbol, direction: directionOf(a) as -1 | 0 | 1,
+      source: ratingChange ? "analyst rating" : "analyst target",
+      headline: ratingChange
+        ? `${a.firm} ${a.action === "up" ? "upgraded" : "downgraded"} to ${a.toGrade || "?"}`
+        : `${a.firm} ${(a.targetTo as number) > (a.targetFrom as number) ? "raised" : "cut"} its price target to ${a.targetTo}`,
+      detail: a.targetFrom && a.targetTo ? `target ${a.targetFrom} → ${a.targetTo}` : "",
+      // Yahoo gives no per-action URL; link the company's own filings page rather than inventing one.
+      url: `https://finance.yahoo.com/quote/${a.symbol}/analysis`,
+      // A rating CHANGE outranks a target tweak — it is a rarer, higher-conviction act.
+      weight: ratingChange ? 2 : 1,
+      key: `analyst|${a.symbol}|${a.date}|${a.firm}|${a.action}|${a.targetTo ?? ""}`,
+      vec: aVecs[i] ?? null,
     });
   });
 

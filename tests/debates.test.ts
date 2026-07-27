@@ -119,7 +119,7 @@ test("embedding unavailable: only ROSTER names with an explicit phrase get throu
 });
 
 test("ledger merge dedups on source+url+ticker and keeps the newest version", () => {
-  const a: EvidenceEntry[] = [{ debateId: "d1", at: "2026-07-01T00:00:00Z", ticker: "NVDA", pole: "bull", source: "filing", headline: "old", detail: "", url: "u1", score: 0.5, via: "roster", weight: 1 }];
+  const a: EvidenceEntry[] = [{ debateId: "d1", at: "2026-07-01T00:00:00Z", ticker: "NVDA", pole: "bull", source: "filing", headline: "old", detail: "", url: "u1", key: "u1", score: 0.5, via: "roster", weight: 1 }];
   const b: EvidenceEntry[] = [{ ...a[0], at: "2026-07-27T00:00:00Z", headline: "new" }];
   const m = mergeLedgerAccumulate(a, b, 100);
   assert.equal(m.length, 1);
@@ -128,7 +128,7 @@ test("ledger merge dedups on source+url+ticker and keeps the newest version", ()
 
 test("balance buckets weighted bull vs bear and reports the net", () => {
   const e = (at: string, pole: "bull" | "bear", weight = 1): EvidenceEntry =>
-    ({ debateId: "d1", at, ticker: "X", pole, source: "s", headline: "h", detail: "", url: at + pole, score: 1, via: "roster", weight });
+    ({ debateId: "d1", at, ticker: "X", pole, source: "s", headline: "h", detail: "", url: at + pole, key: at + pole, score: 1, via: "roster", weight });
   const b = ledgerBalance([
     e("2026-07-01T00:00:00Z", "bull", 2), e("2026-07-02T00:00:00Z", "bear", 1),
     e("2026-07-20T00:00:00Z", "bear", 3),
@@ -200,12 +200,29 @@ test("merge RE-APPLIES today's bar to yesterday's rows — a bug's output cannot
   // The real incident: 19 rows entered the rate-cuts ledger through a phrase gate that skipped the
   // relevance test, all with score 0. Appending alone preserved every one of them after the fix.
   const stale: EvidenceEntry[] = [
-    { debateId: "d1", at: "2026-07-20T00:00:00Z", ticker: "MTB", pole: "bull", source: "filing", headline: "admitted by the old bypass", detail: "", url: "u-old", score: 0, via: "phrase", weight: 1 },
+    { debateId: "d1", at: "2026-07-20T00:00:00Z", ticker: "MTB", pole: "bull", source: "filing", headline: "admitted by the old bypass", detail: "", url: "u-old", key: "u-old", score: 0, via: "phrase", weight: 1 },
   ];
   const good: EvidenceEntry[] = [
-    { debateId: "d1", at: "2026-07-27T00:00:00Z", ticker: "NVDA", pole: "bull", source: "filing", headline: "clears the bar", detail: "", url: "u-new", score: 0.44, via: "roster", weight: 1 },
+    { debateId: "d1", at: "2026-07-27T00:00:00Z", ticker: "NVDA", pole: "bull", source: "filing", headline: "clears the bar", detail: "", url: "u-new", key: "u-new", score: 0.44, via: "roster", weight: 1 },
   ];
   assert.equal(mergeLedgerAccumulate(stale, good, 100, 0).length, 2, "no bar: the bad row survives");
   const healed = mergeLedgerAccumulate(stale, good, 100, DEFAULT_TAU);
   assert.deepEqual(healed.map((e) => e.url), ["u-new"], "with the bar, the sub-threshold row is purged");
+});
+
+test("dedup keys on the source's OWN identity, not a synthesised URL", () => {
+  // The bug: every analyst action on one ticker links to the same quote page, so keying the ledger on
+  // `url` collapsed 23 distinct dated revisions into a handful. A price-target cut on the 27th and one
+  // on the 24th are different evidence and must both survive.
+  const row = (at: string, key: string): EvidenceEntry =>
+    ({ debateId: "d1", at, ticker: "AMD", pole: "bull", source: "analyst target", headline: "PT raised",
+       detail: "", url: "https://finance.yahoo.com/quote/AMD/analysis", key, score: 0.4, via: "roster", weight: 1 });
+  const merged = mergeLedgerAccumulate(
+    [], [row("2026-07-27T00:00:00Z", "analyst|AMD|2026-07-27|Wedbush|main|600"),
+         row("2026-07-24T00:00:00Z", "analyst|AMD|2026-07-24|Baird|main|520")], 100);
+  assert.equal(merged.length, 2, "same URL, different events — both must survive");
+  const sameEvent = mergeLedgerAccumulate(
+    [row("2026-07-27T00:00:00Z", "analyst|AMD|2026-07-27|Wedbush|main|600")],
+    [row("2026-07-27T00:00:00Z", "analyst|AMD|2026-07-27|Wedbush|main|600")], 100);
+  assert.equal(sameEvent.length, 1, "…and a genuine re-run of the same event still dedups");
 });
