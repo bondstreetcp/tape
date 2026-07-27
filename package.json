@@ -81,6 +81,7 @@
     "refresh-ipo": "tsx scripts/refresh-ipo.ts",
     "refresh-overnight-filings": "tsx scripts/refresh-overnight-filings.ts",
     "refresh-filing-index": "tsx scripts/refresh-filing-index.ts",
+    "refresh-debates": "tsx scripts/refresh-debates.ts",
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "refresh-warnings": "tsx scripts/refresh-warnings.ts",
