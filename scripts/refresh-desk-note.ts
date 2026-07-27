@@ -15,6 +15,7 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadCatalysts, type CatalystMap } from "../lib/catalysts";
 import { daysUntil } from "../lib/calendar";
+import { selectDeskActions, actionVerb } from "../lib/deskAnalyst";
 import { fmtDate } from "../lib/format";
 import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
@@ -151,14 +152,28 @@ async function main() {
       return `${a.sym} ${skew}: ${money(a.total)} total (${money(a.call)} calls / ${money(a.put)} puts), biggest ${a.top}${a.chg != null ? ` · stock ${pct(a.chg)}` : ""}`;
     });
 
-  // --- Analyst up/downgrades with implied upside vs current price ---
-  const actions = (analyst ?? [])
-    .filter((a) => a.action === "up" || a.action === "down")
-    .slice(0, 12)
+  // --- Analyst actions, bounded by RECENCY rather than by count ---
+  //
+  // ⚠ THE BUG THIS REPLACES (found live 2026-07-27): this filtered to `up || down` and then took
+  // `.slice(0, 12)`. Genuine up/downgrades are RARE — the overwhelming majority of analyst activity is
+  // maintains, reiterations and initiations — so the slice had to reach back DAYS to find 12 of them.
+  // Measured on sp500 that day: 07-27 had 17 actions and ZERO up/down, and the cumulative up/down count
+  // only reached 11 by 07-21. The desk therefore published SIX-DAY-OLD downgrades under a "Daily Desk"
+  // heading, while discarding all 17 of the day's real analyst notes.
+  //
+  // A count-bounded slice over a filtered list is never "the N most recent" — it is "however far back
+  // I had to go". Same trap as the move-attribution incident. Bound the WINDOW; let the count float.
+  const ANALYST_WINDOW_DAYS = 4; // 4, not 1: Monday's desk must still see Friday's tape across a weekend
+  // daysUntil, not an ms subtraction: `a.date` is a bare YYYY-MM-DD calendar square, and elapsed-ms
+  // rounding makes the window flip with the clock. Past dates come back negative.
+  const ageDays = (iso: string) => { const d = daysUntil(iso, now); return d == null ? 9999 : -d; };
+  const actions = selectDeskActions(analyst ?? [], ageDays, { windowDays: ANALYST_WINDOW_DAYS, max: 12 })
     .map((a) => {
       const px = priceOf.get(a.symbol);
       const up = a.targetTo && px ? ` · PT ${a.targetTo} (${pct((a.targetTo / px - 1) * 100, 0)} vs px)` : a.targetTo ? ` · PT ${a.targetTo}` : "";
-      return `${a.symbol} ${a.action === "up" ? "UPGRADE" : "DOWNGRADE"} ${a.fromGrade || "?"}→${a.toGrade || "?"} (${a.firm})${up}`;
+      // The date is IN the string on purpose: without it the model has no way to know an item is two
+      // sessions old and will happily narrate it as today's news — which is how this shipped wrong.
+      return `${a.date} ${a.symbol} ${actionVerb(a)} (${a.firm})${up}`;
     });
 
   // ── CODE-BUILT tape strip + forward calendar (no LLM — always-accurate context) ─────────────────
@@ -230,7 +245,9 @@ async function main() {
     block("BIGGEST MOVES (1-day, S&P 500; with 1w/YTD trend, sector, size, valuation, 52w-position, next-earnings, catalyst)", movers) +
     block("MATERIAL NEW SEC FILINGS (with what-changed + the model's takeaway)", filings) +
     block("UNUSUAL OPTIONS FLOW (aggregated per name → call/put skew)", flows) +
-    block("ANALYST RATING CHANGES (with implied upside vs current price)", actions);
+    // Each line is prefixed with its OWN date. The model must use it — an item from two sessions ago
+    // is not today's news, and saying so ("Friday's downgrade…") is the honest framing.
+    block(`ANALYST ACTIONS from the last ${ANALYST_WINDOW_DAYS} days — each line starts with the date it happened; say WHEN if it is not today (with implied upside vs current price)`, actions);
 
   const counts = { movers: movers.length, filings: filings.length, flow: flows.length, analyst: actions.length };
   if (movers.length + filings.length + flows.length + actions.length === 0) {
