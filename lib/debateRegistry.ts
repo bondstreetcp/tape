@@ -93,6 +93,16 @@ export const DEBATES: Debate[] = [
       { ticker: "PODD", role: -1, why: "Insulin pump utilisation faces the same two-sided argument." },
       { ticker: "GIS", role: -1, why: "Packaged food volumes are the classic calorie-reduction short." },
       { ticker: "HSY", role: -1, why: "Confection is the most cited category-at-risk." },
+      // Widened 2026-07-27 — the original roster (LLY vs DXCM/PODD/GIS/HSY) had zero reach into every
+      // intake feed, so the debate could never fill. These come from the healthcare names that actually
+      // appear, and they shift the bull side from "the drug maker" to the PICKS AND SHOVELS, which is
+      // both better covered and a cleaner read on whether the volumes are real.
+      { ticker: "WST", role: 1, why: "Makes the containment and delivery components for injectables — incretin volume shows up directly in its units." },
+      { ticker: "TMO", role: 1, why: "Bioprocessing and fill-finish capacity; incretin manufacturing scale-up is a named demand driver." },
+      { ticker: "DHR", role: 1, why: "Same bioprocessing exposure — the arms dealer to the manufacturing ramp." },
+      { ticker: "MCK", role: 1, why: "Distribution economics scale with script volume regardless of who wins the branded fight." },
+      { ticker: "HCA", role: -1, why: "Bariatric and obesity-linked orthopaedic volumes hold up if real-world penetration disappoints." },
+      { ticker: "EW", role: -1, why: "Structural-heart demand is downstream of obesity-linked disease; it is undisturbed if the spillover is overstated." },
     ],
     opened: "2026-07-27",
   },
@@ -236,6 +246,24 @@ export const DEBATES: Debate[] = [
       { ticker: "HD", role: -1, why: "Big-ticket home improvement is the deferral the bull pole predicts; it recovers if the squeeze is only cyclical." },
       { ticker: "NKE", role: -1, why: "Full-price brand strength is the direct counterparty to off-price share gain — its excess inventory is literally the other side's supply." },
       { ticker: "ULTA", role: -1, why: "Mid-tier discretionary beauty holds up only if the wallet is not being rationed; it is the classic at-risk category." },
+      // Widened 2026-07-27 after the board came back EMPTY. The original roster was the intuitive one —
+      // DG/DLTR/TJX/ROST/KR against CMG/DRI/ULTA/NKE — and every single name had zero reach into the
+      // intake feeds. These were chosen the other way round: from the consumer names that DO appear in
+      // the analyst, filing and campaign feeds, keeping only those with a defensible sign.
+      // ⚠ TSLA was the highest-reach consumer name available (11) and was REJECTED anyway: its filings
+      // are about EVs and autonomy, not household trade-down. High reach with a wrong mechanism just
+      // imports noise wearing the debate's costume.
+      { ticker: "MCD", role: 1, why: "Value menus and franchised scale make it the classic share-gainer when households trade down from casual dining." },
+      { ticker: "ACI", role: 1, why: "Grocery captures the eat-at-home shift that trade-down produces." },
+      { ticker: "FIVE", role: 1, why: "Deep-discount price points — the destination trade-down goes TO." },
+      { ticker: "WH", role: 1, why: "Economy and midscale lodging gains share when travel budgets compress." },
+      { ticker: "ELF", role: 1, why: "Mass-market beauty taking share from prestige is the same trade in cosmetics." },
+      { ticker: "PAG", role: -1, why: "Automotive retail is the big-ticket deferral; it recovers if the squeeze is only cyclical." },
+      { ticker: "HZO", role: -1, why: "Boats are the purest discretionary big ticket on the tape." },
+      { ticker: "HOG", role: -1, why: "Recreational vehicles are financed discretionary spending — the first thing postponed." },
+      { ticker: "SAM", role: -1, why: "Premium craft beer loses to value brands when the consumer trades down." },
+      { ticker: "COCO", role: -1, why: "Premium-priced beverage; the bear pole is that shoppers keep paying up for it." },
+      { ticker: "DECK", role: -1, why: "Premium footwear — full-price sell-through is the read on whether the trade-down is real." },
     ],
     opened: "2026-07-27",
   },
