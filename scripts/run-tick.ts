@@ -4,7 +4,7 @@
  * continue-on-error semantics), so the NAS pipeline and the GitHub fallback can never drift.
  * When you add a step to the workflow, add it to STEPS below (and vice versa).
  *
- *   npx tsx scripts/run-tick.ts <full|quotes|intl|desk|narration|digest|auto> [--dry]
+ *   npx tsx scripts/run-tick.ts <full|quotes|intl|desk|narration|digest|news|auto> [--dry]
  *
  * auto      = map the current hour to a tick (the NAS's hourly scheduler uses this):
  *             UTC 02/04/06/08 quotes · UTC 10 intl · ET 08+17 desk · ET 10/12/14/16 quotes · UTC 23 full;
@@ -31,7 +31,7 @@ import path from "node:path";
 // Data-pipeline modes (mirror refresh-data.yml) + two ported side-workflows: `narration` =
 // refresh-narration.yml (the cheap "refresh AI narration" button — the 7 LLM narration steps, no full
 // rebuild), `digest` = binary-digest.yml (the weekly Monday push, webhook/email only, no R2/deploy).
-type Mode = "full" | "quotes" | "intl" | "desk" | "narration" | "digest";
+type Mode = "full" | "quotes" | "intl" | "desk" | "narration" | "digest" | "news";
 type When = "always" | "full" | "quotes-or-desk" | "full-or-intl" | "full-or-desk";
 
 const STEP_TIMEOUT_MIN = 45; // overnight-filings broad scan is ~30m — nothing legitimate exceeds this
@@ -41,6 +41,11 @@ const LOCK_STALE_H = 5;
 // ── The step table: refresh-data.yml, transcribed. `narr` marks the 7 steps refresh-narration.yml
 // runs (they're a subset of FULL). ────────────────────────────────────────────────────────────────
 const STEPS: { name: string; cmd: string; when: When; env?: Record<string, string>; narr?: true }[] = [
+  // ⚠ THE NEWS TAPE IS DELIBERATELY NOT A STEP HERE. It is an append-only archive living in its own
+  // R2 object on a five-minute clock, and it must have exactly ONE writer. A STEPS entry would give it
+  // a second: the tarball hydrate/upload path would carry an hours-old copy and overwrite the newer
+  // dedicated object, permanently deleting every row in between — history the wires cannot re-serve.
+  // It runs as `run-tick.ts news`, which short-circuits with its own pull → refresh → push trio.
   { name: "Refresh quotes (intraday)", cmd: "npm run refresh-quotes", when: "quotes-or-desk" }, // ONLY env set at runtime
   { name: "Refresh US universes (prices, returns, fundamentals)", cmd: "npm run refresh-data", when: "full" },
   { name: "Refine generic sub-industry labels", cmd: "npm run patch-industries", when: "full" },
@@ -122,11 +127,14 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
 ];
 
 const runs = (when: When, mode: Mode): boolean =>
-  when === "always" ||
+  // `news` never reaches the plan — it short-circuits above with its own pull/refresh/push trio, so
+  // no STEPS entry may claim it.
+  mode !== "news" &&
+  (when === "always" ||
   (when === "full" && mode === "full") ||
   (when === "quotes-or-desk" && (mode === "quotes" || mode === "desk")) ||
   (when === "full-or-intl" && (mode === "full" || mode === "intl")) ||
-  (when === "full-or-desk" && (mode === "full" || mode === "desk"));
+  (when === "full-or-desk" && (mode === "full" || mode === "desk")));
 
 const log = (msg: string) => console.log(`[${new Date().toISOString()}] ${msg}`);
 
@@ -191,16 +199,18 @@ async function main() {
     if (!m && !autoDigest) { console.log("run-tick: not a tick hour — exiting."); return; }
     mode = m ?? "digest"; // Monday 13:00 with no data tick → digest-only
     if (!m && autoDigest) autoDigest = false; // already the primary mode; don't double-run
-  } else if (arg === "full" || arg === "quotes" || arg === "intl" || arg === "desk" || arg === "narration" || arg === "digest") {
+  } else if (arg === "full" || arg === "quotes" || arg === "intl" || arg === "desk" || arg === "narration" || arg === "digest" || arg === "news") {
     mode = arg;
   } else {
-    console.error("usage: run-tick.ts <full|quotes|intl|desk|narration|digest|auto> [--dry]");
+    console.error("usage: run-tick.ts <full|quotes|intl|desk|narration|digest|news|auto> [--dry]");
     process.exit(2);
   }
 
   const plan = mode === "digest" ? [] : mode === "narration" ? STEPS.filter((s) => s.narr) : STEPS.filter((s) => runs(s.when, mode));
   if (dry) {
     if (mode === "digest") { console.log("run-tick DRY (mode=digest): hydrate → push-binary-digest (webhook/email; no R2 upload / deploy)."); return; }
+    // `news` never touches the STEPS plan, so printing the plan length would describe the wrong run.
+    if (mode === "news") { console.log("run-tick DRY (mode=news): news-tape-pull → refresh-news-tape → news-tape-push (one R2 object; NO tree hydrate, NO tree upload, NO deploy)."); return; }
     console.log(`run-tick DRY (mode=${mode}) — ${plan.length} refresh steps + hydrate/upload${mode === "full" ? "/gate" : ""}/deploy${autoDigest ? " + weekly digest" : ""}:`);
     for (const s of plan) console.log(`  ${s.cmd.padEnd(46)} ${s.name}`);
     return;
@@ -227,6 +237,22 @@ async function main() {
       if (!step("Pull latest main", "git pull --ff-only origin main")) log("pull failed — running with the current checkout");
       const lockAfter = existsSync("package-lock.json") ? readFileSync("package-lock.json", "utf8").length : 0;
       if (lockAfter !== lockBefore) step("Install dependencies (lockfile changed)", "npm ci");
+    }
+
+    // ── news: the five-minute tick. Deliberately bypasses the whole-tree hydrate/upload/deploy. ────
+    // Moving one small object 288×/day instead of the entire data tarball is the entire point; the
+    // full cycle at this cadence would also multiply the "hydrate before upload" clobber risk by 288.
+    // pull → refresh → push is indivisible: the refresh MERGES onto what pull leaves on disk, and the
+    // archive's only copy is that object (see scripts/news-tape-sync.ts).
+    if (mode === "news") {
+      step("Pull news archive from R2", "npm run news-tape-pull");        // non-fatal by design
+      const refreshed = step("Refresh market news tape", "npm run refresh-news-tape");
+      // Push even when the refresh reported failure: it degrades to stale rather than empty (a source
+      // outage still writes the merged prior archive), so the pushed object is never worse than R2's.
+      const pushed = step("Push news archive to R2", "npm run news-tape-push");
+      log(`news tick: refresh ${refreshed ? "ok" : "FAILED"}, push ${pushed ? "ok" : "FAILED"} (no tree hydrate, no deploy).`);
+      if (!pushed) process.exit(1);
+      return; // finally { unlock() }
     }
 
     // ── HARD GATE: hydrate the prior tree. Abort on failure — never upload a partial tree over R2. ─

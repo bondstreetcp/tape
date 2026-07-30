@@ -28,7 +28,12 @@ async function main() {
   // run, but it weighs ~14 MB gzipped, so shipping it inside the EVERY-tick tarball re-uploaded 14 MB on
   // every intraday quote tick — and made the NAS slot re-download it — for nothing. It rides its own
   // FULL-only object (KEY_COMPANY) instead; data-from-r2 pulls both.
-  execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "--exclude=data/company", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
+  // ⚠ news-tape.json is excluded for a DIFFERENT reason than the others: not size, OWNERSHIP. It is an
+  // append-only archive refreshed every few minutes on its own object (scripts/news-tape-sync.ts), and
+  // the wires it is built from keep only ~20 items each — so history exists nowhere else. If it rode
+  // this tarball too, a nightly upload carrying an hours-old copy would overwrite the dedicated
+  // object's newer one and permanently delete every row in between. One writer, one object.
+  execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "--exclude=data/company", "--exclude=data/news-tape.json", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
   const buf = readFileSync(tarPath);
   await putObject(KEY_TAR, buf, "application/gzip");
   await putObject(KEY_MANIFEST, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length })), "application/json");

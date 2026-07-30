@@ -19,12 +19,14 @@
  */
 import { execFileSync } from "child_process";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
+import { gunzipSync } from "zlib";
 import path from "path";
 import { getObject, r2Configured } from "../lib/r2";
 import { extractAtomic } from "../lib/atomicExtract";
 
 const KEY_TAR = "site-data/data.tar.gz";
 const KEY_COMPANY = "site-data/company.tar.gz";
+const KEY_NEWS_TAPE = "site-data/news-tape.json.gz"; // must match scripts/news-tape-sync.ts
 const haveCommitted = () => existsSync(path.join("data", "russell3000", "snapshot.json"));
 
 /** Untar into a staging dir, then rename each file into place — see lib/atomicExtract for why. The
@@ -100,6 +102,23 @@ async function main() {
     }
   } else {
     console.warn(`data-from-r2: per-stock cache not hydrated (${String(companyRes.reason?.message || companyRes.reason).slice(0, 100)}) — stock pages live-fetch until the next FULL ships it.`);
+  }
+
+  // News tape: its OWN object, for the same reason data/company has one — it is on a different clock.
+  // The tape is rewritten every few minutes by the `news` tick and is deliberately excluded from
+  // data.tar.gz (see data-to-r2), so this is the only way a web slot ever sees it. Best-effort: a
+  // missing object just means no tape has shipped yet, and /news renders its own empty state.
+  try {
+    const gz = await getObject(KEY_NEWS_TAPE);
+    const json = gunzipSync(gz);
+    const parsed = JSON.parse(json.toString("utf8")) as { items?: unknown[] };
+    if (!Array.isArray(parsed.items)) throw new Error("object has no items array");
+    // Written directly rather than through the tar staging path: it is one small file, and parsing
+    // before writing already guarantees we never replace a good copy with a truncated one.
+    writeFileSync(path.join("data", "news-tape.json"), json);
+    console.log(`data-from-r2: hydrated news-tape.json (${parsed.items.length} rows, ${(gz.length / 1024).toFixed(0)} KB gz)`);
+  } catch (e: any) {
+    console.warn(`data-from-r2: news tape not hydrated (${String(e?.message || e).slice(0, 100)}) — /news shows its empty state.`);
   }
 }
 

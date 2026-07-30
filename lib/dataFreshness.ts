@@ -129,6 +129,11 @@ const FEEDS: FeedSpec[] = [
   // entry count would flunk the board for telling the truth. The registry length is what must not
   // collapse. `synthesis` tier: it is derived from feeds that already have their own freshness rows.
   { file: "debates.json", affects: ["/debates"], label: "Key debates ledger", tier: "synthesis", maxAgeHours: SYNTH, countPath: "debates", minCount: 1 },
+  // The ONLY intraday feed in this registry — the tape polls the public wires every few minutes, so a
+  // 24h "core" allowance would let it die for a whole session before anything complained. 2h is
+  // generous against a 5-minute tick and still tolerates a long maintenance window.
+  // ⚠ minCount is on `items` (the ARCHIVE), which only grows — it is never a count of today's rows.
+  { file: "news-tape.json", affects: ["/news"], label: "Market news tape", tier: "core", maxAgeHours: 2, countPath: "items", minCount: 50 },
   { file: "betas.json", affects: ["/portfolio"], label: "Portfolio betas", tier: "core", maxAgeHours: CORE, countPath: "betas", minCount: 500 },
   // Unregistered until 2026-07-20 — so when run-tick drifted and stopped refreshing them, NOTHING
   // flagged it ("every nightly feed self-registers" exists precisely for this failure).

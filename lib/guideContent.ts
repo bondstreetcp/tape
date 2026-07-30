@@ -2624,6 +2624,19 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/news",
+        "title": "Market News Tape",
+        "question": "What just hit the wires, which company was it about, and what did I miss while I was away?",
+        "how": "Every few minutes the site polls the free public news wires — SEC's EDGAR filing feed, PR Newswire, GlobeNewswire, plus the SEC's and the Federal Reserve's own press releases — and adds whatever is new to a running archive. Two things then happen to each headline. First it is tagged to a ticker, if that can be done honestly. A filing carries the company's own CIK number, so those are exact. A press release does not carry a ticker at all, so the tag has to be inferred from the headline, and the rule is deliberately strict: the company name must be at the START of the headline (press releases lead with the issuer, which is a convention of the medium), the name must match SEC's official registrant list, and if two different companies could claim the same name the row is left untagged rather than guessed at. Roughly four rows in ten end up tagged, and a blank ticker means we could not establish one — not that the story is unimportant. Second, law-firm solicitations are separated out; those are most of the volume on the open press wires and they are hidden by default rather than deleted. The tape is minutes behind, not seconds: EDGAR runs about five minutes behind and the press wires about ten, because these are the free public feeds. What it has instead is memory — each wire publishes only its newest twenty or so items and forgets the rest, so the archive is the part you cannot get anywhere else for free. US-listed issuers only. Decision-support, not advice.",
+        "metrics": [
+          { "term": "The tag method", "plain": "How each row got its ticker, shown under the symbol. 'CIK' means the filing named the company itself — exact. 'wire' means the press release printed the ticker. 'name' means we matched the company name at the start of the headline. Shown so you can weigh a row rather than trust it blindly." },
+          { "term": "A blank ticker", "plain": "No issuer could be established with confidence. Common and correct — a wrong ticker is far more damaging than a missing one, so the matcher refuses whenever a name is ambiguous." },
+          { "term": "Filings / Press / Macro", "plain": "Filings are SEC submissions (8-K, Form 4, 13D). Press is company press releases off the newswires. Macro is the SEC's and the Fed's own announcements, which are never tagged to a single company." },
+          { "term": "Promo", "plain": "Law-firm 'shareholder alert' solicitations and product puffery. Hidden by default. A company disclosing its own investigation or lawsuit is NOT promo — that is real news and stays on the tape." },
+          { "term": "Archived", "plain": "How many rows the tape has accumulated since it started running. It only grows going forward: a poll that never happened is history that cannot be recovered." }
+        ],
+      },
+      {
         "path": "/debates",
         "title": "Key Debates",
         "question": "What are the big arguments in the market right now, what evidence has actually landed on each side, and which way has it been running?",
