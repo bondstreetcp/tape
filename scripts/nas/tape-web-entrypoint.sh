@@ -373,6 +373,33 @@ refresh_data_in_place() {
   return 0
 }
 
+# ── the news tape rides its OWN clock ────────────────────────────────────────────────────────────
+# Everything else on the site is baked nightly, so hydrating the data tree on REBUILD_SECONDS (1 h) is
+# right for it and deliberately cheap. The news tape is the one feed where that cadence is a PRODUCT
+# DEFECT rather than a rounding error: the compute box polls the wires every five minutes, and if the
+# web container only picked the result up on the rebuild clock the page would sit up to an hour behind
+# a tape that advertises itself as live — on top of the ~10 min the free wires are already behind.
+#
+# So it is pulled separately, every loop pass (CHECK_SECONDS), and NOT gated on REBUILD_SECONDS.
+# That is affordable only because it is one small object fetched on its own: ~200 KB of JSON that
+# gzips ~5:1, versus the whole data tree. Do NOT "simplify" this by lowering REBUILD_SECONDS instead —
+# that would drag the entire tree (and an npm build) onto a five-minute cadence to move one file.
+#
+# Failure is a NO-OP by construction: news-tape-sync's pull leaves the existing file alone and exits 0
+# when R2 is unreachable or the object is missing, so a bad fetch degrades to a stale tape, never an
+# empty one. It is kept out of the FAILS counter for the same reason — a tape that is 20 minutes cold
+# is not the site being down, and must not trip the "3 consecutive failures" page-out.
+refresh_news_in_place() {
+  slot="$1"
+  # `if !` rather than `|| return 1` — `set -e` is disabled inside a function called from an `if`,
+  # and this must never abort the loop that keeps the site alive.
+  if ! (cd "$ROOT/$slot" && npm run news-tape-pull >/dev/null 2>&1); then
+    log "news tape: pull failed — slot $slot keeps the tape it has (not counted as a data failure)"
+    return 1
+  fi
+  return 0
+}
+
 while true; do
   # `sleep &` + `wait` rather than a bare `sleep`, so a caught signal (SIGHUP = "deploy now") cuts the
   # wait short — verified in the container's actual dash, not assumed.
@@ -405,6 +432,14 @@ while true; do
       alert "CRITICAL: the web server will not answer even after a restart (slot $LIVE) — the site is DOWN"
     fi
   fi
+
+  # ── news tape (every pass) ────────────────────────────────────────────────────────────────────
+  # Placed ABOVE the "nothing to do" early-continue on purpose. Every branch below this point either
+  # skips the rest of the loop (code unchanged + bake still fresh) or does something much heavier,
+  # so anything that must happen on the CHECK_SECONDS cadence has to happen here or not at all.
+  # jsonCache keys on mtime+size, so a freshly pulled file self-invalidates on the next read — no
+  # restart, and no cutover, which is why this is safe to do underneath a live server.
+  [ -n "$LIVE" ] && refresh_news_in_place "$LIVE" || true
 
   remote=$(timeout 20 git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | cut -f1)
   # ⚠ The BUILT commit, not the CHECKED-OUT one. prepare() advances the worktree to origin/main before

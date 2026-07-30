@@ -129,3 +129,45 @@ set the compose `entrypoint`/`command` to idle (`sleep infinity`) and use
 [`scripts/nas/tape-tick.sh`](../scripts/nas/tape-tick.sh) from a DSM Task Scheduler entry (daily,
 00:00, every 1 hour). ⚠ Never run this *and* the phase-1 dispatch — two writers race on the R2
 tarball.
+
+## The five-minute news tick (`/news`)
+
+The market news tape is the one feed that cannot ride the hourly clock: the wires expose only their
+newest ~20 items and forget the rest, so **a tick that does not run is history that cannot be
+recovered**. It gets its own DSM entry.
+
+This one *is* required — the container's self-scheduling loop only runs `run-tick.ts auto`, which is
+hourly by construction. There is no in-container path to a 5-minute cadence.
+
+DSM → Control Panel → **Task Scheduler** → Create → **Scheduled Task → User-defined script**:
+
+- Task: `tape news tick`   ·   User: **root**
+- Schedule: **Daily**, first run **00:00**, **Repeat every 5 minutes**, last run **23:55**
+- Settings → tick **"Send run details when the script terminates abnormally"**
+- Run command:
+
+```sh
+/volume1/docker/tape/tape-news-tick.sh
+```
+
+Source of truth is [`scripts/nas/tape-news-tick.sh`](../scripts/nas/tape-news-tick.sh) — copy it to
+`/volume1/docker/tape/` and `chmod +x`. It is a plain `docker exec` wrapper that bounds its own log
+(288 runs/day) and exits non-zero so DSM emails on failure.
+
+**Why this is safe to overlap with the hourly tick.** `run-tick.ts news` runs *ahead of* the main
+lock and skips the git checkout, on its own `.tick-news.lock`. It touches exactly one R2 object
+(`site-data/news-tape.json.gz`) and never reads or writes the data tree, so it cannot race a FULL
+run. ⚠ Do **not** "simplify" it onto the shared lock — a FULL run holds that for hours, and the tape
+would go dark through the entire nightly rebuild, which is precisely when the wires are busiest.
+
+**The web side has a matching clock.** `tape-web-entrypoint.sh` pulls this one object every
+`CHECK_SECONDS` via `refresh_news_in_place`, deliberately *not* gated on `REBUILD_SECONDS`. Without
+that the compute box would poll every 5 minutes while the page updated hourly — a 5-minute tick in
+name only. ⚠ Do not "fix" it by lowering `REBUILD_SECONDS` instead: that drags the whole data tree
+onto a 5-minute cadence to move one file.
+
+Verify a single tick by hand before trusting the schedule:
+
+```sh
+docker exec tape-runner sh -c "cd /app && npx tsx scripts/run-tick.ts news"
+```
