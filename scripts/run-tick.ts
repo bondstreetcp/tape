@@ -216,6 +216,41 @@ async function main() {
     return;
   }
 
+  // ── news: runs entirely OUTSIDE the main tick's lock and checkout ──────────────────────────────
+  // Two reasons it cannot share them, both of which would have broken the tape in production:
+  //   1. THE LOCK. A FULL run holds it for hours. A five-minute tick that skips whenever the lock is
+  //      held would go dark for the whole nightly rebuild — exactly the window where the wires are
+  //      busiest, and rows missed are rows no wire will re-serve. It touches a different R2 object and
+  //      never reads or writes the data tree, so it genuinely cannot race the main tick; it only has
+  //      to serialize against ITSELF, hence its own lockfile.
+  //   2. THE CHECKOUT. `git pull` in a shared working tree, concurrent with a FULL run's pull/npm ci,
+  //      races on git's own index.lock. The news tick has no need for fresh code every five minutes —
+  //      the hourly tick already pulls.
+  if (mode === "news") {
+    const NEWS_LOCK = path.join(process.cwd(), ".tick-news.lock");
+    const NEWS_STALE_MIN = 15; // a 2-second job stuck this long is hung, not slow
+    if (existsSync(NEWS_LOCK)) {
+      const ageMin = (Date.now() - statSync(NEWS_LOCK).mtimeMs) / 60_000;
+      if (ageMin < NEWS_STALE_MIN) { log(`another news tick is running (lock ${ageMin.toFixed(1)}m old) — skipping.`); return; }
+      log(`stealing stale news lock (${ageMin.toFixed(1)}m old)`);
+    }
+    writeFileSync(NEWS_LOCK, `${process.pid} news ${new Date().toISOString()}`);
+    const unlockNews = () => { try { rmSync(NEWS_LOCK, { force: true }); } catch { /* gone */ } };
+    process.on("exit", unlockNews);
+    process.on("SIGINT", () => { unlockNews(); process.exit(130); });
+    process.on("SIGTERM", () => { unlockNews(); process.exit(143); });
+    try {
+      step("Pull news archive from R2", "npm run news-tape-pull");     // non-fatal by design
+      const refreshed = step("Refresh market news tape", "npm run refresh-news-tape");
+      // Push even when the refresh reported failure: writeFeedGuarded degrades to stale rather than
+      // empty, so the pushed object is never worse than what R2 already holds.
+      const pushed = step("Push news archive to R2", "npm run news-tape-push");
+      log(`news tick: refresh ${refreshed ? "ok" : "FAILED"}, push ${pushed ? "ok" : "FAILED"}.`);
+      if (!pushed) process.exit(1);
+      return;
+    } finally { unlockNews(); }
+  }
+
   // ── Lock (the FULL run spans several hourly slots — later ticks must skip, not stack) ───────────
   if (existsSync(LOCK)) {
     const ageH = (Date.now() - statSync(LOCK).mtimeMs) / 3_600_000;
@@ -237,22 +272,6 @@ async function main() {
       if (!step("Pull latest main", "git pull --ff-only origin main")) log("pull failed — running with the current checkout");
       const lockAfter = existsSync("package-lock.json") ? readFileSync("package-lock.json", "utf8").length : 0;
       if (lockAfter !== lockBefore) step("Install dependencies (lockfile changed)", "npm ci");
-    }
-
-    // ── news: the five-minute tick. Deliberately bypasses the whole-tree hydrate/upload/deploy. ────
-    // Moving one small object 288×/day instead of the entire data tarball is the entire point; the
-    // full cycle at this cadence would also multiply the "hydrate before upload" clobber risk by 288.
-    // pull → refresh → push is indivisible: the refresh MERGES onto what pull leaves on disk, and the
-    // archive's only copy is that object (see scripts/news-tape-sync.ts).
-    if (mode === "news") {
-      step("Pull news archive from R2", "npm run news-tape-pull");        // non-fatal by design
-      const refreshed = step("Refresh market news tape", "npm run refresh-news-tape");
-      // Push even when the refresh reported failure: it degrades to stale rather than empty (a source
-      // outage still writes the merged prior archive), so the pushed object is never worse than R2's.
-      const pushed = step("Push news archive to R2", "npm run news-tape-push");
-      log(`news tick: refresh ${refreshed ? "ok" : "FAILED"}, push ${pushed ? "ok" : "FAILED"} (no tree hydrate, no deploy).`);
-      if (!pushed) process.exit(1);
-      return; // finally { unlock() }
     }
 
     // ── HARD GATE: hydrate the prior tree. Abort on failure — never upload a partial tree over R2. ─
