@@ -23,16 +23,42 @@ const DEFAULT_MODEL = "z-ai/glm-5.2";
 
 // The premium reasoning model for ANALYTICAL/judgment generation (Confluence thesis, valuation
 // verdicts, 13F story, the chatter/Congress summaries). Routed through the same OpenRouter client
-// — pass `{ model: PRO_MODEL }` to chatJSON/chatText. Gemini 3.1 Pro is the stronger synthesizer;
-// the token volume on these is tiny so the cost delta vs GLM is pennies/night. Bulk mechanical
-// work (overnight-filings scan) stays on DEFAULT_MODEL. Override with LLM_PRO_MODEL.
-export const PRO_MODEL = process.env.LLM_PRO_MODEL || "google/gemini-3.1-pro-preview";
+// — pass `{ model: PRO_MODEL }` to chatJSON/chatText. Bulk mechanical work (overnight-filings
+// scan) stays on DEFAULT_MODEL. Override with LLM_PRO_MODEL.
+//
+// glm-5.2 since 2026-08-04 (was google/gemini-3.1-pro-preview): the eval-model-shootout rematch
+// scored them a TIE on the production synthesis prompts (blind out-of-race panel split 2-2, one
+// point apart on both legs) with glm ahead on both code-verified extraction legs — at 6x less
+// ($0.047 vs $0.281 for the identical run). Gemini kept a slight grounding edge on narration
+// (0 invented facts vs glm's 2), so if trade-desk theses start drifting from their stat lines,
+// LLM_PRO_MODEL=google/gemini-3.1-pro-preview is the instant rollback. qwen3.8-max was DQ'd:
+// Alibaba-first-party-only on OpenRouter, unroutable under the provider pinning below.
+export const PRO_MODEL = process.env.LLM_PRO_MODEL || "z-ai/glm-5.2";
 
 // The CHEAP high-volume tier for MECHANICAL, schema-driven extraction (pull guidance numbers from a
 // filing, summarize an overnight 8-K). ~20x cheaper than PRO_MODEL and ~4x cheaper than GLM for the
 // same "fill this JSON from this text" work — the two bulk-extraction jobs (guidance, overnight-filings)
 // dominate the nightly LLM bill, so they run here, not on Pro/GLM. Override with LLM_FLASH_MODEL.
 export const FLASH_MODEL = process.env.LLM_FLASH_MODEL || "google/gemini-2.5-flash-lite";
+
+// ── OpenRouter provider pinning (cloud calls only) ──────────────────────────────────────────────
+// Open-weight models (DeepSeek/Kimi/GLM/Qwen) are served by many hosts, and by default OpenRouter
+// may route to the model vendor's own PRC-jurisdiction endpoint. Pin routing to providers that
+// neither store nor train on prompts (data_collection: "deny") and exclude the first-party Chinese
+// endpoints explicitly. Unknown names in the ignore list are harmless — belt-and-suspenders with
+// the account-wide ignored-providers/ZDR settings in the OpenRouter dashboard.
+//   LLM_PROVIDER_IGNORE   comma list to exclude (replaces the default list)
+//   LLM_PROVIDER_ORDER    optional comma list of preferred providers, tried in order
+//   LLM_PROVIDER_OPEN=1   disable pinning entirely (back to cheapest-anywhere routing)
+const PROVIDER_IGNORE = (process.env.LLM_PROVIDER_IGNORE ?? "DeepSeek,Moonshot AI,Z.AI,Alibaba,SiliconFlow,Chutes")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const PROVIDER_ORDER = (process.env.LLM_PROVIDER_ORDER ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+function providerPrefs(): Record<string, unknown> | null {
+  if (process.env.LLM_PROVIDER_OPEN === "1") return null;
+  const p: Record<string, unknown> = { data_collection: "deny", ignore: PROVIDER_IGNORE };
+  if (PROVIDER_ORDER.length) p.order = PROVIDER_ORDER;
+  return p;
+}
 
 let _key: string | null = null;
 
@@ -147,6 +173,11 @@ async function callChat(
     if (opts.maxTokens) body.max_tokens = opts.maxTokens;
     // `reasoning` is an OpenRouter extension — local vLLM servers may reject unknown fields.
     if (opts.reasoningEffort && !useLocal) body.reasoning = { effort: opts.reasoningEffort };
+    // `provider` (routing pinning) is an OpenRouter extension too — never send it locally.
+    if (!useLocal) {
+      const prov = providerPrefs();
+      if (prov) body.provider = prov;
+    }
 
     const ctrl = new AbortController();
     const abortMs = opts.timeoutMs ?? 120_000; // a big 10-K/Q prompt can be slow; don't hang forever (LIVE routes pass a short bound)
