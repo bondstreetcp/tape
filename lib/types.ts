@@ -52,6 +52,14 @@ export interface StockRow {
   earningsDate?: string | null; // ISO; earningsTimestampStart
   earningsEstimate?: boolean; // date is an estimate, not confirmed
   epsForward?: number | null;
+  /**
+   * Set (YYYY-MM-DD) when this row was CARRIED from a previous build because the quote fetch failed —
+   * the price and returns are from that date, not today. Absent on a normally-built row, so healthy
+   * snapshots pay nothing for it. See lib/universeCarry: a listed name that cannot be fetched goes
+   * stale rather than vanishing, because a missing row silently shrinks every screen and breadth
+   * statistic computed over the universe and nothing downstream can detect it.
+   */
+  staleSince?: string | null;
   fund?: Fundamentals | null; // trend fundamentals (separate periodic patch)
 }
 

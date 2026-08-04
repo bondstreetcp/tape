@@ -110,17 +110,30 @@ async function parseSource(cfg: SourceCfg): Promise<Entry[]> {
 
 async function main() {
   console.log("Fetching constituent lists…");
-  const [sp500, sp400, sp600, r1000, ndx] = await Promise.all([
+  // ⚠ allSettled, NOT all. These are scrapes of pages we do not control, and under Promise.all a
+  // SINGLE broken source aborted the whole script — every universe, including the ones that parsed
+  // perfectly. Observed 2026-07-30: Nasdaq-100 returned 0 rows and took the Russell 3000 rebuild down
+  // with it, which is why the constituent lists on disk had been frozen since June while the site
+  // quietly ran on them. One dead page must cost one universe, not all of them.
+  const settled = await Promise.allSettled([
     parseSource(SOURCES.sp500),
     parseSource(SOURCES.sp400),
     parseSource(SOURCES.sp600),
     parseSource(SOURCES.russell1000),
     parseSource(SOURCES.nasdaq100),
   ]);
+  const NAMES = ["sp500", "sp400", "sp600", "russell1000", "nasdaq100"];
+  const got = settled.map((r, i) => {
+    if (r.status === "fulfilled") return r.value;
+    console.warn(`  ⚠ ${NAMES[i]} FAILED: ${String(r.reason?.message || r.reason).slice(0, 120)}`);
+    return null;
+  });
+  const [sp500, sp400, sp600, r1000, ndx] = got;
+  const failed = NAMES.filter((_, i) => got[i] == null);
 
   // Global GICS classification map (sp500 last = highest priority).
   const gics = new Map<string, { sector: string; industry: string; name: string }>();
-  for (const list of [r1000, sp600, sp400, sp500]) {
+  for (const list of [r1000, sp600, sp400, sp500].filter(Boolean) as Entry[][]) {
     for (const e of list) {
       if (e.sector)
         gics.set(e.symbol, {
@@ -147,12 +160,14 @@ async function main() {
     return [...m.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
   };
 
-  const universes: Record<string, Entry[]> = {
-    sp500: dedupe(sp500),
-    nasdaq100: dedupe(ndx),
-    russell1000: dedupe(r1000),
-    sp1500: dedupe([...sp500, ...sp400, ...sp600]),
-  };
+  // A universe is written ONLY when every source it derives from parsed. A composite built from a
+  // missing leg would be a truncated list that looks complete — the failure mode this whole file
+  // exists to avoid — so an unbuildable universe simply keeps the file already on disk.
+  const universes: Record<string, Entry[]> = {};
+  if (sp500) universes.sp500 = dedupe(sp500);
+  if (ndx) universes.nasdaq100 = dedupe(ndx);
+  if (r1000) universes.russell1000 = dedupe(r1000);
+  if (sp500 && sp400 && sp600) universes.sp1500 = dedupe([...sp500, ...sp400, ...sp600]);
 
   // Optional real Russell 3000 — only if an iShares IWV holdings file is present
   // (data/iwv-holdings.xls SpreadsheetML, or .csv).
@@ -176,6 +191,14 @@ async function main() {
     { symbol: "LEVI", name: "Levi Strauss & Co.", sector: "Consumer Discretionary", industry: "Apparel, Accessories & Luxury Goods" },
   ];
 
+  // The IWV file carries iShares' own coarse sector, and `gics` is what upgrades it to a real GICS
+  // label — which decides the sector-ETF mapping, and a row with no ETF is DROPPED by build-data.
+  // So rebuilding the Russell 3000 against a half-populated classification map would quietly shrink
+  // the universe. Require the map to be healthy first; otherwise keep the list already on disk.
+  if (iwvText && gics.size < 1000) {
+    console.warn(`  ⚠ Russell 3000 NOT rebuilt: GICS map only has ${gics.size} entries (sources failed: ${failed.join(", ") || "none"}) — keeping the existing list rather than shipping one with degraded sectors.`);
+    iwvText = null;
+  }
   if (iwvText) {
     try {
       const r3000 = parseIWV(toRows(iwvText), gics);
@@ -197,6 +220,13 @@ async function main() {
     console.log(
       `${id}: ${list.length}${missing ? ` (${missing} need Yahoo classification)` : ""}`,
     );
+  }
+  if (failed.length) {
+    // Everything that COULD be rebuilt has been written above; the skipped universes keep their prior
+    // file. Exit non-zero so a scheduled run surfaces instead of looking like a clean pass — a silent
+    // partial success here is what let the lists sit frozen for a month.
+    console.error(`\n⚠ ${failed.length} source(s) failed: ${failed.join(", ")}. Universes derived from them kept their previous list. Re-run once the source is back.`);
+    process.exitCode = 1;
   }
   console.log("Done.");
 }

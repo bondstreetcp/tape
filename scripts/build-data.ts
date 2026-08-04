@@ -23,6 +23,8 @@ import {
   type SplitEvent, type SplitLedgerFile,
 } from "../lib/splits";
 import { snapshotWriteAllowed } from "../lib/snapshotGuard";
+import { carryForwardRows, coverageShortfall } from "../lib/universeCarry";
+import { isDateLikeSymbol } from "./iwv";
 import type {
   Returns,
   SectorAgg,
@@ -440,6 +442,7 @@ async function main() {
   // 6) Assemble per-universe snapshots.
   console.log("Writing per-universe snapshots…");
   const blocked: string[] = []; // universes whose snapshot collapsed this run (write-guard kept the prior)
+  const shortfalls: string[] = []; // universes shipping fewer names than the index lists (absolute check)
   for (const u of UNIVERSES) {
     const stocks: StockRow[] = [];
     const seen = new Set<string>();
@@ -475,8 +478,40 @@ async function main() {
         fund: (existingFund.get(e.symbol) as StockRow["fund"]) ?? null,
       });
     }
+    // ── CARRY-FORWARD: a listed name we failed to fetch goes STALE, not MISSING ──────────────────
+    // The `continue` above drops any constituent whose quote came back without a cap or price. That is
+    // right for junk and catastrophic for a transient vendor failure — and on a 2,600-name pull the
+    // latter is routine. MEASURED 2026-07-30: this universe shipped 2,228 of 2,593 real constituents;
+    // 365 names (MTCH, HUM, LNG, DVN, MTD) simply vanished, and most fetched fine hours later.
+    // A vanished row is invisible and silently shrinks every screen and breadth stat computed over the
+    // universe. A stale row is visible, bounded, and self-corrects on the next good fetch.
+    const snapPath = path.join(DATA_DIR, u.id, "snapshot.json");
+    let priorRows: StockRow[] = [];
+    try { priorRows = (JSON.parse(await fs.readFile(snapPath, "utf8")) as Snapshot).stocks ?? []; } catch { /* no prior snapshot */ }
+    const prevCount = priorRows.length || null;
+
+    // Date-like junk from the holdings export can never resolve, so it must not count as "expected"
+    // when we measure coverage — otherwise 313 unresolvable rows mask a real 14% shortfall.
+    const listedReal = universeLists[u.id].map((e) => e.symbol).filter((s) => s && !isDateLikeSymbol(s));
+    const carry = carryForwardRows(
+      listedReal,
+      new Map(stocks.map((r) => [r.symbol, r])),
+      new Map(priorRows.map((r) => [r.symbol, r])),
+      { nowMs: NOW },
+    );
+    const merged = carry.rows;
+    if (carry.carried.length || carry.expired.length) {
+      console.log(
+        `  ${u.id}: carried ${carry.carried.length} stale row(s) through a failed fetch` +
+        (carry.expired.length ? `, expired ${carry.expired.length} past the carry window` : "") +
+        (carry.carried.length ? ` — e.g. ${carry.carried.slice(0, 6).join(", ")}` : ""),
+      );
+    }
+
+    // Sector aggregates are computed AFTER the carry so counts and market caps reflect the universe
+    // we actually ship, not the subset that happened to answer tonight.
     const sectors: SectorAgg[] = SECTORS.map((s) => {
-      const members = stocks.filter((x) => x.etf === s.etf);
+      const members = merged.filter((x) => x.etf === s.etf);
       return {
         etf: s.etf,
         name: s.name,
@@ -488,26 +523,29 @@ async function main() {
 
     const snapshot: Snapshot = {
       generatedAt: new Date(NOW).toISOString(),
-      stocks,
+      stocks: merged,
       sectors,
     };
-    // Write-guard: never REPLACE a healthy snapshot with a collapsed one. This loop drops any symbol
-    // it couldn't quote (line above), so a partial-fetch night — Yahoo rate-limited to 60% of names —
-    // would otherwise ship an index missing constituents (gapped treemap, truncated breadth). Keep the
-    // prior good file instead; a PERSISTENT problem then surfaces as staleness in the freshness monitor.
-    const snapPath = path.join(DATA_DIR, u.id, "snapshot.json");
-    let prevCount: number | null = null;
-    try { prevCount = (JSON.parse(await fs.readFile(snapPath, "utf8")) as Snapshot).stocks?.length ?? null; } catch { /* no prior snapshot */ }
-    const guard = snapshotWriteAllowed(prevCount, stocks.length);
+    // Write-guard: never REPLACE a healthy snapshot with a collapsed one — a night-over-night cliff.
+    const guard = snapshotWriteAllowed(prevCount, merged.length);
     if (!guard.allowed) {
       console.error(`  ⚠ ${u.id}: ${guard.reason} — SKIPPING write, keeping prior snapshot`);
       blocked.push(u.id);
       continue;
     }
+    // ABSOLUTE coverage check — the question the write-guard structurally cannot ask. It compares to
+    // LAST NIGHT, so a universe that erodes 13% a night passes every single write while ratcheting
+    // away; only a check against what the INDEX says should be there can see a slow leak.
+    const cov = coverageShortfall(merged.length, listedReal.length);
+    if (!cov.ok) {
+      shortfalls.push(`${u.id} ${merged.length}/${listedReal.length} (−${Math.round(cov.shortfall * 100)}%)`);
+      console.error(`  ⚠ ${u.id}: only ${merged.length} of ${listedReal.length} listed constituents — ${cov.missing} missing (${Math.round(cov.shortfall * 100)}%)`);
+    }
     await fs.mkdir(path.join(DATA_DIR, u.id), { recursive: true });
     await fs.writeFile(snapPath, JSON.stringify(snapshot));
-    console.log(`  ${u.id}: ${stocks.length} stocks, ${sectors.length} sectors`);
+    console.log(`  ${u.id}: ${merged.length} stocks (${carry.fresh.length} fresh, ${carry.carried.length} carried), ${sectors.length} sectors`);
   }
+  if (shortfalls.length) console.error(`\n⚠ COVERAGE SHORTFALL — these universes are missing listed constituents: ${shortfalls.join("; ")}`);
   if (blocked.length) console.error(`\n⚠ write-guard kept the prior snapshot for ${blocked.length} universe(s): ${blocked.join(", ")} (partial fetch this run). npm run check-freshness will flag any that stay stale.`);
 
   // 7) Split ledger — free: step 4 already fetched these events for the countermeasure.
