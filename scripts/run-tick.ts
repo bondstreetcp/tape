@@ -47,6 +47,23 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   // dedicated object, permanently deleting every row in between — history the wires cannot re-serve.
   // It runs as `run-tick.ts news`, which short-circuits with its own pull → refresh → push trio.
   { name: "Refresh quotes (intraday)", cmd: "npm run refresh-quotes", when: "quotes-or-desk" }, // ONLY env set at runtime
+  // Scheduled at all because it wasn't: this only ever ran when a human typed it, so the index
+  // membership the whole site reasons about drifted from the real indexes for a MONTH (found
+  // 2026-07-30) — and two parser bugs rode along undetected for just as long, because nothing ran the
+  // parser. Index membership changes monthly; a manual-only refresh is a guaranteed slow drift.
+  //
+  // FIRST, before refresh-data, deliberately: build-data reads data/constituents/*.json to decide who
+  // is in each universe, so scraping the lists at the top of the tick means tonight's adds/drops land
+  // in tonight's snapshots rather than a day late. Safe in this position — nothing later rewrites
+  // these files (patch-industries refines the SNAPSHOTS, not the constituent lists), and it runs after
+  // the R2 hydrate, which is what supplies data/iwv-holdings.xls for the Russell 3000 leg.
+  //
+  // ⚠ NON-FATAL, AND MUST STAY THAT WAY. fetch-constituents exits 1 on PARTIAL success — a universe
+  // whose source broke keeps its prior file instead of shipping a truncated one, and says so. That is
+  // a real signal worth an ✗ in the log, but never a reason to abandon a tick: it is one failed step
+  // out of ~70, far below the `fails > plan.length / 2` abort, so a stale index list can't cost us a
+  // night of otherwise-good market data. The yml mirrors this with continue-on-error.
+  { name: "Refresh index constituent lists", cmd: "npm run fetch-constituents", when: "full" },
   { name: "Refresh US universes (prices, returns, fundamentals)", cmd: "npm run refresh-data", when: "full" },
   { name: "Refine generic sub-industry labels", cmd: "npm run patch-industries", when: "full" },
   { name: "Repair sector ETF returns", cmd: "npm run refresh-sectors", when: "full" },

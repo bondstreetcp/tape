@@ -160,6 +160,21 @@ jobs:
 
       # ---- Full rebuild (after close / manual). Each source is independent — keep
       # going if one hiccups (rate limits etc.); the next run fills any gaps.
+
+      # Re-scrape index membership BEFORE refresh-data, which reads data/constituents/*.json to decide
+      # who is in each universe — so tonight's adds/drops land in tonight's snapshots, not tomorrow's.
+      # This step is new because for a long time there was none: fetch-constituents only ran when a
+      # human invoked it, and the lists silently drifted from the real indexes for a month (2026-07-30).
+      # Index membership changes monthly; manual-only was never going to hold.
+      # continue-on-error like its siblings, and pointedly so: the script exits 1 on PARTIAL success —
+      # a universe whose source broke keeps its previous list rather than shipping a truncated one — so
+      # a dead Wikipedia page must cost us a stale index list, not the night's whole data refresh.
+      # Needs the R2 hydrate above (data/iwv-holdings.xls feeds the Russell 3000 leg).
+      - name: Refresh index constituent lists
+        if: ${{ env.FULL == 'true' }}
+        run: npm run fetch-constituents
+        continue-on-error: true
+
       - name: Refresh US universes (prices, returns, fundamentals)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-data

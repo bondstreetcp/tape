@@ -47,6 +47,44 @@ export function isDateLikeSymbol(symbol: string): boolean {
 }
 
 /**
+ * Does this look like a ticker at all, after norm() has mapped "." → "-"? One to five letters, plus an
+ * optional one/two-letter share class ("BRK-B", "BF-B"). Letters only, deliberately.
+ *
+ * The positive counterpart to isDateLikeSymbol, and needed because that one is a NARROW matcher: it
+ * catches the three-letter month abbreviations the iShares export produces ("APR302001") and nothing
+ * else. Wikipedia's index-changes tables put a spelled-out date in the same column position a ticker
+ * occupies, so norm() yields "JULY242026" — which isDateLikeSymbol passes and any is-there-a-letter
+ * test passes. Asking what a ticker IS, rather than enumerating what it isn't, closes that whole class.
+ */
+export function isTickerShaped(symbol: string): boolean {
+  return /^[A-Z]{1,5}(?:-[A-Z]{1,2})?$/.test(symbol);
+}
+
+/**
+ * Decide whether a scraped table is a CONSTITUENT list, and strip any junk rows from it.
+ *
+ * Every Wikipedia index page carries two tables with a "Ticker" column: the members, and the log of
+ * index changes. A header test cannot separate them, and the changes table is often the LONGER of the
+ * two (S&P 400: 618 rows vs 400), so "most rows wins" actively picks the wrong one. What does separate
+ * them is the shape of the symbol column — measured across all five live sources, every genuine
+ * constituent table is 100.0% ticker-shaped (503/400/603/1013/103 rows, zero exceptions) and every
+ * changes table is 0–12%. The default floor sits in that gap with room to spare.
+ *
+ * Returns null when the table doesn't qualify; otherwise the shaped rows plus whatever was dropped, so
+ * the caller can say so out loud — a junk row admitted silently is a symbol that fails to quote every
+ * night forever, indistinguishable from a name the index simply doesn't list.
+ */
+export function qualifyConstituentRows<T extends { symbol: string }>(
+  rows: T[],
+  minShaped = 0.9,
+): { kept: T[]; dropped: string[] } | null {
+  if (!rows.length) return null;
+  const kept = rows.filter((r) => isTickerShaped(r.symbol));
+  if (kept.length / rows.length < minShaped) return null;
+  return { kept, dropped: rows.filter((r) => !isTickerShaped(r.symbol)).map((r) => r.symbol) };
+}
+
+/**
  * Share classes iShares spells without a separator but Yahoo spells WITH a dash.
  *
  * iShares writes "BRKB"; Yahoo (and therefore every price, chart and screen in this repo) needs
