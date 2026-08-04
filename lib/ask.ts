@@ -10,7 +10,7 @@ import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
 import { recordUsage } from "./llmUsage";
-import { deadline } from "./deadline";
+import { deadline, isDeadline } from "./deadline";
 
 const KEY = process.env.GEMINI_API_KEY;
 // gemini-3.1-pro-preview — sharpest model in the bake-off (more sources, segment-level
@@ -19,6 +19,16 @@ const KEY = process.env.GEMINI_API_KEY;
 // at our volume the search — the dominant cost — is effectively free. It's a PREVIEW
 // model: roll back instantly with GEMINI_MODEL=gemini-2.5-pro if it changes/rate-limits.
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+// The rescue model when the primary times out or Google is overloaded: still search-grounded,
+// reliably answers in single-digit seconds with thinking off. A flash answer beats a red error.
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash";
+
+// Per-attempt deadlines. Their SUM (plus gatherContext) must stay inside the 60s the four caller
+// routes advertise via maxDuration: on Vercel a function killed at 60s answers with a raw 5xx —
+// which the client renders as JSON-parse gibberish, strictly worse than a degraded answer.
+// Env-tunable so a live box can be adjusted (and the rescue path exercised) without a deploy.
+const PRIMARY_MS = Number(process.env.ASK_PRIMARY_TIMEOUT_MS) || 40_000;
+const RESCUE_MS = Number(process.env.ASK_RESCUE_TIMEOUT_MS) || 15_000;
 
 export const askConfigured = () => !!KEY;
 
@@ -143,35 +153,67 @@ export async function askGemini(
   // budget — and until now the only thing bounding it was `export const maxDuration = 60` in its four
   // callers, which is a Vercel directive and enforces NOTHING under `next start`. Behind the tunnel
   // the viewer got a 524 at ~100s while this kept running to completion with the answer discarded.
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
-    method: "POST",
-    signal: deadline(50_000), // under the ~60s the routes advertise, well under Cloudflare's patience
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents,
-      // Google Search grounding so the answer reflects current web info, not just
-      // the filing context. ENABLE dynamic reasoning (thinkingBudget -1) for sharper
-      // analysis — thinking shares the output budget, so give it a large
-      // maxOutputTokens so the reasoning can't truncate the final answer (the old
-      // thinkingBudget:0 disabled reasoning, which is why answers felt shallow).
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: -1 } },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  const j: any = await res.json();
-  const um = j?.usageMetadata;
-  if (um) recordUsage(MODEL, um.promptTokenCount || 0, (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0));
-  const cand = j?.candidates?.[0];
-  const answer = (cand?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
-  if (!answer) return null;
-  const sources: AskSource[] = (cand?.groundingMetadata?.groundingChunks || [])
-    .map((c: any) => c?.web)
-    .filter((w: any) => w?.uri)
-    .map((w: any) => ({ title: w.title || w.uri, uri: w.uri }))
-    .slice(0, 6);
-  return { answer, sources };
+  //
+  // One attempt against one deadline turned out to be brittle in the other direction: the preview
+  // model under load blew the 50s bound (observed 2026-08-04, INTC "key risks") and the DOMException's
+  // own text — "The operation was aborted due to timeout" — travelled through the route's catch into
+  // the UI in red. So: a LADDER, in the same degrade-don't-error spirit as feedGuard. Pro with dynamic
+  // thinking gets PRIMARY_MS; if it times out or Google is overloaded, flash with thinking off gets
+  // RESCUE_MS — it answers search-grounded questions in single-digit seconds, and a flash answer is
+  // strictly better than an apology. Only when BOTH fail does the user see an error, and then a
+  // human one.
+  const attempt = async (model: string, ms: number, thinkingBudget: number): Promise<AskResult | null> => {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${KEY}`, {
+      method: "POST",
+      signal: deadline(ms),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents,
+        // Google Search grounding so the answer reflects current web info, not just
+        // the filing context. On the primary, ENABLE dynamic reasoning (thinkingBudget
+        // -1) for sharper analysis — thinking shares the output budget, so give it a
+        // large maxOutputTokens so the reasoning can't truncate the final answer (the
+        // old thinkingBudget:0 disabled reasoning, which is why answers felt shallow).
+        // The rescue runs with thinking OFF (0) — speed is the whole point there.
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget } },
+      }),
+    });
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 160)}`);
+    const j: any = await res.json();
+    const um = j?.usageMetadata;
+    if (um) recordUsage(model, um.promptTokenCount || 0, (um.candidatesTokenCount || 0) + (um.thoughtsTokenCount || 0));
+    const cand = j?.candidates?.[0];
+    const answer = (cand?.content?.parts || []).map((p: any) => p?.text).filter(Boolean).join(" ").trim();
+    if (!answer) return null;
+    const sources: AskSource[] = (cand?.groundingMetadata?.groundingChunks || [])
+      .map((c: any) => c?.web)
+      .filter((w: any) => w?.uri)
+      .map((w: any) => ({ title: w.title || w.uri, uri: w.uri }))
+      .slice(0, 6);
+    return { answer, sources };
+  };
+
+  try {
+    return await attempt(MODEL, PRIMARY_MS, -1);
+  } catch (e: any) {
+    // Rescue only what a different/faster model can actually cure: a deadline, a 429, a 5xx. A 400
+    // or 403 is OUR configuration (bad key, bad model name) — flash would fail identically, and the
+    // retry would bury the one message that says what to fix.
+    const cureable = isDeadline(e) || /Gemini (429|5\d\d)/.test(String(e?.message || e));
+    if (!cureable) throw e;
+    console.warn(`askGemini: ${MODEL} ${isDeadline(e) ? `timed out at ${PRIMARY_MS}ms` : String(e?.message || e).slice(0, 80)} — rescuing with ${FALLBACK_MODEL}`);
+    try {
+      return await attempt(FALLBACK_MODEL, RESCUE_MS, 0);
+    } catch (e2: any) {
+      // Both attempts dead. Say so like a person — the raw DOMException text is what the user
+      // screenshot showed, and it reads like a stack trace, not an answer.
+      if (isDeadline(e2) || /Gemini (429|5\d\d)/.test(String(e2?.message || e2)))
+        throw new Error("The AI took too long to answer — Google's models are busy right now. Try again in a moment.");
+      throw e2;
+    }
+  }
 }
 
 /** Focused summary of a provided source text (no web grounding) — e.g. an earnings-call
