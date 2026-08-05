@@ -148,6 +148,14 @@ export default function SpinoffsView({ universe, data }: { universe: string; dat
                 <tr key={r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2.5">
                     <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link>
+                    {r.forcedFlow?.flushLikely && (
+                      <span
+                        className={`ml-1.5 cursor-help rounded px-1 py-px text-[9px] font-bold uppercase tracking-wide ${r.daysSince <= 15 ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[var(--surface-2)] text-[var(--text-4)]"}`}
+                        title={`Parent ${r.parentTicker} sits in ${r.forcedFlow.parentIndexes.filter((i) => ["sp500", "sp400", "sp600", "nasdaq100"].includes(i)).join("/").toUpperCase() || "index"}-family indexes, and ${r.ticker} has not been added to that family — the index funds that received these shares in the distribution are forced sellers. That flow is mechanical and concentrated in the first ~2 weeks of regular-way trading${r.daysSince <= 15 ? " (live now)" : " (window likely passed)"}. Flips off automatically the night the constituent lists show ${r.ticker} added.`}
+                      >
+                        {r.daysSince <= 15 ? "index flush" : "flushed"}
+                      </span>
+                    )}
                     <div className="max-w-[200px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                   </td>
                   <td className="px-2 py-2.5 text-[12px] text-[var(--text-3)]">{r.parent} <span className="font-mono text-[var(--text-4)]">({r.parentTicker})</span></td>

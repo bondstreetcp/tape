@@ -1777,6 +1777,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "The newly independent company created by the spin-off (ticker and name)."
           },
           {
+            "term": "Index flush",
+            "plain": "The parent sits in the S&P/Nasdaq index family, so index funds tracking those benchmarks received SpinCo shares in the distribution — and must sell them unless the SpinCo is added to an index they track. That selling is mechanical and concentrated in the first couple of weeks of trading (the classic forced-selling window). The badge flips off automatically the night the constituent lists show the SpinCo added; 'flushed' means the window has likely passed."
+          },
+          {
             "term": "Parent",
             "plain": "The company it was spun out of (name and ticker shown)."
           },

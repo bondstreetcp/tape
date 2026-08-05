@@ -16,3 +16,18 @@ test("turnoverColor tracks the backtested exhaustion zone", () => {
   assert.equal(turnoverColor(70), "#f59e0b"); // approaching
   assert.equal(turnoverColor(20), "var(--text-2)"); // early
 });
+
+// ── forced-flow (2026-08-05): who must sell the SpinCo in the first days ──────────────────────────
+import { computeForcedFlow } from "../lib/spinoffs";
+
+test("forced flow: S&P-family parent + unabsorbed spin = flush; Russell-only parent = none", () => {
+  // HON in sp500 spins HONA, HONA not yet in the S&P family → its index funds must sell.
+  const f = computeForcedFlow(["sp500", "russell1000", "russell3000"], ["russell3000"]);
+  assert.equal(f.flushLikely, true);
+  // The night the SpinCo enters the family (e.g. sp400 add), the flush is absorbed.
+  assert.equal(computeForcedFlow(["sp500"], ["sp400"]).flushLikely, false);
+  // A Russell-only parent creates no S&P-family forced selling (Russell adds member spins immediately).
+  assert.equal(computeForcedFlow(["russell3000"], []).flushLikely, false);
+  // Unlisted parent → nothing forced.
+  assert.equal(computeForcedFlow([], []).flushLikely, false);
+});

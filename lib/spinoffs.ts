@@ -55,7 +55,36 @@ export const SPINOFF_ROSTER: SpinoffSeed[] = [
   { ticker: "MRP", name: "Millrose Properties", parent: "Lennar", parentTicker: "LEN", spinDate: "2025-02-07" },
 ];
 
+/**
+ * The forced-flow read: when a parent sits in the S&P/Nasdaq index family, every index fund tracking
+ * those benchmarks RECEIVES SpinCo shares in the distribution — and must sell them unless the SpinCo
+ * is added to an index they track. That selling is mechanical, size-blind, and concentrated in the
+ * first days of regular-way trading: the classic Greenblatt window, and a flow only a small account
+ * can comfortably take the other side of. (FTSE Russell, by contrast, generally adds a member's
+ * spin-off immediately, so Russell membership alone creates little forced selling.)
+ */
+export interface ForcedFlow {
+  parentIndexes: string[]; // which tracked US indexes list the parent
+  spinIndexes: string[]; // which list the SpinCo today (fills in as lists refresh nightly)
+  flushLikely: boolean; // S&P-family/NDX parent, SpinCo not (yet) in that family → forced sellers
+}
+
+/** S&P family + Nasdaq-100 — the memberships whose funds become forced sellers of a non-member spin. */
+const FLUSH_INDEXES = new Set(["sp500", "sp400", "sp600", "nasdaq100"]);
+
+export function computeForcedFlow(parentIndexes: string[], spinIndexes: string[]): ForcedFlow {
+  const parentFlush = parentIndexes.filter((i) => FLUSH_INDEXES.has(i));
+  const spinAbsorbed = spinIndexes.some((i) => FLUSH_INDEXES.has(i));
+  return {
+    parentIndexes,
+    spinIndexes,
+    flushLikely: parentFlush.length > 0 && !spinAbsorbed,
+  };
+}
+
 export interface SpinoffRow extends SpinoffSeed {
+  /** Index-fund forced-selling read — absent when the constituent lists weren't readable. */
+  forcedFlow?: ForcedFlow;
   daysSince: number;
   price: number | null;
   sincePct: number | null; // vs first regular-way close

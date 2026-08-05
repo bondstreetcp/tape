@@ -8,7 +8,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { SPINOFF_ROSTER, type SpinoffRow, type SpinoffsData, type SpinPipelineRow } from "../lib/spinoffs";
+import { computeForcedFlow, SPINOFF_ROSTER, type SpinoffRow, type SpinoffsData, type SpinPipelineRow } from "../lib/spinoffs";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 
@@ -234,6 +234,16 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
 }
 
 async function main() {
+  // Index memberships for the forced-flow read — the constituent lists refresh earlier in the same
+  // FULL tick, so tonight's adds (a SpinCo entering an index = the flush absorbed) show tonight.
+  const memberOf = new Map<string, string[]>();
+  for (const idx of ["sp500", "sp400", "sp600", "nasdaq100", "russell1000", "russell3000"]) {
+    try {
+      const list = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "constituents", `${idx}.json`), "utf8")) as { symbol: string }[];
+      for (const e of list) memberOf.set(e.symbol, [...(memberOf.get(e.symbol) ?? []), idx]);
+    } catch { /* list unreadable → membership unknown, forcedFlow stays absent */ }
+  }
+
   const rows: SpinoffRow[] = [];
   for (const seed of SPINOFF_ROSTER) {
     const spinT = Date.parse(seed.spinDate);
@@ -264,6 +274,7 @@ async function main() {
     const turnoverPct = shares ? +(((cum + wiVol) / shares) * 100).toFixed(1) : null;
     rows.push({
       ...seed,
+      forcedFlow: memberOf.size ? computeForcedFlow(memberOf.get(seed.parentTicker) ?? [], memberOf.get(seed.ticker) ?? []) : undefined,
       daysSince: Math.round((Date.now() - spinT) / DAY),
       price: last,
       sincePct: first > 0 ? +(((last / first) - 1) * 100).toFixed(1) : null,
