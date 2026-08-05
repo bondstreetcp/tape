@@ -14,9 +14,39 @@ import path from "path";
 // big in the UK investment-trust space and exactly where discounts blow out.
 export type CefGroup = "Fixed Income" | "Alternatives" | "Equity" | "Allocation" | "Other";
 
+/** An activist campaign on file for this fund (joined at render from data/campaigns.json). CEF
+ *  activism is the discount-closing mechanism: a 13D from a Saba/Bulldog-class filer is historically
+ *  what turns "cheap vs its own history" into an actual catalyst (tenders, open-ending, board seats). */
+export interface CefActivist {
+  campaigner: string;
+  date: string; // YYYY-MM-DD of the filing
+  form: string; // SCHEDULE 13D / DEFC14A / …
+  ask: string | null;
+  url: string;
+}
+
+/** Latest campaign per CEF ticker — pure join so it's testable; short-seller reports are excluded
+ *  (a short report on a fund is not the discount-closing kind of attention). */
+export function latestCampaignByTicker(
+  campaigns: { ticker?: string | null; type?: string; campaigner?: string; date: string; form?: string; ask?: string | null; url?: string }[],
+  cefTickers: Set<string>,
+): Map<string, CefActivist> {
+  const out = new Map<string, CefActivist>();
+  for (const c of campaigns) {
+    if (!c.ticker || !cefTickers.has(c.ticker)) continue;
+    if (c.type === "short-report" || c.type === "short") continue;
+    const cur = out.get(c.ticker);
+    if (cur && cur.date >= c.date) continue;
+    out.set(c.ticker, { campaigner: c.campaigner || "Activist", date: c.date, form: c.form || "13D", ask: c.ask ?? null, url: c.url || "" });
+  }
+  return out;
+}
+
 export interface Cef {
   ticker: string;
   name: string;
+  /** set by the page-level join against the campaigns feed — absent when no campaign is on file */
+  activist?: CefActivist;
   region: "US" | "UK"; // US = CEF Connect; UK = London-listed investment trust (Morningstar)
   currency: string; // major-currency code for price/NAV/cap display (USD, GBP, EUR…)
   sponsor: string;

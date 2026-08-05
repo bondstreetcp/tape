@@ -2780,6 +2780,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
             "plain": "Price vs NAV as a %. Negative = discount (price below asset value, cheap); positive = premium (price above asset value)."
           },
           {
+            "term": "⚑ activist",
+            "plain": "An activist campaign (SCHEDULE 13D / proxy fight, from the Activism & Shorts monitor) is on file for this fund. On closed-end funds, activist pressure is the classic mechanism that actually closes a discount — tender offers, open-ending, board seats — so a wide discount plus this flag is the setup with a catalyst attached. The badge links to the filing; hover for the filer, date and ask."
+          },
+          {
             "term": "NAV (net asset value)",
             "plain": "The per-share value of everything the fund holds — what its assets are actually worth."
           },

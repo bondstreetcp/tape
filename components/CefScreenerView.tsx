@@ -172,7 +172,23 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
 }
 
 const COLS: Col[] = [
-  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a> },
+  { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => (
+    <span className="whitespace-nowrap">
+      <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a>
+      {f.activist && (
+        <a
+          href={f.activist.url || undefined}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="ml-1.5 cursor-help rounded bg-[#f59e0b]/15 px-1 py-px align-middle text-[9px] font-bold uppercase tracking-wide text-[#f59e0b]"
+          title={`${f.activist.campaigner} — ${f.activist.form} filed ${f.activist.date}${f.activist.ask ? `: ${f.activist.ask}` : ""}. Activist pressure is the classic discount-closing catalyst on closed-end funds (tender offers, open-ending, board seats).`}
+        >
+          ⚑ activist
+        </a>
+      )}
+    </span>
+  ) },
   { id: "region", label: "Mkt", align: "left", get: (f) => f.region, render: (f) => <span className={"rounded px-1.5 py-0.5 text-[10px] font-semibold " + (f.region === "US" ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "bg-[#7c3aed]/15 text-[#a78bfa]")}>{f.region}</span> },
   { id: "name", label: "Name", align: "left", get: (f) => f.name, render: (f) => <span className="block max-w-[14rem] truncate text-[var(--text-2)]" title={f.name}>{f.name}</span> },
   { id: "category", label: "Category", align: "left", get: (f) => f.category, render: (f) => <span className="text-xs text-[var(--text-3)]">{f.category}</span> },
