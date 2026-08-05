@@ -13,7 +13,7 @@ const col = (v: number | null) => (v == null ? "var(--text-3)" : v >= 0 ? "#22c5
 // Bare YYYY-MM-DD must render in UTC or US browsers show the prior day.
 const day = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export default function WarningsView({ data, universe, flagged }: { data: WarningsData; universe: string; flagged?: Record<string, FlaggedInfo> | null }) {
+export default function WarningsView({ data, universe, flagged, record }: { data: WarningsData; universe: string; flagged?: Record<string, FlaggedInfo> | null; record?: React.ReactNode }) {
   const [filter, setFilter] = useState<WarningKind | null>(null);
   const names = useMemo(() => (filter ? data.names.filter((n) => n.kinds.includes(filter)) : data.names), [data.names, filter]);
   const asOf = data.generatedAt ? new Date(data.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
@@ -27,6 +27,7 @@ export default function WarningsView({ data, universe, flagged }: { data: Warnin
         title="Warning Signs"
         desc="The bearish twin of the Confluence Engine — names where several INDEPENDENT negative signals line up: rich vs its own 10-year history, EPS estimates being cut, super-investor 13F exits, a published short-seller report, a guidance cut, an analyst downgrade, put-heavy flow. A stack of unrelated bear signals on a name still priced for perfection is a value-trap / short-candidate flag worth a look. Decision-support, not advice."
       />
+      {record}
 
       <HowToRead>
         <p><b>What this is:</b> the inverse of the Confluence Engine. Where that board finds names several bullish signals agree on, this finds names several <i>bearish</i> ones do — the risk lens.</p>

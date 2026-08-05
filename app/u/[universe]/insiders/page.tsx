@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildInsiderBuys, type InsidersFile } from "@/lib/insiders";
 import InsidersView from "@/components/InsidersView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { Snapshot } from "@/lib/types";
@@ -42,5 +43,5 @@ export default async function InsidersPage({ params }: { params: Promise<{ unive
   if (!data || data.rows.length === 0) {
     return <EmptyState universe={universe} title="Insider Cluster-Buying" note="No open-market insider buys in the current window yet — this fills on the nightly Form 4 scan." />;
   }
-  return <InsidersView data={data} universe={universe} />;
+  return <InsidersView data={data} universe={universe} record={<BoardTrackRecord universe={universe} signal="insiders" />} />;
 }

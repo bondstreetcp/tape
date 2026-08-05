@@ -6,6 +6,7 @@ import { loadSnapshot } from "@/lib/data";
 import { buildSqueeze } from "@/lib/shortSqueeze";
 import type { EstimatesFile } from "@/lib/revisions";
 import SqueezeView from "@/components/SqueezeView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -30,5 +31,5 @@ export default async function SqueezePage({ params }: { params: Promise<{ univer
   if (!data || !data.rows.length) {
     return <EmptyState universe={universe} title="Short-Squeeze Radar" note="US names only — try the S&P 500 or a broad US universe." />;
   }
-  return <SqueezeView data={data} universe={universe} />;
+  return <SqueezeView data={data} universe={universe} record={<BoardTrackRecord universe={universe} signal="squeeze" />} />;
 }

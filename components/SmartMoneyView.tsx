@@ -18,7 +18,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "congress", label: "Congress" },
 ];
 
-export default function SmartMoneyView({ names, universe, asOf, limit = 80 }: { names: SmartMoneyName[]; universe: string; asOf: string | null; limit?: number }) {
+export default function SmartMoneyView({ names, universe, asOf, limit = 80, record }: { names: SmartMoneyName[]; universe: string; asOf: string | null; limit?: number; record?: React.ReactNode }) {
   const [tab, setTab] = useState<Tab>("all");
   const filtered = useMemo(
     () => names.filter((n) => (tab === "all" ? true : tab === "dip" ? n.buyingDip : tab === "13f" ? n.investors.length > 0 : !!n.congress)).slice(0, limit),
@@ -34,6 +34,7 @@ export default function SmartMoneyView({ names, universe, asOf, limit = 80 }: { 
         title="Smart-Money Radar"
         desc="Who's quietly accumulating — names where super-investors initiated or added last quarter (13F) and/or members of Congress are net buyers. The ⤓ dip badge flags names being bought while they're down. Follow-the-money, not advice."
       />
+      {record}
 
       <div className="mb-4 inline-flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
         {TABS.map((t) => (

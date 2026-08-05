@@ -6,6 +6,7 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import EmptyState from "@/components/EmptyState";
 import { buildPositioning } from "@/lib/positioning";
 import PositioningView from "@/components/PositioningView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
@@ -42,6 +43,7 @@ export default async function PositioningPage({ params }: { params: Promise<{ un
       generatedAt={flow.generatedAt}
       callPremium={flow.callPremium ?? null}
       putPremium={flow.putPremium ?? null}
+      record={<BoardTrackRecord universe={universe} signal={["positioning-bull", "positioning-bear"]} />}
     />
   );
 }

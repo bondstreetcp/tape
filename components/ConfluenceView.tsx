@@ -12,7 +12,7 @@ const col = (v: number | null) => (v == null ? "var(--text-3)" : v >= 0 ? "#22c5
 // Bare YYYY-MM-DD must render in UTC or US browsers show the prior day.
 const day = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export default function ConfluenceView({ data, universe, flagged }: { data: ConfluenceData; universe: string; flagged?: Record<string, FlaggedInfo> | null }) {
+export default function ConfluenceView({ data, universe, flagged, record }: { data: ConfluenceData; universe: string; flagged?: Record<string, FlaggedInfo> | null; record?: React.ReactNode }) {
   const [filter, setFilter] = useState<SignalKind | null>(null);
   const names = useMemo(() => (filter ? data.names.filter((n) => n.kinds.includes(filter)) : data.names), [data.names, filter]);
   const asOf = data.generatedAt ? new Date(data.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
@@ -26,6 +26,7 @@ export default function ConfluenceView({ data, universe, flagged }: { data: Conf
         title="Confluence Engine"
         desc="Names where several INDEPENDENT bullish signals line up — cheap vs its own 10-year history, super-investor 13F buying, Congress buys, a real buyback (shrinking share count), analyst upgrades, call-heavy options flow, catalysts. One signal is noise; a stack of unrelated ones agreeing is a setup worth a look. Decision-support, not advice."
       />
+      {record}
 
       {/* legend doubles as a filter */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

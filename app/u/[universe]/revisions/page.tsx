@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildRevisions, type EstimatesFile } from "@/lib/revisions";
 import RevisionsView from "@/components/RevisionsView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -29,5 +30,5 @@ export default async function RevisionsPage({ params }: { params: Promise<{ univ
   if (!data || !data.rows.length) {
     return <EmptyState universe={universe} title="Revisions Momentum" note="The S&P 500 is covered first — try that universe." />;
   }
-  return <RevisionsView data={data} universe={universe} />;
+  return <RevisionsView data={data} universe={universe} record={<BoardTrackRecord universe={universe} signal="revisions" />} />;
 }

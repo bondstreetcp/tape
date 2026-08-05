@@ -9,7 +9,7 @@ const TIERS: SqueezeTier[] = ["Extreme", "High", "Elevated", "Moderate"];
 const pctF = (v: number | null, d = 1) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
 const signed = (v: number | null, d = 0) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 
-export default function SqueezeView({ data, universe }: { data: SqueezeData; universe: string }) {
+export default function SqueezeView({ data, universe, record }: { data: SqueezeData; universe: string; record?: React.ReactNode }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [tier, setTier] = useState<SqueezeTier | null>(null);
 
@@ -29,6 +29,7 @@ export default function SqueezeView({ data, universe }: { data: SqueezeData; uni
         title="Short-Squeeze Radar"
         desc="The classic squeeze setup, ranked: short interest as a % of float, days to cover (how long shorts need to buy back), and whether shorts are still rising. Crowded + hard-to-cover + still being pressed = the most squeezable. Open a candidate's stock page for its live borrow cost. US names only — decision-support, not advice."
       />
+      {record}
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {TIERS.map((t) => (

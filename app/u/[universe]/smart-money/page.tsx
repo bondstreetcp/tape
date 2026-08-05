@@ -5,6 +5,7 @@ import { loadSuperInvestors } from "@/lib/superinvestors";
 import { loadCongress } from "@/lib/congress";
 import { buildSmartMoney } from "@/lib/smartMoney";
 import SmartMoneyView from "@/components/SmartMoneyView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -24,5 +25,5 @@ export default async function SmartMoneyPage({ params }: { params: Promise<{ uni
     return <EmptyState universe={universe} title="Smart-Money Radar" />;
   }
   const asOf = si?.generatedAt ? new Date(si.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
-  return <SmartMoneyView names={names} universe={universe} asOf={asOf} />;
+  return <SmartMoneyView names={names} universe={universe} asOf={asOf} record={<BoardTrackRecord universe={universe} signal="smartmoney" />} />;
 }

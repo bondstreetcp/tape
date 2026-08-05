@@ -3,6 +3,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { loadSnapshot } from "@/lib/data";
 import { buildLeaders } from "@/lib/leaders";
 import LeadersView from "@/components/LeadersView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
@@ -23,5 +24,5 @@ export default async function LeadersPage({ params }: { params: Promise<{ univer
       </main>
     );
   }
-  return <LeadersView rows={rows} universe={universe} />;
+  return <LeadersView rows={rows} universe={universe} record={<BoardTrackRecord universe={universe} signal="leaders" />} />;
 }

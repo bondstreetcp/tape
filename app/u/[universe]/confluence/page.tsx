@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { ConfluenceData } from "@/lib/confluence";
 import { loadFlaggedFor } from "@/lib/flaggedJoin";
 import ConfluenceView from "@/components/ConfluenceView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -29,5 +30,5 @@ export default async function ConfluencePage({ params }: { params: Promise<{ uni
     return <EmptyState universe={universe} title="Confluence Engine" />;
   }
   const flagged = await loadFlaggedFor("confluence", new Set(data.names.map((n) => n.symbol)));
-  return <ConfluenceView universe={universe} data={data} flagged={flagged} />;
+  return <ConfluenceView universe={universe} data={data} flagged={flagged} record={<BoardTrackRecord universe={universe} signal="confluence" />} />;
 }

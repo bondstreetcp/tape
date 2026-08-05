@@ -5,6 +5,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { WarningsData } from "@/lib/warnings";
 import { loadFlaggedFor } from "@/lib/flaggedJoin";
 import WarningsView from "@/components/WarningsView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -26,5 +27,5 @@ export default async function WarningsPage({ params }: { params: Promise<{ unive
   const data = await loadWarnings();
   if (!data || !data.names.length) return <EmptyState universe={universe} title="Warning Signs" />;
   const flagged = await loadFlaggedFor("warnings", new Set(data.names.map((n) => n.symbol)));
-  return <WarningsView universe={universe} data={data} flagged={flagged} />;
+  return <WarningsView universe={universe} data={data} flagged={flagged} record={<BoardTrackRecord universe={universe} signal="warnings" />} />;
 }

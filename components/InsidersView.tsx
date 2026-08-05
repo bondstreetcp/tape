@@ -9,7 +9,7 @@ const money = (v: number | null) =>
   v == null ? "—" : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(0)}k` : `$${Math.round(v)}`;
 const signed = (v: number | null, d = 0) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 
-export default function InsidersView({ data, universe }: { data: InsidersData; universe: string }) {
+export default function InsidersView({ data, universe, record }: { data: InsidersData; universe: string; record?: React.ReactNode }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [clusterOnly, setClusterOnly] = useState(false);
 
@@ -25,6 +25,7 @@ export default function InsidersView({ data, universe }: { data: InsidersData; u
         desc={`Open-market insider BUYS (SEC Form 4, code P) over the last ${data.windowDays} days — corporate insiders putting their own cash in, especially on weakness, is a high-conviction accumulation tell. Cluster buys (several insiders, or large $) rank highest. Open-market buying is RARE in mega-caps, so this is far richer on broad / small-cap universes. Decision-support, not advice.`}
         universe={universe}
       />
+      {record}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button

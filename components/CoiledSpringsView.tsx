@@ -36,7 +36,7 @@ const FILTERS: { key: Setup | "all"; label: string }[] = [
   { key: "blown", label: "Blown + amplified" },
 ];
 
-export default function CoiledSpringsView({ universe, rows, generatedAt }: { universe: string; rows: FusedRow[]; generatedAt: string | null }) {
+export default function CoiledSpringsView({ universe, rows, generatedAt, record }: { universe: string; rows: FusedRow[]; generatedAt: string | null; record?: React.ReactNode }) {
   const [filter, setFilter] = useState<Setup | "all">("all");
   const counts = useMemo(() => {
     const m: Record<string, number> = { coiled: 0, pinned: 0, blown: 0 };
@@ -61,6 +61,7 @@ export default function CoiledSpringsView({ universe, rows, generatedAt }: { uni
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+      {record}
 
       <HowToRead>
         <p><b>What&apos;s here:</b> every scanned name classified by where its <b>realized vol sits in its own historical cone</b> (quiet vs blown-out) crossed with <b>how dealers are positioned</b> (short gamma amplifies moves, long gamma dampens them). The join is the signal — neither board alone tells you a move is both cheap AND likely to run.</p>

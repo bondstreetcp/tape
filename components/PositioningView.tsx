@@ -31,13 +31,14 @@ const SORTS: { key: Sort; label: string; title: string }[] = [
 ];
 
 export default function PositioningView({
-  universe, rows, generatedAt, callPremium, putPremium,
+  universe, rows, generatedAt, callPremium, putPremium, record,
 }: {
   universe: string;
   rows: PositioningRow[];
   generatedAt: string;
   callPremium: number | null;
   putPremium: number | null;
+  record?: React.ReactNode;
 }) {
   const [sort, setSort] = useState<Sort>("premium");
   const [catalystOnly, setCatalystOnly] = useState(false);
@@ -68,6 +69,7 @@ export default function PositioningView({
         </div>
         <UniverseSwitcher current={universe} />
       </div>
+      {record}
 
       <HowToRead>
         <p><b>What&apos;s here:</b> the same big option trades as the <Link href={`/u/${universe}/flow`} className="text-[var(--accent)] hover:underline">Options Flow</Link> tape, but rolled up <b>per underlying</b> into a positioning read — so you see which <i>names</i> are being bet on, not just a list of individual contracts.</p>

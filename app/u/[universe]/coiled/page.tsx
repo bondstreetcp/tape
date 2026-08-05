@@ -7,6 +7,7 @@ import { fuseVolGamma } from "@/lib/volGamma";
 import type { GammaBoardData } from "@/lib/gammaBoard";
 import type { VolConeData } from "@/lib/volCone";
 import CoiledSpringsView from "@/components/CoiledSpringsView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
@@ -24,5 +25,5 @@ export default async function CoiledSpringsPage({ params }: { params: Promise<{ 
   const rows = fuseVolGamma(gamma?.rows ?? [], cone?.rows ?? []);
   // freshest of the two inputs, so the "as of" reflects the join.
   const generatedAt = [gamma?.generatedAt, cone?.generatedAt].filter(Boolean).sort().slice(-1)[0] ?? null;
-  return <CoiledSpringsView universe={universe} rows={rows} generatedAt={generatedAt} />;
+  return <CoiledSpringsView universe={universe} rows={rows} generatedAt={generatedAt} record={<BoardTrackRecord universe={universe} signal="coiled" />} />;
 }

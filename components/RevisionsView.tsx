@@ -8,7 +8,7 @@ import type { RevisionsData } from "@/lib/revisions";
 const pct = (v: number | null, d = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 const col = (v: number | null) => (v == null ? "var(--text-3)" : v > 0 ? "#22c55e" : v < 0 ? "#ef4444" : "var(--text-3)");
 
-export default function RevisionsView({ data, universe }: { data: RevisionsData; universe: string }) {
+export default function RevisionsView({ data, universe, record }: { data: RevisionsData; universe: string; record?: React.ReactNode }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [sector, setSector] = useState<string | null>(null);
   const [mode, setMode] = useState<"all" | "up" | "down">("all");
@@ -32,6 +32,7 @@ export default function RevisionsView({ data, universe }: { data: RevisionsData;
         title="Revisions Momentum"
         desc="Where the Street is quietly moving numbers. Ranks every name by estimate drift — how much consensus EPS has changed over the last 90/30 days — and revision breadth (analysts revising up vs down). Rising estimates ahead of a print is one of the most durable public-market signals (the PEAD factor). Decision-support, not advice."
       />
+      {record}
 
       {/* Sector revision-breadth strip */}
       {data.sectors.length > 0 && (

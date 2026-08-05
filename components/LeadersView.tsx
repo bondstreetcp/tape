@@ -10,7 +10,7 @@ const money = (v: number | null) =>
 const pct = (v: number | null, d = 0) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 const col = (v: number | null) => (v == null ? "var(--text-3)" : v >= 0 ? "#22c55e" : "#ef4444");
 
-export default function LeadersView({ rows, universe }: { rows: LeaderRow[]; universe: string }) {
+export default function LeadersView({ rows, universe, record }: { rows: LeaderRow[]; universe: string; record?: React.ReactNode }) {
   const [quad, setQuad] = useState<Quadrant | null>(null);
   const [sector, setSector] = useState<string | null>(null);
   const [breakoutOnly, setBreakoutOnly] = useState(false);
@@ -37,6 +37,7 @@ export default function LeadersView({ rows, universe }: { rows: LeaderRow[]; uni
         title="Leaders Board"
         desc="Every name ranked by relative strength (RS) — its multi-timeframe return percentile vs the rest of the universe (1–99, IBD-style) — and placed in a momentum quadrant from its RS level vs. whether that RS is accelerating. Breakout = near a 52-week high AND in a golden cross above the 200-day MA. Decision-support, not advice."
       />
+      {record}
 
       {/* Quadrant breadth strip — is leadership broad or narrow? */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

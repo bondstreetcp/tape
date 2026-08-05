@@ -10,7 +10,7 @@ const money = (v: number | null) => (v == null ? "—" : v >= 1e9 ? `$${(v / 1e9
 const pctStr = (v: number | null) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`);
 type ToneF = "all" | "capitulation" | "profit-taking";
 
-export default function DistributionView({ names, universe, asOf }: { names: DistributionName[]; universe: string; asOf: string | null }) {
+export default function DistributionView({ names, universe, asOf, record }: { names: DistributionName[]; universe: string; asOf: string | null; record?: React.ReactNode }) {
   const [toneF, setToneF] = useState<ToneF>("all");
   const [q, setQ] = useState("");
 
@@ -36,6 +36,7 @@ export default function DistributionView({ names, universe, asOf }: { names: Dis
           </p>
         </div>
       </div>
+      {record}
 
       <HowToRead>
         <p><b>What this is:</b> where the tracked super-investors are <i>leaving</i>, not entering — aggregated across the 56-manager roster from their latest quarterly 13F. A name needs 2+ managers exiting/trimming to appear, so it&apos;s consensus distribution, not one fund rebalancing.</p>

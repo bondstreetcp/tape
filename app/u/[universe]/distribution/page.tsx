@@ -4,6 +4,7 @@ import { loadSnapshot } from "@/lib/data";
 import { loadSuperInvestors } from "@/lib/superinvestors";
 import { buildSmartMoneySell } from "@/lib/smartMoneySell";
 import DistributionView from "@/components/DistributionView";
+import BoardTrackRecord from "@/components/BoardTrackRecord";
 import EmptyState from "@/components/EmptyState";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -22,5 +23,5 @@ export default async function DistributionPage({ params }: { params: Promise<{ u
 
   if (!names.length) return <EmptyState universe={universe} title="Smart-Money Distribution" />;
   const asOf = si?.generatedAt ? new Date(si.generatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
-  return <DistributionView names={names} universe={universe} asOf={asOf} />;
+  return <DistributionView names={names} universe={universe} asOf={asOf} record={<BoardTrackRecord universe={universe} signal="distribution" />} />;
 }
