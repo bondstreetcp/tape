@@ -15,6 +15,10 @@ export interface TradeLeg {
   side: "long" | "short";
   strike: number;
   premium: number; // per-share mid (or last) captured at generation time
+  /** Two-sided quote at capture, when one existed — lets the record grade a CROSSED fill (short sells
+   *  at bid, long buys at ask) next to the mid. Absent on recs logged before 2026-08-05. */
+  bid?: number | null;
+  ask?: number | null;
 }
 
 export type TradeStatus = "awaiting_print" | "awaiting_expiry" | "settled";
@@ -51,6 +55,29 @@ export interface TradeRec {
   // grades normally, so the record can MEASURE whether flagged sell-vol plays underperform.
   catalystFlag?: { kind: "strategic-alt" | "spin-off"; headline: string; date: string } | null;
 
+  // ── risk instrumentation (2026-08-05, the "scale it up?" audit) — all LOG-time, all optional so
+  // pre-existing recs stay valid. Only thin-credit is a MEASURED handicap (retro on 206 settled
+  // sells: <1.5%-of-spot credits made $185/play vs the $1,468 average while carrying 3 of 12 tail
+  // losses — uncompensated risk). The rest are CONTEXT logged so the hurricane-prediction question
+  // can be re-asked at a real sample size — the same retro showed today's features do NOT separate
+  // the tails (the worst losses had the FATTEST richness ratios), so no field here claims to. ──
+  /** Entry credit if every leg fills at the WORSE side of its captured quote — the honest fill. */
+  entryCreditCrossed?: number | null;
+  /** Reg-T-floor margin to carry the position, per share of underlying (see marginPerShare). */
+  marginPerShare?: number | null;
+  /** Same, scaled to the $100k-notional basis every P&L on the board uses. */
+  marginUsd100k?: number | null;
+  /** CBOE VIX level on the log night (data/macro.json) — the regime stamp for later slicing. */
+  vixAtLog?: number | null;
+  /** Calendar days between the data date and the print — the unhedged drift window (the ATKR class:
+   *  biggest tail loss in the first 227 settles came from a +31.7% PRE-print drift, 0% print move). */
+  gapDays?: number | null;
+  /** The name's largest single historical earnings move — a sell at implied below this is short a
+   *  move the stock has already demonstrated. */
+  histMaxPct?: number | null;
+  /** Code-computed context chips (see computeRiskFlags). */
+  riskFlags?: string[];
+
   // ── settlement (filled in on later runs) ──
   status: TradeStatus;
   spotAtEarnings?: number | null; // close on the reaction day
@@ -62,6 +89,12 @@ export interface TradeRec {
   outcome?: Outcome | null;
   settleBasis?: "post-print" | "expiry"; // how pnl was graded (older recs: expiry; new: the print)
   pnlToExpiry?: number | null; // secondary, informational: what it would have been if held to expiry
+  /** Pre-print drift: how far the stock moved between logging and the print-eve close (the print's
+   *  own move backed out of the reaction close). The tail the "bet on the print" framing hides. */
+  driftMovePct?: number | null;
+  /** pnl on the capital actually tied up (marginUsd100k), not on notional — the number a sizing
+   *  decision needs. Absent when the rec predates the margin field. */
+  retOnMarginPct?: number | null;
 }
 
 export interface TradeLogData {
@@ -72,6 +105,102 @@ export interface TradeLogData {
 // Net cash at entry, per share: short legs COLLECT premium (+), long legs PAY it (−).
 export function netCredit(legs: TradeLeg[]): number {
   return legs.reduce((s, l) => s + (l.side === "short" ? l.premium : -l.premium), 0);
+}
+
+/**
+ * Net entry cash if every leg fills at the WORSE side of its captured quote: shorts SELL at the bid,
+ * longs BUY at the ask. The mid is what the log grades; this is what a market order actually gets —
+ * the gap between them is the strategy's first, guaranteed cost. Null unless every leg carried a
+ * two-sided quote (a crossed fill computed from half a book would be fiction).
+ */
+export function crossedCredit(legs: TradeLeg[]): number | null {
+  let s = 0;
+  for (const l of legs) {
+    const px = l.side === "short" ? l.bid : l.ask;
+    if (px == null || !(px > 0)) return null;
+    s += l.side === "short" ? px : -px;
+  }
+  return +s.toFixed(4); // quotes are cents-quantized; don't leak float dust into the log
+}
+
+/**
+ * Margin to CARRY the position, per share of underlying — the Reg-T floor, which is the honest
+ * denominator for "return on capital" (portfolio margin is usually lighter; brokers vary; this is
+ * the conservative standard formula, documented rather than guessed). Two candidate requirements:
+ *   • RISK-BASED (when maxLoss is finite): the max loss — right for spreads/condors and long premium.
+ *   • REG-T NAKED (when short legs exist): per side, premium + max(20% of spot − OTM amount, 10% of
+ *     strike[put] / 10% of spot[call]); a strangle margins the GREATER side + the other's premium.
+ * The requirement is the SMALLER of the two that apply: a naked short put has finite risk (stock
+ * stops at zero) but no broker cash-secures it in a margin account — Reg-T's ~15% beats "strike −
+ * premium" — while a condor's width−credit beats the naked formula. min() picks correctly for every
+ * standard structure; both candidates absent (shouldn't happen with legs present) → null.
+ */
+export function marginPerShare(legs: TradeLeg[], spot: number): number | null {
+  if (!legs.length || !(spot > 0)) return null;
+  const { maxLoss } = payoffBounds(legs);
+  const riskBased = maxLoss != null ? Math.max(0, -maxLoss) : null;
+  const shorts = legs.filter((l) => l.side === "short");
+  let regT: number | null = null;
+  if (shorts.length) {
+    const req = (l: TradeLeg): number => {
+      const otm = l.type === "C" ? Math.max(0, l.strike - spot) : Math.max(0, spot - l.strike);
+      const floor = l.type === "P" ? 0.1 * l.strike : 0.1 * spot;
+      return l.premium + Math.max(0.2 * spot - otm, floor);
+    };
+    const calls = shorts.filter((l) => l.type === "C").map(req);
+    const puts = shorts.filter((l) => l.type === "P").map(req);
+    const callReq = calls.length ? Math.max(...calls) : 0;
+    const putReq = puts.length ? Math.max(...puts) : 0;
+    const callPrem = shorts.filter((l) => l.type === "C").reduce((a, l) => a + l.premium, 0);
+    const putPrem = shorts.filter((l) => l.type === "P").reduce((a, l) => a + l.premium, 0);
+    // Greater side's full requirement + the other side's premium (the standard strangle rule).
+    regT = callReq >= putReq ? callReq + putPrem : putReq + callPrem;
+  }
+  if (riskBased != null && regT != null) return Math.min(riskBased, regT);
+  return riskBased ?? regT;
+}
+
+/**
+ * Pre-print drift: spotAtEarnings is the REACTION-day close, so back the print's own move out of it
+ * to recover the print-eve close, then measure from the strike-setting spot. This is the exposure the
+ * "bet on the print" framing hides — strikes are struck at log time, and the stock has days to walk
+ * away from them before the event (the ATKR class: +31.7% drift, 0% print move, worst loss on file).
+ */
+export function prePrintDriftPct(spotAtRec: number, reactionClose: number, realizedMovePct: number): number | null {
+  if (!(spotAtRec > 0) || !(reactionClose > 0)) return null;
+  const evClose = reactionClose / (1 + realizedMovePct / 100);
+  if (!(evClose > 0)) return null;
+  return +(((evClose - spotAtRec) / spotAtRec) * 100).toFixed(2);
+}
+
+/** The one MEASURED handicap threshold: sells collecting under this share of spot are picking pennies
+ *  (retro 2026-08-05: 39 such plays averaged $185 vs the book's $1,468 — with 3 of the 12 tails). */
+export const THIN_CREDIT_PCT = 0.015;
+
+/**
+ * Context chips stamped at LOG time. Honesty contract, same as catalystFlag above: these ANNOTATE,
+ * they never gate — the play still logs and grades, so the record can measure whether each flag
+ * actually predicts anything once the sample is real. The 2026-08-05 retro (206 sells, 12 tails)
+ * found only thin-credit defensible; wide-gap/undefined-risk/hist-max are the candidates being
+ * accumulated for the rematch.
+ */
+export function computeRiskFlags(r: {
+  verdict: "rich" | "cheap";
+  entryCredit: number;
+  spotAtRec: number;
+  maxLoss: number | null;
+  gapDays?: number | null;
+  impliedMovePct: number;
+  histMaxPct?: number | null;
+  catalystFlag?: unknown | null;
+}): string[] {
+  const flags: string[] = [];
+  if (r.verdict === "rich" && r.spotAtRec > 0 && r.entryCredit / r.spotAtRec < THIN_CREDIT_PCT) flags.push("thin-credit");
+  if (r.maxLoss == null) flags.push("undefined-risk");
+  if (r.gapDays != null && r.gapDays >= 5) flags.push("wide-gap");
+  if (r.verdict === "rich" && r.histMaxPct != null && r.histMaxPct > r.impliedMovePct) flags.push("implied<hist-max");
+  if (r.catalystFlag) flags.push("catalyst");
+  return flags;
 }
 
 // P&L per share if held to expiry with the underlying settling at S. Options expire to intrinsic, so

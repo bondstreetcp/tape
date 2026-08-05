@@ -16,6 +16,10 @@ export interface TradeLegSpec {
   side: "long" | "short";
   strike: number;
   premium: number; // per-share mid (or last) at generation time
+  /** The quote's two sides at generation time — captured so the track record can grade a CROSSED
+   *  fill (short fills at bid, long at ask) next to the mid fantasy. Null when one-sided/absent. */
+  bid?: number | null;
+  ask?: number | null;
 }
 
 export interface TradeIdea {
@@ -129,7 +133,12 @@ export function tradeIdea(
   const prem = (type: "C" | "P", k: number): number | null => midOf((type === "C" ? chain.calls : chain.puts).find((x) => x.strike === k));
   // structured legs WITH premiums (for the payoff diagram + the trade log) — only when every leg has a usable quote.
   const legsOf = (specs: { type: "C" | "P"; side: "long" | "short"; strike: number }[]): TradeLegSpec[] | undefined => {
-    const out = specs.map((s) => ({ ...s, premium: prem(s.type, s.strike) }));
+    const out = specs.map((s) => {
+      const o = (s.type === "C" ? chain.calls : chain.puts).find((x) => x.strike === s.strike);
+      // bid/ask ride along only as a PAIR — a one-sided quote can't price a crossed fill.
+      const twoSided = !!(o?.bid && o?.ask && o.bid > 0 && o.ask > 0);
+      return { ...s, premium: prem(s.type, s.strike), bid: twoSided ? o!.bid! : null, ask: twoSided ? o!.ask! : null };
+    });
     return out.every((l) => l.premium != null) ? (out as TradeLegSpec[]) : undefined;
   };
   // Positioning LEAN (informational): skew (puts vs calls bid) + max-pain pull + wall placement. Needs ≥2
@@ -234,6 +243,9 @@ export interface BuiltTrade {
   verdict: "rich" | "cheap";
   richnessRatio: number;
   avgRealizedPct: number;
+  /** Largest single |1-day earnings move| in the history sample — the name's PROVEN worst. A sell at
+   *  implied below this number is short a move the stock has already demonstrated it can make. */
+  histMaxPct: number;
   trade: TradeIdea;
 }
 
@@ -252,6 +264,7 @@ export async function buildEarningsTrade(sym: string, earningsISO: string | null
   const moves = (reactions || []).map((r) => r.move).filter((m): m is number => m != null);
   if (!moves.length) return null;
   const avgRealizedPct = (moves.reduce((a, m) => a + Math.abs(m), 0) / moves.length) * 100;
+  const histMaxPct = Math.max(...moves.map((m) => Math.abs(m))) * 100;
   if (!(avgRealizedPct > 0)) return null;
   const ratio = impliedMove / avgRealizedPct;
   const verdict = ratio >= 1.2 ? "rich" : ratio <= 0.85 ? "cheap" : "fair";
@@ -263,5 +276,5 @@ export async function buildEarningsTrade(sym: string, earningsISO: string | null
   // No priced legs → nothing to settle later. This is also how a catalyst-withheld rich name exits:
   // the desk abstains, so the logger records no play (there is no trade to grade).
   if (!trade || !trade.legsData) return null;
-  return { spot: sm.price, impliedMovePct: impliedMove, verdict: verdict as "rich" | "cheap", richnessRatio: ratio, avgRealizedPct, trade };
+  return { spot: sm.price, impliedMovePct: impliedMove, verdict: verdict as "rich" | "cheap", richnessRatio: ratio, avgRealizedPct, histMaxPct, trade };
 }

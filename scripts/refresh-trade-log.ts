@@ -21,7 +21,7 @@ import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
 import { buildEarningsTrade } from "../lib/earningsTrade";
-import { netCredit, payoffBounds, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
+import { computeRiskFlags, crossedCredit, marginPerShare, netCredit, payoffBounds, prePrintDriftPct, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
 import { loadCatalystOverlay } from "../lib/catalystOverlay";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -120,6 +120,12 @@ async function main() {
   // re-stamp pass below keeps annotating previously-logged recs.
   const overlay = await loadCatalystOverlay(now);
   const flagFor = overlay.flagFor;
+  // Regime stamp for every rec logged tonight — VIX from the macro feed (best-effort: a missing
+  // macro file costs the annotation, never the log).
+  const vixNow: number | null = await fsp
+    .readFile(path.join(DATA, "macro.json"), "utf8")
+    .then((s) => JSON.parse(s).indicators?.find((i: any) => i.key === "vix")?.value ?? null)
+    .catch(() => null);
   if (overlay.size) console.log(`catalyst overlay: ${overlay.size} ticker keys with a LIVE strategic-alt/spin-off disclosure (resolved filtered, class roots aliased)`);
 
   // ── 1. LOG new plays for upcoming reporters ──
@@ -182,10 +188,53 @@ async function main() {
       catalystFlag: flagFor(s.symbol),
       status: "awaiting_print",
     };
+    // ── risk instrumentation (all annotation, never a gate — see lib/tradeLog) ──
+    const gapDays = Math.max(0, Math.round((Date.parse(String(s.earningsDate).slice(0, 10) + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / DAY));
+    const xc = crossedCredit(rec.legs);
+    const mps = marginPerShare(rec.legs, rec.spotAtRec);
+    rec.gapDays = gapDays;
+    rec.histMaxPct = +built.histMaxPct.toFixed(2);
+    rec.entryCreditCrossed = xc != null ? +xc.toFixed(2) : null;
+    rec.marginPerShare = mps != null ? +mps.toFixed(2) : null;
+    rec.marginUsd100k = mps != null ? Math.round((mps * 100000) / rec.spotAtRec) : null;
+    rec.vixAtLog = vixNow;
+    rec.riskFlags = computeRiskFlags({ ...rec, gapDays, histMaxPct: rec.histMaxPct });
     byId.set(rec.id, rec);
     logged++;
   });
   console.log(`logged ${logged} new plays`);
+
+  // ── 1c. BACKFILL derived-only annotations on pre-instrumentation recs (2026-08-05) ──
+  // driftMovePct and margin need nothing that isn't already stored (strikes, premiums, spots), so the
+  // existing book gets them retroactively — the flags that need LOG-time data (bid/ask, VIX, histMax)
+  // stay honestly absent on old recs. Idempotent: skips anything already filled.
+  let backfilled = 0;
+  for (const rec of byId.values()) {
+    let touched = false;
+    if (rec.driftMovePct == null && rec.spotAtEarnings != null && rec.realizedMovePct != null) {
+      rec.driftMovePct = prePrintDriftPct(rec.spotAtRec, rec.spotAtEarnings, rec.realizedMovePct);
+      touched = rec.driftMovePct != null;
+    }
+    if (rec.marginPerShare == null && rec.legs?.length && rec.spotAtRec > 0) {
+      const mps = marginPerShare(rec.legs, rec.spotAtRec);
+      if (mps != null) {
+        rec.marginPerShare = +mps.toFixed(2);
+        rec.marginUsd100k = Math.round((mps * 100000) / rec.spotAtRec);
+        if (rec.pnl != null && mps > 0) rec.retOnMarginPct = +((rec.pnl / mps) * 100).toFixed(1);
+        touched = true;
+      }
+    }
+    if (rec.gapDays == null && rec.asOfDate && rec.earningsDate) {
+      const gd = Math.round((Date.parse(String(rec.earningsDate).slice(0, 10) + "T00:00:00Z") - Date.parse(rec.asOfDate + "T00:00:00Z")) / DAY);
+      if (Number.isFinite(gd)) { rec.gapDays = Math.max(0, gd); touched = true; }
+    }
+    if (rec.riskFlags == null) {
+      rec.riskFlags = computeRiskFlags(rec);
+      touched = true;
+    }
+    if (touched) backfilled++;
+  }
+  if (backfilled) console.log(`backfilled risk annotations on ${backfilled} pre-instrumentation recs`);
 
   // ── 1b. RE-STAMP the catalyst flag on already-logged recs ──
   // Flags used to be entry-time-only, which systematically missed the FRESHEST disclosures: corp-events
@@ -216,6 +265,8 @@ async function main() {
         rec.realizedMovePct = +(rx.move * 100).toFixed(2);
         rec.moveCleared = Math.abs(rec.realizedMovePct) > rec.impliedMovePct;
         rec.spotAtEarnings = +rx.close.toFixed(2);
+        // How far the stock walked from the strikes BEFORE the print — the ATKR class of risk.
+        rec.driftMovePct = prePrintDriftPct(rec.spotAtRec, rx.close, rec.realizedMovePct);
         // Reprice the structure the morning after — the honest earnings-play grade.
         const daysToExp = Math.round((expT - Date.parse(rx.day + "T00:00:00Z")) / DAY);
         const pnl = settlePostPrint(rec, rx.close, daysToExp);
@@ -225,6 +276,8 @@ async function main() {
           rec.settleBasis = "post-print";
           rec.settledAt = nowISO;
           rec.status = "settled";
+          // The sizing number: P&L on the capital tied up, not on notional.
+          if (rec.marginPerShare != null && rec.marginPerShare > 0) rec.retOnMarginPct = +((pnl / rec.marginPerShare) * 100).toFixed(1);
           settled++;
         }
       }

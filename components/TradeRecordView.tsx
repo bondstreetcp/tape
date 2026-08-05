@@ -74,6 +74,12 @@ export default function TradeRecordView({
 
   const wr = stats.winRate;
   const rich = stats.byVerdict.rich, cheap = stats.byVerdict.cheap;
+  // Return on the capital actually tied up (Reg-T floor), where the margin annotation exists —
+  // the number a sizing decision needs; notional-basis P&L flatters premium selling.
+  const onMargin = useMemo(() => {
+    const xs = allRecs.filter((r) => r.status === "settled" && r.retOnMarginPct != null).map((r) => r.retOnMarginPct!);
+    return xs.length >= 10 ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  }, [allRecs]);
 
   return (
     <main className="mx-auto max-w-[92rem] px-4 py-6 sm:px-6">
@@ -97,6 +103,14 @@ export default function TradeRecordView({
           <Stat label="Total P&L" value={bigMoney(stats.totalPnl)} color={stats.totalPnl >= 0 ? GREEN : RED} sub={`${NOTIONAL_K} notional each`} />
           <Stat label="Sell-premium" value={rich.n ? `${rich.wins}/${rich.n}` : "—"} color={rich.avgPnl == null ? undefined : rich.avgPnl >= 0 ? GREEN : RED} sub={rich.avgPnl == null ? "rich → short" : `avg ${bigMoney(rich.avgPnl)}`} />
           <Stat label="Buy-premium" value={cheap.n ? `${cheap.wins}/${cheap.n}` : "—"} color={cheap.avgPnl == null ? undefined : cheap.avgPnl >= 0 ? GREEN : RED} sub={cheap.avgPnl == null ? "cheap → long" : `avg ${bigMoney(cheap.avgPnl)}`} />
+          {onMargin != null && (
+            <Stat
+              label="On margin"
+              value={`${onMargin >= 0 ? "+" : ""}${onMargin.toFixed(1)}%`}
+              color={onMargin >= 0 ? GREEN : RED}
+              sub="avg per play on Reg-T capital"
+            />
+          )}
         </div>
       )}
 
@@ -175,6 +189,22 @@ export default function TradeRecordView({
                           ⚠ CATALYST
                         </span>
                       )}
+                      {r.riskFlags?.includes("thin-credit") && (
+                        <span
+                          className="ml-1.5 cursor-help rounded bg-[color-mix(in_oklab,#f59e0b_14%,transparent)] px-1 py-0.5 align-middle text-[10px] font-semibold text-[#d97706]"
+                          title="Thin credit: the premium collected is under 1.5% of the share price. Measured on this book's first 206 settled sells: such plays averaged $185 vs the $1,468 book average while carrying 3 of the 12 worst losses — risk without pay."
+                        >
+                          thin credit
+                        </span>
+                      )}
+                      {r.riskFlags?.includes("implied<hist-max") && (
+                        <span
+                          className="ml-1.5 cursor-help rounded bg-[var(--surface-2)] px-1 py-0.5 align-middle text-[10px] font-medium text-[var(--text-4)]"
+                          title={`Selling an implied move below this name's own largest historical earnings move${r.histMaxPct != null ? ` (±${r.histMaxPct.toFixed(1)}%)` : ""} — the stock has already demonstrated it can clear these strikes. Logged as context; not yet a measured predictor.`}
+                        >
+                          &lt;hist max
+                        </span>
+                      )}
                       <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.legsText}>{r.legsText}</div>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap font-mono text-[12px] text-[var(--text-3)]">{r.expiry}<span className="text-[var(--text-4)]"> · {r.dte}d</span></td>
@@ -185,6 +215,15 @@ export default function TradeRecordView({
                         <span style={{ color: r.realizedMovePct >= 0 ? GREEN : RED }}>
                           {signPct(r.realizedMovePct)}{r.moveCleared ? <span title="cleared the implied move" className="ml-0.5 text-[var(--text-3)]">✓</span> : null}
                         </span>
+                      )}
+                      {r.driftMovePct != null && Math.abs(r.driftMovePct) >= r.impliedMovePct / 2 && (
+                        <div
+                          className="cursor-help text-[10px]"
+                          style={{ color: Math.abs(r.driftMovePct) > r.impliedMovePct ? "#f59e0b" : "var(--text-4)" }}
+                          title={`The stock drifted ${signPct(r.driftMovePct)} between logging and the print — the strikes were set ${r.gapDays != null ? r.gapDays + " day(s) " : ""}before the event, so this move hit the position before earnings did. The realized figure above is the print alone.`}
+                        >
+                          drift {signPct(r.driftMovePct)}
+                        </div>
                       )}
                     </td>
                     <td
