@@ -324,6 +324,14 @@ async function main() {
     // data/company from the tarball but never re-ships company.tar.gz, and never writes the heartbeat).
     const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", mode === "full" ? { FULL: "true" } : {});
     let gateOk = true;
+    // The gate runs on FULL ONLY, and intraday ticks deploy ungated BY DESIGN — do not "fix" this by
+    // gating them. Observed 2026-08-05 (news tape dead 5 days, gate red): the 23:00 FULL skipped its
+    // deploy, then the 02:00 quotes tick deployed anyway — and that was the RIGHT outcome. The upload
+    // above has already advanced R2, so a skipped deploy protects nobody from the stale feed (the site
+    // hydrates it either way); gating quotes ticks would only mean a dead news tape freezes QUOTE
+    // updates all day — strictly staler for the user. The gate's real teeth are (1) this FULL-tick
+    // skip, which keeps the just-rebuilt tree off the site for a few hours while (2) check-freshness
+    // pushes the red verdict to ALERT_WEBHOOK_URL so a human fixes the feed the same night.
     if (mode === "full") gateOk = step("Data-freshness gate", "npm run check-freshness");
 
     if (uploaded && gateOk) {

@@ -12,12 +12,17 @@ export async function notifyAlert(msg: string, title = "Tape alert", urlOverride
     return;
   }
   const isNtfy = /(^|\/\/)ntfy\.sh\//.test(url) || /\/\/ntfy\./.test(url);
+  // ntfy takes the title as an HTTP HEADER, and fetch header values must be ByteString (Latin-1) —
+  // an em-dash or arrow in the title throws "Cannot convert argument to a ByteString" BEFORE any
+  // request is sent, i.e. the alert about the outage becomes its own silent outage. Found live
+  // 2026-08-05 wiring the freshness gate in. ASCII-fold the header; the BODY stays raw UTF-8.
+  const headerSafe = (s: string) => s.replace(/[^\x20-\x7E]/g, "-");
   try {
     const res = await fetch(url, {
       signal: deadline(10_000),
       method: "POST",
       headers: isNtfy
-        ? { Title: title, Priority: "high", Tags: "warning" }
+        ? { Title: headerSafe(title), Priority: "high", Tags: "warning" }
         : { "Content-Type": "application/json" },
       // Slack wants {text}, Discord wants {content}, ntfy wants the raw string. Send all shapes at once.
       body: isNtfy ? msg : JSON.stringify({ text: msg, content: msg }),

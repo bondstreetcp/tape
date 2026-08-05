@@ -794,6 +794,10 @@ jobs:
       - name: Data-freshness gate
         if: ${{ env.FULL == 'true' }}
         run: npm run check-freshness
+        env:
+          # A red gate must reach a human, not just an exit code — the 2026-08-05 lesson (four red
+          # nights, four skipped deploys, zero humans aware). Inert when the secret is unset.
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
 
       # Trigger a Vercel production deploy via Deploy Hook. Reliable — the git-push webhook is flaky,
       # and after the data/→R2 cutover there is NO data commit to trigger a deploy at all, so this

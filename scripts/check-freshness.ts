@@ -10,6 +10,7 @@
  * registry + how the thresholds are calibrated.
  */
 import { checkFreshness, FAILING, type FreshResult } from "../lib/dataFreshness";
+import { notifyAlert } from "../lib/alertNotify";
 
 const ICON: Record<string, string> = { ok: "  ok  ", stale: " STALE", missing: "MISSING", empty: " EMPTY", unreadable: "UNREAD" };
 
@@ -43,6 +44,23 @@ async function main() {
 
   if (bad.length && !warnOnly) {
     console.error(`FRESHNESS CHECK FAILED — ${bad.length} feed(s) stale/missing/empty. See above.`);
+    // Push the red verdict to the ops webhook — THE lesson of 2026-08-05: the news tape sat dead for
+    // 5 days and this gate went red four consecutive nights, skipping four nightly deploys, and the
+    // only witnesses were an unread DSM email and a /status page nobody opens daily. An exit code is
+    // not an alarm. notifyAlert no-ops (with a log line) when ALERT_WEBHOOK_URL is unset, and this
+    // runs once per FULL tick, so a week-long outage is one ping per night, not a pager storm.
+    // Cap the list: past ~4KB ntfy demotes the whole message to a "you received a file" attachment —
+    // so the catastrophic night (hydrate broken, EVERYTHING stale) is precisely the night the alert
+    // would turn unreadable on a phone. Ten lines names the victims; /status has the rest.
+    const CAP = 10;
+    const lines = bad.slice(0, CAP).map((r) => {
+      const boards = r.affects?.length ? ` → ${r.affects.join(" ")}` : "";
+      return `• ${r.label} [${r.status.toUpperCase()}] ${r.detail}${boards}`;
+    });
+    if (bad.length > CAP) lines.push(`…and ${bad.length - CAP} more feeds`);
+    if (rep.secDiagnosis) lines.push(`SEC: ${rep.secDiagnosis}`);
+    lines.push("Nightly deploy will be SKIPPED until this is green. Details: /status");
+    await notifyAlert(lines.join("\n"), `Tape freshness RED - ${bad.length} feed${bad.length > 1 ? "s" : ""}`);
     // Set the code and let the loop drain — a bare process.exit() here races with the SEC probe's
     // still-closing socket and trips a libuv assertion on Windows (UV_HANDLE_CLOSING), the same crash
     // the NAS healthcheck hit. Connection:close on the probe means nothing lingers to hang on.
