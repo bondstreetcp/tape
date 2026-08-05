@@ -1843,6 +1843,35 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/tenders",
+        "title": "Tender Offers",
+        "question": "Which live tender offers grant odd-lot priority — the term that pays holders of fewer than 100 shares in full, ahead of everyone bigger?",
+        "how": "The board scans SEC tender-offer filings (SC TO-I is a company buying back its own shares; SC TO-T is a third party's offer) every night, keeps only listed tickers (most raw volume is unlisted interval-fund repurchases), extracts the offer's terms with AI, and then verifies every number appears verbatim in the filing text before showing it. The special column is odd-lot priority: many tenders accept holders of fewer than 100 shares in full, with no proration — a clause that exists so issuers can shed the administrative cost of tiny holders, and that institutions structurally cannot use. Buying 99 shares below the offer price and tendering into that priority is one of the few return streams that exists precisely because an account is small: typically a few hundred dollars per event, a few events a year. The premium column is not free money — a fat premium is usually the market pricing real completion risk, so the conditions column and the filing itself are the actual homework.",
+        "metrics": [
+          {
+            "term": "Offer",
+            "plain": "The stated purchase price. Dutch-auction tenders state a range and the final price is set by the auction — the board shows the LOW end, the conservative bound."
+          },
+          {
+            "term": "Premium",
+            "plain": "Low offer versus the live quote. Large premiums usually signal completion risk (financing or minimum-tender conditions), not a giveaway."
+          },
+          {
+            "term": "Odd-lot ✓",
+            "plain": "The filing grants under-100-share holders priority acceptance without proration, detected in the filing text near the priority/proration language."
+          },
+          {
+            "term": "Per odd-lot",
+            "plain": "(low offer − spot) × 99 shares — the maximum value of one odd-lot position if the offer completes at the low price, before fees."
+          },
+          {
+            "term": "Expires",
+            "plain": "The offer's stated expiration date; offers run about 20 business days and are often extended by amendment."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/corp-events",
         "title": "Corporate Events",
         "question": "Which companies just announced a one-off corporate catalyst — a buyback, spin-off, strategic review, stock split, or CEO/CFO change?",

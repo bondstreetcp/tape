@@ -119,6 +119,8 @@ const FEEDS: FeedSpec[] = [
   // Seasonal by nature: Polymarket lists single-name earnings markets around each season and near
   // zero between them, so rows=0 is a TRUE statement, not a broken feed — age-only, no floor.
   { file: "earnings-odds.json", affects: ["/earnings-odds"], label: "Earnings odds (Polymarket)", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  // Episodic by nature (a handful of listed tenders a quarter; odd-lot ones rarer) — age-only.
+  { file: "tenders.json", affects: ["/tenders"], label: "Tender offers (odd-lot)", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
