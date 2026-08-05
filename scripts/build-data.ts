@@ -24,6 +24,7 @@ import {
 } from "../lib/splits";
 import { snapshotWriteAllowed } from "../lib/snapshotGuard";
 import { carryForwardRows, coverageShortfall } from "../lib/universeCarry";
+import { notifyAlert } from "../lib/alertNotify";
 import { isDateLikeSymbol } from "./iwv";
 import type {
   Returns,
@@ -545,7 +546,16 @@ async function main() {
     await fs.writeFile(snapPath, JSON.stringify(snapshot));
     console.log(`  ${u.id}: ${merged.length} stocks (${carry.fresh.length} fresh, ${carry.carried.length} carried), ${sectors.length} sectors`);
   }
-  if (shortfalls.length) console.error(`\n⚠ COVERAGE SHORTFALL — these universes are missing listed constituents: ${shortfalls.join("; ")}`);
+  if (shortfalls.length) {
+    console.error(`\n⚠ COVERAGE SHORTFALL — these universes are missing listed constituents: ${shortfalls.join("; ")}`);
+    // Same lesson as the freshness gate (2026-08-05): a log line in a nightly nobody reads is not an
+    // alarm. The 124-megacap russell1000 hole rode exactly this print for days. One webhook per FULL
+    // run at most; no-op when ALERT_WEBHOOK_URL is unset.
+    await notifyAlert(
+      `Universe coverage shortfall (fetched vs what the index lists):\n${shortfalls.map((s) => `• ${s}`).join("\n")}\nRows the index lists that neither fetched nor carried. See the FULL-run log.`,
+      "Tape universe coverage short",
+    );
+  }
   if (blocked.length) console.error(`\n⚠ write-guard kept the prior snapshot for ${blocked.length} universe(s): ${blocked.join(", ")} (partial fetch this run). npm run check-freshness will flag any that stay stale.`);
 
   // 7) Split ledger — free: step 4 already fetched these events for the countermeasure.

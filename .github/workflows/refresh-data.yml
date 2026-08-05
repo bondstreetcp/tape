@@ -75,7 +75,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Standdown check: is the NAS (the primary writer) alive? ───────────────────────────────────────
+  # THE 2026-08-05 DIAGNOSIS. When the NAS took over the schedule, this workflow was kept as the
+  # fallback — but nothing ever told it to stand down, so BOTH pipelines ran their full schedules for
+  # days: hydrate→refresh→upload interleaved (this workflow launched a FULL at 23:43 mid-NAS-FULL) and
+  # whichever uploaded last won R2. Each writer's row-carry can only preserve what its OWN hydrated
+  # prior had, so every clobber converted the losing side's carried rows into permanent unknowns —
+  # russell1000 shipped 884/1013 with 124 megacaps missing, "0 carried" — with GitHub's datacenter IPs
+  # (which Yahoo throttles hardest) re-injecting the holes each round.
+  #
+  # The fix: SCHEDULED runs first read site-data/manifest.json (every upload stamps `writer` + time)
+  # and stand down when the NAS has written within MAX_AGE_H. NAS dead → the next cron takes over
+  # automatically — the fallback this workflow was kept to be. workflow_dispatch NEVER stands down:
+  # it is how the NAS itself dispatches specific ticks here and how a human forces a run.
+  # FAIL-OPEN by design: if the manifest is unreadable (creds rotated, R2 down), proceed as writer —
+  # a rare return to the known dual-writer wobble beats a silent no-runs-anywhere outage, and the
+  # Ops-alerts watchdog (freshness-alert.yml) still barks if FULLs stop entirely.
+  primary-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      standdown: ${{ steps.check.outputs.standdown }}
+    steps:
+      - name: Read last writer + age from the R2 manifest
+        id: check
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.LAKE_S3_SECRET }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          MAX_AGE_H: 6 # NAS uploads every ~1-2h weekdays; 6 covers its longest quiet stretch (the FULL's own ~4h run) without delaying a real failover past one cron slot
+        run: |
+          STANDDOWN=false
+          if [ -n "$ENDPOINT" ] && aws s3api get-object --endpoint-url "$ENDPOINT" --bucket "$BUCKET" --key site-data/manifest.json /tmp/manifest.json >/dev/null 2>&1; then
+            WRITER=$(jq -r '.writer // "unknown"' /tmp/manifest.json)
+            GEN=$(jq -r '.generatedAt // empty' /tmp/manifest.json)
+            AGE_H=999
+            if [ -n "$GEN" ]; then
+              TS=$(date -u -d "$GEN" +%s 2>/dev/null || echo 0)
+              [ "$TS" -gt 0 ] && AGE_H=$(( ( $(date -u +%s) - TS ) / 3600 ))
+            fi
+            if [ "$WRITER" = "nas" ] && [ "$AGE_H" -lt "$MAX_AGE_H" ]; then STANDDOWN=true; fi
+            echo "manifest: writer=$WRITER age=${AGE_H}h (max ${MAX_AGE_H}h) → standdown=$STANDDOWN"
+          else
+            echo "manifest unreadable — FAIL OPEN, proceeding as writer"
+          fi
+          echo "standdown=$STANDDOWN" >> "$GITHUB_OUTPUT"
+
   refresh:
+    needs: primary-check
+    # Scheduled runs yield to a living NAS; dispatched runs (the NAS's own dispatches, human fallback
+    # drills) always proceed.
+    if: ${{ github.event_name != 'schedule' || needs.primary-check.outputs.standdown != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 210 # FULL run keeps growing: overnight-filings broad scan ~30m + insider/OGE/valuation-history ~15m each + campaigns/IPO/LLM tails. 150m KILLED the 2026-07-01 run at exactly 2h30 (conclusion "cancelled") → flow/desk-note went stale for a day; multi-expiry flow adds ~15m more. Keep comfortable headroom.
     # FULL = the after-close rebuild (22:00 schedule) or a manual run. INTL = the post-Asian-close

@@ -36,7 +36,17 @@ async function main() {
   execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "--exclude=data/company", "--exclude=data/news-tape.json", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
   const buf = readFileSync(tarPath);
   await putObject(KEY_TAR, buf, "application/gzip");
-  await putObject(KEY_MANIFEST, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length })), "application/json");
+  // `writer` is the standdown protocol's signal (refresh-data.yml "primary-check" reads it): while the
+  // NAS uploads regularly, GitHub's SCHEDULED runs stand down instead of racing it for R2. The
+  // 2026-08-05 diagnosis behind it: both pipelines ran their full schedules for days, hydrate→refresh→
+  // upload interleaved (GH launched a FULL at 23:43 mid-NAS-FULL), and last-upload-won. Each writer's
+  // carry (lib/universeCarry) can only preserve rows its OWN hydrated prior had, so every clobber
+  // turned the losing writer's carried rows into the winner's permanent unknowns — russell1000 shipped
+  // 884/1013 with 124 megacaps (JPM, HD, LLY, XOM…) missing and "0 carried", while GH's datacenter IPs
+  // (Yahoo throttles them hardest) kept re-injecting the holes. The NAS sets TAPE_WRITER=nas in
+  // run-tick; GITHUB_ACTIONS is set by the runner; anything else is a human at a keyboard.
+  const WRITER = process.env.TAPE_WRITER || (process.env.GITHUB_ACTIONS ? "github" : "local");
+  await putObject(KEY_MANIFEST, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length, writer: WRITER })), "application/json");
 
   // Per-stock cache → its own object, FULL-only. An intraday tick leaves the last FULL's company.tar.gz
   // untouched (it's the ONLY writer), so it's never stale beyond one FULL cycle. BEST-EFFORT end to end

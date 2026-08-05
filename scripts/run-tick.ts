@@ -322,7 +322,9 @@ async function main() {
     // per-stock cache object (company.tar.gz) and the freshness heartbeat. In GitHub Actions `env.FULL`
     // is set job-wide; run-tick only has `mode` locally, so pass it explicitly (else the NAS strips
     // data/company from the tarball but never re-ships company.tar.gz, and never writes the heartbeat).
-    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", mode === "full" ? { FULL: "true" } : {});
+    // TAPE_WRITER stamps the R2 manifest so refresh-data.yml's primary-check can see the NAS is alive
+    // and stand its scheduled runs down (the dual-writer clobber fix — see data-to-r2.ts).
+    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", { TAPE_WRITER: "nas", ...(mode === "full" ? { FULL: "true" } : {}) });
     let gateOk = true;
     // The gate runs on FULL ONLY, and intraday ticks deploy ungated BY DESIGN — do not "fix" this by
     // gating them. Observed 2026-08-05 (news tape dead 5 days, gate red): the 23:00 FULL skipped its
