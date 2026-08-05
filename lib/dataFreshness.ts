@@ -116,6 +116,9 @@ const FEEDS: FeedSpec[] = [
   { file: "vol-dislocation.json", affects: ["/vol-dislocation", "/skew", "/term-structure", "/earnings-desk", "/trade-desk"], label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
   // biotech-vol / pead: age-only — zero forward binaries or an earnings-lull window are legitimate
   { file: "biotech-vol.json", affects: ["/biotech-vol", "/binary-week", "/confluence", "/morning-desk"], label: "Biotech event vol", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  // Seasonal by nature: Polymarket lists single-name earnings markets around each season and near
+  // zero between them, so rows=0 is a TRUE statement, not a broken feed — age-only, no floor.
+  { file: "earnings-odds.json", affects: ["/earnings-odds"], label: "Earnings odds (Polymarket)", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },

@@ -1145,6 +1145,43 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/earnings-odds",
+        "title": "Earnings Odds",
+        "question": "For each name with an open Polymarket earnings market, what does the betting crowd say about a beat — and has the market's own question quietly gone stale against the moving street consensus?",
+        "how": "Polymarket runs real-money 'will X beat quarterly earnings?' markets, one per reporter, each with an exact EPS bar written into the market at creation. That bar is FROZEN, while Wall Street's consensus estimate keeps drifting right up to the print — so the board's key column, drift, is simply today's consensus minus the frozen bar, computed by code. Positive drift means consensus has climbed above the bar: the market's question became easier than it sounds, and its YES should be priced rich. Negative means the bar now sits above consensus — a harder beat than the headline suggests. Around that column sit the crowd's P(beat) (the market's mid price), the options market's implied ±move for the same print, and — where the desk's model logged one — its own predicted EPS and beat/miss call, so three independent reads on the same event can disagree in front of you. Books are small, so volume is always printed and odds on a wide bid/ask are suppressed rather than quoted.",
+        "metrics": [
+          {
+            "term": "Bar (adj / GAAP)",
+            "plain": "The EPS number the market resolves against, exactly as the venue wrote it — adjusted (non-GAAP) or GAAP. The drift column only exists for adjusted bars, because street consensus is an adjusted number; comparing it to a GAAP bar would manufacture fake drift."
+          },
+          {
+            "term": "Consensus now (n)",
+            "plain": "Today's street consensus EPS for the quarter and how many analysts it averages."
+          },
+          {
+            "term": "Drift",
+            "plain": "Consensus now minus the frozen bar, in cents. Positive = easier beat than the question sounds; negative = harder."
+          },
+          {
+            "term": "P(beat)",
+            "plain": "The market's YES price, read as a probability — the mid of the best bid and ask. Shown as 'wide' instead when the spread is over 10 cents, because a price that loose is noise."
+          },
+          {
+            "term": "Volume",
+            "plain": "Dollars traded in the market so far. These books are small — a few thousand dollars is typical — so treat the odds as a noisy crowd read, not a deep market."
+          },
+          {
+            "term": "Implied ±",
+            "plain": "The options market's straddle-priced earnings-day move for the same report, from the Expected-Move screener."
+          },
+          {
+            "term": "Desk call",
+            "plain": "The in-house model's predicted EPS and beat/miss call for this exact report, logged before the print (see the Preview Accuracy Record for how those calls have scored)."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/earnings-setup",
         "title": "Earnings Setup Cards",
         "question": "For names reporting soon, at a glance: is the options-priced earnings move rich or cheap versus how much the stock has actually moved on past reports?",

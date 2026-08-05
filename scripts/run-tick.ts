@@ -111,6 +111,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh corporate events", cmd: "npm run refresh-corp-events", when: "full" },
   { name: "Refresh earnings-play track record", cmd: "npm run refresh-trade-log", when: "full" },
   { name: "Refresh preview accuracy record (predicted prints)", cmd: "npm run refresh-preview-log", when: "full" }, // FLASH-tier forecasts + code-graded settles
+  // AFTER earnings-move + preview-log, deliberately: it joins both files, so running here means
+  // tonight's straddle moves and tonight's desk forecasts land in tonight's odds rows.
+  { name: "Refresh earnings odds (Polymarket × consensus drift)", cmd: "npm run refresh-earnings-odds", when: "full" },
   // One trivial query so the Supabase free tier never sees 7 idle days and auto-pauses the research
   // store (the 2026-07-19 outage — the corpus went dark for ~2 weeks). Skips cleanly without the env.
   { name: "Keep the research DB alive (Supabase pause guard)", cmd: "npm run ping-research-db", when: "full" },

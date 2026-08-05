@@ -66,6 +66,7 @@
     "refresh-dispersion": "tsx scripts/refresh-dispersion.ts",
     "refresh-pead": "tsx scripts/refresh-pead.ts",
     "refresh-earnings-move": "tsx scripts/refresh-earnings-move.ts",
+    "refresh-earnings-odds": "tsx scripts/refresh-earnings-odds.ts",
     "refresh-trade-log": "tsx scripts/refresh-trade-log.ts",
     "refresh-preview-log": "tsx scripts/refresh-earnings-preview-log.ts",
     "ping-research-db": "tsx scripts/ping-research-db.ts",
