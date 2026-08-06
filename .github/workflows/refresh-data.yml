@@ -769,6 +769,13 @@ jobs:
         run: npm run refresh-signal-grid
         continue-on-error: true
 
+      # Research trickle (not a user-facing feed): accumulates the 2020/2022/2024 earnings-vol
+      # regime replay — ~150 polite fetches/night against EDGAR submissions + DoltHub's options DB.
+      - name: Regime replay trickle (earnings-vol backtest)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-regime-replay
+        continue-on-error: true
+
       # Cheap-vs-history EXPLAINED — GLM labels the deepest discounts genuine vs value-trap.
       # Needs valuation-history.json + the snapshot (above) + OPENROUTER_API_KEY.
       - name: Refresh valuation-discount verdicts

@@ -139,6 +139,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh signal track record", cmd: "npm run refresh-signal-log", when: "full" },
   { name: "Backtest price signals", cmd: "npm run backtest-signals", when: "full" },
   { name: "Signal parameter grid (walk-forward)", cmd: "npm run refresh-signal-grid", when: "full" }, // single-threaded, ~30s on this box; no network
+  // Research trickle, not a user-facing feed (deliberately NOT in dataFreshness): ~150 polite
+  // fetches/night against EDGAR + DoltHub, accumulating the 2020/2022/2024 earnings-vol replay.
+  { name: "Regime replay trickle (earnings-vol backtest)", cmd: "npm run refresh-regime-replay", when: "full" },
   { name: "Refresh valuation-discount verdicts", cmd: "npm run refresh-valuation-explain", when: "full", narr: true },
   { name: "Refresh 13F quarter story", cmd: "npm run refresh-13f-story", when: "full", narr: true },
   { name: "Refresh Congress summary", cmd: "npm run refresh-congress-summary", when: "full", narr: true },
