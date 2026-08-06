@@ -447,13 +447,34 @@ async function main() {
   for (const u of UNIVERSES) {
     const stocks: StockRow[] = [];
     const seen = new Set<string>();
+    // Prior snapshot, read BEFORE the row loop (it used to be read only for the carry below):
+    // THE 2026-08-06 DIAGNOSIS — Yahoo serves this host DEGRADED quote payloads for a stable subset
+    // of symbols (ADI/AFL/AMD…, verified live: price present, marketCap AND sharesOutstanding both
+    // stripped; the same call from another host returns them). The old gate treated price-without-cap
+    // as a failed fetch, which manufactured the deterministic nightly 121-name russell1000 hole out
+    // of quotes that had SUCCEEDED. Salvage: re-price the prior night's cap with the fresh price
+    // (prior cap ÷ prior price × fresh price — share counts don't move overnight). A fresh-price row
+    // with a re-priced cap is honest data; a carried or missing row was the strictly worse outcome.
+    const priorBySym = new Map<string, StockRow>();
+    try {
+      const prev = JSON.parse(await fs.readFile(path.join(DATA_DIR, u.id, "snapshot.json"), "utf8")) as Snapshot;
+      for (const r of prev.stocks ?? []) priorBySym.set(r.symbol, r);
+    } catch { /* first build of this universe */ }
+    let capSalvaged = 0;
     for (const e of universeLists[u.id]) {
       if (seen.has(e.symbol)) continue;
       seen.add(e.symbol);
       const c = classBySym.get(e.symbol);
       const m = metricBySym.get(e.symbol);
-      // drop unmapped / no-data / junk rows (no market cap or price → empty cells)
-      if (!c?.etf || !m || !m.marketCap || !m.price) continue;
+      // drop unmapped / no-data / junk rows (no price → empty cells)
+      if (!c?.etf || !m || !m.price) continue;
+      if (!m.marketCap) {
+        const p = priorBySym.get(e.symbol);
+        if (p?.marketCap && p.price && p.price > 0) {
+          m.marketCap = Math.round((p.marketCap / p.price) * m.price);
+          capSalvaged++;
+        } else continue; // no cap and nothing to re-price from → genuinely unusable row
+      }
       stocks.push({
         symbol: e.symbol,
         name: m.name,
@@ -487,8 +508,7 @@ async function main() {
     // A vanished row is invisible and silently shrinks every screen and breadth stat computed over the
     // universe. A stale row is visible, bounded, and self-corrects on the next good fetch.
     const snapPath = path.join(DATA_DIR, u.id, "snapshot.json");
-    let priorRows: StockRow[] = [];
-    try { priorRows = (JSON.parse(await fs.readFile(snapPath, "utf8")) as Snapshot).stocks ?? []; } catch { /* no prior snapshot */ }
+    const priorRows: StockRow[] = [...priorBySym.values()]; // read once above (cap salvage + carry share it)
     const prevCount = priorRows.length || null;
 
     // Date-like junk from the holdings export can never resolve, so it must not count as "expected"
@@ -544,7 +564,7 @@ async function main() {
     }
     await fs.mkdir(path.join(DATA_DIR, u.id), { recursive: true });
     await fs.writeFile(snapPath, JSON.stringify(snapshot));
-    console.log(`  ${u.id}: ${merged.length} stocks (${carry.fresh.length} fresh, ${carry.carried.length} carried), ${sectors.length} sectors`);
+    console.log(`  ${u.id}: ${merged.length} stocks (${carry.fresh.length} fresh, ${carry.carried.length} carried${capSalvaged ? `, ${capSalvaged} cap-salvaged` : ""}), ${sectors.length} sectors`);
   }
   if (shortfalls.length) {
     console.error(`\n⚠ COVERAGE SHORTFALL — these universes are missing listed constituents: ${shortfalls.join("; ")}`);
