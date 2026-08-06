@@ -408,6 +408,13 @@ jobs:
         run: npm run refresh-insiders
         continue-on-error: true
 
+      # Short-selling mechanics: FINRA daily short-volume window + SEC fails-to-deliver, over the US
+      # universe. Free official files; FTD parsed via unzip with graceful fallback.
+      - name: Refresh short mechanics (FINRA/FTD)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-short-mechanics
+        continue-on-error: true
+
       # Congressional (Senate STOCK Act) trades from the public Senate eFD. No key; polite
       # throttling built in. Disclosures lag ~30-45 days, so daily is plenty.
       - name: Refresh congressional trades

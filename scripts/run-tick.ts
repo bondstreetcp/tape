@@ -87,6 +87,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Bake per-stock cache (stats+financials+profile)", cmd: "npm run refresh-company-cache", when: "full" }, // fetch-heavy: belongs on the fast pipe; budgeted here
   { name: "Refresh holdco NAV", cmd: "npm run refresh-holdco-nav", when: "full" },
   { name: "Refresh insider buys (Form 4)", cmd: "npm run refresh-insiders", when: "full" },
+  { name: "Refresh short mechanics (FINRA short-vol + SEC FTD)", cmd: "npm run refresh-short-mechanics", when: "full" },
   { name: "Refresh congressional trades", cmd: "npm run refresh-congress", when: "full" },
   { name: "Refresh government contracts (USAspending)", cmd: "npm run refresh-gov-contracts", when: "full" },
   { name: "Refresh President's OGE trades", cmd: "npm run refresh-trump", when: "full" },

@@ -106,6 +106,7 @@ const FEEDS: FeedSpec[] = [
   { file: "earnings-move.json", affects: ["/earnings-move", "/earnings-week", "/earnings-setup", "/earnings-desk", "/earnings"], label: "Earnings expected-move", tier: "core", maxAgeHours: CORE },
   { file: "putwrite.json", affects: ["/put-writing", "/covered-call", "/credit-spreads", "/portfolio-income", "/vol-dislocation"], label: "Put-writing screen", tier: "core", maxAgeHours: CORE },
   { file: "insiders.json", affects: ["/insiders", "/confluence", "/signal-record"], label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
+  { file: "short-mechanics.json", affects: ["/short-mechanics", "/squeeze"], label: "Short mechanics (FINRA/FTD)", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 500 },
   { file: "spinoffs.json", affects: ["/spinoffs", "/confluence"], label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
   { file: "trade-log.json", affects: ["/track-record"], label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },
   // Forward-accumulating like the trade-log: no count floor (the log legitimately starts empty —

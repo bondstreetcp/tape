@@ -2537,6 +2537,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/short-mechanics",
+        "title": "Short Mechanics",
+        "question": "How much of a stock's daily volume is being sold short, and where are shares failing to settle — the short-side plumbing behind a squeeze?",
+        "how": "Two free official files that sit underneath the squeeze story. FINRA publishes, every day, how many shares were sold short on each stock as a fraction of that day's reported volume — the board shows the latest day, the multi-day average, and whether shorting is picking up. The SEC publishes, twice a month, the shares that failed to deliver (didn't settle on time); large, persistent fails flag hard-to-borrow or settlement pressure. Read these as ACTIVITY and PLUMBING, deliberately separate from the Short-Squeeze Radar's short-interest-as-%-of-float (a position measure) and the borrow fee: a stock can print heavy short-volume on a day without carrying a big short position, so this complements those rather than repeating them. Decision-support, not advice.",
+        "metrics": [
+          {
+            "term": "Short-vol %",
+            "plain": "The most recent day's short-sale volume divided by that day's reported volume (FINRA). Short activity ON THE DAY — not short interest as a % of float. Values above 100% are a thin-name reporting artifact and are capped."
+          },
+          {
+            "term": "Window avg / Trend",
+            "plain": "The average short-volume % over the recent window, and how far the latest day sits above or below it (percentage points). A positive trend means shorting is accelerating versus its own norm."
+          },
+          {
+            "term": "Fails-to-deliver",
+            "plain": "The dollar value of shares that failed to settle in the latest SEC semi-monthly file. Persistent large fails are a delivery-pressure / hard-to-borrow tell — an input to squeeze dynamics, not a position."
+          },
+          {
+            "term": "FTD chg",
+            "plain": "Change in fails-to-deliver dollars versus the prior semi-monthly file."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/squeeze",
         "title": "Short-Squeeze Radar",
         "question": "Which stocks have the classic short-squeeze setup — heavily shorted, hard to cover, and still being pressed?",
