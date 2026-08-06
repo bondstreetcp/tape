@@ -3062,6 +3062,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/gov-contracts",
+        "title": "Government Contracts",
+        "question": "Which government-exposed companies are winning more (or less) federal contract money — and from which agencies — ahead of the earnings that report it?",
+        "how": "Federal contract obligations are public record on USAspending.gov (the government's own spending database), and they are a hard, forward-looking read on a company's government revenue: the money is committed months before it shows up as recognized sales. This board tracks a hand-verified roster of government-exposed public companies (defense primes, government-IT/services, healthcare distributors) — each mapped by hand to its federal recipient identity, so a row is real or it isn't shown. For each, it compares obligations in the last four COMPLETE fiscal quarters against the four before (the current, still-filling quarter is excluded so it can't drag the trend down), shows the eight-quarter trend, and names the top awarding agencies. Sort by year-over-year momentum to see whose federal backlog is growing or shrinking. Decision-support, not advice.",
+        "metrics": [
+          {
+            "term": "Trailing 12mo",
+            "plain": "Total federal contract dollars obligated to the company over the last four complete fiscal quarters. Obligations are money the government has legally committed — a leading indicator of revenue."
+          },
+          {
+            "term": "YoY",
+            "plain": "Trailing-12-month obligations versus the four quarters before that. Positive = a growing federal backlog. Shown as '—' when the prior-year base is too small to make the percentage meaningful."
+          },
+          {
+            "term": "Trend (8q)",
+            "plain": "The last eight quarters of obligations as a sparkline; the current in-progress quarter is included but not counted in the momentum math."
+          },
+          {
+            "term": "Top agencies",
+            "plain": "The agencies that awarded the most to this company over the trailing year — the concentration of who's actually buying."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/congress",
         "title": "Congressional Trading",
         "question": "What stocks are members of Congress (and the President) buying and selling, as disclosed under the STOCK Act?",

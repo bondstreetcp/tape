@@ -88,6 +88,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh holdco NAV", cmd: "npm run refresh-holdco-nav", when: "full" },
   { name: "Refresh insider buys (Form 4)", cmd: "npm run refresh-insiders", when: "full" },
   { name: "Refresh congressional trades", cmd: "npm run refresh-congress", when: "full" },
+  { name: "Refresh government contracts (USAspending)", cmd: "npm run refresh-gov-contracts", when: "full" },
   { name: "Refresh President's OGE trades", cmd: "npm run refresh-trump", when: "full" },
   { name: "Refresh overnight filings (SuperAnalyst)", cmd: "npm run refresh-overnight-filings", when: "full", env: { SCAN_BROAD: "1" } },
   { name: "Refresh filing semantic index (local embeddings)", cmd: "npm run refresh-filing-index", when: "full" }, // reads the window just written; no network

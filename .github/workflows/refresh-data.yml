@@ -415,6 +415,13 @@ jobs:
         run: npm run refresh-congress
         continue-on-error: true
 
+      # Federal contract-award momentum for a curated roster of gov-exposed public cos (USAspending,
+      # keyless public-domain). ~80 polite calls; per-name degrade.
+      - name: Refresh government contracts (USAspending)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-gov-contracts
+        continue-on-error: true
+
       # President Trump's OGE Form 278-T trades (scanned PDF → Gemini OCR-cleanup extraction).
       # The filing changes rarely (periodic), so most runs re-extract the same data; skipped
       # cleanly if GEMINI_API_KEY isn't set.
