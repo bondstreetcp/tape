@@ -124,6 +124,8 @@ const FEEDS: FeedSpec[] = [
   { file: "tenders.json", affects: ["/tenders"], label: "Tender offers (odd-lot)", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   // Curated roster (~39 names) → the count is stable; a collapse means USAspending was unreachable.
   { file: "gov-contracts.json", affects: ["/gov-contracts"], label: "Government contracts", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
+  // Episodic (live cash deals come and go) — age-only, no floor.
+  { file: "merger-arb.json", affects: ["/merger-arb"], label: "Merger-arb spreads", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },

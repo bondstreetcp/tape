@@ -1847,6 +1847,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/merger-arb",
+        "title": "Merger Arbitrage",
+        "question": "Among companies being acquired for cash, which offer the best annualized return for holding through the close — and how much of that return is really deal-break risk?",
+        "how": "When a company agrees to be bought, it files a definitive merger proxy (a DEFM14A) and its stock settles just below the agreed price — the gap is the spread, and it's the market paying you to carry the risk that the deal falls through. This board scans those proxies nightly, extracts the deal terms with AI, and then verifies the cash price appears verbatim in the filing before showing it. For each live cash deal it shows the deal price, the current price, the spread, and that spread annualized by the days to the expected close (a conservative 120-day default when no date is stated). It's a classic small-account edge: the big clean cash deals get crowded by funds, but the smaller and messier ones are left alone. SPAC combinations and pure stock-for-stock deals are excluded — the first aren't a premium to a real business, the second have no fixed cash target to measure a spread against.",
+        "metrics": [
+          {
+            "term": "Deal",
+            "plain": "The fixed cash price per share the acquirer agreed to pay, with the consideration type (cash / stock / mixed). Only cash and the cash leg of mixed deals get a spread."
+          },
+          {
+            "term": "Spread",
+            "plain": "Deal price minus current price, as a %. Positive is the gross return if the deal closes on terms; negative means the stock trades above the deal — the market expects a bump or a rival bidder."
+          },
+          {
+            "term": "Annualized",
+            "plain": "The spread scaled to a yearly rate by the days to the expected close. This is the ranking, but it deliberately ignores deal-break risk — a very wide spread usually means the market doubts the deal will close."
+          },
+          {
+            "term": "Close / Note",
+            "plain": "The expected closing date (or 'est.' when the filing doesn't state one) and a one-line flag on the most material condition — a regulatory review, a competing bid, a vote date."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/tenders",
         "title": "Tender Offers",
         "question": "Which live tender offers grant odd-lot priority — the term that pays holders of fewer than 100 shares in full, ahead of everyone bigger?",

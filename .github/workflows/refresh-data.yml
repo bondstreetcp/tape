@@ -722,6 +722,13 @@ jobs:
         run: npm run refresh-tenders
         continue-on-error: true
 
+      # Merger-arb: live cash-deal spreads from EDGAR definitive merger proxies (DEFM14A). FLASH
+      # extracts terms; the cash price is code-verified against the filing text. Episodic.
+      - name: Refresh merger-arb spreads (DEFM14A)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-merger-arb
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).

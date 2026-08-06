@@ -135,6 +135,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh IPO & lockup monitor", cmd: "npm run refresh-ipo", when: "full" },
   { name: "Refresh spinoff turnover", cmd: "npm run refresh-spinoffs", when: "full" },
   { name: "Refresh tender offers (odd-lot monitor)", cmd: "npm run refresh-tenders", when: "full" },
+  { name: "Refresh merger-arb spreads (DEFM14A)", cmd: "npm run refresh-merger-arb", when: "full" },
   { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk", narr: true },
   { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full", narr: true },
   { name: "Refresh Warning Signs", cmd: "npm run refresh-warnings", when: "full" },
