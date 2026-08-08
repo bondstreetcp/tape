@@ -41,7 +41,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         10_800_000,
         async () => {
           const c = await assemblePreviewContext(sym, earningsISO);
-          return raceTimeout(buildAiPreview(c, { bounded: true }), 40_000, null);
+          return raceTimeout(buildAiPreview(c, { bounded: true }), 52_000, null); // PRO(30s)→FLASH(15s) fallback fits under this
         },
         { cacheIf: (v) => v != null },
       );

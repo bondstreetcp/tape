@@ -151,16 +151,22 @@ export async function buildAiPreview(c: PreviewContext, opts: { bounded?: boolea
   // model pick its own keys/nesting, which parses fine but fails our field validation → a silent null
   // (observed on the thesis/debate upgrade). Belt and braces with chatJSON's json_object mode.
   const SCHEMA = '\n\nReturn ONLY JSON with EXACTLY these keys: {"moneyLine": string, "overview": string, "thesis": string, "debate": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string, "fromLastCall": string}';
-  // Live request → cap Gemini's reasoning + the transport (retries 2, 35s/attempt); the route adds a
-  // 40s outer wall-clock race on top. Nightly leaves transport at the generous defaults. maxTokens 6000:
-  // ten fields + reasoning overhead on a ~17k-char context — 4000 risked reasoning eating the output.
-  const t = opts.bounded ? { retries: 2, timeoutMs: 35_000 } : {};
-  const out = await chatJSON<any>(SYSTEM, c.ctx + SCHEMA, { maxTokens: 6000, model: PRO_MODEL, reasoningEffort: "low", ...t });
   const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 6) : []);
   const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  return out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
-    ? { moneyLine: s(out.moneyLine), overview: s(out.overview), thesis: s(out.thesis), debate: s(out.debate), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear), fromLastCall: s(out.fromLastCall) }
-    : null;
+  const shape = (out: any): AiPreview | null =>
+    out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
+      ? { moneyLine: s(out.moneyLine), overview: s(out.overview), thesis: s(out.thesis), debate: s(out.debate), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear), fromLastCall: s(out.fromLastCall) }
+      : null;
+  const attempt = async (model: string, maxTokens: number, timeoutMs?: number): Promise<AiPreview | null> =>
+    shape(await chatJSON<any>(SYSTEM, c.ctx + SCHEMA, { maxTokens, model, reasoningEffort: "low", retries: 1, ...(timeoutMs ? { timeoutMs } : {}) }).catch(() => null));
+  // DEGRADE, don't error — the "Couldn't build the preview just now" report (2026-08). The PRO model
+  // times out or returns a parsed-but-EMPTY shell often enough (the known packed-context trap) that a
+  // single PRO call is unreliable on the live route. So: PRO first, and on null (timeout / empty
+  // shell) fall to FLASH — faster, smaller ceiling, and a flash preview beats an apology. Budgets fit
+  // the route's outer race (now 52s): bounded PRO 30s + FLASH 15s. Nightly keeps generous defaults.
+  const pro = await attempt(PRO_MODEL, 6000, opts.bounded ? 30_000 : undefined);
+  if (pro) return pro;
+  return attempt(FLASH_MODEL, 3500, opts.bounded ? 15_000 : undefined);
 }
 
 export interface PredictedPrint {
