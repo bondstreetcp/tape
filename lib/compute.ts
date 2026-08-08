@@ -67,7 +67,9 @@ export function sliceSeries(
     // The 1D window is one session. By default that's the last session in THIS series' own feed, but
     // a comparison chart passes a shared `sessionStart` (the most-recent session across all series) so
     // a name whose live feed lags a day isn't sliced to — and drawn on — yesterday next to today's lines.
-    if (intraday.length === 0) return [];
+    // No intraday at all (sector ETFs carry none; some feeds lag) → the 1-day move from the last two
+    // daily closes, so the Sector-Compare 1D view renders instead of going blank (2026-08 report).
+    if (intraday.length === 0) return daily.length >= 2 ? daily.slice(-2) : daily.slice();
     let start = sessionStart;
     if (start == null) {
       const lastDay = new Date(intraday[intraday.length - 1].t);
@@ -78,7 +80,12 @@ export function sliceSeries(
   if (tf === "1w") {
     const cutoff = now - 7 * DAY;
     const pts = intraday.filter((p) => p.t >= cutoff);
-    return pts.length > 1 ? pts : intraday;
+    if (pts.length > 1) return pts;
+    // No usable intraday → daily bars in the window (prior bar prepended as the baseline), falling
+    // back to the last ~week of dailies when the feed itself lags. Keeps 1W alive for ETFs/lagged feeds.
+    const di = daily.findIndex((p) => p.t >= cutoff);
+    const dpts = di < 0 ? [] : daily.slice(di > 0 ? di - 1 : 0);
+    return dpts.length > 1 ? dpts : daily.slice(-6);
   }
   let cutoff: number;
   switch (tf) {
@@ -154,6 +161,9 @@ function rebaseBaseline(
 ): number | null {
   if (tf !== "1d") return sliced.length ? sliced[0].c : null;
   if (!sliced.length) return null;
+  // 1d daily-fallback (empty intraday): sliced is [priorClose, lastClose], so the prior close IS the
+  // baseline — don't run the intraday-anchor logic below, which would pick today's bar and zero it out.
+  if (intraday.length === 0) return sliced[0].c;
   const d = new Date(sliced[0].t);
   const startOfToday = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   for (let i = intraday.length - 1; i >= 0; i--) if (intraday[i].t < startOfToday) return intraday[i].c;

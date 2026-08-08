@@ -13,10 +13,12 @@ import type { Snapshot } from "@/lib/types";
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
-// Insider Cluster-Buying — the nightly Form 4 open-market-buy scan (data/insiders.json). Open-market
-// insider buying is overwhelmingly a SMALL/MID-CAP signal (mega-cap officers rarely buy with cash), so
-// the board joins against the BROADEST US universe (Russell 3000), NOT the selected one — otherwise it
-// collapses to ~1 name on the S&P 500. It's a US-wide board regardless of the universe in the URL.
+// Insider Cluster-Buying — the nightly Form 4 open-market-buy scan (data/insiders.json), joined
+// against the SELECTED universe's constituents so the universe toggle actually filters (a name not in
+// the S&P 500 must not show under it — the 2026-08 "Valvoline on the S&P 500" report). Open-market
+// buying is overwhelmingly a small/mid-cap signal, so a narrow universe is sparse ON PURPOSE — the
+// view's empty-state points to Broad 1500 / Russell 3000. Fallback to the broadest snapshot only if
+// the selected universe's snapshot is entirely missing (never to smuggle off-universe names in).
 async function loadBroadUs(): Promise<Snapshot | null> {
   for (const u of ["russell3000", "broad1500", "russell1000", "sp1500", "sp500", "nasdaq100"]) {
     const snap = await loadSnapshot(u);
@@ -30,7 +32,7 @@ export default async function InsidersPage({ params }: { params: Promise<{ unive
   if (!UNIVERSE_BY_ID[universe]) notFound();
   if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Insider Cluster-Buying" relPath="/insiders" dataNote="This board is built on SEC Form 4 insider-buy filings, which only US-listed companies file" />;
 
-  const snap = await loadBroadUs();
+  const snap = (await loadSnapshot(universe)) ?? (await loadBroadUs());
   let file: InsidersFile | null = null;
   try {
     const p = join(process.cwd(), "data", "insiders.json");
