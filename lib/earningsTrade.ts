@@ -44,14 +44,25 @@ const midOf = (o: Opt | undefined): number | null => {
 };
 
 // ATM put IV − call IV: >0 means puts are bid over calls (downside hedging skew) → prefer a defined-risk condor.
+// ATM strike selection MUST come from strikes carrying BOTH legs — Yahoo serves sparse chains where
+// the nearest-to-spot strike exists on one side only (EAT: 230C quoted, no 230P), and a union pick
+// would then null out the whole read even though 220 has a perfectly two-legged market one notch away.
+function atmBothSides(chain: OptionChain): { atm: number; cO: Opt | undefined; pO: Opt | undefined } | null {
+  const callsBy = new Map(chain.calls.map((o) => [o.strike, o]));
+  const putsBy = new Map(chain.puts.map((o) => [o.strike, o]));
+  const strikes = [...callsBy.keys()].filter((k) => putsBy.has(k));
+  if (!strikes.length || !chain.underlying) return null;
+  const u = chain.underlying;
+  const atm = strikes.reduce((a, b) => (Math.abs(b - u) < Math.abs(a - u) ? b : a));
+  return { atm, cO: callsBy.get(atm), pO: putsBy.get(atm) };
+}
+
 function skewOf(chain: OptionChain | null): number | null {
   if (!chain?.underlying || (!chain.calls.length && !chain.puts.length)) return null;
-  const u = chain.underlying;
-  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))];
-  if (!strikes.length) return null;
-  const atm = strikes.reduce((a, b) => (Math.abs(b - u) < Math.abs(a - u) ? b : a));
-  const cIV = chain.calls.find((o) => o.strike === atm)?.iv ?? null;
-  const pIV = chain.puts.find((o) => o.strike === atm)?.iv ?? null;
+  const at = atmBothSides(chain);
+  if (!at) return null;
+  const cIV = at.cO?.iv ?? null;
+  const pIV = at.pO?.iv ?? null;
   return cIV != null && pIV != null ? pIV - cIV : null;
 }
 
@@ -79,10 +90,11 @@ export async function straddleMove(sym: string, baseChain: OptionChain | null, e
   const chain = expiry && expiry !== baseChain.selected ? await getOptions(sym, expiry).catch(() => baseChain) : baseChain;
   const U = chain.underlying;
   if (!U || (!chain.calls.length && !chain.puts.length)) return null;
-  const strikes = [...new Set([...chain.calls, ...chain.puts].map((o) => o.strike))];
-  if (!strikes.length) return null;
-  const atm = strikes.reduce((a, b) => (Math.abs(b - U) < Math.abs(a - U) ? b : a));
-  const cO = chain.calls.find((o) => o.strike === atm), pO = chain.puts.find((o) => o.strike === atm);
+  // Both-legged ATM only (see atmBothSides) — a straddle needs a call AND a put by definition, and
+  // sparse chains carry one-sided strikes nearest to spot (the EAT 230C/no-230P case).
+  const at = atmBothSides(chain);
+  if (!at) return null;
+  const { atm, cO, pO } = at;
   const c = midOf(cO), p = midOf(pO);
   if (c == null || p == null) return null;
   const cost = c + p;

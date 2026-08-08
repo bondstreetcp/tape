@@ -74,3 +74,21 @@ test("rich + NO catalyst → behavior unchanged (regression guard for the new pa
   assert.ok(t?.legsData, "short structure still emitted when no catalyst is live");
   assert.match(t!.structure, /Iron condor|Short strangle/);
 });
+
+test("straddleMove: sparse chain with a one-sided nearest strike → ATM picked from BOTH-legged strikes (the EAT case)", async () => {
+  const { straddleMove } = await import("../lib/earningsTrade");
+  // Spot 100.4: the union-nearest strike (100) has a CALL but NO PUT — exactly Yahoo's sparse EAT
+  // chain (230C quoted, no 230P), which used to null the whole read (implied move, verdict, play).
+  // The nearest strike carrying BOTH legs is 105; the straddle must resolve there, not die at 100.
+  const chain: OptionChain = {
+    underlying: 100.4,
+    expirations: ["2026-08-21"],
+    selected: "2026-08-21",
+    calls: [90, 95, 100, 105, 110].map((k) => opt(k, 0.5)),
+    puts: [90, 95, 105, 110].map((k) => opt(k, 0.5)), // no 100 put
+  };
+  const sm = await straddleMove("TEST", chain, null); // expiry === selected → no refetch, pure
+  assert.ok(sm, "straddle must resolve on a both-legged strike instead of nulling out");
+  assert.equal(sm!.atmStrike, 105);
+  assert.ok(Math.abs(sm!.movePct - (4 / 100.4) * 100) < 0.01, `movePct from the 105 straddle, got ${sm!.movePct}`);
+});

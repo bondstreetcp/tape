@@ -155,15 +155,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
     // THE hot path: ~6 live Yahoo calls, 12-17s from the NAS uplink. memo makes the single-process
     // origin behave like the Vercel CDN did — one slow compute per symbol per 3h, then instant, with
     // concurrent viewers sharing one in-flight compute and errors degrading to the stale entry.
-    const data = await memo(`ep:data:${sym}:${earningsISO ?? ""}`, 10_800_000, async () => {
-      const { closes, ...quant } = await computeQuant(sym, earningsISO);
-      const peerSympathy = await peerReadThrough(sym, closes);
-      return { ...quant, peerSympathy };
-    });
+    const data = await memo(
+      `ep:data:${sym}:${earningsISO ?? ""}`,
+      10_800_000,
+      async () => {
+        const { closes, ...quant } = await computeQuant(sym, earningsISO);
+        const peerSympathy = await peerReadThrough(sym, closes);
+        return { ...quant, peerSympathy };
+      },
+      // Cache only computes that produced SUBSTANCE. One bad moment (every Yahoo sub-fetch racing
+      // out — a NAS uplink hiccup, or a dev first-compile) otherwise pins an all-null quant read
+      // for 3h and every earnings card renders empty — the 2026-08 "EAT/ARMK cards don't load"
+      // report. Same guard the ai/why/preprint parts already carry ("never cache the failure").
+      { cacheIf: (v) => v.reaction != null || v.straddle != null || v.impliedMove != null },
+    );
 
+    const gotSubstance = data.reaction != null || data.straddle != null || data.impliedMove != null;
     return NextResponse.json(
       { data },
-      { headers: { "Cache-Control": "public, s-maxage=10800, stale-while-revalidate=21600" } },
+      // no-store on an empty read — the edge must not pin the failure either.
+      { headers: { "Cache-Control": gotSubstance ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } },
     );
   } catch {
     return NextResponse.json(part === "ai" ? { ai: null } : part === "preprint" ? { preprint: null, hasResearch: false } : { data: null });
