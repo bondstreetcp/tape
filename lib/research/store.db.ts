@@ -10,8 +10,33 @@ import type { StoredDoc } from "./types";
 
 let _sql: ReturnType<typeof postgres> | null = null;
 function db() {
-  if (!_sql) _sql = postgres(process.env.RESEARCH_DATABASE_URL!, { max: 1, idle_timeout: 20, connect_timeout: 15, prepare: false });
+  // max 3 (was 1): with a single connection, ONE stalled statement queued every other query in the
+  // process behind it — the 2026-08 NAS incident, where an upload's INSERT stalled mid-payload on a
+  // dead socket and health/uploads/desk all hung indefinitely. max_lifetime recycles sockets every
+  // 10 min so a half-dead one can't persist.
+  if (!_sql) _sql = postgres(process.env.RESEARCH_DATABASE_URL!, { max: 3, idle_timeout: 20, connect_timeout: 15, max_lifetime: 600, prepare: false });
   return _sql;
+}
+
+/**
+ * Race a postgres.js query against a wall clock; on expiry CANCEL it (postgres cancel protocol —
+ * frees the server-side statement AND rejects the pending promise, which releases the pool slot)
+ * and throw. Without this, a write stalled on a black-holed socket holds its pool slot forever:
+ * idle_timeout only covers idle connections and connect_timeout only covers dialing — neither
+ * applies mid-statement, which is exactly where the big research-doc payloads die on a bad uplink.
+ * Writes only; reads are small and now have pool headroom.
+ */
+function withCancel<T>(q: { cancel?: () => void } & PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => {
+      try { q.cancel?.(); } catch { /* already settled */ }
+      reject(new Error(`${label} timed out after ${ms}ms (statement cancelled)`));
+    }, ms);
+    q.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
 }
 
 let schemaReady = false;
@@ -75,7 +100,9 @@ export async function dbSaveDoc(d: StoredDoc): Promise<void> {
   await ready();
   const sql = db();
   const J = (v: any) => sql.json(v); // postgres.js jsonb helper (loosen the strict JSONValue type)
-  await sql`
+  // The doc row carries the FULL note text — the largest single write in the app and the one that
+  // stalled the NAS. 60s is generous for a healthy path; a stall cancels instead of wedging.
+  await withCancel(sql`
     insert into research_docs (id,ticker,company,source,analysts,publish_date,doc_type,title,rating,rating_prior,price_target,price_target_prior,target_basis,thesis,risks,catalysts,management_insights,estimates,summary,entitlement,file_name,page_count,char_count,blob_key,body)
     values (${d.id},${d.ticker},${d.company},${d.source},${J(d.analysts)},${d.publishDate},${d.docType},${d.title},${d.rating},${d.ratingPrior},${d.priceTarget},${d.priceTargetPrior},${d.targetBasis},${J(d.thesis)},${J(d.risks)},${J(d.catalysts)},${J(d.managementInsights)},${J(d.estimates)},${d.summary},${d.entitlement},${d.fileName},${d.pageCount},${d.charCount},${d.blobKey},${d.text ?? null})
     on conflict (id) do update set
@@ -86,7 +113,7 @@ export async function dbSaveDoc(d: StoredDoc): Promise<void> {
       management_insights=excluded.management_insights, estimates=excluded.estimates, summary=excluded.summary,
       entitlement=excluded.entitlement, file_name=excluded.file_name, page_count=excluded.page_count,
       char_count=excluded.char_count, blob_key=excluded.blob_key, body=excluded.body
-  `;
+  `, 60_000, `research: save doc ${d.id}`);
 }
 
 export async function dbListDocs(ticker?: string): Promise<StoredDoc[]> {
@@ -117,10 +144,29 @@ const vlit = (v: number[]) => "[" + v.join(",") + "]";
 export async function dbSaveChunks(docId: string, ticker: string, rows: { ordinal: number; text: string; embedding: number[] }[]): Promise<void> {
   await ready();
   const sql = db();
-  await sql`delete from research_chunks where doc_id = ${docId}`;
-  for (const r of rows) {
-    await sql`insert into research_chunks (doc_id, ordinal, ticker, text, embedding)
-      values (${docId}, ${r.ordinal}, ${ticker}, ${r.text}, ${vlit(r.embedding)}::vector)`;
+  // BATCHED multi-row inserts (25/statement): a ~300-chunk doc used to be ~300 sequential round
+  // trips — 45-90s+ on the NAS uplink, which blew past the Cloudflare Tunnel's ~100s ceiling and
+  // made the site uploader report "failed" for docs that actually saved. 12 statements finish in
+  // seconds. Per-statement cancel + an overall budget so a stalled socket degrades to one failed
+  // doc's embeddings (best-effort at every call site), never a wedged pool slot.
+  const deadline = Date.now() + 120_000;
+  await withCancel(sql`delete from research_chunks where doc_id = ${docId}`, 30_000, `research: clear chunks ${docId}`);
+  const B = 25;
+  for (let i = 0; i < rows.length; i += B) {
+    if (Date.now() > deadline) throw new Error(`research: chunk inserts for ${docId} exceeded 120s budget at ${i}/${rows.length}`);
+    const grp = rows.slice(i, i + B);
+    const vals: string[] = [];
+    const params: (string | number)[] = [];
+    grp.forEach((r, j) => {
+      const o = j * 5;
+      vals.push(`($${o + 1},$${o + 2},$${o + 3},$${o + 4},$${o + 5}::vector)`);
+      params.push(docId, r.ordinal, ticker, r.text, vlit(r.embedding));
+    });
+    await withCancel(
+      sql.unsafe(`insert into research_chunks (doc_id, ordinal, ticker, text, embedding) values ${vals.join(",")}`, params as any[]),
+      30_000,
+      `research: chunks ${docId} @${i}`,
+    );
   }
 }
 

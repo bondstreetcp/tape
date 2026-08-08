@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import crypto from "node:crypto";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { extractResearch, extractConfigured } from "@/lib/research/extract";
@@ -28,8 +28,18 @@ export async function POST(req: NextRequest) {
     const blobKey = await uploadPdf(id, buf);
     const stored: StoredDoc = { ...doc, id, fileName: file.name, pageCount: data.numpages, charCount: text.length, ingestedAt: new Date().toISOString(), blobKey, text };
     await saveDoc(stored);
-    if (semanticSearchAvailable()) { try { await saveChunks(id, doc.ticker, await embedChunks(text)); } catch { /* embeddings best-effort */ } }
-    return NextResponse.json({ ok: true, doc: { ...stored, text: undefined } });
+    // Embeddings run AFTER the response (next/server after()) — chunking + embedding + inserts took
+    // 45-90s+ on the NAS uplink, longer than the Cloudflare Tunnel's ~100s request ceiling, so the
+    // client saw "failed" for docs that actually saved (the 2026-08 batch: TXRH landed, UI said
+    // failed). The doc IS the deliverable; embeddings are best-effort enrichment and now finish out
+    // of band. Semantic search picks the chunks up on its next query.
+    if (semanticSearchAvailable()) {
+      after(async () => {
+        try { await saveChunks(id, doc.ticker, await embedChunks(text)); }
+        catch (e) { console.warn(`research: background embeddings for ${id} (${doc.ticker}) failed —`, String((e as any)?.message || e).slice(0, 140)); }
+      });
+    }
+    return NextResponse.json({ ok: true, doc: { ...stored, text: undefined }, embeddings: "processing" });
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message || e).slice(0, 160) });
   }
