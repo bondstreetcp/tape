@@ -150,7 +150,27 @@ async function main() {
     await sleep(150);
   }
   // Widest annualized spread first (the arb ranking); deals past their close date drop off.
-  const live = rows.filter((r) => !r.expectedClose || (daysUntil(r.expectedClose) ?? 0) >= -5);
+  // Liveness is TWO gates, both learned from the 365d widening surfacing closed deals:
+  // 1. A stated close keeps a deal until 5d past it. WITHOUT one, age out ~200d after the proxy —
+  //    proxy→close runs 1-5 months, and a target that closed DELISTS, after which Yahoo serves a
+  //    stale residual print that fabricates a monster "spread" (RNA showed +483% five months after
+  //    its vote; TASK +126% a year after closing).
+  // 2. A cash spread >35% is never an arb — it's a dead ticker's stale print or a broken deal, and
+  //    ranking by annualized return would crown exactly those rows. Dropped, not shown greyed:
+  //    a number we can't trust doesn't belong on the board at all.
+  const preLive = rows.filter((r) => {
+    if (r.expectedClose) return (daysUntil(r.expectedClose) ?? 0) >= -5;
+    const ageD = (Date.now() - Date.parse(r.filedAt)) / DAY;
+    return Number.isFinite(ageD) ? ageD <= 200 : true;
+  });
+  const sane = preLive.filter((r) => r.spreadPct == null || r.spreadPct <= 35);
+  // One row per target — amendments supersede (WBD carried both its $27.75 and bumped $31 proxies
+  // as separate "deals"; only the newest proxy's terms are tenderable).
+  const newest = new Map<string, MergerArbRow>();
+  for (const r of sane) { const prev = newest.get(r.ticker); if (!prev || r.filedAt > prev.filedAt) newest.set(r.ticker, r); }
+  const live = [...newest.values()];
+  const aged = rows.length - preLive.length, insane = preLive.length - sane.length, superseded = sane.length - live.length;
+  if (aged || insane || superseded) console.log(`merger-arb: dropped ${aged} presumed-closed (no stated close, proxy >200d old) + ${insane} untrustworthy spreads (>35% "cash spread" = stale/broken) + ${superseded} superseded amendments`);
   live.sort((a, b) => (b.annualizedPct ?? -1e9) - (a.annualizedPct ?? -1e9));
 
   const allTargets = dedupeTargets(targets);

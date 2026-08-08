@@ -1902,9 +1902,9 @@ export const GUIDE_GROUPS: GuideGroup[] = [
       },
       {
         "path": "/corp-events",
-        "title": "Corporate Events",
+        "title": "Corporate Event News",
         "question": "Which companies just announced a one-off corporate catalyst — a buyback, spin-off, strategic review, stock split, or CEO/CFO change?",
-        "how": "This runs a full-text search over recent SEC 8-K filings — the form companies must file to disclose material events — across EDGAR, and uses AI to extract five catalyst types. Buybacks are a company repurchasing its own shares, which shrinks the share count and can support the price. Strategic alternatives means management is publicly exploring a sale or breakup. Spin-offs here are announced (not yet completed — they later graduate to the Spinoff Turnover board). Splits divide shares into more or fewer units (cosmetic, but sometimes a sentiment cue), and leadership changes are new CEOs/CFOs. Each card shows an AI headline and the stock's move since the filing; read it as a feed of fresh, discrete catalysts to investigate, not a buy/sell signal.",
+        "how": "The morning event-driven wire — the read that replaces a sell-side desk's daily event-driven email. It runs a full-text search over recent SEC 8-K filings — the form companies must file to disclose material events — across EDGAR, and uses AI to extract five catalyst types. Buybacks are a company repurchasing its own shares, which shrinks the share count and can support the price. Strategic alternatives means management is publicly exploring a sale or breakup. Spin-offs here are announced (not yet completed — they later graduate to the Spinoff Turnover board). Splits divide shares into more or fewer units (cosmetic, but sometimes a sentiment cue), and leadership changes are new CEOs/CFOs. Each card shows an AI headline and the stock's move since the filing; read it as a feed of fresh, discrete catalysts to investigate, not a buy/sell signal.",
         "metrics": [
           {
             "term": "Type",
@@ -2040,38 +2040,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
           },
           {
             "term": "Date",
-            "plain": "When the rule was published or the contract awarded; links to the source."
+            "plain": "When the 8-K was filed; links to the filing."
           }
         ]
       },
-      {
-        "path": "https://arb.bondstreetcp.com/",
-        "title": "Merger Arb",
-        "question": "On pending takeover deals, how wide is the gap between the target's stock price and the agreed deal value — the return you'd earn if the deal closes?",
-        "how": "This is an external link to a dedicated arbitrage desk (arb.bondstreetcp.com), not an in-app board, so the metrics below are the concepts you'll meet there. Merger arbitrage is an event-driven strategy: when Company A agrees to buy Company B, B's shares usually trade a little below the agreed price because there's a chance the deal breaks (regulators block it, financing falls through, shareholders vote no). That gap is the 'spread'; buying the target captures it if the deal closes, but you lose if the deal collapses and the stock falls back toward its pre-deal price. Read it as: a wide spread pays more but signals the market's greater doubt the deal completes — the return compensates you for deal-break risk.",
-        "metrics": [
-          {
-            "term": "Merger-arb spread",
-            "plain": "How far the target trades below the agreed deal value; the raw return earned if the deal closes. Wide means the market doubts completion."
-          },
-          {
-            "term": "Annualized return",
-            "plain": "The spread scaled to a yearly rate using the expected time to closing, so deals of different lengths can be compared fairly."
-          },
-          {
-            "term": "Cash / exchange ratio",
-            "plain": "Cash deals pay a fixed dollar amount per share; stock deals pay a set number of acquirer shares per target share (the 'exchange ratio')."
-          },
-          {
-            "term": "CVR",
-            "plain": "Contingent value right — an extra payout to target holders if a future milestone is met, on top of the headline deal price."
-          },
-          {
-            "term": "Break price",
-            "plain": "The estimated price the target would fall back to if the deal collapses — your downside at risk."
-          }
-        ]
-      }
     ]
   },
   {

@@ -33,9 +33,11 @@ export default function CorpEventsView({ universe, data }: { universe: string; d
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-          <h1 className="mt-1 text-2xl font-bold">Corporate Events</h1>
+          <h1 className="mt-1 text-2xl font-bold">Corporate Event News</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            The one-off catalysts from SEC 8-Ks — <b style={{ color: typeColor("buyback") }}>buybacks</b>, <b style={{ color: typeColor("strategic-alt") }}>strategic alternatives</b>, <b style={{ color: typeColor("spin-off") }}>spin-offs</b>, <b style={{ color: typeColor("split") }}>splits</b>, and <b style={{ color: typeColor("leadership") }}>CEO/CFO changes</b> — AI-extracted, with the stock since. {data.events.length} events · {data.scanned} filings scanned · {fmtDateTime(data.generatedAt)}
+            The morning event-driven wire from SEC 8-Ks — <b style={{ color: typeColor("buyback") }}>buybacks</b>, <b style={{ color: typeColor("strategic-alt") }}>strategic alternatives</b>, <b style={{ color: typeColor("spin-off") }}>spin-offs</b>, <b style={{ color: typeColor("split") }}>splits</b>, and <b style={{ color: typeColor("leadership") }}>CEO/CFO changes</b> — AI-extracted, with the stock since. {data.events.length} events · {data.scanned} filings scanned · {fmtDateTime(data.generatedAt)}
+            {/* The spin-off rows here are only what an 8-K disclosed — the Form 10 pipeline is the complete separation view (the 2026-08 "event-driven spinoffs is missing spinoffs" report). */}
+            {" "}Spin-off rows are 8-K disclosures only — the full pipeline lives on <Link href={`/u/${universe}/spinoffs`} className="text-[var(--accent)] hover:underline">Spin-offs</Link>.
           </p>
         </div>
         <UniverseSwitcher current={universe} />

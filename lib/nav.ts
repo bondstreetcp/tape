@@ -38,6 +38,9 @@ export const FEATURES: NavItem[] = [
   { label: "Earnings Calendar", path: "/earnings", desc: "Who reports when, with the options-implied move", group: "Markets", job: "Find ideas", kw: "earnings dates report calendar" },
   { label: "Macro & Rates", path: "/macro", desc: "Yield curve, inflation, growth, and credit spreads (FRED)", group: "Markets", job: "Track the market", kw: "fred yields inflation rates economy" },
   { label: "Fixed Income", path: "/rates", desc: "The bond desk — curve spreads, inversion, and credit OAS in one view", group: "Markets", job: "Track the market", kw: "rates bonds curve inversion 2s10s oas credit spreads treasury fixed income" },
+  // Corporate Event News leads Event-Driven (2026-08, Sam): it replaces the sell-side morning
+  // event-driven email — the first read of the day, so it's the first entry.
+  { label: "Corporate Event News", path: "/corp-events", desc: "The morning event-driven wire — buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes from SEC 8-Ks, with the stock's move since", group: "Event-Driven", job: "Find ideas", kw: "buyback repurchase spin-off spinoff carve-out strategic alternatives sale merger stock split reverse split ceo cfo change leadership 8-k corporate event driven kedm monitor morning email news wire event driven digest" },
   { label: "Spin-offs", path: "/spinoffs", desc: "The separation lifecycle — upcoming spins from Form 10 filings + completed spins with the share-register turnover clock (seller-exhaustion bottom)", group: "Event-Driven", job: "Find ideas", kw: "spinoff spin-off spin off separation carve-out carveout form 10 10-12b upcoming pipeline in registration turnover when-issued forced selling seller exhaustion greenblatt special situations bottom stub parent subsidiary distribution" },
   { label: "Fed Watch", path: "/fed", desc: "FOMC statements, minutes, speeches & the Beige Book — AI-scored hawkish↔dovish with what changed", group: "Markets", job: "Track the market", kw: "fed federal reserve fomc powell hawkish dovish rate cut hike minutes beige book monetary policy speeches" },
   { label: "Breadth & Regime", path: "/breadth", desc: "Market internals — how many names participate, plus the macro risk backdrop", group: "Markets", job: "Track the market", kw: "breadth internals advance decline new highs lows above 200 day ma participation t2108 regime risk-on risk-off" },
@@ -103,11 +106,11 @@ export const FEATURES: NavItem[] = [
   { label: "Congress Trades", path: "/congress", desc: "Members of Congress' stock trades (STOCK Act)", group: "Research", job: "Find ideas", kw: "congress senate house pelosi trades politicians" },
   { label: "Trump's Stock Calls", path: "/trump-stocks", desc: "Just the Truth Social posts where Trump names a public company — with how the stock did since", group: "Research", job: "Find ideas", kw: "trump truth social stock calls recommendations mentions dell intel nvidia tariffs bullish bearish president politician social" },
   { label: "Activism & Shorts", path: "/campaigns", desc: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", group: "Event-Driven", job: "Find ideas", kw: "activist 13d proxy fight short seller muddy waters campaign icahn elliott saba radoff dissident board seats hindenburg allegation event driven" },
-  { label: "Corporate Events", path: "/corp-events", desc: "Buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes — from SEC 8-Ks", group: "Event-Driven", job: "Find ideas", kw: "buyback repurchase spin-off spinoff carve-out strategic alternatives sale merger stock split reverse split ceo cfo change leadership 8-k corporate event driven kedm monitor" },
-  { label: "Tender Offers", path: "/tenders", desc: "Live tender offers with the odd-lot lens — offers that take <100-share holders in full, ahead of proration", group: "Event-Driven", job: "Find ideas", kw: "tender offer odd lot odd-lot priority proration self-tender dutch auction sc to-i to-t buyback going private small account arbitrage 99 shares" },
   { label: "Merger Arbitrage", path: "/merger-arb", desc: "Live cash-deal spreads from definitive merger proxies — annualized return to close vs deal-break risk", group: "Event-Driven", job: "Find ideas", kw: "merger arbitrage arb deal spread definitive agreement defm14a acquisition takeover cash deal annualized return break risk pending close special situations" },
-  { label: "Government Contracts", path: "/gov-contracts", desc: "Federal contract-award momentum per company — obligations trend + agency mix, from USAspending", group: "Research", job: "Find ideas", kw: "government contracts federal awards usaspending defense procurement obligations backlog momentum agency dod va pentagon contractor spending fpds" },
-  { label: "Merger Arb", path: "/merger-arb", desc: "Pending-deal spreads on the dedicated arb desk ↗", group: "Event-Driven", job: "Find ideas", external: "https://arb.bondstreetcp.com/", kw: "merger arbitrage arb pending deal acquisition takeover spread annualized return definitive agreement per share cash stock exchange ratio cvr break price deal close regulatory antitrust event driven risk arb m&a target acquirer" },
+  { label: "Tender Offers", path: "/tenders", desc: "Live tender offers with the odd-lot lens — offers that take <100-share holders in full, ahead of proration", group: "Event-Driven", job: "Find ideas", kw: "tender offer odd lot odd-lot priority proration self-tender dutch auction sc to-i to-t buyback going private small account arbitrage 99 shares" },
+  // (The external "Merger Arb ↗" link to arb.bondstreetcp.com was removed 2026-08 — the separate arb
+  // site is down (Vercel), and it duplicated the in-app Merger Arbitrage entry under the same path.)
+  { label: "Government Contracts", path: "/gov-contracts", desc: "Federal contract-award momentum per company — obligations trend + agency mix, from USAspending", group: "Screens", job: "Find ideas", kw: "government contracts federal awards usaspending defense procurement obligations backlog momentum agency dod va pentagon contractor spending fpds" },
   { label: "IPOs & Lockups", path: "/ipos", desc: "Recent IPOs + the lockup-expiry calendar (IPO + ~180d) — when insider supply first hits the stock", group: "Event-Driven", job: "Find ideas", kw: "ipo initial public offering lockup unlock expiry 180 days insider supply 424b4 new listing nasdaq nyse event driven kedm" },
   { label: "Biotech Catalysts", path: "/biotech-catalysts", desc: "Clinical binary events — Phase 2/3 readouts, enrollment done, failures — mapped to the sponsor's ticker", group: "Event-Driven", job: "Find ideas", kw: "biotech pharma clinical trial phase 3 phase 2 readout pdufa fda catalyst binary event clinicaltrials topline data sponsor drug" },
   { label: "Policy & Contracts", path: "/policy", desc: "New federal rules (tariffs, EPA, FAA, drug-pricing) + big government contract wins, mapped to tickers", group: "Event-Driven", job: "Find ideas", kw: "policy federal register rule tariff epa fda cms drug pricing faa ftc government contract award defense usaspending lockheed boeing raytheon revenue signal regulation" },
@@ -137,10 +140,23 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     { label: "Vol & Positioning", blurb: "The realized-vol cone, where vol is rich/cheap, skew & term structure, dispersion, dealer gamma, the name-level positioning radar, coiled springs, and cheap options into a catalyst (incl. biotech binaries)", paths: ["/vol-cone", "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol"] },
     { label: "Income", blurb: "Sell premium on quality names — cash-secured puts, covered calls, credit spreads", paths: ["/put-writing", "/covered-call", "/credit-spreads"] },
   ],
-  // Event-Driven has no hubs — its 7 monitors show as a flat, scannable dropdown.
+  // Event-Driven is FULLY hubbed (2026-08, Sam's IA pass): a group with any hubs shows ONLY hubs in
+  // the dropdown, so every member needs one. Most are single-path hubs (render as plain entries — the
+  // menu stays flat and scannable); the ORDER here is the dropdown order, and Corporate Event News
+  // leads — it replaces the sell-side morning event-driven email. Merger Arbitrage carries Tender
+  // Offers as its second tab (both are small-account SEC-filing arbs; the sub-nav bar joins them).
+  "Event-Driven": [
+    { label: "Corporate Event News", blurb: "The morning event-driven wire — buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes from SEC 8-Ks, with the stock since", paths: ["/corp-events"] },
+    { label: "Merger Arbitrage", blurb: "Cash-deal spreads from definitive merger proxies + live tender offers with the odd-lot lens", paths: ["/merger-arb", "/tenders"] },
+    { label: "Spin-offs", blurb: "The separation lifecycle — upcoming spins from Form 10 filings + completed spins with the turnover clock", paths: ["/spinoffs"] },
+    { label: "Activism & Shorts", blurb: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", paths: ["/campaigns"] },
+    { label: "IPOs & Lockups", blurb: "Recent IPOs + the lockup-expiry calendar — when insider supply first hits the stock", paths: ["/ipos"] },
+    { label: "Biotech Catalysts", blurb: "Clinical binary events — readouts, enrollment, failures — mapped to the sponsor's ticker", paths: ["/biotech-catalysts"] },
+    { label: "Policy & Contracts", blurb: "New federal rules + big government contract wins, mapped to tickers", paths: ["/policy"] },
+  ],
   Screens: [
     { label: "Screener", blurb: "Build your own filter — screen the whole universe by return, valuation & quality", paths: ["/screener"] },
-    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up, stretched stat-arb pairs, and the live track record grading them", paths: ["/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/insiders", "/factor-overlap", "/comps", "/pairs"] },
+    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up, short-side plumbing, federal-award momentum, stretched stat-arb pairs, and the live track record grading them", paths: ["/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/short-mechanics", "/gov-contracts", "/insiders", "/factor-overlap", "/comps", "/pairs"] },
     { label: "Value & Backtest", blurb: "Cheap vs. its own history, capital return (buybacks + yield), earnings-quality forensics, reverse-DCF expectations, NAV discounts (CEFs + holdcos), and factor-screen backtesting", paths: ["/valuation-history", "/buybacks", "/forensics", "/expectations", "/cef", "/cef-hunter", "/holdco-nav", "/backtest"] },
   ],
   Research: [
@@ -173,10 +189,11 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/forensics", // earnings-quality scores from the US SEC fundamentals panel (US filers only)
   "/portfolio-radar", // joins the book to the US catalyst feeds (earnings/biotech/lockup)
   "/portfolio-income", // joins the book to the US covered-call scan (putwrite.json)
-  // (merger-arb is an external link to arb.bondstreetcp.com — not gated)
 ]);
 
-const _allHubs: NavHub[] = [GROUP_HUBS.Markets, GROUP_HUBS.Options, GROUP_HUBS.Screens, GROUP_HUBS.Research].flatMap((h) => h ?? []);
+export const NAV_GROUPS: NavGroup[] = ["Markets", "Options", "Event-Driven", "Screens", "Research"];
+
+const _allHubs: NavHub[] = NAV_GROUPS.flatMap((g) => GROUP_HUBS[g] ?? []);
 const _featByPath = new Map(FEATURES.map((f) => [f.path, f] as const));
 /** The hub a relative path (e.g. "/cef") belongs to + its member NavItems — for the sub-nav bar.
  *  Single-tool hubs return null (no sub-tabs needed). */
@@ -187,5 +204,4 @@ export function hubForPath(relPath: string): { label: string; items: NavItem[] }
 }
 
 export const ALL_NAV: NavItem[] = [...TOP_LINKS, ...FEATURES];
-export const NAV_GROUPS: NavGroup[] = ["Markets", "Options", "Event-Driven", "Screens", "Research"];
 export const JOBS: Job[] = ["Track the market", "Find ideas", "Research a name", "Income strategies"];
