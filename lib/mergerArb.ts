@@ -33,11 +33,38 @@ export interface MergerArbRow {
   url: string;
 }
 
+/**
+ * EVERY DEFM14A filer in the scan window — including the stock/mixed deals the cash board drops.
+ * Filing a definitive merger proxy means the company is under a signed acquisition agreement
+ * regardless of consideration, and that's the fact the earnings desk needs: an acquisition target's
+ * stock is pinned to the deal, so its options no longer trade earnings (the KVUE long-straddle
+ * report — a mixed K-C deal, invisible on the cash board, and the strategic-alt overlay had
+ * deliberately dropped it as "resolved"). Consumed by lib/catalystOverlay as the "acquisition" flag.
+ */
+export interface DealTarget {
+  ticker: string;
+  name: string;
+  filedAt: string; // DEFM14A filing date, YYYY-MM-DD
+}
+
 export interface MergerArbFile {
   generatedAt: string;
   rows: MergerArbRow[];
   scanned: number; // DEFM14A filings seen in the window
   spacs: number; // dropped as SPAC/blank-check deals
+  /** all deal targets in the window, any consideration (cash rows are a subset) */
+  targets?: DealTarget[];
+}
+
+/** Latest DEFM14A per ticker (a target can file amendments/supplements — keep the newest date). */
+export function dedupeTargets(list: DealTarget[]): DealTarget[] {
+  const by = new Map<string, DealTarget>();
+  for (const t of list) {
+    const k = t.ticker.toUpperCase();
+    const prev = by.get(k);
+    if (!prev || t.filedAt > prev.filedAt) by.set(k, { ...t, ticker: k });
+  }
+  return [...by.values()].sort((a, b) => (a.filedAt < b.filedAt ? 1 : -1));
 }
 
 /** Default holding horizon when the filing states no expected close — deals typically close ~3-5

@@ -23,6 +23,7 @@ import { loadSnapshot } from "../lib/data";
 import { buildEarningsTrade } from "../lib/earningsTrade";
 import { computeRiskFlags, crossedCredit, marginPerShare, netCredit, payoffBounds, prePrintDriftPct, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
 import { loadCatalystOverlay } from "../lib/catalystOverlay";
+import { detectPreannounce } from "../lib/preannounce";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -158,7 +159,11 @@ async function main() {
     // (an after-close print must use an expiry strictly after the report date).
     const eIso = new Date(s._e).toISOString();
     await throttle();
-    const built = await buildEarningsTrade(s.symbol, eIso, flagFor(s.symbol) ?? null).catch(() => null);
+    // Overlay first (strategic-alt / spin-off / acquisition), then the per-symbol preannouncement
+    // check — the SAME resolution computeQuant uses, so the logger can never log a play the card
+    // would withhold (the KVUE long-straddle / IBM preannounced-print class).
+    const catFlag = flagFor(s.symbol) ?? (await detectPreannounce(s.symbol, eIso).catch(() => null));
+    const built = await buildEarningsTrade(s.symbol, eIso, catFlag).catch(() => null);
     if (!built || !built.trade.legsData) return;
     const legs = built.trade.legsData;
     const entry = netCredit(legs);
@@ -185,7 +190,7 @@ async function main() {
       maxProfit: maxProfit != null ? +maxProfit.toFixed(2) : null,
       maxLoss: maxLoss != null ? +maxLoss.toFixed(2) : null,
       // undefined (no live catalyst) is dropped by JSON.stringify — the field only appears when flagged
-      catalystFlag: flagFor(s.symbol),
+      catalystFlag: catFlag ?? undefined,
       status: "awaiting_print",
     };
     // ── risk instrumentation (all annotation, never a gate — see lib/tradeLog) ──
@@ -242,13 +247,24 @@ async function main() {
   // a second look. Re-check nightly: ADD (never clear) a flag whenever the disclosure DATE precedes the
   // rec's print — provably pre-print regardless of when we notice it, so the annotation stays honest
   // even when stamped onto an already-settled rec.
-  let restamped = 0;
+  let restamped = 0, preChecked = 0;
   for (const rec of byId.values()) {
     if (rec.catalystFlag) continue;
     const flag = flagFor(rec.symbol);
-    if (flag && Date.parse(flag.date) < Date.parse(rec.earningsDate)) { rec.catalystFlag = flag; restamped++; }
+    if (flag && Date.parse(flag.date) < Date.parse(rec.earningsDate)) { rec.catalystFlag = flag; restamped++; continue; }
+    // Preannouncement back-fill — ONE submissions fetch per never-checked rec (undefined = never
+    // looked; null = looked, clean — persisted so tomorrow's run skips it). This retro-annotates the
+    // IBM-class settled plays so the record can MEASURE what preannounced prints cost before the
+    // suppression shipped, instead of asserting the rule works. The flag's own filing date is
+    // pre-print by construction (2-35d before), so the annotation stays honest on settled recs.
+    if (rec.catalystFlag === undefined) {
+      preChecked++;
+      const pre = await detectPreannounce(rec.symbol, rec.earningsDate).catch(() => null);
+      rec.catalystFlag = pre && Date.parse(pre.date) < Date.parse(rec.earningsDate) ? pre : null;
+      if (rec.catalystFlag) restamped++;
+    }
   }
-  if (restamped) console.log(`catalyst overlay: re-stamped ${restamped} previously-logged recs (disclosure predates their print)`);
+  if (restamped || preChecked) console.log(`catalyst restamp: ${restamped} flags added (${preChecked} preannounce checks run against SEC submissions)`);
 
   // ── 2. SETTLE at the POST-PRINT (primary), then fill held-to-expiry (secondary) ──
   const openRecs = [...byId.values()].filter((r) => r.status !== "settled" || rec_needsExpiry(r));

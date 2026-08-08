@@ -92,3 +92,38 @@ test("straddleMove: sparse chain with a one-sided nearest strike → ATM picked 
   assert.equal(sm!.atmStrike, 105);
   assert.ok(Math.abs(sm!.movePct - (4 / 100.4) * 100) < 0.01, `movePct from the 105 straddle, got ${sm!.movePct}`);
 });
+
+// ── acquisition + preannounce: BOTH sides withheld ──
+// An acquired name's stock is pinned to deal terms (long vol = paying for movement the deal forbids
+// — the KVUE long-straddle report); a preannounced name's print is no longer the event the realized
+// history graded (the IBM case). Unlike strategic-alt (short side only), these stand aside entirely.
+
+const ACQ = { kind: "acquisition" as const, headline: "Definitive merger proxy (DEFM14A) filed — under agreement to be acquired", date: "2026-07-15" };
+const PRE = { kind: "preannounce" as const, headline: "8-K Item 2.02 (prelim results) filed 2026-07-28, 14d ahead of the scheduled print", date: "2026-07-28" };
+
+test("acquisition: rich AND cheap both withheld — no legs, no alts, kind surfaced", () => {
+  for (const verdict of ["rich", "cheap"] as const) {
+    const t = tradeIdea({ verdict, avgRealized: 6 }, null, straddle, chainWith(0.1), 6, null, ACQ);
+    assert.ok(t, `${verdict}: card still explains`);
+    assert.match(t!.structure, /No play — being acquired/);
+    assert.equal(t!.legsData, undefined, `${verdict}: nothing for the logger to grade`);
+    assert.equal(t!.alt, null);
+    assert.equal(t!.catalystWithheld?.kind, "acquisition");
+  }
+});
+
+test("preannounce: rich AND cheap both withheld (both comparisons against normal-print history are contaminated)", () => {
+  for (const verdict of ["rich", "cheap"] as const) {
+    const t = tradeIdea({ verdict, avgRealized: 6 }, null, straddle, chainWith(0.1), 6, null, PRE);
+    assert.ok(t);
+    assert.match(t!.structure, /No play — preannounced/);
+    assert.equal(t!.legsData, undefined);
+    assert.equal(t!.catalystWithheld?.kind, "preannounce");
+  }
+});
+
+test("strategic-alt still withholds the SHORT side only (long straddle untouched) — regression", () => {
+  const long = tradeIdea({ verdict: "cheap", avgRealized: 9 }, null, straddle, chainWith(0.1), 6, null, CATALYST);
+  assert.equal(long!.structure, "Long straddle / strangle");
+  assert.ok(long!.legsData);
+});

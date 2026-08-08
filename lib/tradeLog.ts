@@ -53,7 +53,7 @@ export interface TradeRec {
   // nightly: a flag is ADDED whenever the disclosure date precedes the rec's print (provably pre-print,
   // so honest even when noticed late), and never cleared. ANNOTATION ONLY: the play still logs and
   // grades normally, so the record can MEASURE whether flagged sell-vol plays underperform.
-  catalystFlag?: { kind: "strategic-alt" | "spin-off"; headline: string; date: string } | null;
+  catalystFlag?: { kind: "strategic-alt" | "spin-off" | "acquisition" | "preannounce"; headline: string; date: string } | null;
 
   // ── risk instrumentation (2026-08-05, the "scale it up?" audit) — all LOG-time, all optional so
   // pre-existing recs stay valid. Only thin-credit is a MEASURED handicap (retro on 206 settled

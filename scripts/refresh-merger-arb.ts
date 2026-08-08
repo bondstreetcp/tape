@@ -14,14 +14,19 @@ import YahooFinance from "yahoo-finance2";
 import { chatJSON, llmConfigured } from "../lib/llm";
 import { deadline, withDeadline } from "../lib/deadline";
 import { daysUntil } from "../lib/calendar";
-import { isSpac, priceInText, spreadMath, DEFAULT_CLOSE_DAYS, type MergerArbRow, type MergerArbFile } from "../lib/mergerArb";
+import { isSpac, priceInText, spreadMath, dedupeTargets, DEFAULT_CLOSE_DAYS, type MergerArbRow, type MergerArbFile, type DealTarget } from "../lib/mergerArb";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "merger-arb.json");
 const CACHE = path.join(DATA, ".tmp", "merger-arb-seen.json");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
-const WINDOW_DAYS = 150; // a deal lives from proxy to close ~3-5 months
+// A TYPICAL deal runs proxy→close in 3-5 months, but mega-deals run 9-12 (KVUE filed its DEFM14A
+// 2025-12-16 for an H2-2026 close and a 150d window aged it out — dropping both its board row while
+// live AND the acquisition flag that suppresses earnings plays on it). Closed deals self-resolve
+// (the ticker delists / rows drop past expectedClose); the residual cost of the wide window is a
+// BROKEN deal wrongly withholding plays until it ages out — a conservative miss, accepted.
+const WINDOW_DAYS = 365;
 const DAY = 86_400_000;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -55,9 +60,19 @@ const SCHEMA = 'Return ONLY JSON: {"acquirer":string,"consideration":"cash"|"sto
 
 async function eftsDEFM14A(): Promise<any[]> {
   const start = new Date(Date.now() - WINDOW_DAYS * DAY).toISOString().slice(0, 10);
-  const res = await fetch(`https://efts.sec.gov/LATEST/search-index?forms=DEFM14A&startdt=${start}&enddt=${new Date().toISOString().slice(0, 10)}`, { headers: { "User-Agent": UA }, signal: deadline(20_000) });
-  if (!res.ok) throw new Error(`EFTS HTTP ${res.status}`);
-  return (await res.json())?.hits?.hits ?? [];
+  const end = new Date().toISOString().slice(0, 10);
+  // EFTS caps a page at 100 hits — a 365d window carries ~200+ DEFM14A, so page with `from` until a
+  // short page (cap paranoia at 10 pages; EFTS refuses from>10k anyway).
+  const all: any[] = [];
+  for (let from = 0; from < 1000; from += 100) {
+    const res = await fetch(`https://efts.sec.gov/LATEST/search-index?forms=DEFM14A&startdt=${start}&enddt=${end}&size=100&from=${from}`, { headers: { "User-Agent": UA }, signal: deadline(20_000) });
+    if (!res.ok) { if (from === 0) throw new Error(`EFTS HTTP ${res.status}`); break; } // page-1 failure is fatal; later pages degrade to partial
+    const page = (await res.json())?.hits?.hits ?? [];
+    all.push(...page);
+    if (page.length < 100) break;
+    await sleep(250);
+  }
+  return all;
 }
 
 async function quote(sym: string): Promise<number | null> {
@@ -76,6 +91,7 @@ async function main() {
   const hits = await eftsDEFM14A();
   console.log(`refresh-merger-arb: ${hits.length} DEFM14A in ${WINDOW_DAYS}d`);
   const rows: MergerArbRow[] = [];
+  const targets: DealTarget[] = [];
   let spacs = 0;
   for (const h of hits) {
     const src = h._source ?? {};
@@ -87,6 +103,10 @@ async function main() {
     if (isSpac(name)) { spacs++; continue; }
     const ticker = tickerFrom(dn);
     if (!ticker) continue;
+    // Every non-SPAC DEFM14A filer is a deal TARGET under a signed agreement — recorded regardless
+    // of consideration (and of the reject cache), because the earnings desk must know a name is
+    // pinned to a deal even when the cash board can't spread it (mixed/stock — the KVUE case).
+    targets.push({ ticker, name, filedAt: (src.file_date || "").slice(0, 10) });
     const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${adsh.replace(/-/g, "")}/${adsh}-index.htm`;
 
     const cached = seen[adsh];
@@ -133,11 +153,12 @@ async function main() {
   const live = rows.filter((r) => !r.expectedClose || (daysUntil(r.expectedClose) ?? 0) >= -5);
   live.sort((a, b) => (b.annualizedPct ?? -1e9) - (a.annualizedPct ?? -1e9));
 
-  const out: MergerArbFile = { generatedAt: new Date().toISOString(), rows: live, scanned: hits.length, spacs };
+  const allTargets = dedupeTargets(targets);
+  const out: MergerArbFile = { generatedAt: new Date().toISOString(), rows: live, scanned: hits.length, spacs, targets: allTargets };
   await fsp.mkdir(path.join(DATA, ".tmp"), { recursive: true });
   await fsp.writeFile(CACHE, JSON.stringify(seen));
   await fsp.writeFile(FILE, JSON.stringify(out));
-  console.log(`merger-arb: ${live.length} live cash deals (${spacs} SPACs dropped of ${hits.length} DEFM14A).`);
+  console.log(`merger-arb: ${live.length} live cash deals (${spacs} SPACs dropped of ${hits.length} DEFM14A); ${allTargets.length} deal targets recorded (any consideration).`);
 }
 
 main().catch((e) => { console.error("refresh-merger-arb:", String(e?.message || e)); process.exit(1); });

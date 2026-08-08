@@ -17,7 +17,7 @@ const GREEN = "#22c55e", RED = "#ef4444";
 
 type StatusF = "all" | "preprint" | "settled";
 type VerdictF = "all" | "rich" | "cheap";
-type SortKey = "recent" | "pnl" | "implied" | "realized";
+type SortKey = "recent" | "play" | "pnl" | "implied" | "realized";
 
 export default function TradeRecordView({
   universe, recs: allRecs, prices, generatedAt, intl,
@@ -37,7 +37,7 @@ export default function TradeRecordView({
 
   const recs = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    const get: Record<SortKey, (r: TradeRec) => number> = {
+    const get: Record<Exclude<SortKey, "play">, (r: TradeRec) => number> = {
       recent: (r) => Date.parse(r.earningsDate) || 0,
       // Sort on the same dollar-notional basis the column displays, not raw per-share
       pnl: (r) => (r.pnl != null ? dollarPnl(r.pnl, r.spotAtRec) ?? -Infinity : -Infinity),
@@ -52,7 +52,9 @@ export default function TradeRecordView({
         if (ql && !r.symbol.toLowerCase().includes(ql) && !r.name.toLowerCase().includes(ql)) return false;
         return true;
       })
-      .sort((a, b) => get[sort](b) - get[sort](a));
+      // "play" groups by structure (strangles with strangles, condors with condors), newest print
+      // first inside each group — how the P&L attribution by structure actually gets eyeballed.
+      .sort((a, b) => (sort === "play" ? a.structure.localeCompare(b.structure) || (Date.parse(b.earningsDate) || 0) - (Date.parse(a.earningsDate) || 0) : get[sort](b) - get[sort](a)));
   }, [allRecs, statusF, verdictF, sort, q]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
@@ -155,7 +157,7 @@ export default function TradeRecordView({
               <tr>
                 <th className="px-2 py-2 font-medium">Ticker</th>
                 <SortTh k="recent">Report</SortTh>
-                <th className="px-2 py-2 font-medium">Play</th>
+                <SortTh k="play">Play</SortTh>
                 <th className="px-2 py-2 font-medium">Expiry</th>
                 <th className="px-2 py-2 text-right font-medium">Entry</th>
                 <SortTh k="implied" cls="text-right">Implied ±</SortTh>

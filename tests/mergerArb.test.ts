@@ -42,3 +42,15 @@ test("price verification demands a dollar amount, not a bare number", () => {
   assert.equal(priceInText(text, 50.0), true);
   assert.equal(priceInText("this is section 47 of the agreement", 47), false); // bare number = section ref
 });
+
+test("dedupeTargets: latest DEFM14A per ticker wins (amendments/supplements collapse), newest first", async () => {
+  const { dedupeTargets } = await import("../lib/mergerArb");
+  const out = dedupeTargets([
+    { ticker: "kvue", name: "Kenvue Inc", filedAt: "2026-06-01" },
+    { ticker: "KVUE", name: "Kenvue Inc", filedAt: "2026-07-15" }, // amendment, later — wins (case-folded)
+    { ticker: "ABCD", name: "Abcd Corp", filedAt: "2026-07-01" },
+  ]);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], { ticker: "KVUE", name: "Kenvue Inc", filedAt: "2026-07-15" });
+  assert.equal(out[1].ticker, "ABCD");
+});

@@ -15,9 +15,17 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import { eventResolved, classRoot, type CorpEventsData } from "@/lib/corpEvents";
+import type { MergerArbFile } from "@/lib/mergerArb";
 
 export interface CatalystFlag {
-  kind: "strategic-alt" | "spin-off";
+  /**
+   * strategic-alt / spin-off: from corp-events — withholds SHORT-vol only (elevated IV is priced
+   * event risk). acquisition: from the merger-arb DEFM14A scan — a signed deal pins the stock, so
+   * ALL plays are withheld (the KVUE long-straddle report: long vol on a capped name is paying for
+   * movement the deal forbids). preannounce: not from this overlay (per-symbol, lib/preannounce) —
+   * the type lives here because tradeIdea and the trade log speak CatalystFlag.
+   */
+  kind: "strategic-alt" | "spin-off" | "acquisition" | "preannounce";
   headline: string;
   date: string; // YYYY-MM-DD disclosure date
 }
@@ -51,6 +59,19 @@ export async function loadCatalystOverlay(nowMs: number = Date.now()): Promise<C
   // deal). Filter AFTER most-recent selection: an older "announced" event must not resurrect a ticker
   // whose spin has since completed (the MIDD case).
   for (const [k, v] of byTicker) if (eventResolved(v.headline)) byTicker.delete(k);
+  // ── acquisition targets (merger-arb DEFM14A scan, ANY consideration) — OVERWRITE unconditionally ──
+  // A signed definitive deal supersedes a strategic-alt flag (the review concluded — in a deal), and
+  // it's precisely the state eventResolved above deletes, so this source must come AFTER that filter
+  // and never pass through it. The scan window (150d) roughly matches proxy→close; a closed deal
+  // delists and stops having earnings dates, and a BROKEN deal wrongly withholds for a few weeks —
+  // a conservative miss (no play logged), never a wrong trade.
+  try {
+    const ma = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "merger-arb.json"), "utf8")) as MergerArbFile;
+    for (const t of ma.targets || []) {
+      if (!t.ticker || !t.filedAt) continue;
+      byTicker.set(t.ticker.toUpperCase(), { kind: "acquisition", headline: `Definitive merger proxy (DEFM14A) filed — under agreement to be acquired`, date: t.filedAt });
+    }
+  } catch { /* board missing on this box — no acquisition flags */ }
   // Alias each surviving flag under its share-class ROOT: EDGAR stores the first-listed class (BF-A)
   // while snapshots trade the other (BF-B); exact key wins at lookup, roots are the fallback.
   for (const [k, v] of [...byTicker]) {

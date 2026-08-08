@@ -32,8 +32,10 @@ export interface TradeIdea {
   legsData?: TradeLegSpec[]; // structured legs WITH premiums — present only when every leg has a usable quote
   lean?: "bullish" | "bearish" | null; // positioning read (skew + max-pain + walls) — informational, not a call
   alt?: { structure: string; legs: string; rationale: string; kind: "directional" | "calendar" } | null; // one conditional alternative
-  /** Set when a RICH verdict was withheld because a hard catalyst is live — the card explains instead
-   *  of suggesting short premium, and (having no legsData) the nightly logger logs nothing to grade. */
+  /** Set when the verdict's play was withheld because a hard catalyst is live — the card explains
+   *  instead of suggesting a structure, and (having no legsData) the nightly logger logs nothing to
+   *  grade. strategic-alt/spin-off withhold the SHORT side only; acquisition and preannounce
+   *  withhold BOTH sides (see the dispatch in tradeIdea). */
   catalystWithheld?: CatalystFlag | null;
 }
 
@@ -183,6 +185,28 @@ export function tradeIdea(
       return { kind: "calendar", structure: "Calendar (sell front / own back)", legs: `short ~${term.frontDte}d ${fmt(atmK)} straddle · long ~${term.backDte}d ${fmt(atmK)} straddle`, rationale: `Steep term crush (${term.crushRatio.toFixed(1)}×) — sell the event-inflated front, own the back; harvests the differential IV decay, not just the level.` };
     return null;
   })();
+  // An ACQUISITION or a PREANNOUNCEMENT disqualifies the print as a tradeable event in BOTH
+  // directions, so intercept before the rich/cheap dispatch. Acquisition (2026-08, the KVUE long
+  // straddle): a signed deal pins the stock to its terms — long vol pays for movement the deal
+  // forbids, short vol sells deal-break risk; there is no earnings trade. Preannounce (the IBM
+  // case): the market already repriced on the prelim 8-K, so the print is no longer the event the
+  // realized history graded — "rich vs history" AND "cheap vs history" are both contaminated reads.
+  if (catalyst && (catalyst.kind === "acquisition" || catalyst.kind === "preannounce") && (richness.verdict === "rich" || richness.verdict === "cheap")) {
+    const acq = catalyst.kind === "acquisition";
+    return {
+      verdict: richness.verdict,
+      structure: acq ? "No play — being acquired" : "No play — preannounced",
+      legs: "stand aside",
+      rationale: acq
+        ? `Under a definitive agreement to be acquired (${catalyst.headline.toLowerCase().startsWith("definitive") ? catalyst.headline : `"${catalyst.headline}"`}, ${catalyst.date}) — the stock is pinned to deal terms, so options here no longer price this print: buying vol pays for movement the deal forbids, selling it is short the deal breaking. No earnings trade.`
+        : `${catalyst.headline} — the market already repriced on the prelim numbers, so implied ±${impliedMove.toFixed(1)}% vs ~±${richness.avgRealized.toFixed(1)}% realized compares a known-event print against a history of normal ones. Neither side of that read is trustworthy; the desk stands aside.`,
+      expiry: exp,
+      dte,
+      lean,
+      alt: null,
+      catalystWithheld: catalyst,
+    };
+  }
   if (richness.verdict === "rich") {
     // A LIVE hard catalyst (strategic review, spin in motion) means the elevated implied move is priced
     // EVENT risk, not a vol mispricing — the naive "implied > realized → sell" read is exactly how you

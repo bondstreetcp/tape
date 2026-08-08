@@ -10,6 +10,7 @@ import { loadEarningsMove } from "./earningsMove";
 import { getOptions, getTermStructure, type OptionChain, type Opt } from "./options";
 import { straddleMove, tradeIdea } from "./earningsTrade";
 import { loadCatalystOverlay } from "./catalystOverlay";
+import { detectPreannounce } from "./preannounce";
 import { peerCohort } from "./peerCohorts";
 import { yahoo } from "./yahooClient";
 import { beatGuide, type GuidanceData, type GuidanceTicker } from "./guidance";
@@ -242,9 +243,15 @@ export async function computeQuant(sym: string, earningsISO: string | null) {
   const volRegime = volRegimeFrom(closes.map((x) => x.c), options?.atmIV ?? null);
   // Price the legs on the SAME expiry the straddle used (the one bracketing earnings), not the nearest
   // chain — so the suggested strikes and their premiums are internally consistent with the implied move.
-  // The catalyst overlay withholds short-premium structures when a strategic-alt/spin-off is live —
-  // same lookup the nightly trade logger uses, so the card and the record can never diverge on it.
-  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove, term, catalystOverlay?.flagFor(sym) ?? null);
+  // Catalyst resolution: the corp-events/merger-arb overlay first (strategic-alt / spin-off /
+  // acquisition), then the per-symbol preannouncement check (8-K Item 2.02 ahead of the scheduled
+  // print — lib/preannounce, internally 6s-bounded and per-process memoized, so the hot path pays
+  // one submissions fetch per name per process at most).
+  const catalystFlag = catalystOverlay?.flagFor(sym) ?? (await detectPreannounce(sym, earningsISO).catch(() => null));
+  // The flag withholds structures per its kind (short side for strategic-alt/spin-off, BOTH sides
+  // for acquisition/preannounce) — same lookup the nightly trade logger uses, so the card and the
+  // record can never diverge on it.
+  const trade = tradeIdea(richness, options, straddle, sm?.chain ?? chain, impliedMove, term, catalystFlag);
   // Strike ladder for the interactive IV-crush scenario matrix (client reprices via Black-Scholes).
   const ivScenario = ivScenarioFrom(sm, chain, term);
   // Should you BUY premium (calls/puts/straddle) into the print? Even a right directional call loses if
