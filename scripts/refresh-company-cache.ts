@@ -51,8 +51,13 @@ async function main() {
   let fresh = 0;
   for (const sym of all) {
     const c = await readCompanyCache(sym);
-    if (c && ageDays(c.fetchedAt) < STALE_DAYS) fresh++;
-    else dueAged.push({ sym, age: c ? ageDays(c.fetchedAt) : Infinity });
+    // A file with NULL stats is a partial-failure bake, not coverage — its fresh fetchedAt must not
+    // exempt it for STALE_DAYS (EAT baked stats-null and would have sat estimates-less through its
+    // print). Count it due regardless of age. Genuinely dataless names never write a file at all
+    // (the hasData guard), so this cohort is only the vendor-blip names and shrinks to zero via the
+    // carry-forward below once a name has EVER had stats.
+    if (c && ageDays(c.fetchedAt) < STALE_DAYS && c.stats) fresh++;
+    else dueAged.push({ sym, age: c && c.stats ? ageDays(c.fetchedAt) : Infinity });
   }
   dueAged.sort((a, b) => b.age - a.age);
   const targets = dueAged.slice(0, MAX_PER_RUN).map((x) => x.sym);
