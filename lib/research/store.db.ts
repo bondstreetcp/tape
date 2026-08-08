@@ -83,7 +83,22 @@ export async function ensureSchema(): Promise<void> {
   await sql`create index if not exists research_chunks_ticker_idx on research_chunks (ticker)`;
   schemaReady = true;
 }
-async function ready() { if (!schemaReady) await ensureSchema(); }
+async function ready() {
+  if (schemaReady) return;
+  // Probe, don't DDL. ensureSchema's create-if-not-exists statements queue on shared catalog locks
+  // even when every object already exists — a cold process (dev restart, NAS slot swap) colliding
+  // with an in-flight upload sat 2 minutes behind them and died on the server's statement_timeout
+  // (2026-08, error 57014 in `create extension`). One instant SELECT settles the common case; only
+  // a genuinely missing table (42P01 undefined_table — first boot ever) runs the one-time creates.
+  try {
+    await withCancel(db()`select 1 from research_docs limit 1`, 10_000, "research: schema probe");
+    schemaReady = true;
+    return;
+  } catch (e: any) {
+    if (e?.code !== "42P01") throw e;
+  }
+  await ensureSchema();
+}
 
 const toDoc = (r: any): StoredDoc => ({
   id: r.id, ticker: r.ticker, company: r.company || "", source: r.source || "", analysts: r.analysts || [],
