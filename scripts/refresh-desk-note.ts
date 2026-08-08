@@ -21,6 +21,7 @@ import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
 import { getNews, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
+import { detectRecentReport } from "../lib/preannounce";
 import { buildBinaryWeek } from "../lib/binaryWeek";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch, DeskTape, DeskCalendar } from "../lib/deskNote";
@@ -37,7 +38,7 @@ const readJson = async <T,>(f: string): Promise<T | null> =>
 const SYSTEM =
   "You are a senior markets-desk strategist writing the morning brief for a sharp portfolio manager. You are given PRE-SELECTED overnight data WITH CONTEXT (trend, 52-week position, valuation, next-earnings, options skew, implied upside). " +
   "Do NOT just relist the data — for every development write the SECOND LAYER: WHY it matters, the mechanism / read-through, whether it looks like real signal or just noise, and what it sets up or what to watch next. Tie each section together with a one-line thematic 'synthesis' (the so-what for the group). Surface CONNECTIONS the raw feeds don't show on their own — e.g. a stock that is weak AND has heavy near-dated put premium AND just got downgraded is positioning into a catalyst; an unexplained move with no catalyst on file is itself notable. Give the bull AND the bear when it's a genuine debate. " +
-  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found, and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
+  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. ATTRIBUTION RULE — EARNINGS OUTRANK EVERYTHING: when a mover is marked 'REPORTED EARNINGS …' (a results 8-K is on record), that print IS the driver of its same-day and next-session move — lead with the report (use headlines for the beat/miss/guide color), and treat any analyst upgrade/downgrade dated at or after the print as REACTION to it, never the cause. A move 2-7 days after a marked report with no fresh catalyst is a CONTINUED post-earnings move — say so and tag it Earnings, never 'no specific catalyst'. Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found AND no recent report is marked, and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Earnings | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
   "DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: combine ONE name's threads (its move + filing + options + upgrade) into its single bullet. FORMAT (CRITICAL): each bullet's 'fact' describes exactly ONE ticker's move/event — at most one ticker's price change per fact, kept to a short scannable line. NEVER list two or more tickers' moves in a single fact, even when they share a theme: a four-name sector move is FOUR separate bullets under one section heading, tied together by that section's 'synthesis' line — not one run-on bullet. (You may reference a related ticker inside the 'read', but the 'fact' stays single-ticker.) COVERAGE: every stock that moved ±8% or more in the data MUST appear somewhere in the brief — fold it into the right section; never silently drop a double-digit move (those are exactly what the reader scans for). " +
   "SECTIONS (FIXED): use EXACTLY these headings, in this order, and omit a section only when it has no bullets — 1) the movers section (heading given in the run context), 2) 'Filings that matter', 3) 'Analyst actions', 4) 'Options desk'. Do NOT invent other section headings; the structure carries the meaning, the synthesis line carries the theme. " +
   NO_ADVICE;
@@ -100,6 +101,13 @@ async function main() {
 
   const movers = await Promise.all(
     moverRows.map(async (s) => {
+      // ── Move attribution, CODE-FIRST: did this name just REPORT? ──
+      // The 8-K Item 2.02 filing date is the ground truth "it reported Nd ago" fact, checked BEFORE
+      // any headline inference. Without it the model attributes the print's move to whatever headline
+      // survives ranking — ABNB +17% was credited to a Wedbush upgrade the morning it REPORTED, and
+      // RMD's Friday print read as "no specific catalyst" on Monday (2026-08 report). Headlines still
+      // ride along for the beat/miss color; the filing fact anchors WHAT the driver is.
+      const rep = await detectRecentReport(s.symbol, now).catch(() => null);
       const why = freshDayCatalyst(s.symbol);
       // No usable cached catalyst → actively pull recent news so GLM can explain the move instead of
       // shrugging "unexplained". (A 12% move almost always has a reason — go find it.)
@@ -117,6 +125,10 @@ async function main() {
         driver = heads.length
           ? `recent news: ${heads.map((h) => `${h.date ? `[${h.date}] ` : "[undated] "}${h.title}`).join(" | ")}`
           : "no catalyst or recent news found";
+      }
+      if (rep) {
+        const when = rep.daysAgo === 0 ? "TODAY" : rep.daysAgo === 1 ? "YESTERDAY" : `${rep.date} (${rep.daysAgo}d ago)`;
+        driver = `REPORTED EARNINGS ${when} — 8-K results filing on record${driver ? ` · ${driver}` : ""}`;
       }
       const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
       return (

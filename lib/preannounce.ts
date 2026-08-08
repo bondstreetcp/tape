@@ -36,6 +36,48 @@ export function isPreannouncement8K(form: string, items: string | undefined, fil
   return d != null && d >= 2 && d <= 35;
 }
 
+/** Pure classifier — an 8-K Item 2.02 filed within the LAST `maxDays` days (0 = today). The
+ *  "did this name JUST report?" fact, from the filing record instead of headline inference — the
+ *  Daily Desk's move-attribution ground truth (ABNB +17% was credited to a Wedbush upgrade when it
+ *  had reported that morning; RMD's Friday print read as "no specific catalyst" on Monday). */
+export function isRecentReport8K(form: string, items: string | undefined, filedDay: string, todayDay: string, maxDays: number): boolean {
+  if (!/^8-K(\/A)?$/.test(form)) return false;
+  if (!items || !items.split(",").some((s) => s.trim() === "2.02")) return false;
+  const d = daysBefore(filedDay, todayDay); // days from filing to today; negative = future-dated
+  return d != null && d >= 0 && d <= maxDays;
+}
+
+const repMemo = new Map<string, { date: string; daysAgo: number } | null>();
+
+/** Did `sym` file an earnings 8-K (Item 2.02) in the last `maxDays` days? Best-effort, memoized. */
+export async function detectRecentReport(sym: string, nowMs: number, maxDays = 7): Promise<{ date: string; daysAgo: number } | null> {
+  const todayDay = new Date(nowMs).toISOString().slice(0, 10);
+  const key = `${sym.toUpperCase()}|${todayDay}|${maxDays}`;
+  if (repMemo.has(key)) return repMemo.get(key)!;
+  let out: { date: string; daysAgo: number } | null = null;
+  try {
+    const bounded = <T>(p: Promise<T>): Promise<T | null> =>
+      Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), 6_000))]);
+    const cik = await bounded(tickerToCik(sym));
+    if (cik) {
+      const recent = (await bounded(getSubmissions(cik)))?.filings?.recent;
+      const forms: string[] = recent?.form ?? [];
+      const dates: string[] = recent?.filingDate ?? [];
+      const items: string[] = recent?.items ?? [];
+      for (let i = 0; i < forms.length; i++) {
+        const d = daysBefore(dates[i], todayDay);
+        if (d != null && d > maxDays) break; // newest-first — nothing older can qualify
+        if (isRecentReport8K(forms[i], items[i], dates[i], todayDay, maxDays)) {
+          out = { date: dates[i], daysAgo: d! };
+          break;
+        }
+      }
+    }
+  } catch { /* submissions unreachable — no fact */ }
+  repMemo.set(key, out);
+  return out;
+}
+
 // Per-process memo (sym+earnings day → flag or null) — the live card re-renders; the submissions
 // fetch should happen once per name per process, not per view.
 const memo = new Map<string, CatalystFlag | null>();
