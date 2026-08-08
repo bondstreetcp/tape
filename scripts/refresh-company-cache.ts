@@ -59,11 +59,22 @@ async function main() {
   console.log(`company-cache: ${all.length} names (${UNIVERSES.length} universes) · ${fresh} still fresh (<${STALE_DAYS}d) · ${targets.length} due this run, oldest-first (budget ${BUDGET_MIN}m, conc ${CONCURRENCY})`);
 
   const deadline = Date.now() + BUDGET_MIN * 60_000;
-  let built = 0, failed = 0, deferred = 0;
+  let built = 0, failed = 0, deferred = 0, carried = 0;
   await pool(targets, CONCURRENCY, async (sym) => {
     if (Date.now() > deadline) { deferred++; return; }
     try {
       const bundle = await fetchCompanyBundle(sym);
+      // Field-level stale-not-empty: a PARTIALLY failed fetch must not null a field the prior bake
+      // had. The all-empty guard below only catches total outages — EAT 2026-08 baked with
+      // financials present but Yahoo stats/profile nulled in that moment, and since cachedStats
+      // deliberately never re-fetches when the file exists, the Earnings tab showed "No estimate or
+      // statistics data available" until the next bake. Carry each missing field from the prior file.
+      const prior = await readCompanyCache(sym);
+      if (prior) {
+        if (!bundle.stats && prior.stats) { bundle.stats = prior.stats; carried++; }
+        if (!bundle.profile && prior.profile) { bundle.profile = prior.profile; carried++; }
+        if (!bundle.financials.annual.length && !bundle.financials.quarterly.length && ((prior.financials?.annual?.length ?? 0) || (prior.financials?.quarterly?.length ?? 0))) { bundle.financials = prior.financials; carried++; }
+      }
       // Never persist an EMPTY bundle. If every source came back null (transient vendor outage, or a
       // genuinely dataless ticker) we write nothing: an existing name keeps its prior good file, and a
       // never-cached name stays uncached so the page live-falls-back and recovers on its own. Degrade
@@ -85,7 +96,7 @@ async function main() {
 
   // Cumulative count of cached files on disk (not just this run) — the honest coverage number.
   const cachedCount = (await fs.readdir(companyCacheDir()).catch(() => [])).filter((f) => f.endsWith(".json")).length;
-  console.log(`company-cache: built ${built}, failed ${failed}${deferred ? `, ${deferred} deferred (budget spent)` : ""} · ${cachedCount} names cached total`);
+  console.log(`company-cache: built ${built}, failed ${failed}${carried ? `, ${carried} fields carried from prior bakes (partial vendor failures)` : ""}${deferred ? `, ${deferred} deferred (budget spent)` : ""} · ${cachedCount} names cached total`);
 
   const index = { generatedAt: new Date().toISOString(), count: cachedCount, universe: "US union", staleDays: STALE_DAYS, builtThisRun: built };
   const w = await writeFeedGuarded("company-cache.json", index);
