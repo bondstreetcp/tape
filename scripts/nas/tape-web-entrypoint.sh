@@ -47,12 +47,19 @@ export ONNXRUNTIME_NODE_INSTALL=skip
 export LAKE_REQUIRE_R2=1
 
 # Best-effort ops ping (Slack {text} / Discord {content} — each ignores the other's key). Inert unless
-# ALERT_WEBHOOK_URL is set in tape.env. This is the "green watchdog, stale site" fix: R2-side freshness
+# ALERT_WEBHOOK_URL comes from tape.env OR /app/.alert-env (sourced below) — the latter exists
+# because Synology's Container Manager silently ignores tape.env edits until the container is
+# DELETED and recreated, while a file on the persistent /app volume can be written with one
+# `docker exec` and takes effect on a plain restart. Never commit the real topic (public repo).
+[ -f /app/.alert-env ] && . /app/.alert-env
+# This is the "green watchdog, stale site" fix: R2-side freshness
 # alerts stay green when THIS container's rebuilds fail, so the failure must page from here.
 alert() {
   [ -n "$ALERT_WEBHOOK_URL" ] || return 0
-  curl -sS -m 10 -X POST -H 'Content-Type: application/json' \
-    -d "{\"text\":\"[tape-web] $1\",\"content\":\"[tape-web] $1\"}" "$ALERT_WEBHOOK_URL" >/dev/null 2>&1 || true
+  # ntfy-shaped (the chosen channel, 2026-08-09): plain-text body + Title/Priority headers — an
+  # ntfy topic renders JSON bodies as raw JSON. Matches lib/alertNotify's transport.
+  curl -sS -m 10 -X POST -H 'Title: Tape web' -H 'Priority: high' -H 'Tags: warning' \
+    -d "[tape-web] $1" "$ALERT_WEBHOOK_URL" >/dev/null 2>&1 || true
 }
 
 SERVER_PID=""

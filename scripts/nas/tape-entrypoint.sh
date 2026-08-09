@@ -21,6 +21,11 @@ if [ ! -d "$APP/.git" ]; then
 fi
 git pull --ff-only origin main || echo "[entrypoint] git pull failed — using the current checkout"
 
+# ALERT_WEBHOOK_URL for run-tick's alarms (checkout-age, freshness) — from the persistent /app
+# volume rather than tape.env, because env_file edits need a container DELETE+recreate on Synology
+# while this file lands with one `docker exec` + restart. Never commit the real topic.
+[ -f "$APP/.alert-env" ] && . "$APP/.alert-env"
+
 # onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads the
 # CUDA 12 EP binaries on linux/x64 BY DEFAULT (its install metadata lists requirements["linux/x64"] =
 # ["cuda12"]; only the CPU runtime ships bundled). This box is CPU-only AND on a slow home uplink, so
