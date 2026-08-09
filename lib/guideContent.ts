@@ -3233,6 +3233,38 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/my-names",
+        "title": "My Names — Change Ledger",
+        "question": "What changed in the names I watch since I last looked?",
+        "how": "The monitoring layer for your watchlist. The page joins every watched name against the app's existing feeds — no AI in this path, every line links to its source — and lists typed events, most-actionable first: a results 8-K on record (REPORTED), a preannouncement, a signed deal or live strategic review, an upcoming report with the options-priced move, an overnight filing note, insider cluster buying, short-mechanics stress (heavy fails-to-deliver or elevated short volume), borrow-fee tightening, notable 30-day estimate-revision activity, unusual options premium, and fresh dated headlines. A per-browser 'since you last looked' cursor stamps NEW on anything that appeared after your previous visit, so the page answers the monitoring question directly instead of making you re-scan boards. Names with no events collapse into one quiet line.",
+        "metrics": [
+          {
+            "term": "NEW",
+            "plain": "The event's date is after your previous visit to this page. The cursor is stored in this browser only."
+          },
+          {
+            "term": "REPORTED",
+            "plain": "A results 8-K (Item 2.02) is on file within the last week — the print is the context for this name's tape; analyst notes dated after it are reaction, not cause."
+          },
+          {
+            "term": "Reports in Nd (±X%)",
+            "plain": "The scheduled print is within 5 days; ±X% is the move the options market is pricing for it, when a chain exists."
+          },
+          {
+            "term": "Short-mechanics stress",
+            "plain": "Fails-to-deliver above $1M or short volume at 60%+ of the tape — the plumbing behind a potential squeeze or settlement pressure."
+          },
+          {
+            "term": "Borrow tightening",
+            "plain": "The annualized fee to borrow shares crossed 1%, or fewer than 100K shares are available — shorting this name is getting expensive or thin."
+          },
+          {
+            "term": "Street estimates moving",
+            "plain": "At least a few analysts revised current-quarter EPS in the last 30 days; the arrow counts show which way."
+          }
+        ]
+      },
+      {
         "path": "/portfolio",
         "title": "Portfolio Risk Cockpit",
         "question": "What are the real exposures and risks hidden in my portfolio — its market sensitivity, concentration, sector and style tilts, and what a market move would do to it?",
