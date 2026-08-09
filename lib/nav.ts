@@ -74,6 +74,7 @@ export const FEATURES: NavItem[] = [
   { label: "Screener", path: "/screener", desc: "Build your own filter — screen the whole universe by return, valuation, and quality", group: "Screens", job: "Find ideas", kw: "filter screen factors build custom criteria universe scan quality valuation return momentum growth" },
   { label: "Backtest", path: "/backtest", desc: "Test factor screens and strategies against history", group: "Screens", job: "Find ideas", kw: "backtest strategy momentum factor" },
   // ── Research
+  { label: "Idea Inbox", path: "/ideas", desc: "Fresh arrivals across every idea board, fused by name and weighted by each board's graded record — the daily idea scan in one feed", group: "Screens", job: "Find ideas", kw: "idea inbox arrivals new today fused boards signal weighted track record daily ideas what's new scan discover candidates fresh names watch star" },
   { label: "Confluence Engine", path: "/confluence", desc: "Names where several independent bullish signals stack up — the flagship idea scanner", group: "Screens", job: "Find ideas", kw: "confluence signals ideas opportunities value smart money setups" },
   { label: "Warning Signs", path: "/warnings", desc: "The bearish twin — names where several negative signals stack up (rich vs history + estimate cuts + super-investor exits + downgrade)", group: "Screens", job: "Find ideas", kw: "warning signs bearish red flags value trap short candidate expensive rich overvalued estimate cuts downgrade guidance cut super investor selling distribution put flow avoid sell confluence negative signals risk" },
   { label: "Signal Track Record", path: "/signal-record", desc: "Every idea board graded on what its picks actually did next — logged live, scored at 1w/1m/3m vs the S&P", group: "Screens", job: "Find ideas", kw: "signal track record scorecard accountability hit rate edge performance do the signals work confluence warnings squeeze leaders insiders backtest forward returns graded receipts win rate" },
@@ -157,7 +158,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   ],
   Screens: [
     { label: "Screener", blurb: "Build your own filter — screen the whole universe by return, valuation & quality", paths: ["/screener"] },
-    { label: "Idea Scanners", blurb: "Signal-fusion boards — names where bullish (or bearish) signals stack up, short-side plumbing, federal-award momentum, stretched stat-arb pairs, and the live track record grading them", paths: ["/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/short-mechanics", "/gov-contracts", "/insiders", "/factor-overlap", "/comps", "/pairs"] },
+    { label: "Idea Scanners", blurb: "The Idea Inbox — fresh arrivals across every board, weighted by each board's graded record — plus the signal-fusion boards themselves and the live track record grading them", paths: ["/ideas", "/confluence", "/warnings", "/signal-record", "/smart-money", "/revisions", "/analyst-upside", "/squeeze", "/short-mechanics", "/gov-contracts", "/insiders", "/factor-overlap", "/comps", "/pairs"] },
     { label: "Value & Backtest", blurb: "Cheap vs. its own history, capital return (buybacks + yield), earnings-quality forensics, reverse-DCF expectations, NAV discounts (CEFs + holdcos), and factor-screen backtesting", paths: ["/valuation-history", "/buybacks", "/forensics", "/expectations", "/cef", "/cef-hunter", "/holdco-nav", "/backtest"] },
   ],
   Research: [
@@ -184,6 +185,7 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol",
   // US-only non-options feeds
   "/pairs", // S&P 500 stat-arb pairs (data/pairs.json is US-only)
+  "/ideas", // fuses the US idea boards (the signal log is US scans)
   "/insiders", // SEC Form 4 open-market buys (US filers only; page renders UsOnlyNotice on direct nav)
   "/signal-record", // grades the US idea boards (signal-log.json is built from US feeds)
   "/buybacks", // S&P 500 capital return from SEC XBRL companyfacts (US filers only)

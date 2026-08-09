@@ -2220,6 +2220,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/ideas",
+        "title": "Idea Inbox",
+        "question": "What just arrived across all the idea boards, and which arrivals deserve attention first?",
+        "how": "Each idea board (Confluence, Warning Signs, Smart-Money, Revisions, Squeeze, Leaders, Insiders, Coiled Springs, Positioning…) ranks names nightly, but checking them one by one is menu-diving. The inbox reads the same signal log that /signal-record grades — a name 'arrives' when it newly appears on a board (flicker-guarded: a one-night dip off a board doesn't create a fake new arrival) — fuses arrivals by company, and weights each board's vote by that board's own graded 1-month edge versus the S&P 500. A board with a proven record counts for more; an unproven board gets a small neutral weight; a negative record floors at zero. The weights are printed at the top of the page. A name flagged by both a bullish and a bearish board shows as Contested — that disagreement is itself information. The star button adds a name to your watchlist, which feeds My Names monitoring — the handoff from finding an idea to tracking it.",
+        "metrics": [
+          {
+            "term": "Score",
+            "plain": "The sum of each arrival's board weight times its freshness — a name flagged today by two proven boards outranks one flagged last week by one unproven board."
+          },
+          {
+            "term": "Board weight",
+            "plain": "That board's average 1-month direction-adjusted edge versus the S&P across its graded picks. Proven boards earn their multiplier; new boards get a neutral 0.5 until ~15 picks have been graded."
+          },
+          {
+            "term": "Contested",
+            "plain": "A bullish board and a bearish board both flagged this name inside the window — the market's own argument, worth reading both sides."
+          },
+          {
+            "term": "3d / 7d / 14d",
+            "plain": "The arrival window — how recently a name must have appeared on a board to show. The default 7d is the weekly scan; 3d is the daily one."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/confluence",
         "title": "Confluence Engine",
         "question": "Which stocks have several unrelated bullish signals stacking up at the same time?",
