@@ -272,9 +272,22 @@ async function main() {
   // starved the JSON — the model burned ~14k output across a retry and still returned no parseable brief,
   // so the skip-write guard froze the note for a day+. Give it real output headroom and dial reasoning to
   // "medium" (this is synthesis/writing, not a hard judgment call) so the JSON reliably completes.
-  const out = await chatJSON<{ tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] }>(SYSTEM, user, { maxTokens: 16000, model: PRO_MODEL, reasoningEffort: "medium" });
-  if (!out || !Array.isArray(out.sections)) {
-    console.warn("desk-note: LLM returned no usable brief — skipping write.");
+  // Rescue ladder (2026-08-09: a post-failover regen hit glm's empty-shell-on-packed-context trap
+  // and the skip-write guard froze a two-day-old note): PRO once → PRO retry → the shootout's tie
+  // partner (gemini-3.1-pro — PRO-tier quality, different provider, so a glm-side shell/outage
+  // doesn't decide whether the desk gets a brief). Skip-write stays the last resort.
+  type DeskOut = { tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] };
+  const usable = (o: DeskOut | null): o is DeskOut => !!o && Array.isArray(o.sections) && o.sections.length > 0;
+  const attempt = (model: string) =>
+    chatJSON<DeskOut>(SYSTEM, user, { maxTokens: 16000, model, reasoningEffort: "medium" }).catch(() => null);
+  let out = await attempt(PRO_MODEL);
+  if (!usable(out)) {
+    console.warn("desk-note: PRO returned no usable brief — retrying, then the alternate pro model.");
+    out = await attempt(PRO_MODEL);
+  }
+  if (!usable(out)) out = await attempt("google/gemini-3.1-pro-preview");
+  if (!usable(out)) {
+    console.warn("desk-note: no usable brief from any rung — skipping write.");
     return;
   }
 
