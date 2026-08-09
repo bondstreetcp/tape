@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { CompRow } from "@/lib/sameStoreSales";
 
@@ -70,6 +71,7 @@ export default function CompsBoardView({ rows, universe, asOf }: { rows: CompRow
             {view.map((r) => (
               <tr key={r.ticker} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                 <td className="px-3 py-2">
+                  <WatchStar symbol={r.ticker} compact />
                   <Link href={`/u/${universe}/stock/${r.ticker}?tab=statements`} className="font-medium text-[var(--text)] hover:text-[var(--accent)]">{r.name}</Link>
                   <div className="text-[10px] text-[var(--text-4)]"><span className="font-mono">{r.ticker}</span> · {r.industry}{r.region && r.region !== "US" ? <span className="ml-1 rounded bg-[var(--surface-2)] px-1 py-px text-[9px] font-medium text-[var(--text-3)]">{r.region}</span> : null}</div>
                 </td>

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 import { SCREEN_SHORT, SCREEN_INFO, SCREEN_ORDER, type ScreenKey } from "@/lib/screens";
 import type { FactorOverlapName } from "@/lib/factorOverlap";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
@@ -55,6 +56,7 @@ export default function FactorOverlapView({ names, universe }: { names: FactorOv
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="rounded bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-xs font-bold text-[var(--accent)]" title="Number of screens it lands in">{n.count}×</span>
+                  <WatchStar symbol={n.symbol} compact />
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{n.symbol}</Link>
                   <span className="truncate text-sm text-[var(--text-3)]">{n.name}</span>
                 </div>

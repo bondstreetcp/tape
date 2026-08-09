@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 const pct = (x: number, d = 1) => `${(x * 100).toFixed(d)}%`;
 
@@ -65,7 +66,7 @@ export default function DispersionView({ universe, data }: { universe: string; d
               <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-2 sm:gap-x-6">
                 {data.topNames.map((n) => (
                   <div key={n.symbol} className="flex items-center justify-between gap-2 text-[13px]">
-                    <Link href={`/u/${universe}/stock/${n.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{n.symbol}</Link>
+                    <span className="inline-flex items-center gap-1.5"><WatchStar symbol={n.symbol} compact /><Link href={`/u/${universe}/stock/${n.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{n.symbol}</Link></span>
                     <span className="truncate text-[11px] text-[var(--text-4)]">{n.sector}</span>
                     <span className="font-mono tabular-nums font-semibold text-[var(--text-2)]">{pct(n.atmIV, 0)}</span>
                   </div>

@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 
 const fmtM = (v: number): string => {
   const a = Math.abs(v);
@@ -116,7 +117,7 @@ export default function PositioningView({
                 return (
                   <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 align-top hover:bg-[var(--surface-2)]">
                     <td className="px-3 py-2">
-                      <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                      <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                       <div className="max-w-[170px] truncate text-[11px] text-[var(--text-4)]" title={r.name}>{r.name}</div>
                       {r.chgPct != null && <div className="text-[11px]" style={{ color: r.chgPct >= 0 ? UP : DOWN }}>{r.chgPct >= 0 ? "+" : ""}{r.chgPct.toFixed(1)}%</div>}
                     </td>

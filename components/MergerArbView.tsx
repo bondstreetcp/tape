@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate } from "@/lib/format";
 import { daysUntil } from "@/lib/calendar";
@@ -70,7 +71,10 @@ export default function MergerArbView({ universe, data }: { universe: string; da
               return (
                 <tr key={r.url} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface)]">
                   <td className="px-3 py-2">
-                    <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.ticker}</Link>
+                    <span className="inline-flex items-center gap-1.5">
+                      <WatchStar symbol={r.ticker} compact />
+                      <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.ticker}</Link>
+                    </span>
                     <span className="ml-2 hidden text-[12px] text-[var(--text-4)] lg:inline">{r.name.slice(0, 26)}</span>
                   </td>
                   <td className="px-3 py-2 text-[12px] text-[var(--text-3)]">{r.acquirer.slice(0, 28)}</td>

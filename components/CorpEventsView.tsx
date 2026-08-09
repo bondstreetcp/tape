@@ -6,6 +6,7 @@ import { typeColor, typeLabel, perfColor } from "@/lib/corpEvents";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
+import WatchStar from "./WatchStar";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
@@ -67,6 +68,7 @@ function EventCard({ e, universe }: { e: CorpEvent; universe: string }) {
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `color-mix(in oklab, ${typeColor(e.type)} 16%, transparent)`, color: typeColor(e.type) }}>{typeLabel(e.type)}</span>
+        {e.ticker && <WatchStar symbol={e.ticker} compact />}
         {e.ticker && <Link href={`/u/${universe}/stock/${e.ticker}`} className="text-sm font-semibold text-[var(--accent)] hover:underline">{e.ticker}</Link>}
         <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">{e.headline}</span>
         {e.sincePct != null && <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[12px]" style={{ color: perfColor(e.sincePct) }} title="stock since the filing">{pctStr(e.sincePct)}</span>}

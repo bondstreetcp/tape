@@ -4,6 +4,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 // Static (server-rendered) tables — already ranked. No client state needed.
 
@@ -17,7 +18,7 @@ function StretchedRow({ universe, p }: { universe: string; p: PairRow }) {
   const rich = p.z > 0 ? p.a : p.b;
   const cheap = p.z > 0 ? p.b : p.a;
   const stock = (s: string) => (
-    <Link href={`/u/${universe}/stock/${s}`} className="font-semibold text-[var(--accent)] hover:underline">{s}</Link>
+    <span className="inline-flex items-center gap-1.5"><WatchStar symbol={s} compact /><Link href={`/u/${universe}/stock/${s}`} className="font-semibold text-[var(--accent)] hover:underline">{s}</Link></span>
   );
   return (
     <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
@@ -47,7 +48,7 @@ function DecoupledRowUI({ universe, d }: { universe: string; d: DecoupledRow }) 
   // per-leg return, not the spread sign) — the likely catalyst name. brokeMovePct carries direction.
   const up = d.brokeMovePct >= 0;
   const stock = (s: string) => (
-    <Link href={`/u/${universe}/stock/${s}`} className="font-semibold text-[var(--accent)] hover:underline">{s}</Link>
+    <span className="inline-flex items-center gap-1.5"><WatchStar symbol={s} compact /><Link href={`/u/${universe}/stock/${s}`} className="font-semibold text-[var(--accent)] hover:underline">{s}</Link></span>
   );
   return (
     <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">

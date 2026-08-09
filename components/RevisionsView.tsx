@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { RevisionsData } from "@/lib/revisions";
 
@@ -100,7 +101,7 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
               <tr key={r.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                 <td className="px-3 py-2 tabular-nums text-[var(--text-4)]">{i + 1}</td>
                 <td className="px-3 py-2">
-                  <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
+                  <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
                   <span className="ml-2 hidden text-[var(--text-4)] sm:inline">{r.name.length > 24 ? r.name.slice(0, 24) + "…" : r.name}</span>
                   <span className="ml-2 text-[10px] text-[var(--text-4)]">{r.sector}</span>
                 </td>

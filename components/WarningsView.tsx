@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 import { WARNING_META, WARNING_ORDER, type WarningsData, type WarningName, type WarningKind, type FlaggedInfo } from "@/lib/warnings";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
@@ -89,6 +90,7 @@ function WarningCard({ n, universe, f }: { n: WarningName; universe: string; f?:
                 New
               </span>
             )}
+            <WatchStar symbol={n.symbol} compact />
             <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{n.symbol}</Link>
             <span className="truncate text-sm text-[var(--text-3)]">{n.name}</span>
           </div>

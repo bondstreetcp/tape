@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CefData, Cef, CefGroup } from "@/lib/cef";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import WatchStar from "./WatchStar";
 
 const GROUPS: ("All" | CefGroup)[] = ["All", "Fixed Income", "Alternatives", "Equity", "Allocation", "Other"];
 const REGIONS: ("All" | "US" | "UK")[] = ["All", "US", "UK"];
@@ -174,7 +175,10 @@ export default function CefScreenerView({ universe, data }: { universe: string; 
 const COLS: Col[] = [
   { id: "ticker", label: "Ticker", align: "left", sort: "ticker", get: (f) => f.ticker, render: (f) => (
     <span className="whitespace-nowrap">
-      <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a>
+      <span className="inline-flex items-center gap-1.5">
+        <WatchStar symbol={f.ticker} compact />
+        <a href={f.region === "UK" ? `https://finance.yahoo.com/quote/${encodeURIComponent(f.ticker)}.L` : `https://www.cefconnect.com/fund/${f.ticker}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono font-semibold text-[var(--accent)] hover:underline">{f.ticker}</a>
+      </span>
       {f.activist && (
         <a
           href={f.activist.url || undefined}

@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 // UTC-pinned: a bare YYYY-MM-DD parsed as UTC midnight but formatted in a US browser zone shows one day early.
 const dateLabel = (iso: string | null) => (iso ? new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "—");
@@ -86,6 +87,7 @@ function BioCard({ i, universe }: { i: BioCatalyst; universe: string }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
       <div className="mb-1 flex flex-wrap items-center gap-2">
+        <WatchStar symbol={i.ticker} compact />
         <Link href={`/u/${universe}/stock/${i.ticker}`} className="text-sm font-semibold text-[var(--accent)] hover:underline">{i.ticker}</Link>
         <span className="text-[13px] text-[var(--text-2)]">{i.company}</span>
         <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] text-[var(--text-3)]">{i.phase}</span>

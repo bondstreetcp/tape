@@ -11,6 +11,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import InfoDot from "./InfoDot";
 import { VERDICT_META, type ValuationExplainMap } from "@/lib/valuationExplain";
 import UniverseSwitcher from "./UniverseSwitcher";
+import WatchStar from "./WatchStar";
 
 const ALL_MULTIPLES: MultipleKey[] = ["pe", "evEbitda", "ps", "pb"];
 const MULTIPLE_LABELS: Record<MultipleKey, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
@@ -218,6 +219,7 @@ export default function ValuationHistoryView({
                 <tr key={r.ticker} className="border-b border-[var(--divider)] hover:bg-[var(--surface-hover)]">
                   <td className="whitespace-nowrap px-3 py-1.5">
                     <span className="inline-flex items-center gap-1.5">
+                      <WatchStar symbol={r.ticker} compact />
                       {tlink(r.ticker)}
                       {explain[r.ticker] && (
                         <span

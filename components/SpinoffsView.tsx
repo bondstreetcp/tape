@@ -12,6 +12,7 @@ import { fmtDate, fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import SpinoffBriefing from "./SpinoffBriefing";
 import SpinoffPreview from "./SpinoffPreview";
+import WatchStar from "./WatchStar";
 
 type SortKey = "setup" | "turnover" | "recent" | "since";
 
@@ -61,7 +62,10 @@ function PipelineSection({ universe, pipeline }: { universe: string; pipeline: S
               return (
                 <tr key={p.cik} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2.5">
-                    <a href={p.url} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] hover:underline">{p.ticker || p.spinco}</a>
+                    <span className="inline-flex items-center gap-1.5">
+                      {p.ticker && <WatchStar symbol={p.ticker} compact />}
+                      <a href={p.url} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] hover:underline">{p.ticker || p.spinco}</a>
+                    </span>
                     {p.ticker && <div className="max-w-[220px] truncate text-[11px] text-[var(--text-4)]">{p.spinco}</div>}
                     {p.business && <div className="max-w-[260px] truncate text-[11px] text-[var(--text-4)]" title={p.business}>{p.business}</div>}
                     <div className="mt-1 flex flex-wrap gap-1.5">
@@ -147,7 +151,10 @@ export default function SpinoffsView({ universe, data }: { universe: string; dat
               {rows.map((r) => (
                 <tr key={r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2.5">
-                    <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link>
+                    <span className="inline-flex items-center gap-1.5">
+                      <WatchStar symbol={r.ticker} compact />
+                      <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link>
+                    </span>
                     {r.forcedFlow?.flushLikely && (
                       <span
                         className={`ml-1.5 cursor-help rounded px-1 py-px text-[9px] font-bold uppercase tracking-wide ${r.daysSince <= 15 ? "bg-[#f59e0b]/15 text-[#f59e0b]" : "bg-[var(--surface-2)] text-[var(--text-4)]"}`}

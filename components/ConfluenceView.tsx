@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import { SIGNAL_META, SIGNAL_ORDER, type ConfluenceData, type ConfluenceName, type FlaggedInfo, type SignalKind } from "@/lib/confluence";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
@@ -82,6 +83,7 @@ function ConfluenceCard({ n, universe, f }: { n: ConfluenceName; universe: strin
                 New
               </span>
             )}
+            <WatchStar symbol={n.symbol} compact />
             <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{n.symbol}</Link>
             <span className="truncate text-sm text-[var(--text-3)]">{n.name}</span>
           </div>

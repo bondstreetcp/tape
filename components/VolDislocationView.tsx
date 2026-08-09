@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 type F = "rich" | "cheap" | "all";
 
@@ -91,7 +92,7 @@ export default function VolDislocationView({ universe, data }: { universe: strin
             {rows.map((r) => (
               <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2">
-                  <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                  <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                   <div className="max-w-[160px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                   {r.catalyst && (
                     <div className="mt-0.5 max-w-[180px] truncate text-[11px]" style={{ color: r.catalyst.kind === "event" ? "#f59e0b" : "var(--text-4)" }} title={`AI read of recent headlines (${Math.round(r.catalyst.confidence * 100)}% conf) — the rich vol may be pricing this, not a free dislocation`}>

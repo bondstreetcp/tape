@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import type { SmartMoneyName } from "@/lib/smartMoney";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
@@ -60,6 +61,7 @@ export default function SmartMoneyView({ names, universe, asOf, limit = 80, reco
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="rounded bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-xs font-bold text-[var(--accent)]" title="Conviction score">{n.score}</span>
+                  <WatchStar symbol={n.symbol} compact />
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{n.symbol}</Link>
                   <span className="truncate text-sm text-[var(--text-3)]">{n.name}</span>
                   {n.buyingDip && <span className="rounded-full bg-[rgba(34,197,94,.14)] px-1.5 py-0.5 text-[10px] font-semibold text-[#22c55e]">⤓ buying the dip</span>}

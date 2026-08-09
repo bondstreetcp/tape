@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { InsidersData } from "@/lib/insiders";
 
@@ -48,7 +49,7 @@ export default function InsidersView({ data, universe, record }: { data: Insider
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     {r.buyers >= 2 && <span className="rounded bg-[#22c55e1a] px-1.5 py-0.5 font-mono text-xs font-bold text-[#22c55e]" title="Distinct insiders buying">{r.buyers}× buyers</span>}
-                    <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
+                    <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
                     <span className="truncate text-sm text-[var(--text-3)]">{r.name}</span>
                     <span className="text-[10px] text-[var(--text-4)]">{r.sector}</span>
                   </div>

@@ -7,6 +7,7 @@ import type { ForensicsData, ForensicRow } from "@/lib/forensics";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 
 const RED = "#ef4444", AMBER = "#f59e0b", GREEN = "#22c55e", MUTE = "var(--text-4)";
 
@@ -116,6 +117,7 @@ export default function ForensicsView({ universe, data, known }: { universe: str
             {rows.map((r) => (
               <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2 whitespace-nowrap">
+                  <WatchStar symbol={r.symbol} compact />{" "}
                   {knownSet.has(r.symbol)
                     ? <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                     : <span className="font-semibold text-[var(--text-2)]">{r.symbol}</span>}

@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 // UTC-pinned: a bare YYYY-MM-DD parsed as UTC midnight but formatted in a US browser zone shows one day early.
 const dateLabel = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -74,7 +75,10 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
               {rows.map((e) => (
                 <tr key={e.id} className="border-b border-[var(--border)] last:border-0 align-top hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2">
-                    <Link href={`/u/${universe}/ipos/${slug(e)}`} className="font-semibold text-[var(--accent)] hover:underline">{e.ticker || e.company}</Link>
+                    <span className="inline-flex items-center gap-1.5">
+                      <WatchStar symbol={slug(e)} compact />
+                      <Link href={`/u/${universe}/ipos/${slug(e)}`} className="font-semibold text-[var(--accent)] hover:underline">{e.ticker || e.company}</Link>
+                    </span>
                     <div className="max-w-[190px] truncate text-[11px] text-[var(--text-4)]">{e.ticker ? e.company : e.exchange || "—"}{e.exchange && e.ticker ? ` · ${e.exchange}` : ""}</div>
                     {e.summary?.business && <div className="mt-0.5 max-w-[320px] truncate text-[11px] text-[var(--text-3)]" title={e.summary.business}>{e.summary.business}</div>}
                   </td>

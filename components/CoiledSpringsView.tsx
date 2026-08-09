@@ -8,6 +8,7 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 
 const pv = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
 const SETUP: Record<Setup, { label: string; c: string; hint: string }> = {
@@ -106,7 +107,7 @@ export default function CoiledSpringsView({ universe, rows, generatedAt, record 
                 return (
                   <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                     <td className="px-3 py-2">
-                      <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                      <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                       <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                     </td>
                     <td className="px-2 py-2">

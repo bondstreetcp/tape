@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import type { EarningsMoveRow } from "@/lib/earningsMove";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 
@@ -66,6 +67,7 @@ export default function EarningsSetupView({ rows, universe, asOf }: { rows: Earn
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
+                    <WatchStar symbol={r.symbol} compact />
                     <span className="font-mono font-semibold text-[var(--text)]">{r.symbol}</span>
                     <span className="truncate text-sm text-[var(--text-3)]">{r.name}</span>
                   </div>

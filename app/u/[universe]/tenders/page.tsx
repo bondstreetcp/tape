@@ -6,6 +6,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import PageHeader from "@/components/PageHeader";
 import InfoDot from "@/components/InfoDot";
 import EmptyState from "@/components/EmptyState";
+import WatchStar from "@/components/WatchStar";
 import { fmtDate } from "@/lib/format";
 import { daysUntil } from "@/lib/calendar";
 import type { TendersFile } from "@/lib/tenders";
@@ -81,7 +82,10 @@ export default async function TendersPage({ params }: { params: Promise<{ univer
               return (
                 <tr key={`${r.ticker}-${r.form}`} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface)]">
                   <td className="px-3 py-2">
-                    <span className="font-mono font-semibold text-[var(--text)]">{r.ticker}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <WatchStar symbol={r.ticker} compact />
+                      <span className="font-mono font-semibold text-[var(--text)]">{r.ticker}</span>
+                    </span>
                     <span className="ml-2 hidden text-[12px] text-[var(--text-4)] lg:inline">{r.name.slice(0, 36)}</span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-[12px] text-[var(--text-3)]">{r.form === "SC TO-I" ? "self-tender" : "third-party"}{r.offerType === "dutch" ? " · dutch" : ""}</td>

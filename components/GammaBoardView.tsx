@@ -8,6 +8,7 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 
 const gex = (n: number): string => {
   const a = Math.abs(n), s = n < 0 ? "−" : "";
@@ -48,7 +49,10 @@ function Row({ universe, r }: { universe: string; r: GammaBoardRow }) {
   return (
     <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
       <td className="px-3 py-2">
-        {isEtf ? <span className="font-semibold">{r.symbol}</span> : <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>}
+        <span className="inline-flex items-center gap-1.5">
+          <WatchStar symbol={r.symbol} compact />
+          {isEtf ? <span className="font-semibold">{r.symbol}</span> : <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>}
+        </span>
         <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
       </td>
       <td className="px-2 py-2">

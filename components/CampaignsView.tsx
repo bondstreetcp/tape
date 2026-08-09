@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const pctStr = (v: number | null | undefined) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
@@ -76,6 +77,7 @@ function CampaignCard({ c, universe }: { c: Campaign; universe: string }) {
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ background: `color-mix(in oklab, ${typeColor(c.type)} 16%, transparent)`, color: typeColor(c.type) }}>{typeLabel(c.type)}</span>
+        {c.ticker ? <WatchStar symbol={c.ticker} compact /> : null}
         {c.ticker ? (
           <Link href={`/u/${universe}/stock/${c.ticker}`} className="text-sm font-semibold text-[var(--accent)] hover:underline">{c.ticker}</Link>
         ) : null}

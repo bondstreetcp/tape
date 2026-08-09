@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate } from "@/lib/format";
 import type { ShortMechFile, ShortMechRow } from "@/lib/shortMechanics";
@@ -74,6 +75,7 @@ export default function ShortMechanicsView({ universe, data }: { universe: strin
             {rows.map((r) => (
               <tr key={r.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface)]">
                 <td className="px-3 py-2">
+                  <WatchStar symbol={r.symbol} compact />
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
                   <span className="ml-2 hidden text-[12px] text-[var(--text-4)] lg:inline">{r.name.slice(0, 34)}</span>
                 </td>

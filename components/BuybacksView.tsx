@@ -7,6 +7,7 @@ import { BADGE_META, type BuybackData, type BuybackRow, type BuybackBadge } from
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import WatchStar from "./WatchStar";
 
 const UP = "#22c55e", DOWN = "#ef4444";
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${(v * 100).toFixed(d)}%`);
@@ -103,9 +104,12 @@ export default function BuybacksView({ universe, data, known }: { universe: stri
             {rows.map((r) => (
               <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2">
-                  {knownSet.has(r.symbol)
-                    ? <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
-                    : <span className="font-semibold text-[var(--text-2)]">{r.symbol}</span>}
+                  <span className="inline-flex items-center gap-1.5">
+                    <WatchStar symbol={r.symbol} compact />
+                    {knownSet.has(r.symbol)
+                      ? <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                      : <span className="font-semibold text-[var(--text-2)]">{r.symbol}</span>}
+                  </span>
                   <span className="ml-2 hidden text-[11px] text-[var(--text-4)] sm:inline">{r.name.length > 26 ? r.name.slice(0, 26) + "…" : r.name}</span>
                 </td>
                 <td className="px-2 py-2 text-right font-semibold tabular-nums text-[var(--text)]">{pct(r.totalYield)}</td>

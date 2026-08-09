@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "./PageHeader";
+import WatchStar from "./WatchStar";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { TIER_COLOR, type SqueezeData, type SqueezeTier } from "@/lib/shortSqueeze";
 
@@ -74,7 +75,10 @@ export default function SqueezeView({ data, universe, record }: { data: SqueezeD
               <tr key={r.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                 <td className="px-3 py-2 tabular-nums text-[var(--text-4)]">{i + 1}</td>
                 <td className="px-3 py-2">
-                  <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
+                  <span className="inline-flex items-center gap-1.5">
+                    <WatchStar symbol={r.symbol} compact />
+                    <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{r.symbol}</Link>
+                  </span>
                   <span className="ml-2 hidden text-[var(--text-4)] sm:inline">{r.name.length > 22 ? r.name.slice(0, 22) + "…" : r.name}</span>
                   <span className="ml-2 rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ color: TIER_COLOR[r.tier], background: TIER_COLOR[r.tier] + "1a" }}>{r.tier}</span>
                 </td>

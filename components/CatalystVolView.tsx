@@ -7,6 +7,7 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
+import WatchStar from "./WatchStar";
 
 // UTC-pinned: a bare YYYY-MM-DD parsed as UTC midnight but formatted in a US browser zone shows one day early.
 const dateLabel = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -85,7 +86,7 @@ export default function CatalystVolView({ universe, data }: { universe: string; 
               {rows.map((r) => (
                 <tr key={`${r.ticker}-${r.eventDate}`} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2">
-                    <Link href={`/u/${universe}/stock/${r.ticker}`} className="font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link>
+                    <WatchStar symbol={r.ticker} compact /> <Link href={`/u/${universe}/stock/${r.ticker}`} className="font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link>
                     <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.company}</div>
                   </td>
                   <td className="px-2 py-2 text-[var(--text-2)]">{r.eventType}</td>
