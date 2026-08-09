@@ -12,6 +12,7 @@ export default function AccountMenu() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -38,6 +39,13 @@ export default function AccountMenu() {
       email: addr,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
+    if (error) {
+      setErrMsg(
+        (error as { code?: string }).code === "over_email_send_rate_limit"
+          ? "Email quota hit — the mailer only sends a few links per hour. Wait a bit, then try again."
+          : error.message || "Couldn't send the link — try again.",
+      );
+    }
     setState(error ? "error" : "sent");
   };
   const signOut = async () => {
@@ -84,7 +92,7 @@ export default function AccountMenu() {
                     {state === "sending" ? "…" : "Send"}
                   </button>
                 </div>
-                {state === "error" && <div className="mt-1.5 text-xs text-[#ef4444]">Couldn&apos;t send the link — check the address and try again.</div>}
+                {state === "error" && <div className="mt-1.5 text-xs text-[#ef4444]">{errMsg}</div>}
               </>
             )}
           </div>
