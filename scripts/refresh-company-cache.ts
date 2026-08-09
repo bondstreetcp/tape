@@ -43,6 +43,20 @@ async function main() {
   }
   if (!symbols.size) { console.error("company-cache: no readable snapshots — keeping the prior cache (degrade to STALE)."); process.exit(1); }
 
+  // Off-index coverage: index membership LAGS a listing by months, so a recent IPO is invisible to
+  // every universe snapshot and its stock page has no bake to read (Midera/MFP, listed 2026-06-26,
+  // had a dead Earnings tab six weeks later). Add the IPO monitor's tickers + an explicit
+  // COMPANY_CACHE_EXTRA=SYM,SYM escape hatch for names every feed missed. Junk tickers cost one
+  // failed fetch and write nothing (the hasData guard).
+  try {
+    const ipo = JSON.parse(await fs.readFile(path.join(DATA, "ipo-monitor.json"), "utf8")) as { events?: { kind?: string; ticker?: string }[] };
+    for (const e of ipo.events ?? []) if (e.kind === "ipo" && e.ticker && /^[A-Z0-9.\-]{1,6}$/.test(e.ticker)) symbols.add(e.ticker);
+  } catch { /* monitor absent on this box — universes only */ }
+  for (const s of (process.env.COMPANY_CACHE_EXTRA ?? "").split(",")) {
+    const t = s.trim().toUpperCase();
+    if (t && /^[A-Z0-9.\-]{1,6}$/.test(t)) symbols.add(t);
+  }
+
   // Due = missing OR older than STALE_DAYS, sorted OLDEST-FIRST (never-cached = ∞ age) so a
   // budget-bound run drains the whole universe over successive nights instead of re-baking the same
   // front cohort forever (fair round-robin, no tail starvation).
