@@ -11,6 +11,7 @@ import DeskNote from "@/components/DeskNote";
 import Briefing from "@/components/Briefing";
 import DailyDeskTabs from "@/components/DailyDeskTabs";
 import OvernightFilingsView from "@/components/OvernightFilingsView";
+import WatchlistWire from "@/components/WatchlistWire";
 
 export const dynamic = "force-dynamic";
 
@@ -73,13 +74,18 @@ export default async function DailyDeskPage({
           )
         }
         wire={
-          <section>
-            <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-[var(--divider)] pb-1.5">
-              <h2 className="text-lg font-bold text-[var(--text)]">News wire</h2>
-              <span className="text-[11px] text-[var(--text-4)]">Reuters Morning News Call · The Day Ahead</span>
-            </div>
-            <Briefing />
-          </section>
+          <>
+            {/* Your watched names lead the wire — curated headlines + the code-anchored REPORTED
+                fact per name (client component: the watchlist is client state). */}
+            <WatchlistWire universe={universe} />
+            <section>
+              <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-[var(--divider)] pb-1.5">
+                <h2 className="text-lg font-bold text-[var(--text)]">News wire</h2>
+                <span className="text-[11px] text-[var(--text-4)]">Reuters Morning News Call · The Day Ahead</span>
+              </div>
+              <Briefing />
+            </section>
+          </>
         }
         filings={
           overnight ? (
