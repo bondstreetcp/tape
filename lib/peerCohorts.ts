@@ -20,6 +20,13 @@ export const PEER_COHORTS: Cohort[] = [
   { label: "Semiconductors", tickers: ["NVDA", "AMD", "AVGO", "QCOM", "INTC", "MU", "TXN", "ARM", "TSM", "MRVL", "ADI", "NXPI"] },
   { label: "Big-box & e-commerce retail", tickers: ["WMT", "TGT", "COST", "AMZN", "DLTR", "DG", "BJ", "KR"] },
   { label: "Home improvement & hardlines", tickers: ["HD", "LOW", "FND", "WSM", "RH", "TSCO", "BBY"] },
+  // GICS "Diversified Support Services" lumps uniform routes with Copart/Leidos-class names — the
+  // 2026-08 VSTS incident: cap-ranking that group crowded out UniFirst, the ACTUAL comp (an analyst
+  // comps Vestis against Cintas and UniFirst — the uniform-rental route economics, not defense IT).
+  { label: "Uniform rental & facility services", tickers: ["CTAS", "VSTS", "UNF", "ARMK"] },
+  // GICS "Heavy Electrical Equipment" is thin (AZZ + a solar name); GE Vernova's street comps are
+  // the power-equipment / grid-buildout complex.
+  { label: "Power equipment & grid", tickers: ["GEV", "ETN", "VRT", "PWR", "HUBB", "MIR"] },
 ];
 
 const BY_TICKER = new Map<string, Cohort>();

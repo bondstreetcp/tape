@@ -11,7 +11,7 @@ import { getOptions, getTermStructure, type OptionChain, type Opt } from "./opti
 import { straddleMove, tradeIdea } from "./earningsTrade";
 import { loadCatalystOverlay } from "./catalystOverlay";
 import { detectPreannounce } from "./preannounce";
-import { peerCohort } from "./peerCohorts";
+import { resolvePeers } from "./industryPeers";
 import { yahoo } from "./yahooClient";
 import { beatGuide, type GuidanceData, type GuidanceTicker } from "./guidance";
 import type { SssData, SssTicker } from "./sameStoreSales";
@@ -111,11 +111,14 @@ export async function dailyCloses(sym: string): Promise<{ t: number; c: number }
 // move that day? Returns, per peer: avg |this stock's same-day move|, the slope (beta) of this stock's
 // move on the peer's move, and the same-direction rate. A peer printing before this name is a live prior.
 export async function peerReadThrough(sym: string, myCloses: { t: number; c: number }[]) {
-  const cohort = peerCohort(sym);
+  // Curated cohort ?? GICS-industry group — the cohort-only lookup left every uncohorted name
+  // (≈3,000 of them, incl. VSTS) with NO peer sympathy at all, despite the industry group sitting
+  // in the snapshot (the same classification the preview's code-selected peers now use).
+  const cohort = await resolvePeers(sym, 6).catch(() => null);
   if (!cohort || myCloses.length < 60) return null;
   const dayMove = new Map<string, number>(); // YYYY-MM-DD → this stock's close-to-close move that session
   for (let i = 1; i < myCloses.length; i++) dayMove.set(new Date(myCloses[i].t).toISOString().slice(0, 10), myCloses[i].c / myCloses[i - 1].c - 1);
-  const peers = cohort.tickers.filter((t) => t !== sym).slice(0, 4);
+  const peers = cohort.peers.map((p) => p.symbol).filter((t) => t !== sym).slice(0, 4);
   const out = await Promise.all(peers.map(async (p) => {
     const pr = await getEarningsReactions(p, 8).catch(() => []);
     const pairs: { peer: number; me: number }[] = [];

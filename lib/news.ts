@@ -182,3 +182,33 @@ export function pickHeadlines(
     .slice(0, opts.limit)
     .map((n) => ({ title: n.title, date: n.time ? n.time.slice(0, 10) : "" }));
 }
+
+// Corporate-suffix tokens that can't identify a company ("Group", "Holdings"…) — skipped when
+// deriving name tokens for the on-company filter below.
+const NAME_STOP = /^(inc|corp|corporation|company|co|group|holdings?|plc|ltd|llc|the|international|global|services|technologies|systems|solutions|industries|enterprises|partners|trust|fund)$/i;
+
+/**
+ * Keep only headlines that are actually ABOUT this company: the title must carry the ticker (as a
+ * word) or a significant token of the company name. Yahoo's ticker/name search returns
+ * name-similar STRANGERS — a "VSTS"/"Vestis" search returns VISTRA stories, which is how the
+ * VSTS earnings preview cited "Vistra, a related entity" and nuclear-sector headlines as peer
+ * read-throughs (2026-08). Sector-color stories that never name the company are dropped too:
+ * losing stray macro color costs less than narrating a stranger's print as this company's
+ * context. Pure; returns [] honestly when nothing qualifies.
+ */
+export function onCompanyHeadlines(news: NewsItem[], who: { symbol: string; name?: string | null }, limit = 8): NewsItem[] {
+  const sym = who.symbol.toUpperCase();
+  const tickerRe = new RegExp(`(^|[^A-Z])${sym.replace(/[.^$*+?()[\]{}|\-]/g, "\$&")}([^A-Z]|$)`);
+  const tokens = (who.name ?? "")
+    .split(/[^A-Za-z]+/)
+    .filter((t) => t.length >= 4 && !NAME_STOP.test(t))
+    .map((t) => t.toLowerCase());
+  return news
+    .filter((n) => {
+      if (!n?.title) return false;
+      if (tickerRe.test(n.title)) return true;
+      const lower = n.title.toLowerCase();
+      return tokens.some((t) => lower.includes(t));
+    })
+    .slice(0, limit);
+}

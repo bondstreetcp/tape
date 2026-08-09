@@ -16,7 +16,8 @@
  * SERVER-ONLY (network + fs via earningsQuant). Never import from a "use client" file.
  */
 import { cachedStats } from "./companyCache";
-import { getNews } from "./news";
+import { getNews, onCompanyHeadlines } from "./news";
+import { resolvePeers } from "./industryPeers";
 import { getLatestTranscript } from "./transcripts";
 import { getEarningsReactions } from "./earningsReaction";
 import { getFilings, getFilingText } from "./edgar";
@@ -70,7 +71,7 @@ export interface PreviewContext {
 /** Assemble everything both model passes need — every live sub-fetch time-bound (the NAS has no
  *  platform function ceiling; see the route). One assembly, two prompts. */
 export async function assemblePreviewContext(sym: string, earningsISO: string | null): Promise<PreviewContext> {
-  const [stats, news, transcript, quant, priorRelease] = await Promise.all([
+  const [stats, news, transcript, quant, priorRelease, peerSet] = await Promise.all([
     // Cache-first (local file for baked names); the live fallback on a cold/off-index name is one
     // Yahoo call — bound it like the rest.
     raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
@@ -93,6 +94,10 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
       20_000,
       null,
     ),
+    // CODE-selected peers (curated cohort ?? GICS industry) — the model narrates read-throughs for
+    // THESE names only; it must never pick peers from its own association or from search-noise
+    // headlines (the VSTS→Vistra incident).
+    raceTimeout(resolvePeers(sym).catch(() => null), 8_000, null),
   ]);
   const guid = loadGuidance(sym);
   const sss = loadSss(sym);
@@ -109,7 +114,10 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     `EPS estimates ${revDir} (revisions ${q0?.epsUp30d ?? 0} up / ${q0?.epsDown30d ?? 0} down, 30d). Sell-side: ${dist}, mean PT ${stats?.targetMean ?? "?"} vs price ${stats?.price ?? "?"}. ` +
     `Valuation fwd P/E ${stats?.forwardPE?.toFixed(0) ?? "?"}, op margin ${stats?.operatingMargins != null ? (stats.operatingMargins * 100).toFixed(0) + "%" : "?"}, short ${stats?.shortPercentOfFloat != null ? (stats.shortPercentOfFloat * 100).toFixed(1) + "% of float" : "?"}. ` +
     `Recent analyst moves: ${(stats?.ratingChanges || []).slice(0, 6).map((c) => `${c.firm} ${c.action} ${c.toGrade || ""}${c.targetTo ? " PT " + c.targetTo : ""}`).join("; ") || "none on file"}. ` +
-    `Recent headlines: ${(news || []).slice(0, 8).map((n) => n.title.trim()).filter(Boolean).join(" | ") || "none"}.` +
+    // On-company headlines ONLY: a ticker search returns name-similar strangers (VSTS→Vistra), and
+    // a stray headline in context becomes a fabricated "peer read-through". Filter mechanically.
+    `Recent headlines (filtered to this company): ${onCompanyHeadlines(news || [], { symbol: sym, name: peerSet?.self.name ?? null }, 8).map((n) => n.title.trim()).filter(Boolean).join(" | ") || "none"}. ` +
+    `Peers (CODE-SELECTED from ${peerSet ? `"${peerSet.label}"` : "classification data"}): ${peerSet?.peers.length ? peerSet.peers.map((p) => `${p.symbol}${p.name ? ` (${p.name})` : ""}`).join(", ") : "none identified"}.` +
     (gQuoted ? `\n\nSTANDING GUIDANCE, in the company's OWN WORDS (${gQuoted.period}, ${gQuoted.action}): "${String(gQuoted.quote).slice(0, 500)}"` : "") +
     (sig ? `\n\nQUANT SIGNALS — this terminal's own options + reaction-history analysis (GROUND the preview in the notable ones; synthesize, don't just restate): ${sig.slice(0, 1400)}` : "") +
     (priorRelease?.text ? `\n\nPRIOR EARNINGS PRESS RELEASE (8-K filed ${priorRelease.date} — the company's own results + outlook language from LAST quarter):\n${priorRelease.text.slice(0, 6000)}` : "") +
@@ -141,7 +149,7 @@ export async function buildAiPreview(c: PreviewContext, opts: { bounded?: boolea
     "'debate' = ONE sentence naming the genuine bull/bear disagreement THIS print resolves — the thing smart money actually argues about, not 'will they beat'. " +
     "'watch' = 3-5 SPECIFIC items the Street is focused on THIS quarter — actual KPIs/segments/guidance lines for THIS company, never 'will they beat EPS'. " +
     "'guidance' = the company's standing guidance + expectation (raise/reaffirm/cut/first guide), or note if none. " +
-    "'peerReads' = 2-3 recent reads from sector peers / suppliers / customers that already reported or pre-announced, and the implied read-through for this name (use the headlines + your knowledge; if none, return []). " +
+    "'peerReads' = 2-3 recent reads STRICTLY about the companies in the supplied 'Peers (CODE-SELECTED)' list — or a supplier/customer you can tie MECHANICALLY to this company's P&L — that already reported or pre-announced, with the implied read-through for this name. NEVER treat a name-similar company as a peer: ticker/name searches return unrelated companies with similar names (search noise), so any company that is neither this one nor a listed peer must be IGNORED everywhere in the preview, not just here. If there is no genuine peer signal, return []. " +
     "'bull' = the bull case into the print; 'bear' = the bear case / what's priced in. " +
     "If QUANT SIGNALS are supplied below, GROUND moneyLine/overview/bull/bear in the notable ones — e.g. options pricing a rich vs cheap move, a sell-the-news reaction pattern, post-earnings drift, a sandbagging guidance history, vol-crush — woven naturally into the narrative, NOT as a bullet dump. " +
     "'fromLastCall' = if a MOST RECENT EARNINGS CALL transcript is supplied below, 1-2 sentences on what management SAID or COMMITTED to last call (guidance given, targets, tone, promises) + the ONE thing to check for follow-through THIS print; if no transcript is supplied, return ''. " +
