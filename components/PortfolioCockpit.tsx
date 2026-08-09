@@ -152,6 +152,7 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
   useEffect(() => {
     if (!hydrated.current) return;
     try { localStorage.setItem(STORE_KEY, text); } catch { /* ignore */ }
+    void import("@/lib/userPrefs").then((m) => m.saveBookDebounced(text)); // cross-device book (no-op signed out)
   }, [text]);
   useEffect(() => {
     if (!hydrated.current) return;

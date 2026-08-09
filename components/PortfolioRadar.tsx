@@ -33,7 +33,7 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
     setHydrated(true);
   }, []);
   useEffect(() => {
-    if (hydrated) try { localStorage.setItem(STORE_KEY, text); } catch { /* ignore */ }
+    if (hydrated) try { localStorage.setItem(STORE_KEY, text); void import("@/lib/userPrefs").then((m) => m.saveBookDebounced(text)); } catch { /* ignore */ }
   }, [text, hydrated]);
 
   const positions = useMemo(() => parsePositions(text), [text]);

@@ -52,7 +52,9 @@ export function useMyNames(): { names: MyName[]; list: string[]; bySymbol: Recor
     // Cross-tab: the cockpit/radar save the book under this key; a storage event keeps the union live.
     const onStorage = (e: StorageEvent) => { if (e.key === BOOK_KEY) read(); };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    // Same-tab re-read after the sign-in prefs merge lands (setItem doesn't fire "storage" locally).
+    window.addEventListener("tape:prefs-synced", read);
+    return () => { window.removeEventListener("storage", onStorage); window.removeEventListener("tape:prefs-synced", read); };
   }, []);
   const names = useMemo(() => composeMyNames(watch, parsePositions(bookText)), [watch, bookText]);
   return useMemo(() => ({

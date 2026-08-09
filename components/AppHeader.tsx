@@ -7,6 +7,7 @@ import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
 import InstallPWA from "./InstallPWA";
 import MyNamesBadge from "./MyNamesBadge";
+import PrefsSync from "./PrefsSync";
 import AccountMenu from "./AccountMenu";
 import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
@@ -183,6 +184,7 @@ export default function AppHeader({
           <ThemeToggle />
           <AlertBell base={base} />
           <AccountMenu />
+          <PrefsSync />
         </div>
       </div>
 

@@ -22,8 +22,7 @@ export const TOP_LINKS: NavItem[] = [
   { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Monitor my names", kw: "saved favorites star" },
   { label: "Guide", path: "/guide", desc: "What every board does and what each number means — a plain-English manual", job: "Track the market", kw: "guide help manual learn glossary how to read explained tutorial docs what does this mean finance 101 onboarding start here concepts metrics definitions" },
   { label: "Status", path: "/status", desc: "Is everything working? Every data feed's freshness, which boards are degraded, the live build, and the server clock", job: "Track the market", kw: "status health system uptime online offline broken degraded stale data freshness feeds working outage incident monitor diagnostics build version clock skew what is down not updating" },
-  // NOTE: when auth activates (docs/SETUP-auth.md), add an "Alerts" entry here — the page exists at
-  // /alerts but is a dead-end ("accounts aren't configured") until then, so it stays out of the nav.
+  { label: "Alerts", path: "/alerts", desc: "Your alert rules + what fired — price levels, events, earnings, and signals on your names", job: "Monitor my names", kw: "alerts alert rules bell notifications price level triggered fired events earnings signals my names ring" },
 ];
 
 // Grouped (dropdown) features.

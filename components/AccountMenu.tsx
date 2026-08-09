@@ -1,5 +1,6 @@
 "use client";
-/** Header account control: Google sign-in when signed out, avatar → sign-out menu when signed in.
+/** Header account control: email MAGIC-LINK sign-in when signed out (the beta-friendly method —
+ *  passwordless, zero OAuth config; the shelf note's explicit pick), avatar → sign-out when in.
  *  Renders nothing until Supabase auth is configured, so the header is unchanged pre-setup. */
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -9,6 +10,8 @@ import { useUser } from "@/lib/supabase/useUser";
 export default function AccountMenu() {
   const { user, loading, enabled } = useUser();
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -22,13 +25,16 @@ export default function AccountMenu() {
 
   if (!enabled || loading) return null;
 
-  const signIn = async () => {
+  const sendLink = async () => {
     const sb = browserSupabase();
-    if (!sb) return;
-    await sb.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(pathname || "/")}` },
+    const addr = email.trim();
+    if (!sb || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return;
+    setState("sending");
+    const { error } = await sb.auth.signInWithOtp({
+      email: addr,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(pathname || "/")}` },
     });
+    setState(error ? "error" : "sent");
   };
   const signOut = async () => {
     const sb = browserSupabase();
@@ -39,18 +45,47 @@ export default function AccountMenu() {
 
   if (!user) {
     return (
-      <button
-        onClick={signIn}
-        className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] sm:inline-flex"
-      >
-        <svg width="14" height="14" viewBox="0 0 18 18" aria-hidden>
-          <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
-          <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.7H.96v2.34A9 9 0 0 0 9 18z" />
-          <path fill="#FBBC05" d="M3.98 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.02-2.34z" />
-          <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.94l3.02 2.34C4.68 5.16 6.66 3.58 9 3.58z" />
-        </svg>
-        Sign in
-      </button>
+      <div ref={ref} className="relative hidden shrink-0 sm:block">
+        <button
+          onClick={() => { setOpen((v) => !v); setState("idle"); }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+        >
+          Sign in
+        </button>
+        {open && (
+          <div className="absolute right-0 z-50 mt-1.5 w-72 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-md)]">
+            {state === "sent" ? (
+              <div className="text-sm text-[var(--text-2)]">
+                <div className="mb-1 font-semibold text-[var(--text)]">Check your email</div>
+                A sign-in link is on its way to <b>{email.trim()}</b>. Open it on this device — your watchlist, book, and alert settings then follow you across devices.
+              </div>
+            ) : (
+              <>
+                <div className="mb-1.5 text-sm font-semibold text-[var(--text)]">Sign in with a magic link</div>
+                <p className="mb-2 text-xs text-[var(--text-4)]">No password — we email you a one-tap link. Your local watchlist merges into the account on first sign-in.</p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void sendLink(); }}
+                    placeholder="you@example.com"
+                    className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
+                  />
+                  <button
+                    onClick={() => void sendLink()}
+                    disabled={state === "sending"}
+                    className="rounded-md bg-[var(--accent-strong)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                  >
+                    {state === "sending" ? "…" : "Send"}
+                  </button>
+                </div>
+                {state === "error" && <div className="mt-1.5 text-xs text-[#ef4444]">Couldn&apos;t send the link — check the address and try again.</div>}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 

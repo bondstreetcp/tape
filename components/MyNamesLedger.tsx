@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMyNames } from "@/lib/myNames";
+import { saveCloudPrefs } from "@/lib/userPrefs";
 import { rankOf, type LedgerData, type LedgerEvent, type LedgerKind, type LedgerName } from "@/lib/myNamesLedger";
 
 // My Names — Change Ledger (P1). Client-side because the list is client state; the route joins.
@@ -75,7 +76,11 @@ export default function MyNamesLedger({ universe }: { universe: string }) {
         if (!live) return;
         setData(j);
         setState("done");
-        try { window.localStorage.setItem(SEEN_KEY, new Date().toISOString()); } catch { /* cosmetic */ }
+        try {
+          const nowIso = new Date().toISOString();
+          window.localStorage.setItem(SEEN_KEY, nowIso);
+          void saveCloudPrefs({ last_seen: nowIso }); // cross-device cursor (no-op signed out)
+        } catch { /* cosmetic */ }
       })
       .catch(() => { if (live) setState("error"); });
     return () => { live = false; };

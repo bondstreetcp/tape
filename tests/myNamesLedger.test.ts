@@ -79,3 +79,23 @@ test("composeMyNames: book first with net side, watch-only after, both-sources t
   assert.deepEqual(by.EAT, { symbol: "EAT", sources: ["watch"], side: null });
   assert.deepEqual(out.slice(0, 2).map((n) => n.sources[0]), ["book", "book"], "book names lead");
 });
+
+// ── accounts unshelving: the prefs merge doctrine ──
+
+test("mergePrefs: cloud wins where present, local fills empty cloud columns (and uploads the fill)", async () => {
+  const { mergePrefs } = await import("../lib/userPrefs");
+  const local = { last_seen: "2026-08-01T00:00:00Z", push_topic: "tape-abc", book_text: "NVDA 100" };
+  // Signed out / unconfigured → use local, nothing to upload anywhere.
+  assert.deepEqual(mergePrefs(local, null).use, local);
+  // Cloud has a cursor but no topic/book → cloud cursor wins, local fills the rest and uploads.
+  const cloud = { last_seen: "2026-08-09T00:00:00Z", push_topic: null, book_text: null };
+  const m = mergePrefs(local, cloud);
+  assert.equal(m.use.last_seen, "2026-08-09T00:00:00Z");
+  assert.equal(m.use.push_topic, "tape-abc");
+  assert.deepEqual(m.upload, { push_topic: "tape-abc", book_text: "NVDA 100" });
+  // Fully-populated cloud → cloud verbatim, no upload.
+  const full = { last_seen: "2026-08-09T00:00:00Z", push_topic: "tape-xyz", book_text: "AAPL 1" };
+  const m2 = mergePrefs(local, full);
+  assert.deepEqual(m2.use, full);
+  assert.equal(m2.upload, null);
+});

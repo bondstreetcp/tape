@@ -19,6 +19,7 @@ function getOrMakeTopic(): string {
     crypto.getRandomValues(buf);
     const t = "tape-" + [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
     localStorage.setItem(TOPIC_KEY, t);
+    void import("@/lib/userPrefs").then((m) => m.saveCloudPrefs({ push_topic: t })); // cross-device topic (no-op signed out)
     return t;
   } catch {
     return "";
