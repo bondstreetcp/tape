@@ -45,7 +45,7 @@ export default function AccountMenu() {
 
   if (!user) {
     return (
-      <div ref={ref} className="relative hidden shrink-0 sm:block">
+      <div ref={ref} className="relative shrink-0">
         <button
           onClick={() => { setOpen((v) => !v); setState("idle"); }}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
@@ -53,7 +53,7 @@ export default function AccountMenu() {
           Sign in
         </button>
         {open && (
-          <div className="absolute right-0 z-50 mt-1.5 w-72 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-md)]">
+          <div className="absolute right-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-md)]">
             {state === "sent" ? (
               <div className="text-sm text-[var(--text-2)]">
                 <div className="mb-1 font-semibold text-[var(--text)]">Check your email</div>
