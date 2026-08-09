@@ -729,6 +729,15 @@ jobs:
         run: npm run refresh-merger-arb
         continue-on-error: true
 
+      # Push alerts (My Names P3): evaluates subscriptions against the fresh feeds. EVALUATE-ONLY
+      # here — TAPE_WRITER is not set on GitHub, so this step never sends; the NAS runner is the
+      # single sender (a standdown fail-open must not double-notify phones). Needs the research DB
+      # for the sub registry; skips cleanly without it.
+      - name: Push alerts (My Names)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run push-alerts
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).

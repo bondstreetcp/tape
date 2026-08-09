@@ -72,6 +72,7 @@
     "refresh-gov-contracts": "tsx scripts/refresh-gov-contracts.ts",
     "refresh-short-mechanics": "tsx scripts/refresh-short-mechanics.ts",
     "refresh-merger-arb": "tsx scripts/refresh-merger-arb.ts",
+    "push-alerts": "tsx scripts/push-alerts.ts",
     "refresh-trade-log": "tsx scripts/refresh-trade-log.ts",
     "refresh-preview-log": "tsx scripts/refresh-earnings-preview-log.ts",
     "ping-research-db": "tsx scripts/ping-research-db.ts",

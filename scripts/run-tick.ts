@@ -136,6 +136,10 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh spinoff turnover", cmd: "npm run refresh-spinoffs", when: "full" },
   { name: "Refresh tender offers (odd-lot monitor)", cmd: "npm run refresh-tenders", when: "full" },
   { name: "Refresh merger-arb spreads (DEFM14A)", cmd: "npm run refresh-merger-arb", when: "full" },
+  // Push alerts (My Names P3) — AFTER merger-arb/campaigns/earnings-move so it evaluates the fresh
+  // feeds. TAPE_WRITER=nas makes THIS runner the single sender; the GitHub mirror step evaluates
+  // and logs but never sends (a standdown fail-open must not double-notify phones).
+  { name: "Push alerts (My Names)", cmd: "npm run push-alerts", when: "full", env: { TAPE_WRITER: "nas" } },
   { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk", narr: true },
   { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full", narr: true },
   { name: "Refresh Warning Signs", cmd: "npm run refresh-warnings", when: "full" },

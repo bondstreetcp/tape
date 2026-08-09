@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import MyNamesLedger from "@/components/MyNamesLedger";
+import PushAlerts from "@/components/PushAlerts";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function MyNamesPage({ params }: { params: Promise<{ univer
         </p>
       </div>
       <MyNamesLedger universe={universe} />
+      <PushAlerts />
     </main>
   );
 }
