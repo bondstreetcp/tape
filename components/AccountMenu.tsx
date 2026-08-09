@@ -30,9 +30,13 @@ export default function AccountMenu() {
     const addr = email.trim();
     if (!sb || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return;
     setState("sending");
+    // Return-path travels in a cookie, NOT in emailRedirectTo: Supabase matches the redirect
+    // against the allowlist INCLUDING the query string, so "?next=..." silently falls back to the
+    // Site URL. Same-browser is already required (the PKCE verifier cookie), so a cookie is safe.
+    document.cookie = `tape-next=${encodeURIComponent(pathname || "/")}; Max-Age=900; Path=/; SameSite=Lax`;
     const { error } = await sb.auth.signInWithOtp({
       email: addr,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(pathname || "/")}` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
     setState(error ? "error" : "sent");
   };
