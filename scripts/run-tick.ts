@@ -25,6 +25,7 @@
  * npm-ci-if-lockfile-changed first (the NAS equivalent of actions/checkout).
  */
 import { spawnSync, execSync } from "node:child_process";
+import { notifyAlert } from "../lib/alertNotify";
 import { existsSync, readFileSync, writeFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -217,9 +218,32 @@ function step(name: string, cmd: string, extraEnv: Record<string, string> = {}):
   return ok;
 }
 
+// ── Checkout-age alarm ──
+// The runner ran a 3-week-stale checkout without anyone noticing (2026-08-09) — the entrypoint now
+// pulls per tick, and THIS is the alarm if that ever silently stops working again (a stuck pull, a
+// diverged branch, a detached volume). Cheap: one ls-remote per tick; alerts at most once a day via
+// a state file. Best-effort end to end — a git/network hiccup must never block the tick.
+function checkCheckoutAge(): void {
+  try {
+    const localSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const remote = execSync("git ls-remote origin main", { encoding: "utf8", timeout: 15_000 }).split(/\s/)[0]?.trim();
+    if (!remote || remote === localSha) return;
+    const behind = Number(execSync(`git rev-list --count HEAD..${remote}`, { encoding: "utf8" }).trim());
+    if (!Number.isFinite(behind) || behind < 20) return; // a tick-to-push race is normal; 20+ commits behind is a dead updater
+    const stamp = path.join("data", ".tmp", "checkout-age-alerted.json");
+    const today = new Date().toISOString().slice(0, 10);
+    try { if (JSON.parse(readFileSync(stamp, "utf8")).date === today) return; } catch { /* not alerted today */ }
+    const msg = `Runner checkout is ${behind} commits behind origin/main (${localSha.slice(0, 7)}) — the per-tick git pull is not landing. Restart tape-runner or check the volume.`;
+    console.error(`run-tick: ⚠ ${msg}`);
+    void notifyAlert(msg, "Tape runner code stale");
+    writeFileSync(stamp, JSON.stringify({ date: today, behind }));
+  } catch { /* best-effort — never block the tick */ }
+}
+
 async function main() {
   const arg = (process.argv[2] || "").toLowerCase();
   const dry = process.argv.includes("--dry");
+  checkCheckoutAge();
 
   const fromAuto = arg === "auto";
   let mode: Mode;

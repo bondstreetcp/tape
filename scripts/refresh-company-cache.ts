@@ -15,6 +15,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { fetchCompanyBundle, readCompanyCache, companyCacheDir, companyCacheFile } from "../lib/companyCache";
+import { archiveWriter, readCompanyManifest, shouldStandDown } from "../lib/companyArchive";
 import { pool } from "../lib/edgar";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { UNIVERSES } from "../lib/universes";
@@ -29,6 +30,17 @@ const MAX_PER_RUN = Number(process.env.COMPANY_CACHE_MAX || 100000); // safety c
 const ageDays = (iso: string) => (Date.now() - Date.parse(iso)) / 86_400_000;
 
 async function main() {
+  // ── Standdown: the good-IP pipe owns this feed ──
+  // Yahoo serves this NAS's (and GH's datacenter) egress IPs degraded quoteSummary payloads — the
+  // 2026-08 null-stats incident baked stats:null for 75% of the tree from here. The Windows box
+  // (writer "pc") bakes nightly and stamps R2; while that stamp is fresh, other writers skip. Fail-
+  // open: no stamp / stale stamp / any read error → this box bakes as the fallback, and the
+  // carry-forward + null-stats-is-due guards below bound the damage to STALE, never null.
+  const self = archiveWriter();
+  const sd = shouldStandDown(await readCompanyManifest(), self, Date.now());
+  console.log(`company-cache: ${sd.reason}`);
+  if (sd.skip) return;
+
   await fs.mkdir(companyCacheDir(), { recursive: true });
 
   // EVERY universe the stock route serves — US AND international. A name that isn't baked live-fetches

@@ -43,5 +43,10 @@ while true; do
   echo "[entrypoint] sleeping ${sleep}s until $(date -u -d "@${next}" +%FT%TZ 2>/dev/null || echo 'next hour')"
   sleep "$sleep"
   cd "$APP"
+  # Pull PER TICK, not per boot — the header always claimed this, but the pull sat above the loop
+  # and the runner silently ran a 3-week-stale checkout (found 2026-08-09: the nightly was missing
+  # every fix of that window). Failure-tolerant like boot; the sha log line makes drift visible.
+  git pull --ff-only origin main >/dev/null 2>&1 || echo "[entrypoint] git pull failed — ticking on the current checkout"
+  echo "[entrypoint] checkout @ $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
   npx tsx scripts/run-tick.ts auto || echo "[entrypoint] tick exited non-zero (continue-on-error; check tick.log)"
 done

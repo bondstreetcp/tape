@@ -11,9 +11,9 @@ import { execFileSync } from "child_process";
 import { readFileSync, mkdirSync, rmSync, existsSync } from "fs";
 import path from "path";
 import { putObject, r2Configured } from "../lib/r2";
+import { uploadCompanyArchive } from "../lib/companyArchive";
 
 const KEY_TAR = "site-data/data.tar.gz";
-const KEY_COMPANY = "site-data/company.tar.gz";
 const KEY_MANIFEST = "site-data/manifest.json";
 const KEY_HEARTBEAT = "site-data/full-heartbeat.json";
 
@@ -57,16 +57,11 @@ async function main() {
   let companyMsg = "";
   if (isFull) {
     try {
-      if (existsSync(path.join("data", "company"))) {
-        const companyTar = path.join(tmp, "company.tar.gz");
-        execFileSync("tar", ["-czf", companyTar, "data/company"], { stdio: ["ignore", "ignore", "inherit"] });
-        const cbuf = readFileSync(companyTar);
-        await putObject(KEY_COMPANY, cbuf, "application/gzip");
-        rmSync(companyTar, { force: true });
-        companyMsg = ` + company.tar.gz (${(cbuf.length / 1e6).toFixed(1)} MB)`;
-      } else {
-        console.warn("data-to-r2: FULL run but data/company/ is missing — leaving the prior company.tar.gz in place.");
-      }
+      // Shared with scripts/upload-company-cache.ts (the PC pipe) — one uploader, one stamp shape.
+      // This branch normally only fires when THIS writer actually baked (the bake script stands
+      // down to a fresh foreign stamp); re-uploading an unchanged tree is harmless either way.
+      const m = await uploadCompanyArchive();
+      companyMsg = ` + company.tar.gz (${(m.bytes / 1e6).toFixed(1)} MB)`;
     } catch (e: any) {
       console.warn(`data-to-r2: per-stock cache upload failed (${String(e?.message || e).slice(0, 120)}) — leaving the prior company.tar.gz; heartbeat + deploy proceed.`);
     }
