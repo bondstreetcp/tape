@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useWatchlist } from "@/lib/watchlist";
+import { useMyNames } from "@/lib/myNames";
 import { rankOf, type LedgerData, type LedgerEvent, type LedgerKind, type LedgerName } from "@/lib/myNamesLedger";
 
 // My Names — Change Ledger (P1). Client-side because the list is client state; the route joins.
@@ -34,8 +34,21 @@ const pctChip = (v: number | null) =>
     </span>
   );
 
+// Source/side chips — a bearish event on a SHORT is opposite risk to the same event on a LONG,
+// so the book chip carries the side, not just membership (P2 union).
+const sideChip = (n: { side: "long" | "short" | null; sources: string[] }) => (
+  <>
+    {n.side && (
+      <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: n.side === "long" ? "#22c55e" : "#ef4444", background: `color-mix(in oklab, ${n.side === "long" ? "#22c55e" : "#ef4444"} 15%, transparent)` }}>
+        {n.side === "long" ? "▲ LONG" : "▼ SHORT"}
+      </span>
+    )}
+    {n.sources.includes("watch") && <span className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-3)]">☆ WATCH</span>}
+  </>
+);
+
 export default function MyNamesLedger({ universe }: { universe: string }) {
-  const { list } = useWatchlist();
+  const { list, bySymbol } = useMyNames();
   const [data, setData] = useState<LedgerData | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   // Previous visit's cursor, captured once on mount before this visit advances it.
@@ -78,7 +91,7 @@ export default function MyNamesLedger({ universe }: { universe: string }) {
   if (!list.length) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-10 text-center text-sm text-[var(--text-3)]">
-        Nothing to monitor yet — star names with the <b>☆ Watch</b> button on any stock page (or from the <Link href={`/u/${universe}/watchlist`} className="text-[var(--accent)] hover:underline">Watchlist</Link>) and every change in them lands here.
+        Nothing to monitor yet — star names with the <b>☆ Watch</b> button on any stock page (or from the <Link href={`/u/${universe}/watchlist`} className="text-[var(--accent)] hover:underline">Watchlist</Link>), or paste your book into <Link href={`/u/${universe}/portfolio`} className="text-[var(--accent)] hover:underline">Prism</Link> — every change in those names lands here.
       </div>
     );
   }
@@ -108,6 +121,7 @@ export default function MyNamesLedger({ universe }: { universe: string }) {
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono text-sm font-bold text-[var(--accent)] hover:underline">{n.symbol}</Link>
                   {n.name && <span className="max-w-[18rem] truncate text-xs text-[var(--text-3)]">{n.name}</span>}
                   {pctChip(n.pct1d)}
+                  {bySymbol[n.symbol] && sideChip(bySymbol[n.symbol])}
                 </div>
                 <ul className="mt-1.5 space-y-1">
                   {n.events.map((e, i) => {

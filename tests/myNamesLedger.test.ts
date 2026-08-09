@@ -57,3 +57,25 @@ test("flowEvent: $1M single line or $2M aggregate; small premium is silent", () 
   assert.equal(flowEvent([{ premium: 400_000 }]), null);
   assert.equal(flowEvent([]), null);
 });
+
+// ── P2: the union composition (lib/myNames.composeMyNames — pure) ──
+
+test("composeMyNames: book first with net side, watch-only after, both-sources tagged, zero-net book lines drop", async () => {
+  const { composeMyNames } = await import("../lib/myNames");
+  const out = composeMyNames(
+    ["eat", "KVUE", "FLAT"],
+    [
+      { symbol: "NVDA", shares: 100 },
+      { symbol: "nvda", shares: 50 }, // dupes net
+      { symbol: "KVUE", shares: -200 }, // in both lists → book side wins, both sources
+      { symbol: "FLAT", shares: 100 },
+      { symbol: "FLAT", shares: -100 }, // nets to zero → drops from the book, stays via watch
+    ],
+  );
+  const by = Object.fromEntries(out.map((n) => [n.symbol, n]));
+  assert.deepEqual(by.NVDA, { symbol: "NVDA", sources: ["book"], side: "long" });
+  assert.deepEqual(by.KVUE, { symbol: "KVUE", sources: ["book", "watch"], side: "short" });
+  assert.deepEqual(by.FLAT, { symbol: "FLAT", sources: ["watch"], side: null });
+  assert.deepEqual(by.EAT, { symbol: "EAT", sources: ["watch"], side: null });
+  assert.deepEqual(out.slice(0, 2).map((n) => n.sources[0]), ["book", "book"], "book names lead");
+});

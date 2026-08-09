@@ -4,6 +4,7 @@ import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { parsePositions } from "@/lib/portfolio";
+import { useWatchlist } from "@/lib/watchlist";
 import { KIND_META, type CatalystEvent } from "@/lib/catalystCalendar";
 import { buildPortfolioCatalysts, type Impact, type PortfolioCatalyst, type SnapshotEarnings } from "@/lib/portfolioCatalysts";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -34,7 +35,10 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
   }, [text, hydrated]);
 
   const positions = useMemo(() => parsePositions(text), [text]);
-  const result = useMemo(() => buildPortfolioCatalysts(positions, events, { earningsDates }), [positions, events, earningsDates]);
+  // P2 union: watchlist names ride with side "watch" (zero shares) — a starred name's catalysts
+  // belong on the same timeline as the book's; a name in BOTH keeps its book side.
+  const { list: watch } = useWatchlist();
+  const result = useMemo(() => buildPortfolioCatalysts(positions, events, { earningsDates, watch }), [positions, events, earningsDates, watch]);
   const shown = useMemo(() => (highOnly ? result.catalysts.filter((c) => c.impact === "high") : result.catalysts), [result, highOnly]);
 
   // group the shown list into urgency buckets, preserving the soonest-first order
@@ -53,7 +57,7 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Portfolio Catalyst Radar</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            What&apos;s live in <i>your</i> book — every forward catalyst on a name you hold, on one timeline, with the position side attached. Feeds as of {fmtDateTime(generatedAt)}. Your book stays in your browser.
+            What&apos;s live in <i>your</i> names — every forward catalyst on a name you hold <i>or watch</i>, on one timeline, with the position side attached (☆ for watchlist names you don&apos;t hold). Feeds as of {fmtDateTime(generatedAt)}. Your book stays in your browser.
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -107,7 +111,11 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
                           <div className="text-[10px] text-[var(--text-4)]">{fmtDate(c.date)}</div>
                         </div>
                         <div className="w-12 shrink-0">
-                          <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: c.side === "long" ? LONG : SHORT, background: `color-mix(in oklab, ${c.side === "long" ? LONG : SHORT} 15%, transparent)` }}>{c.side === "long" ? "LONG" : "SHORT"}</span>
+                          {c.side === "watch" ? (
+                            <span className="rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-3)]">☆ WATCH</span>
+                          ) : (
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: c.side === "long" ? LONG : SHORT, background: `color-mix(in oklab, ${c.side === "long" ? LONG : SHORT} 15%, transparent)` }}>{c.side === "long" ? "LONG" : "SHORT"}</span>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">

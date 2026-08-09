@@ -7,7 +7,7 @@
  */
 import type { CatalystEvent } from "./catalystCalendar";
 
-export type Side = "long" | "short";
+export type Side = "long" | "short" | "watch";
 export type Impact = "high" | "medium" | "low";
 
 export interface BookPosition {
@@ -62,7 +62,7 @@ export function eventImpact(e: CatalystEvent): Impact {
 export function buildPortfolioCatalysts(
   positions: BookPosition[],
   events: CatalystEvent[],
-  opts: { horizonDays?: number; earningsDates?: Record<string, SnapshotEarnings>; nowMs?: number } = {},
+  opts: { horizonDays?: number; earningsDates?: Record<string, SnapshotEarnings>; nowMs?: number; watch?: string[] } = {},
 ): PortfolioCatalystResult {
   const horizon = opts.horizonDays ?? 120;
   const DAY = 86_400_000;
@@ -81,41 +81,54 @@ export function buildPortfolioCatalysts(
   for (const [k, v] of bySymbol) if (v === 0) bySymbol.delete(k);
 
   const owned = new Set(bySymbol.keys());
+  // Watch-only names (the My Names union, P2): monitored with side "watch", zero shares. A name in
+  // BOTH lists keeps its book side — the position is the risk; the star is just interest.
+  const watchOnly = new Set<string>();
+  for (const w of opts.watch ?? []) {
+    const k = norm(w);
+    if (k && !bySymbol.has(k)) watchOnly.add(k);
+  }
+
   const catalysts: PortfolioCatalyst[] = [];
   const withCatalyst = new Set<string>();
   const hasEarnings = new Set<string>(); // owned symbols already covered by a real earnings event
-  const add = (e: CatalystEvent, net: number) => {
+  const add = (e: CatalystEvent, net: number | null) => {
     withCatalyst.add(norm(e.ticker));
-    catalysts.push({ ...e, side: net > 0 ? "long" : "short", shares: Math.abs(net), impact: eventImpact(e) });
+    catalysts.push({ ...e, side: net == null ? "watch" : net > 0 ? "long" : "short", shares: net == null ? 0 : Math.abs(net), impact: eventImpact(e) });
   };
   for (const e of events) {
     const sym = norm(e.ticker);
     const net = bySymbol.get(sym);
-    if (net == null) continue;
+    const watched = watchOnly.has(sym);
+    if (net == null && !watched) continue;
     if (e.daysTo < 0 || e.daysTo > horizon) continue;
     if (e.kind === "earnings") hasEarnings.add(sym);
-    add(e, net);
+    add(e, net ?? null);
   }
   // Supplement with snapshot forward-earnings dates so reporters beyond the ≤16-day options feed still
   // surface (that feed only carries near-term names). Skip any symbol already covered by a real
   // earnings event (the options-feed version has the implied move and wins).
   if (opts.earningsDates) {
-    for (const [sym, net] of bySymbol) {
-      if (hasEarnings.has(sym)) continue;
-      const se = opts.earningsDates[sym];
-      if (!se?.date) continue;
+    const supplement = (sym: string, net: number | null) => {
+      if (hasEarnings.has(sym)) return;
+      const se = opts.earningsDates![sym];
+      if (!se?.date) return;
       const daysTo = Math.round((Date.parse(se.date) - nowMs) / DAY);
-      if (!Number.isFinite(daysTo) || daysTo < 0 || daysTo > horizon) continue;
+      if (!Number.isFinite(daysTo) || daysTo < 0 || daysTo > horizon) return;
       add({ date: se.date.slice(0, 10), daysTo, kind: "earnings", ticker: sym, company: se.name ?? sym, sector: se.sector, label: "Earnings", movePct: null, detail: se.estimated ? "date estimated" : undefined }, net);
-    }
+    };
+    for (const [sym, net] of bySymbol) supplement(sym, net);
+    for (const sym of watchOnly) supplement(sym, null);
   }
   catalysts.sort((a, b) => a.daysTo - b.daysTo || IMPACT_RANK[a.impact] - IMPACT_RANK[b.impact] || a.ticker.localeCompare(b.ticker));
 
+  // "Owned" widens to the monitored union so quiet-name accounting covers watch-only names too.
+  const monitored = new Set([...owned, ...watchOnly]);
   return {
     catalysts,
     ownedWithCatalysts: withCatalyst.size,
-    totalOwned: owned.size,
+    totalOwned: monitored.size,
     highNext30: catalysts.filter((c) => c.impact === "high" && c.daysTo <= 30).length,
-    quietNames: [...owned].filter((s) => !withCatalyst.has(s)).sort(),
+    quietNames: [...monitored].filter((s) => !withCatalyst.has(s)).sort(),
   };
 }

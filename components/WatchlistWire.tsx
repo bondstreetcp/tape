@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useWatchlist } from "@/lib/watchlist";
+import { useMyNames } from "@/lib/myNames";
 import type { WatchlistWireData, WireName } from "@/lib/watchlistWire";
 
 // "Your names" — the watchlist-curated headline feed that leads the Daily Desk's News Wire tab
@@ -25,7 +25,7 @@ const CAT_LABEL: Record<string, string> = {
 };
 
 export default function WatchlistWire({ universe }: { universe: string }) {
-  const { list } = useWatchlist();
+  const { list, bySymbol } = useMyNames(); // P2: the wire covers the book + the watchlist
   const [data, setData] = useState<WatchlistWireData | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const joined = useMemo(() => [...list].sort().join(","), [list]);
@@ -44,7 +44,7 @@ export default function WatchlistWire({ universe }: { universe: string }) {
   if (!list.length) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--text-3)]">
-        Star names with the <b>☆ Watch</b> button on any stock page (or from the <Link href={`/u/${universe}/watchlist`} className="text-[var(--accent)] hover:underline">Watchlist</Link>) and their curated headlines lead this tab each morning.
+        Star names with the <b>☆ Watch</b> button on any stock page (or paste your book into <Link href={`/u/${universe}/portfolio`} className="text-[var(--accent)] hover:underline">Prism</Link>) and their curated headlines lead this tab each morning.
       </div>
     );
   }
@@ -70,6 +70,8 @@ export default function WatchlistWire({ universe }: { universe: string }) {
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(n.symbol)}`} className="font-mono text-sm font-bold text-[var(--accent)] hover:underline">{n.symbol}</Link>
                   {n.name && <span className="max-w-[16rem] truncate text-xs text-[var(--text-3)]">{n.name}</span>}
                   {pctChip(n.pct1d)}
+                  {bySymbol[n.symbol]?.side === "long" && <span className="rounded bg-[#22c55e]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#22c55e]">▲ LONG</span>}
+                  {bySymbol[n.symbol]?.side === "short" && <span className="rounded bg-[#ef4444]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#ef4444]">▼ SHORT</span>}
                   {n.reported && (
                     <span className="rounded bg-[color-mix(in_oklab,#f59e0b_18%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[#f59e0b]" title="A results 8-K (Item 2.02) is on record — this print is the context for the name's tape; analyst notes dated after it are reaction, not cause.">
                       REPORTED {n.reported.daysAgo === 0 ? "TODAY" : n.reported.daysAgo === 1 ? "YESTERDAY" : `${n.reported.date} · ${n.reported.daysAgo}d ago`}

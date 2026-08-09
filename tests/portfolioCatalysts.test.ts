@@ -99,3 +99,20 @@ test("horizon drops far-dated events; quiet names + summary counts are reported"
   assert.deepEqual(r.quietNames, ["NVDA", "TSLA"]); // NVDA's only event is >120d out → counts as quiet
   assert.equal(r.highNext30, 2); // AAPL earnings (8%) @3d + MRNA biotech @6d
 });
+
+// ── P2 union: watch-only names ride with side "watch" ──
+
+test("watch names surface with side watch / zero shares; a name in BOTH lists keeps its book side", () => {
+  const r = buildPortfolioCatalysts(
+    [{ symbol: "AAPL", shares: -10 }],
+    CAL,
+    { watch: ["KO", "AAPL", "MRNA"] },
+  );
+  const ko = r.catalysts.find((c) => c.ticker === "KO")!;
+  assert.equal(ko.side, "watch");
+  assert.equal(ko.shares, 0);
+  assert.equal(r.catalysts.find((c) => c.ticker === "AAPL")!.side, "short", "book side wins over the star");
+  assert.equal(r.catalysts.find((c) => c.ticker === "MRNA")!.side, "watch");
+  // quiet-name accounting covers the union: ABNB isn't watched/held here, so totals reflect 3 names
+  assert.equal(r.totalOwned, 3);
+});
