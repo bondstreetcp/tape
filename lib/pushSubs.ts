@@ -71,10 +71,14 @@ export async function listPushSubs(): Promise<StoredPushSub[]> {
 }
 
 /** Send one ntfy message — shared by the evaluator and the test button. Best-effort boolean. */
-export async function sendNtfy(topic: string, title: string, body: string, opts: { tags?: string; priority?: string } = {}): Promise<boolean> {
+export async function sendNtfy(topic: string, title: string, body: string, opts: { tags?: string; priority?: string; clickPath?: string } = {}): Promise<boolean> {
   if (!TOPIC_RE.test(topic)) return false;
   const base = process.env.NTFY_BASE || "https://ntfy.sh";
   const headerSafe = (s: string) => s.replace(/[^\x20-\x7E]/g, "-"); // ntfy headers are ByteStrings (the em-dash crash)
+  // Tapping the notification should LAND somewhere (2026-08 UX pass): clickPath ("/u/sp500/my-names",
+  // "/u/sp500/stock/EAT") + PUSH_CLICK_BASE (the site's public origin, set in the runner's
+  // /app/.alert-env). Without the base configured, the ping still sends — just without the link.
+  const clickBase = (process.env.PUSH_CLICK_BASE || "").replace(/\/$/, "");
   try {
     const res = await fetch(`${base}/${topic}`, {
       method: "POST",
@@ -83,6 +87,7 @@ export async function sendNtfy(topic: string, title: string, body: string, opts:
         Title: headerSafe(title),
         Priority: opts.priority ?? "default",
         Tags: headerSafe(opts.tags ?? "chart_with_upwards_trend"),
+        ...(clickBase && opts.clickPath ? { Click: `${clickBase}${opts.clickPath}` } : {}),
       },
       signal: AbortSignal.timeout(10_000),
     });

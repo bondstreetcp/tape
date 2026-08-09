@@ -12,9 +12,28 @@ export default function InstallPWA() {
   const [show, setShow] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [help, setHelp] = useState(false);
+  const [updated, setUpdated] = useState(false);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      const local = /^(localhost|127\.|192\.168\.|\[::1\])/.test(location.hostname);
+      if (local) {
+        // Dev/preview: NEVER run the SW. Dev chunks aren't content-hashed, so the SW's cache-first
+        // static handler serves hours-old code against fresh data — the recurring "data updates but
+        // my edit won't render" split-brain (2026-08-08, three times in one session). Actively
+        // unregister anything a previous visit installed, so a dev box heals itself.
+        navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+      } else {
+        // The build sha in the URL makes every deploy a NEW worker: install → skipWaiting →
+        // clients.claim → controllerchange on open tabs, where the toast below offers a refresh.
+        // Without it, VERSION in sw.js was hand-bumped (i.e., never) and tabs from two deploys ago
+        // lazy-loaded dead chunks (the 2026-08-08 "pages aren't working anymore" class).
+        navigator.serviceWorker.register(`/sw.js?v=${process.env.NEXT_PUBLIC_GIT_SHA || "dev"}`).catch(() => {});
+        const hadController = !!navigator.serviceWorker.controller; // first-ever install also fires controllerchange — no toast for that
+        const onChange = () => { if (hadController) setUpdated(true); };
+        navigator.serviceWorker.addEventListener("controllerchange", onChange);
+      }
+    }
 
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
     if (standalone) return; // already installed
@@ -33,7 +52,19 @@ export default function InstallPWA() {
     };
   }, []);
 
-  if (!show) return null;
+  // The update toast renders regardless of the install button's state — an already-installed
+  // (standalone) user is exactly who needs to hear "a new version took over this tab".
+  const toast = updated ? (
+    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+      <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--text)] shadow-lg">
+        <span>Tape updated — refresh to load the new version.</span>
+        <button onClick={() => window.location.reload()} className="rounded-md bg-[var(--accent-strong)] px-3 py-1 text-sm font-medium text-white">Refresh</button>
+        <button onClick={() => setUpdated(false)} className="text-[var(--text-4)] hover:text-[var(--text)]" aria-label="Dismiss">✕</button>
+      </div>
+    </div>
+  ) : null;
+
+  if (!show) return toast;
 
   const onClick = async () => {
     if (isIOS) { setHelp((v) => !v); return; }
@@ -47,6 +78,7 @@ export default function InstallPWA() {
 
   return (
     <div className="relative shrink-0">
+      {toast}
       <button
         onClick={onClick}
         title="Install Tape as an app on your device"

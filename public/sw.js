@@ -5,7 +5,7 @@
  *   - navigations (HTML)             → network-first, fall back to the offline page
  *   - everything else same-origin    → network, fall back to cache
  * Bump VERSION to invalidate the shell cache on deploy. */
-const VERSION = "tape-v2"; // bump on any app-shell change → old caches cleared on activate
+const VERSION = "tape-v3"; // v3 2026-08-09: registration now keys the worker URL on the BUILD SHA (InstallPWA), so each deploy installs fresh + toasts open tabs; this constant only names the cache to purge on activate
 const SHELL = ["/offline.html", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

@@ -91,7 +91,7 @@ export default function IdeaInboxView({ universe, inbox, generatedAt }: { univer
             return (
               <div key={r.symbol} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <WatchStar symbol={r.symbol} size={14} />
+                  <WatchStar symbol={r.symbol} compact />
                   <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}`} className="font-mono text-sm font-bold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                   <span className="max-w-[18rem] truncate text-xs text-[var(--text-3)]">{r.name}</span>
                   {r.sector && <span className="text-[11px] text-[var(--text-4)]">{r.sector}</span>}

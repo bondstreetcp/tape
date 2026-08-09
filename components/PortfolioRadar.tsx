@@ -21,7 +21,9 @@ const IMPACT_META: Record<Impact, { label: string; color: string }> = {
 };
 const bucketOf = (d: number) => (d <= 7 ? "This week" : d <= 30 ? "This month" : "Later (≤120d)");
 
-export default function PortfolioRadar({ universe, events, earningsDates, generatedAt }: { universe: string; events: CatalystEvent[]; earningsDates: Record<string, SnapshotEarnings>; generatedAt: string }) {
+// `embedded` drops the page chrome (<main>/breadcrumb/h1/switcher/MyBookTabs) — the My Names page
+// mounts this as its Radar tab; the book editor + timeline stay.
+export default function PortfolioRadar({ universe, events, earningsDates, generatedAt, embedded = false }: { universe: string; events: CatalystEvent[]; earningsDates: Record<string, SnapshotEarnings>; generatedAt: string; embedded?: boolean }) {
   const [text, setText] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [highOnly, setHighOnly] = useState(false);
@@ -50,20 +52,25 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
 
   const hasBook = positions.length > 0;
 
+  const Frame = embedded ? "section" : "main";
   return (
-    <main className="mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-          <h1 className="mt-1 text-2xl font-bold">Portfolio Catalyst Radar</h1>
-          <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            What&apos;s live in <i>your</i> names — every forward catalyst on a name you hold <i>or watch</i>, on one timeline, with the position side attached (☆ for watchlist names you don&apos;t hold). Feeds as of {fmtDateTime(generatedAt)}. Your book stays in your browser.
-          </p>
-        </div>
-        <UniverseSwitcher current={universe} />
-      </div>
+    <Frame className={embedded ? "" : "mx-auto max-w-[80rem] px-4 py-6 sm:px-6"}>
+      {!embedded && (
+        <>
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
+              <h1 className="mt-1 text-2xl font-bold">Portfolio Catalyst Radar</h1>
+              <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
+                What&apos;s live in <i>your</i> names — every forward catalyst on a name you hold <i>or watch</i>, on one timeline, with the position side attached (☆ for watchlist names you don&apos;t hold). Feeds as of {fmtDateTime(generatedAt)}. Your book stays in your browser.
+              </p>
+            </div>
+            <UniverseSwitcher current={universe} />
+          </div>
 
-      <MyBookTabs universe={universe} current="/portfolio-radar" />
+          <MyBookTabs universe={universe} current="/portfolio-radar" />
+        </>
+      )}
 
       <HowToRead>
         <p><b>What&apos;s here:</b> your pasted holdings joined to the forward Catalyst Calendar — earnings (with the options-implied move), investor days, biotech/FDA readouts, and IPO-lockup expiries. Only names you own show up, soonest first.</p>
@@ -143,6 +150,6 @@ export default function PortfolioRadar({ universe, events, earningsDates, genera
           )}
         </>
       )}
-    </main>
+    </Frame>
   );
 }

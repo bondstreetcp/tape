@@ -66,7 +66,7 @@ async function main() {
 
   let sent = 0;
   for (const m of msgs) {
-    const ok = await sendNtfy(m.topic, m.title, m.body, { tags: m.tags, priority: m.priority });
+    const ok = await sendNtfy(m.topic, m.title, m.body, { tags: m.tags, priority: m.priority, clickPath: `/u/sp500/stock/${encodeURIComponent(m.symbol)}` });
     if (ok) { sentMap[`${m.topic}|${m.key}`] = new Date().toISOString(); sent++; }
     else console.warn(`push-alerts: send failed for ${m.symbol} (${m.key}) — will retry next run.`);
   }

@@ -162,6 +162,7 @@ export default function FinancialsView({
   daily,
   intraday,
   generatedAt,
+  signalsStrip,
 }: {
   universe: string;
   symbol: string;
@@ -180,6 +181,8 @@ export default function FinancialsView({
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
+  /** "Signals on this name" — board-membership chips, server-computed by the page (NameSignals) */
+  signalsStrip?: React.ReactNode;
 }) {
   type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "social";
   const [view, setView] = useState<View>("overview");
@@ -353,6 +356,10 @@ export default function FinancialsView({
           onChange={(v) => changeView(v as View)}
         />
       </div>
+
+      {/* Board-membership context — which idea boards carry this name right now (server-computed
+          from the signal log). Above the tab content on every tab: it's identity-level context. */}
+      {signalsStrip}
 
       {view === "overview" ? (
         row ? (

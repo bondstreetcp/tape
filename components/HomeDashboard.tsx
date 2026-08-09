@@ -24,10 +24,14 @@ export default function HomeDashboard({
   snapshot,
   universe,
   catalysts = {},
+  morningStrip,
 }: {
   snapshot: Snapshot;
   universe: string;
   catalysts?: CatalystMap;
+  /** the Home dispatcher tiles (desk brief / my names / idea inbox) — server-composed, rendered
+   *  above the header so the morning loop starts here (2026-08 workflow-sharpening) */
+  morningStrip?: React.ReactNode;
 }) {
   const [tf, setTf] = usePersistedTimeframe(null, "1d");
   const [threshold, setThreshold] = useState(2);
@@ -75,6 +79,7 @@ export default function HomeDashboard({
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      {morningStrip}
       <header className="mb-6 flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

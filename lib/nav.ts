@@ -3,7 +3,7 @@
 // so a newcomer can find and understand every feature without clicking blind.
 
 export type NavGroup = "Markets" | "Options" | "Event-Driven" | "Screens" | "Research";
-export type Job = "Track the market" | "Find ideas" | "Research a name" | "Income strategies";
+export type Job = "Track the market" | "Find ideas" | "Monitor my names" | "Research a name" | "Income strategies";
 
 export interface NavItem {
   label: string;
@@ -19,7 +19,7 @@ export interface NavItem {
 export const TOP_LINKS: NavItem[] = [
   { label: "Home", path: "", desc: "Market overview — the index, sectors, and biggest movers", job: "Track the market", kw: "dashboard overview" },
   { label: "Daily Desk", path: "/morning-desk", desc: "The AI desk brief (morning + evening runs), with the day's Reuters news wire on its own tab", job: "Track the market", kw: "ai brief notes overnight morning desk daily briefing news reuters wire evening tab" },
-  { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Research a name", kw: "saved favorites star" },
+  { label: "Watchlist", path: "/watchlist", desc: "Your saved names, with a daily AI digest", job: "Monitor my names", kw: "saved favorites star" },
   { label: "Guide", path: "/guide", desc: "What every board does and what each number means — a plain-English manual", job: "Track the market", kw: "guide help manual learn glossary how to read explained tutorial docs what does this mean finance 101 onboarding start here concepts metrics definitions" },
   { label: "Status", path: "/status", desc: "Is everything working? Every data feed's freshness, which boards are degraded, the live build, and the server clock", job: "Track the market", kw: "status health system uptime online offline broken degraded stale data freshness feeds working outage incident monitor diagnostics build version clock skew what is down not updating" },
   // NOTE: when auth activates (docs/SETUP-auth.md), add an "Alerts" entry here — the page exists at
@@ -117,10 +117,10 @@ export const FEATURES: NavItem[] = [
   { label: "Policy & Contracts", path: "/policy", desc: "New federal rules (tariffs, EPA, FAA, drug-pricing) + big government contract wins, mapped to tickers", group: "Event-Driven", job: "Find ideas", kw: "policy federal register rule tariff epa fda cms drug pricing faa ftc government contract award defense usaspending lockheed boeing raytheon revenue signal regulation" },
   { label: "Filings & Docs", path: "/research", desc: "Browse and AI-summarize a company's SEC filings", group: "Research", job: "Research a name", kw: "filings documents sec edgar summary" },
   { label: "Research Desk", path: "/research-desk", desc: "Upload sell-side PDFs → searchable, cross-broker synthesis", group: "Research", job: "Research a name", kw: "research pdf upload broker analyst report" },
-  { label: "My Names — Change Ledger", path: "/my-names", desc: "Everything that changed in the names you watch — prints, preannouncements, deals, filings, insider clusters, borrow stress, revisions, options flow — since you last looked", group: "Research", job: "Track the market", kw: "my names change ledger monitor watchlist what changed since i last looked new events reported preannounce deal filing insider borrow short squeeze estimate revisions options flow news alerts monitoring my stocks portfolio watch" },
-  { label: "Prism", path: "/portfolio", desc: "Paste your book → exposure, factor attribution, predicted vol & VaR, crowding & a solved hedge, all as a share of your AUM", group: "Research", job: "Track the market", kw: "prism portfolio cockpit book positions holdings risk exposure gross net long short beta market shock scenario stress test concentration hhi sector tilt cockpit blotter my positions var drawdown hedge" },
-  { label: "Portfolio Radar", path: "/portfolio-radar", desc: "Every forward catalyst in YOUR book on one timeline — earnings (implied move), biotech/FDA readouts, investor days, lockups — with the long/short side attached", group: "Research", job: "Track the market", kw: "portfolio catalyst radar my book holdings earnings dates biotech pdufa fda readout lockup investor day forward calendar what's happening in my names position side long short binary event risk upcoming events my positions blotter watch calendar personalized" },
-  { label: "Portfolio Income", path: "/portfolio-income", desc: "Covered-call income on the shares you already own — premium in real dollars, annualized yield, if-called return, with an earnings-in-window flag", group: "Research", job: "Track the market", kw: "portfolio options income covered call my book holdings premium yield annualized if called upside cap sell calls overwrite buy-write income generate yield on my shares longs earnings risk assignment contracts personalized" },
+  { label: "My Names — Change Ledger", path: "/my-names", desc: "Everything that changed in the names you watch — prints, preannouncements, deals, filings, insider clusters, borrow stress, revisions, options flow — since you last looked", group: "Research", job: "Monitor my names", kw: "my names change ledger monitor watchlist what changed since i last looked new events reported preannounce deal filing insider borrow short squeeze estimate revisions options flow news alerts monitoring my stocks portfolio watch" },
+  { label: "Prism", path: "/portfolio", desc: "Paste your book → exposure, factor attribution, predicted vol & VaR, crowding & a solved hedge, all as a share of your AUM", group: "Research", job: "Monitor my names", kw: "prism portfolio cockpit book positions holdings risk exposure gross net long short beta market shock scenario stress test concentration hhi sector tilt cockpit blotter my positions var drawdown hedge" },
+  { label: "Portfolio Radar", path: "/portfolio-radar", desc: "Every forward catalyst in YOUR book on one timeline — earnings (implied move), biotech/FDA readouts, investor days, lockups — with the long/short side attached", group: "Research", job: "Monitor my names", kw: "portfolio catalyst radar my book holdings earnings dates biotech pdufa fda readout lockup investor day forward calendar what's happening in my names position side long short binary event risk upcoming events my positions blotter watch calendar personalized" },
+  { label: "Portfolio Income", path: "/portfolio-income", desc: "Covered-call income on the shares you already own — premium in real dollars, annualized yield, if-called return, with an earnings-in-window flag", group: "Research", job: "Monitor my names", kw: "portfolio options income covered call my book holdings premium yield annualized if called upside cap sell calls overwrite buy-write income generate yield on my shares longs earnings risk assignment contracts personalized" },
 ];
 
 // Sub-hubs — the Research and Strategies menus grew long, so cluster each into a few hubs that act as
@@ -207,4 +207,4 @@ export function hubForPath(relPath: string): { label: string; items: NavItem[] }
 }
 
 export const ALL_NAV: NavItem[] = [...TOP_LINKS, ...FEATURES];
-export const JOBS: Job[] = ["Track the market", "Find ideas", "Research a name", "Income strategies"];
+export const JOBS: Job[] = ["Track the market", "Find ideas", "Monitor my names", "Research a name", "Income strategies"];

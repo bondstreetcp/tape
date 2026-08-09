@@ -17,14 +17,18 @@ import TimeframeSelector from "./TimeframeSelector";
 import UniverseSwitcher from "./UniverseSwitcher";
 import WatchlistDigest from "./WatchlistDigest";
 
+// `embedded` renders the table without page chrome (<main>/breadcrumb/h1) — the My Names page
+// mounts it as its Quotes tab, where the page already owns that frame.
 export default function WatchlistView({
   universe,
   stocks,
   generatedAt,
+  embedded = false,
 }: {
   universe: string;
   stocks: StockRow[];
   generatedAt: string;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,14 +79,19 @@ export default function WatchlistView({
     return { high, low, below200, near200 };
   }, [rows]);
 
+  const Frame = embedded ? "section" : "main";
   return (
-    <main className="mx-auto max-w-[80rem] px-4 py-6 sm:px-6">
+    <Frame className={embedded ? "" : "mx-auto max-w-[80rem] px-4 py-6 sm:px-6"}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
-            ← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
-          </Link>
-          <h1 className="mt-1 text-2xl font-bold">★ Watchlist</h1>
+          {!embedded && (
+            <>
+              <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">
+                ← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}
+              </Link>
+              <h1 className="mt-1 text-2xl font-bold">★ Watchlist</h1>
+            </>
+          )}
           <p className="mt-1 text-xs text-[var(--text-3)]">
             {rows.length} {rows.length === 1 ? "name" : "names"} · saved in this
             browser · as of {fmtDateTime(generatedAt)}
@@ -189,6 +198,6 @@ export default function WatchlistView({
           </table>
         </div>
       )}
-    </main>
+    </Frame>
   );
 }

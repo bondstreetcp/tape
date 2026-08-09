@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import ThemeToggle from "./ThemeToggle";
 import InstallPWA from "./InstallPWA";
+import MyNamesBadge from "./MyNamesBadge";
 import AccountMenu from "./AccountMenu";
 import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
@@ -153,11 +154,13 @@ export default function AppHeader({
           </nav>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* My Names replaces the bare watchlist star up top (2026-08, the monitoring leg's front
+              door) — the badge is the "anything happened in my names?" count from the ledger cursor. */}
           <Link
-            href={`${base}/watchlist`}
-            title="Watchlist"
-            className={"hidden shrink-0 rounded-md px-1.5 py-1 text-base transition-colors lg:inline-flex " + (isActive(`${base}/watchlist`) ? "text-[var(--accent)]" : "text-[var(--text-4)] hover:bg-[var(--surface-hover)] hover:text-[#fbbf24]")}
-          >★</Link>
+            href={`${base}/my-names`}
+            title="My Names — everything that changed in your book + watchlist since you last looked"
+            className={"hidden shrink-0 items-center rounded-md px-1.5 py-1 text-base transition-colors lg:inline-flex " + (isActive(`${base}/my-names`) || isActive(`${base}/watchlist`) ? "text-[var(--accent)]" : "text-[var(--text-4)] hover:bg-[var(--surface-hover)] hover:text-[#fbbf24]")}
+          >★<MyNamesBadge /></Link>
           <button
             onClick={() => window.dispatchEvent(new Event("open-cmdk"))}
             title="Jump to any feature or company (⌘K / Ctrl-K)"
@@ -277,7 +280,8 @@ export default function AppHeader({
           {[
             { path: "", label: "Home", exact: true },
             { path: "/morning-desk", label: "Daily Desk" },
-            { path: "/watchlist", label: "★ Watchlist" },
+            { path: "/my-names", label: "★ My Names" },
+            { path: "/ideas", label: "📥 Idea Inbox" },
           ].map((m) => {
             const href = `${base}${m.path}`;
             return <Link key={m.path} href={href} className={drawerLink(isActive(href, (m as any).exact))}>{m.label}</Link>;

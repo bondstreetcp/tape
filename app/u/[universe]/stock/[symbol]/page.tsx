@@ -6,6 +6,8 @@ import { peerCohort } from "@/lib/peerCohorts";
 import { xyToPoints } from "@/lib/compute";
 import { loadCompanyBundle } from "@/lib/companyCache";
 import FinancialsView from "@/components/FinancialsView";
+import NameSignals, { type NameSignal } from "@/components/NameSignals";
+import { summarizeSignals, SIGNAL_KEYS, type SignalLogFile } from "@/lib/signalLog";
 import SetupNotice from "@/components/SetupNotice";
 import { fetchLiveStock } from "@/lib/liveStock";
 import type { StockRow, StockSeries } from "@/lib/types";
@@ -46,6 +48,33 @@ function loadIvHistory(sym: string): IvSnapshot[] | null {
     return (JSON.parse(readFileSync(p, "utf8")) as IvHistoryData).byTicker?.[sym] ?? null;
   } catch {
     return null;
+  }
+}
+
+// "Signals on this name" — which idea boards carry this symbol right now (membership at the last
+// nightly run) or flagged it inside ~90d, plus each board's graded 1-month edge. Same log
+// /signal-record grades; the Idea Inbox→stock-page hop keeps its "why it surfaced" context.
+function nameSignals(sym: string): NameSignal[] {
+  try {
+    const p = join(process.cwd(), "data", "signal-log.json");
+    if (!existsSync(p)) return [];
+    const log = JSON.parse(readFileSync(p, "utf8")) as SignalLogFile;
+    const m1 = new Map(summarizeSignals(log.events ?? []).map((s) => [s.signal, s.horizons.m1]));
+    const out: NameSignal[] = [];
+    for (const signal of SIGNAL_KEYS) {
+      const onBoard = (log.lastMembership?.[signal] ?? []).includes(sym);
+      const ev = (log.events ?? [])
+        .filter((e) => e.signal === signal && e.symbol === sym && !e.seed)
+        .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+      const arrivedMs = ev ? Date.parse(ev.date) : NaN;
+      const recent = Number.isFinite(arrivedMs) && Date.now() - arrivedMs <= 90 * 86_400_000;
+      if (!onBoard && !recent) continue;
+      const h = m1.get(signal);
+      out.push({ signal, onBoard, arrived: recent ? ev!.date : null, m1Edge: h && h.n >= 15 && h.avgEdge != null ? h.avgEdge : null });
+    }
+    return out;
+  } catch {
+    return [];
   }
 }
 
@@ -116,6 +145,7 @@ export default async function StockPage({
     <FinancialsView
       universe={universe}
       symbol={SYM}
+      signalsStrip={<NameSignals universe={universe} signals={nameSignals(SYM)} />}
       name={row.name}
       etf={row.etf}
       sectorName={meta?.name ?? row.sector}
