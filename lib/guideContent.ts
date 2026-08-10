@@ -3134,6 +3134,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/chains",
+        "title": "Value Chains",
+        "question": "Who sits where in a supply chain — and which layer actually keeps the margin?",
+        "how": "Six hand-written value chains (AI datacenter, US housing, aerospace, oil & gas, grid & power, the drug supply chain) rendered as ordered layers, upstream to downstream. The layer definitions are reviewable code, not model output: each layer lists its hand-picked seeds, and membership expands only through an exact industry classification or a specific description phrase — every expanded chip shows the gate that admitted it on hover, and a name that fits two layers is refused rather than guessed. Per layer you get sourced economics with an explicit n for every stat: median margins, return on assets, revenue growth, the year-over-year change in annual gross margin, and market-cap concentration (HHI). Use it to place a name in its chain before you buy the story about it — pricing power tends to live in the concentrated, high-margin layers, and a thesis about one layer usually implies something testable about its neighbors. No lead-lag claims: a pre-committed walk-forward test failed, so that leg was dropped rather than shipped. Decision-support, not advice.",
+        "metrics": [
+          {
+            "term": "Gross margin (median)",
+            "plain": "Median trailing-12-month gross margin across the layer's members; n counts the members with the stat. A rough read on where value sticks in the chain."
+          },
+          {
+            "term": "GM YoY",
+            "plain": "Median change in annual gross margin, latest fiscal year vs the prior one, in percentage points — is this layer's take expanding or being squeezed? Abstains for members without two comparable fiscal years."
+          },
+          {
+            "term": "Cap HHI",
+            "plain": "Market-cap concentration within the layer on the standard 0–10,000 Herfindahl scale; above ~2,500 is concentrated. Concentrated layers tend to hold the pricing power over fragmented neighbors."
+          },
+          {
+            "term": "Chip borders",
+            "plain": "Solid border = hand-picked seed; dashed = admitted by an industry or description match (hover shows which). Ambiguous fits are listed as refused at the bottom, not silently placed."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/congress",
         "title": "Congressional Trading",
         "question": "What stocks are members of Congress (and the President) buying and selling, as disclosed under the STOCK Act?",

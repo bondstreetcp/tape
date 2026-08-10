@@ -101,7 +101,8 @@
     "refresh-valuation-explain": "tsx scripts/refresh-valuation-explain.ts",
     "refresh-13f-story": "tsx scripts/refresh-13f-story.ts",
     "refresh-congress-summary": "tsx scripts/refresh-congress-summary.ts",
-    "patch-industries": "tsx scripts/patch-industries.ts"
+    "patch-industries": "tsx scripts/patch-industries.ts",
+    "refresh-value-chains": "tsx scripts/refresh-value-chains.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

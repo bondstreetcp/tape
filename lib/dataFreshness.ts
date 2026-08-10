@@ -126,6 +126,10 @@ const FEEDS: FeedSpec[] = [
   { file: "gov-contracts.json", affects: ["/gov-contracts"], label: "Government contracts", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
   // Episodic (live cash deals come and go) — age-only, no floor.
   { file: "merger-arb.json", affects: ["/merger-arb"], label: "Merger-arb spreads", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  // Gate on MEMBER rows, not chains: chains.length is a structural constant (6 hand-written defs
+  // build even from an empty company cache), so a hollow night would sail past it. Steady state is
+  // ~330 member rows from local-only compute; 120 = collapsed-cache territory, not a lean night.
+  { file: "value-chains.json", affects: ["/chains"], label: "Value chains", tier: "core", maxAgeHours: CORE, countPath: "memberRows", minCount: 120 },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },

@@ -729,6 +729,13 @@ jobs:
         run: npm run refresh-merger-arb
         continue-on-error: true
 
+      # Value chains: hand-written ordered layers + per-layer economics from the local company
+      # cache. Pure local compute — no network; membership provenance and refusals in the payload.
+      - name: Refresh value chains (layer economics)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-value-chains
+        continue-on-error: true
+
       # Push alerts (My Names P3): evaluates subscriptions against the fresh feeds. EVALUATE-ONLY
       # here — TAPE_WRITER is not set on GitHub, so this step never sends; the NAS runner is the
       # single sender (a standdown fail-open must not double-notify phones). Needs the research DB
