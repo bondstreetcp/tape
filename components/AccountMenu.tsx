@@ -13,6 +13,9 @@ export default function AccountMenu() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errMsg, setErrMsg] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpErr, setOtpErr] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -48,6 +51,21 @@ export default function AccountMenu() {
     }
     setState(error ? "error" : "sent");
   };
+  // Same-browser is only required by the LINK (its PKCE verifier cookie); the emailed 6-digit code
+  // verifies from any browser — the escape hatch for in-app email viewers. Needs {{ .Token }} in
+  // the Supabase Magic Link email template to actually appear in the email.
+  const verifyCode = async () => {
+    const sb = browserSupabase();
+    const token = otp.trim();
+    if (!sb || !/^\d{6}$/.test(token)) return;
+    setOtpBusy(true);
+    setOtpErr("");
+    const { error } = await sb.auth.verifyOtp({ email: email.trim(), token, type: "email" });
+    setOtpBusy(false);
+    if (error) setOtpErr(/expired|invalid/i.test(error.message) ? "Code invalid or expired — send a fresh link and use its code." : error.message);
+    else setOpen(false);
+  };
+
   const signOut = async () => {
     const sb = browserSupabase();
     if (!sb) return;
@@ -59,7 +77,7 @@ export default function AccountMenu() {
     return (
       <div ref={ref} className="relative shrink-0">
         <button
-          onClick={() => { setOpen((v) => !v); setState("idle"); }}
+          onClick={() => { setOpen((v) => !v); setState("idle"); setOtp(""); setOtpErr(""); }}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
         >
           Sign in
@@ -69,7 +87,26 @@ export default function AccountMenu() {
             {state === "sent" ? (
               <div className="text-sm text-[var(--text-2)]">
                 <div className="mb-1 font-semibold text-[var(--text)]">Check your email</div>
-                A sign-in link is on its way to <b>{email.trim()}</b>. Open it on this device — your watchlist, book, and alert settings then follow you across devices.
+                A sign-in link is on its way to <b>{email.trim()}</b>. Open it in <i>this browser</i> — or type the 6-digit code from the email:
+                <div className="mt-2 flex gap-1.5">
+                  <input
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={(e) => { if (e.key === "Enter") void verifyCode(); }}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-sm tracking-widest outline-none placeholder:text-[var(--text-4)] focus:border-[var(--border-strong)]"
+                  />
+                  <button
+                    onClick={() => void verifyCode()}
+                    disabled={otpBusy || otp.length !== 6}
+                    className="rounded-md bg-[var(--accent-strong)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                  >
+                    {otpBusy ? "…" : "Verify"}
+                  </button>
+                </div>
+                {otpErr && <div className="mt-1.5 text-xs text-[#ef4444]">{otpErr}</div>}
               </div>
             ) : (
               <>

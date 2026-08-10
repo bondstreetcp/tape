@@ -9,6 +9,7 @@ import InstallPWA from "./InstallPWA";
 import MyNamesBadge from "./MyNamesBadge";
 import PrefsSync from "./PrefsSync";
 import AccountMenu from "./AccountMenu";
+import AuthErrorNotice from "./AuthErrorNotice";
 import AlertBell from "./AlertBell";
 import CommandPalette from "./CommandPalette";
 import TapeLogo from "./Logo";
@@ -185,6 +186,7 @@ export default function AppHeader({
           <AlertBell base={base} />
           <AccountMenu />
           <PrefsSync />
+          <AuthErrorNotice />
         </div>
       </div>
 
