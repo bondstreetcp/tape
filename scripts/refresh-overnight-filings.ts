@@ -103,6 +103,25 @@ interface Digest {
   keyMetrics: Record<string, unknown>;
 }
 
+// ── Focused sentiment pass (the /debates label-quality unblock, user-approved 2026-08-10). ──
+// eval-sentiment-rubric.ts measured that the stored labels' miscalibration is TASK SHAPE, not the
+// rubric sentence: the SAME production wording run as its own small task over the raw filing text
+// agreed 78% with a skeptical PRO reference vs the mega-call's 64% (a recalibrated sentence did no
+// better). So sentiment gets a dedicated FLASH call per filing — the exact measured construction
+// (30k text cap, compact 4-field schema, NO background snapshot), run concurrently with the digest
+// so the nightly's wall-clock doesn't move. Wording below mirrors the eval's variant A verbatim.
+const FOCUSED_TEXT_CAP = 30_000;
+const FOCUSED_SYSTEM =
+  "You are an equity analyst writing the overnight desk note on a new SEC filing. You get the FILING text — your ONLY source for every claim and number you cite. " +
+  "Identify ONLY what materially changed or what the filing announces: revenue/margin/EPS vs the prior period, guidance, segment trends, new/dropped risk factors, buybacks/dividends, M&A (parties/price/structure), capital raises (size/coupon/use of proceeds), management changes, accounting/restatements. Ground every claim in the FILING text — never invent or infer a number that isn't stated there. Ignore boilerplate and unchanged repeated language. " +
+  "FIELD RUBRICS — surprise: 'beat'/'miss' ONLY vs an analyst consensus/estimate explicitly stated in the filing (e.g. an EPS-surprise line), else 'na'; never infer beat/miss from a year-over-year change. sentiment: the filing's effect on the forward outlook / intrinsic value (bullish/neutral/bearish) — judge substance, not tone. decisionTakeaway: one falsifiable sentence on what changed and why it matters; never a buy/sell/hold call. Return ONLY JSON.";
+const FOCUSED_SCHEMA =
+  'Return ONLY a JSON object: {"headline": string (<=12 words), "decisionTakeaway": string, "sentiment": "bullish"|"neutral"|"bearish", "surprise": "beat"|"inline"|"miss"|"na"}';
+
+interface FocusedSentiment {
+  sentiment: "bullish" | "neutral" | "bearish";
+}
+
 interface OvernightItem extends Digest {
   ticker: string;
   name: string;
@@ -112,6 +131,8 @@ interface OvernightItem extends Digest {
   riskFactorsRemoved: number | null;
   accession: string;
   url: string;
+  /** Which call produced `sentiment`: the dedicated pass ("focused") or the mega-call fallback. */
+  sentimentSource?: "focused" | "digest";
 }
 
 interface NewFiling {
@@ -283,12 +304,21 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
 
   // local:true — the highest-input-token nightly job (whole filing diffs); serve from the local
   // overnight box when configured (NONE-gated + "only explicitly-stated numbers" rubric keeps it
-  // grounded regardless of model). Falls back to Flash cloud if the box is offline.
-  const digest = await chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000, local: true });
+  // grounded regardless of model). Falls back to Flash cloud if the box is offline. The focused
+  // sentiment call runs concurrently — its failure only costs provenance, never the item.
+  const [digest, focused] = await Promise.all([
+    chatJSON<Digest>(SYSTEM, user, { model: OVERNIGHT_MODEL, maxTokens: 2000, local: true }),
+    chatJSON<FocusedSentiment>(
+      FOCUSED_SYSTEM,
+      `${FOCUSED_SCHEMA}\n\n=== FILING (${nf.symbol} ${nf.form}, filed ${nf.filingDate}) ===\n${newClip.slice(0, FOCUSED_TEXT_CAP)}`,
+      { model: FLASH_MODEL, maxTokens: 900 },
+    ).catch(() => null),
+  ]);
   if (digest == null) return "llmfail"; // transport/model failure — NOT the NONE-gate; counted separately
   if (typeof digest.headline !== "string") return "llmfail"; // malformed digest — transient, don't drop the prior
   const headline = digest.headline.trim();
   if (!headline || /^none$/i.test(headline)) return "none"; // NONE-gate — definitively immaterial
+  const focusedOk = focused != null && ["bullish", "neutral", "bearish"].includes(focused.sentiment);
 
   return {
     ticker: nf.symbol,
@@ -298,7 +328,8 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
     headline,
     whatChanged: Array.isArray(digest.whatChanged) ? digest.whatChanged.filter((x) => typeof x === "string" && x.trim()).slice(0, 5) : [],
     decisionTakeaway: typeof digest.decisionTakeaway === "string" ? digest.decisionTakeaway.trim() : "",
-    sentiment: ["bullish", "neutral", "bearish"].includes(digest.sentiment) ? digest.sentiment : "neutral",
+    sentiment: focusedOk ? focused.sentiment : ["bullish", "neutral", "bearish"].includes(digest.sentiment) ? digest.sentiment : "neutral",
+    sentimentSource: focusedOk ? ("focused" as const) : ("digest" as const),
     surprise: ["beat", "inline", "miss", "na"].includes(digest.surprise) ? digest.surprise : "na",
     impact: ["high", "medium", "low"].includes(digest.impact) ? digest.impact : "medium",
     // keyMetrics hardening: only string/number values (an object rendered "[object Object]"), and
@@ -447,7 +478,12 @@ async function main() {
     items: merged.items,
   };
   await fs.writeFile(OUT, JSON.stringify(out));
+  const focusedN = merged.items.filter((x: OvernightItem) => x.sentimentSource === "focused").length;
+  const dist = (["bullish", "neutral", "bearish"] as const)
+    .map((s) => `${s.slice(0, 4)}=${merged.items.filter((x: OvernightItem) => x.sentiment === s).length}`)
+    .join(" ");
   console.log(`\nWrote ${merged.items.length} digests (${gatedNone} NONE-gated, ${merged.carried} carried) → data/overnight-filings.json`);
+  console.log(`sentiment: ${dist} · focused pass on ${focusedN}/${merged.items.length} (rest = mega-call fallback or pre-split carries)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
