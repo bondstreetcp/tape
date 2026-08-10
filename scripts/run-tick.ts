@@ -142,6 +142,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh tender offers (odd-lot monitor)", cmd: "npm run refresh-tenders", when: "full" },
   { name: "Refresh merger-arb spreads (DEFM14A)", cmd: "npm run refresh-merger-arb", when: "full" },
   { name: "Refresh value chains (layer economics)", cmd: "npm run refresh-value-chains", when: "full" },
+  { name: "Refresh lobbying (LDA join)", cmd: "npm run refresh-lobbying", when: "full" },
   // Push alerts (My Names P3) — AFTER merger-arb/campaigns/earnings-move so it evaluates the fresh
   // feeds. TAPE_WRITER=nas makes THIS runner the single sender; the GitHub mirror step evaluates
   // and logs but never sends (a standdown fail-open must not double-notify phones).

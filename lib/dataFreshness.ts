@@ -130,6 +130,9 @@ const FEEDS: FeedSpec[] = [
   // build even from an empty company cache), so a hollow night would sail past it. Steady state is
   // ~330 member rows from local-only compute; 120 = collapsed-cache territory, not a lean night.
   { file: "value-chains.json", affects: ["/chains"], label: "Value chains", tier: "core", maxAgeHours: CORE, countPath: "memberRows", minCount: 120 },
+  // Accumulating LDA store aggregated per ticker; the strict resolver refuses aggressively, so the
+  // count is organic — floor low (the seeded year lands ~hundreds of tickers; 50 = collapsed store).
+  { file: "lobbying.json", affects: ["/lobbying"], label: "Lobbying (LDA)", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 50 },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },

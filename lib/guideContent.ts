@@ -3159,6 +3159,35 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/lobbying",
+        "title": "Lobbying",
+        "question": "Which companies are spending on Washington, on which bills — and is Congress trading the same names?",
+        "how": "Lobbying Disclosure Act filings are public quarterly records naming a client, the registrant lobbying for them, what was spent, and free-text descriptions of the issues worked — in which specific bill numbers are dense. This board joins three public records with code only: disclosed client names resolve to tickers under strict rules (exact name match or an unambiguous leading corporate name — cities, universities and hospitals that merely share words with a listed company are refused, and every refusal is counted in the header); bill numbers are lifted from the activity text by a tested extractor and joined to the bill's latest recorded action from GovInfo; and STOCK Act trades in the same tickers render alongside. Spend stays in two columns because the two disclosure bases overlap — a company's own in-house filing usually already includes what it pays outside firms, so summing them double-counts. The join shows attention and money, not positions: a filing naming a bill says the company worked on it, not which side it took. Decision-support, not advice.",
+        "metrics": [
+          {
+            "term": "Own spend",
+            "plain": "Lobbying expenses from the company's own in-house registrant filings — usually the fullest single number for total lobbying outlay."
+          },
+          {
+            "term": "Via firms",
+            "plain": "Income reported by hired lobbying firms for this client. Companies without an in-house operation show only this column. Never add it to Own spend."
+          },
+          {
+            "term": "Bills lobbied",
+            "plain": "Bill numbers named in the filings' activity descriptions, most-mentioned first. Hover for the bill's title. A chip means the bill was worked on — not endorsed."
+          },
+          {
+            "term": "Contested bills",
+            "plain": "Bills ranked by how many distinct companies lobby them, with each bill's latest recorded congressional action — where corporate attention concentrates and how far the bill has actually moved."
+          },
+          {
+            "term": "Congress trades",
+            "plain": "Buys/sells (and distinct members) in the same ticker from STOCK Act disclosures — rendered side by side as a join, not a causal claim."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/congress",
         "title": "Congressional Trading",
         "question": "What stocks are members of Congress (and the President) buying and selling, as disclosed under the STOCK Act?",

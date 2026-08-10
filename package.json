@@ -104,7 +104,8 @@
     "patch-industries": "tsx scripts/patch-industries.ts",
     "refresh-value-chains": "tsx scripts/refresh-value-chains.ts",
     "sync-runner-env": "tsx scripts/sync-runner-env.ts",
-    "push-runner-env": "tsx scripts/push-runner-env.ts"
+    "push-runner-env": "tsx scripts/push-runner-env.ts",
+    "refresh-lobbying": "tsx scripts/refresh-lobbying.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

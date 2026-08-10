@@ -743,6 +743,22 @@ jobs:
         run: npm run refresh-value-chains
         continue-on-error: true
 
+      # Lobbying join: incremental LDA pull (LDA_API_KEY via secrets/alert-env), strict client→ticker
+      # resolution, bill extraction + keyless GovInfo status, congress-trades join. Store accumulates
+      # in data/ and rides the site tarball; a missing key degrades STALE.
+      - name: Refresh lobbying (LDA join)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-lobbying
+        env:
+          LDA_API_KEY: ${{ secrets.LDA_API_KEY }}
+          # R2 creds so the one-time store bootstrap can fire on this pipeline too (the NAS gets
+          # them from tape.env; without these the GH run would abort on a missing local store).
+          LAKE_S3_ENDPOINT: ${{ secrets.LAKE_S3_ENDPOINT }}
+          LAKE_S3_BUCKET: ${{ secrets.LAKE_S3_BUCKET }}
+          LAKE_S3_KEY_ID: ${{ secrets.LAKE_S3_KEY_ID }}
+          LAKE_S3_SECRET: ${{ secrets.LAKE_S3_SECRET }}
+        continue-on-error: true
+
       # Push alerts (My Names P3): evaluates subscriptions against the fresh feeds. EVALUATE-ONLY
       # here — TAPE_WRITER is not set on GitHub, so this step never sends; the NAS runner is the
       # single sender (a standdown fail-open must not double-notify phones). Needs the research DB
