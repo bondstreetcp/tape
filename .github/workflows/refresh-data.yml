@@ -149,6 +149,9 @@ jobs:
       # printed "LLM not configured — skipping" every night; their feeds only updated when run
       # locally. Per-step env blocks remain harmless duplicates.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Tee every getNews fetch into the persistent headline archive (lib/newsArchive) — mirrors
+      # run-tick's process-wide NEWS_ARCHIVE=1.
+      NEWS_ARCHIVE: "1"
       # onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads
       # the CUDA 12 EP binaries on linux/x64 BY DEFAULT — its install metadata lists
       # requirements["linux/x64"] = ["cuda12"] and only the CPU runtime ships bundled in the package.

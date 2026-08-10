@@ -36,6 +36,9 @@ type Mode = "full" | "quotes" | "intl" | "desk" | "narration" | "digest" | "news
 type When = "always" | "full" | "quotes-or-desk" | "full-or-intl" | "full-or-desk";
 
 const STEP_TIMEOUT_MIN = 45; // overnight-filings broad scan is ~30m — nothing legitimate exceeds this
+// Every step inherits this: any pipeline that calls getNews tees its headlines into the persistent
+// archive (lib/newsArchive). Runner-only — web builds never set it (read-only filesystems).
+process.env.NEWS_ARCHIVE = "1";
 const LOCK = path.join(process.cwd(), ".tick.lock");
 const LOCK_STALE_H = 5;
 

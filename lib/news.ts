@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { deadline } from "./deadline";
+import { archiveNews } from "./newsArchive";
 
 export interface NewsItem {
   title: string;
@@ -121,9 +122,13 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
   const wire = out.filter((o) => isWire(o.publisher));
   const top = out.filter((o) => !isWire(o.publisher) && isTop(o.publisher));
   const pref = out.filter((o) => !isWire(o.publisher) && !isTop(o.publisher) && isPreferred(o.publisher));
+  const ranked = [...wire, ...top, ...pref];
+  // Tee into the persistent archive (lib/newsArchive; no-op unless NEWS_ARCHIVE=1) — the full
+  // ranked list, not the caller's truncation, so the archive keeps what the fetch actually saw.
+  void archiveNews(query, ranked);
   // ⚠ This order is by SOURCE, deliberately — see pickHeadlines below before consuming it.
   // `count` only truncates an already-parsed list, so asking for more costs nothing.
-  return [...wire, ...top, ...pref].slice(0, count);
+  return ranked.slice(0, count);
 }
 
 // ── Explaining a MOVE is a different job from listing news ────────────────────────────────────────

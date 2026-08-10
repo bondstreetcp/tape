@@ -133,6 +133,10 @@ const FEEDS: FeedSpec[] = [
   // Accumulating LDA store aggregated per ticker; the strict resolver refuses aggressively, so the
   // count is organic — floor low (the seeded year lands ~hundreds of tickers; 50 = collapsed store).
   { file: "lobbying.json", affects: ["/lobbying"], label: "Lobbying (LDA)", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 50 },
+  // Forward-accumulating tee of every getNews fetch (substrate, no page yet) — age-only, NO floor
+  // (starts empty on ship night: the bootstrap-floor trap). Updates whenever a nightly step
+  // fetches news, which the desk note does every FULL run.
+  { file: "news-archive.json", affects: [], label: "Headline archive", tier: "core", maxAgeHours: CORE, countPath: "count" },
   { file: "pead.json", affects: ["/pead", "/earnings-desk"], label: "Post-earnings drift", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   { file: "dispersion.json", affects: ["/dispersion"], label: "Index dispersion", tier: "core", maxAgeHours: CORE },
   { file: "guidance-board.json", affects: ["/guidance", "/earnings-desk", "/confluence", "/warnings"], label: "Guidance credibility board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
