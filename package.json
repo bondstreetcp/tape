@@ -102,7 +102,9 @@
     "refresh-13f-story": "tsx scripts/refresh-13f-story.ts",
     "refresh-congress-summary": "tsx scripts/refresh-congress-summary.ts",
     "patch-industries": "tsx scripts/patch-industries.ts",
-    "refresh-value-chains": "tsx scripts/refresh-value-chains.ts"
+    "refresh-value-chains": "tsx scripts/refresh-value-chains.ts",
+    "sync-runner-env": "tsx scripts/sync-runner-env.ts",
+    "push-runner-env": "tsx scripts/push-runner-env.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

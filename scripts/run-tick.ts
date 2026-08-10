@@ -47,6 +47,10 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   // a second: the tarball hydrate/upload path would carry an hours-old copy and overwrite the newer
   // dedicated object, permanently deleting every row in between — history the wires cannot re-serve.
   // It runs as `run-tick.ts news`, which short-circuits with its own pull → refresh → push trio.
+  // First on purpose: pulls new/rotated secrets from R2 into $APP/.alert-env, which the entrypoint
+  // sources at the TOP of each tick — so a value written now is in env from the NEXT tick on. This
+  // exists because the container's env_file (tape.env) only applies on a DSM container recreate.
+  { name: "Sync runner env (R2 secrets)", cmd: "npm run sync-runner-env", when: "always" },
   { name: "Refresh quotes (intraday)", cmd: "npm run refresh-quotes", when: "quotes-or-desk" }, // ONLY env set at runtime
   // Scheduled at all because it wasn't: this only ever ran when a human typed it, so the index
   // membership the whole site reasons about drifted from the real indexes for a MONTH (found

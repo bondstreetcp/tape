@@ -202,6 +202,13 @@ jobs:
           echo "ONLY=$ONLY" >> "$GITHUB_ENV"
           echo "Wall-clock ${H}:00 UTC → ${MKT} → ONLY='${ONLY}'"
 
+      # Mirror of run-tick's "Sync runner env" (pipelineMirror). On GitHub this is effectively a
+      # no-op with value — secrets already arrive via ${{ secrets.* }}; it writes /app/.alert-env
+      # only on the NAS where the entrypoint sources it per tick.
+      - name: Sync runner env (R2 secrets)
+        run: npm run sync-runner-env
+        continue-on-error: true
+
       # ---- Intraday: quotes only. Re-prices each snapshot from fresh quotes and
       # rewrites just the ~15 snapshot files (the heavy per-symbol history series are
       # left untouched for the after-close run). ONLY is set by the step above.
