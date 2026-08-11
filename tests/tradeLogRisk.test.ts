@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, THIN_CREDIT_PCT, type TradeLeg } from "../lib/tradeLog";
+import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, spreadCostPct, THIN_CREDIT_PCT, WIDE_SPREAD_PCT, type TradeLeg } from "../lib/tradeLog";
 
 // The 2026-08-05 "scale it up?" audit instrumentation. These pin the pure math: the Reg-T margin
 // approximation against hand-computed examples, the crossed-fill rule, the ATKR drift back-out, and
@@ -70,4 +70,25 @@ test("flags: thin-credit is the measured handicap; the rest annotate context", (
   // Buys never flag thin-credit (they PAY premium) nor implied<hist-max (that's a seller's tell).
   assert.deepEqual(computeRiskFlags({ verdict: "cheap", entryCredit: -5, spotAtRec: 100, maxLoss: -5, impliedMovePct: 8, histMaxPct: 12 }), []);
   assert.equal(THIN_CREDIT_PCT, 0.015);
+});
+
+// spreadCostPct + the wide-spread flag: the measured, per-play version of the cost leak.
+test("spreadCostPct: fraction of the mid credit a crossing fill forfeits", () => {
+  // BLBD-shaped: mid 3.30 credit, crossed 0.80 → the spread eats 2.50/3.30 ≈ 76%.
+  assert.ok(Math.abs((spreadCostPct({ entryCredit: 3.3, entryCreditCrossed: 0.8 }) as number) - 0.7576) < 1e-3);
+  // Liquid: mid 1.00, crossed 0.90 → 10%.
+  assert.ok(Math.abs((spreadCostPct({ entryCredit: 1.0, entryCreditCrossed: 0.9 }) as number) - 0.1) < 1e-9);
+  // Debit entry (buy): more-negative crossed = worse; |denominator| keeps the sign as cost.
+  assert.ok(Math.abs((spreadCostPct({ entryCredit: -6.97, entryCreditCrossed: -7.9 }) as number) - 0.1334) < 1e-3);
+  assert.equal(spreadCostPct({ entryCredit: 3.3 }), null); // no crossed capture → abstain
+  assert.equal(spreadCostPct({ entryCredit: 0, entryCreditCrossed: 0 }), null); // no credit
+});
+
+test("flags: wide-spread fires at/above the threshold, only when quotes were captured", () => {
+  const base = { verdict: "rich" as const, entryCredit: 2, spotAtRec: 100, maxLoss: -5, impliedMovePct: 8 };
+  assert.ok(!computeRiskFlags(base).includes("wide-spread")); // no crossed capture → no flag
+  assert.ok(computeRiskFlags({ ...base, entryCreditCrossed: 1.0 }).includes("wide-spread")); // 50% == threshold
+  assert.ok(computeRiskFlags({ ...base, entryCreditCrossed: 0.8 }).includes("wide-spread")); // 60%
+  assert.ok(!computeRiskFlags({ ...base, entryCreditCrossed: 1.5 }).includes("wide-spread")); // 25% — tradeable
+  assert.equal(WIDE_SPREAD_PCT, 0.5);
 });

@@ -22,7 +22,7 @@ interface DataPart {
   term: { frontIV: number; backIV: number; frontDte: number; backDte: number; crushRatio: number } | null;
   nextTiming: "bmo" | "amc" | null;
   volRegime: { atmIV: number; hv20: number; ivHvRatio: number; hvPctile: number | null } | null;
-  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; lean?: "bullish" | "bearish" | null; alt?: { structure: string; legs: string; rationale: string; kind: string } | null; catalystWithheld?: { kind: "strategic-alt" | "spin-off" | "acquisition" | "preannounce"; headline: string; date: string } | null } | null;
+  trade: { verdict: string; structure: string; legs: string; rationale: string; expiry?: string | null; dte?: number | null; legsData?: { type: "C" | "P"; side: "long" | "short"; strike: number; premium: number }[]; lean?: "bullish" | "bearish" | null; alt?: { structure: string; legs: string; rationale: string; kind: string } | null; catalystWithheld?: { kind: "strategic-alt" | "spin-off" | "acquisition" | "preannounce"; headline: string; date: string } | null; spreadCostPct?: number | null } | null;
   peerSympathy: { sym: string; n: number; avgAbsMe: number; beta: number | null; sameDir: number }[] | null;
   surpriseReaction: { n: number; beatUp: number | null; beatN: number; missDown: number | null; missN: number } | null;
   priceSeries?: [number, number][]; // [t, close] recent daily series for the expected-move cone
@@ -537,6 +537,11 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
               {d.trade.expiry && (
                 <span className="ml-1 rounded bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-3)]" title="The option expiry these legs are priced on — the first one after the earnings date, so it captures the event.">
                   exp {d.trade.expiry}{d.trade.dte != null ? ` · ${d.trade.dte}d` : ""}
+                </span>
+              )}
+              {d.trade.spreadCostPct != null && d.trade.spreadCostPct >= 0.5 && (
+                <span className="ml-1.5 rounded bg-[color-mix(in_oklab,#ef4444_16%,transparent)] px-1.5 py-0.5 text-[11px] font-semibold text-[#ef4444]" title={`Wide chain: crossing this bid-ask would forfeit ~${Math.round(d.trade.spreadCostPct * 100)}% of the mid credit (a worst-case/relative read from the current quotes). The credit shown won't survive a market-order fill — work a limit near mid or pass. This is where the strategy's cost leak lives, name by name.`}>
+                  ⚠ WIDE CHAIN −{Math.round(d.trade.spreadCostPct * 100)}%
                 </span>
               )}
               <span className="text-[var(--text-2)]"> · {d.trade.legs}</span>

@@ -10,6 +10,17 @@
 import { getOptions, type OptionChain, type Opt } from "@/lib/options";
 import { getEarningsReactions } from "@/lib/earningsReaction";
 import type { CatalystFlag } from "@/lib/catalystOverlay";
+import { netCredit, crossedCredit } from "@/lib/tradeLog";
+
+/** Liquidity read for the suggested legs: what share of the mid credit a crossing fill forfeits.
+ *  Same definition as lib/tradeLog spreadCostPct, computed from the card's own two-sided quotes. */
+function legsSpreadCostPct(legs: TradeLegSpec[] | undefined): number | null {
+  if (!legs?.length) return null;
+  const mid = netCredit(legs);
+  const xc = crossedCredit(legs);
+  if (xc == null || !(Math.abs(mid) > 0)) return null;
+  return (mid - xc) / Math.abs(mid);
+}
 
 export interface TradeLegSpec {
   type: "C" | "P";
@@ -37,6 +48,10 @@ export interface TradeIdea {
    *  grade. strategic-alt/spin-off withhold the SHORT side only; acquisition and preannounce
    *  withhold BOTH sides (see the dispatch in tradeIdea). */
   catalystWithheld?: CatalystFlag | null;
+  /** Fraction of the mid credit a spread-crossing fill would forfeit, from the legs' two-sided
+   *  quotes — the liquidity read. High = the credit won't survive real fills (the ~45% cost leak,
+   *  name by name). null when any leg lacks a two-sided quote. Same math as lib/tradeLog spreadCostPct. */
+  spreadCostPct?: number | null;
 }
 
 const midOf = (o: Opt | undefined): number | null => {
@@ -252,9 +267,14 @@ export function tradeIdea(
       legsData,
       lean,
       alt,
+      spreadCostPct: legsSpreadCostPct(legsData),
     };
   }
   if (richness.verdict === "cheap") {
+    const cheapLegs = legsOf([
+      { type: "C", side: "long", strike: atmK },
+      { type: "P", side: "long", strike: atmK },
+    ]);
     return {
       verdict: "cheap",
       structure: "Long straddle / strangle",
@@ -262,12 +282,10 @@ export function tradeIdea(
       rationale: `Implied ±${impliedMove.toFixed(1)}% is cheap vs ~±${richness.avgRealized.toFixed(1)}% realized — own the move.`,
       expiry: exp,
       dte,
-      legsData: legsOf([
-        { type: "C", side: "long", strike: atmK },
-        { type: "P", side: "long", strike: atmK },
-      ]),
+      legsData: cheapLegs,
       lean,
       alt,
+      spreadCostPct: legsSpreadCostPct(cheapLegs),
     };
   }
   return null; // fairly priced → no clean premium edge

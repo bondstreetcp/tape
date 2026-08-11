@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { TradeRec } from "@/lib/tradeLog";
-import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve } from "@/lib/tradeLog";
+import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve, spreadCostPct } from "@/lib/tradeLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -160,6 +160,7 @@ export default function TradeRecordView({
         <span><b className="text-[var(--text-2)]">Cleared ✓</b> = the realized move exceeded what options priced (a premium-buyer&apos;s win)</span>
         <span><b className="text-[#f59e0b]">⚠ Catalyst</b> = a disclosed strategic-alternatives / spin-off event was live when logged — elevated IV may be pricing the KNOWN event, not a vol mispricing; judge a sell-premium read accordingly</span>
         <span><b className="text-[var(--text-2)]">Pre-print</b> plays are logged &amp; awaiting their report — the live queue, shown with entry premiums.</span>
+        <span><b className="text-[#ef4444]">spread −N%</b> = crossing this chain&apos;s bid-ask would forfeit N% of the mid credit (captured after hours = worst-case). Flagged at ≥50%: the mid credit that grades the play won&apos;t survive real fills — where the modeled ~45% cost leak actually lives, name by name. The <b className="text-[var(--text-2)]">crossed</b> figure under Entry is that worse fill.</span>
       </div>
 
       {/* filters */}
@@ -237,6 +238,17 @@ export default function TradeRecordView({
                           thin credit
                         </span>
                       )}
+                      {r.riskFlags?.includes("wide-spread") && (() => {
+                        const sc = spreadCostPct(r);
+                        return (
+                          <span
+                            className="ml-1.5 cursor-help rounded bg-[color-mix(in_oklab,#ef4444_14%,transparent)] px-1 py-0.5 align-middle text-[10px] font-semibold text-[#ef4444]"
+                            title={`Wide chain: crossing the bid-ask would forfeit ${sc != null ? Math.round(sc * 100) + "%" : "over half"} of the mid credit (captured after hours, so a worst-case/relative read). The mid credit that grades this play won't survive real fills — the edge lives inside this spread.`}
+                          >
+                            {sc != null ? `spread −${Math.round(sc * 100)}%` : "wide spread"}
+                          </span>
+                        );
+                      })()}
                       {r.riskFlags?.includes("implied<hist-max") && (
                         <span
                           className="ml-1.5 cursor-help rounded bg-[var(--surface-2)] px-1 py-0.5 align-middle text-[10px] font-medium text-[var(--text-4)]"
@@ -248,7 +260,17 @@ export default function TradeRecordView({
                       <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.legsText}>{r.legsText}</div>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap font-mono text-[12px] text-[var(--text-3)]">{r.expiry}<span className="text-[var(--text-4)]"> · {r.dte}d</span></td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: isCredit ? GREEN : RED }} title={isCredit ? "credit received" : "debit paid"}>{isCredit ? "+" : "−"}${Math.abs(r.entryCredit).toFixed(2)}</td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: isCredit ? GREEN : RED }} title={isCredit ? "credit received (mid)" : "debit paid (mid)"}>
+                      {isCredit ? "+" : "−"}${Math.abs(r.entryCredit).toFixed(2)}
+                      {r.entryCreditCrossed != null && (
+                        <div
+                          className="cursor-help text-[10px] text-[var(--text-4)]"
+                          title="What the position fills for if you cross the bid-ask (shorts sell the bid, longs pay the ask) — captured after hours, so a worst-case read. The gap to the mid above is the strategy's first, guaranteed cost."
+                        >
+                          {r.entryCreditCrossed >= 0 ? "+" : "−"}${Math.abs(r.entryCreditCrossed).toFixed(2)} crossed
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">±{r.impliedMovePct.toFixed(1)}%</td>
                     <td className="px-2 py-2 text-right font-mono tabular-nums">
                       {r.realizedMovePct == null ? <span className="text-[var(--text-4)]">—</span> : (

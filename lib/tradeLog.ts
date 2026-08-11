@@ -176,6 +176,20 @@ export function prePrintDriftPct(spotAtRec: number, reactionClose: number, reali
 /** The one MEASURED handicap threshold: sells collecting under this share of spot are picking pennies
  *  (retro 2026-08-05: 39 such plays averaged $185 vs the book's $1,468 — with 3 of the 12 tails). */
 export const THIN_CREDIT_PCT = 0.015;
+/** A chain is "wide" when crossing it would forfeit at least this share of the mid credit. The
+ *  book-wide crossing cost measured ~45% on average (data/trade-log, after-hours quotes), so a
+ *  per-play ≥50% means the spread eats MORE than the typical edge — the credit won't survive real
+ *  fills. Captured after-hours, so it is an UPPER BOUND / relative liquidity signal, not a promise. */
+export const WIDE_SPREAD_PCT = 0.5;
+
+/** Fraction of the mid entry credit a spread-crossing fill forfeits, from the legs' captured
+ *  two-sided quotes (shorts fill at bid, longs at ask). Positive = cost; works for credit and debit
+ *  entries alike. null unless entryCreditCrossed was captured (needs a two-sided quote on every leg;
+ *  ~20% of after-hours logs have it). The measured, per-play version of the modeled cost curve. */
+export function spreadCostPct(rec: { entryCredit: number; entryCreditCrossed?: number | null }): number | null {
+  if (rec.entryCreditCrossed == null || !(Math.abs(rec.entryCredit) > 0)) return null;
+  return (rec.entryCredit - rec.entryCreditCrossed) / Math.abs(rec.entryCredit);
+}
 
 /**
  * Context chips stamped at LOG time. Honesty contract, same as catalystFlag above: these ANNOTATE,
@@ -187,6 +201,7 @@ export const THIN_CREDIT_PCT = 0.015;
 export function computeRiskFlags(r: {
   verdict: "rich" | "cheap";
   entryCredit: number;
+  entryCreditCrossed?: number | null;
   spotAtRec: number;
   maxLoss: number | null;
   gapDays?: number | null;
@@ -196,6 +211,8 @@ export function computeRiskFlags(r: {
 }): string[] {
   const flags: string[] = [];
   if (r.verdict === "rich" && r.spotAtRec > 0 && r.entryCredit / r.spotAtRec < THIN_CREDIT_PCT) flags.push("thin-credit");
+  const sc = spreadCostPct(r);
+  if (sc != null && sc >= WIDE_SPREAD_PCT) flags.push("wide-spread");
   if (r.maxLoss == null) flags.push("undefined-risk");
   if (r.gapDays != null && r.gapDays >= 5) flags.push("wide-gap");
   if (r.verdict === "rich" && r.histMaxPct != null && r.histMaxPct > r.impliedMovePct) flags.push("implied<hist-max");
