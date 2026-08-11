@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, spreadCostPct, THIN_CREDIT_PCT, WIDE_SPREAD_PCT, type TradeLeg } from "../lib/tradeLog";
+import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, spreadCostPct, liquidityTier, tradeabilityRank, THIN_CREDIT_PCT, WIDE_SPREAD_PCT, type TradeLeg } from "../lib/tradeLog";
 
 // The 2026-08-05 "scale it up?" audit instrumentation. These pin the pure math: the Reg-T margin
 // approximation against hand-computed examples, the crossed-fill rule, the ATKR drift back-out, and
@@ -82,6 +82,20 @@ test("spreadCostPct: fraction of the mid credit a crossing fill forfeits", () =>
   assert.ok(Math.abs((spreadCostPct({ entryCredit: -6.97, entryCreditCrossed: -7.9 }) as number) - 0.1334) < 1e-3);
   assert.equal(spreadCostPct({ entryCredit: 3.3 }), null); // no crossed capture → abstain
   assert.equal(spreadCostPct({ entryCredit: 0, entryCreditCrossed: 0 }), null); // no credit
+});
+
+test("liquidityTier + tradeabilityRank: tight chains sort ahead of unknown, wide last", () => {
+  const tight = { entryCredit: 2, entryCreditCrossed: 1.6 }; // 20% cost
+  const wide = { entryCredit: 2, entryCreditCrossed: 0.6 }; // 70% cost
+  const unknown = { entryCredit: 2 };
+  assert.equal(liquidityTier(tight), "tight");
+  assert.equal(liquidityTier(wide), "wide");
+  assert.equal(liquidityTier(unknown), "unknown");
+  // Rank orders tight (< unknown < wide) so "tradeable first" surfaces fillable chains.
+  assert.ok(tradeabilityRank(tight) < tradeabilityRank(unknown));
+  assert.ok(tradeabilityRank(unknown) < tradeabilityRank(wide));
+  // Two tight chains: the tighter one ranks first.
+  assert.ok(tradeabilityRank({ entryCredit: 2, entryCreditCrossed: 1.8 }) < tradeabilityRank(tight));
 });
 
 test("flags: wide-spread fires at/above the threshold, only when quotes were captured", () => {

@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { TradeRec } from "@/lib/tradeLog";
-import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve, spreadCostPct } from "@/lib/tradeLog";
+import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve, spreadCostPct, liquidityTier, tradeabilityRank } from "@/lib/tradeLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -17,7 +17,7 @@ const GREEN = "#22c55e", RED = "#ef4444";
 
 type StatusF = "all" | "preprint" | "settled";
 type VerdictF = "all" | "rich" | "cheap";
-type SortKey = "recent" | "play" | "pnl" | "implied" | "realized";
+type SortKey = "recent" | "play" | "pnl" | "implied" | "realized" | "tradeable";
 
 export default function TradeRecordView({
   universe, recs: allRecs, prices, generatedAt, intl,
@@ -43,10 +43,25 @@ export default function TradeRecordView({
   // The scaling curve: sell-book P&L as the assumed spread-crossing worsens. The mid-price record is
   // the ceiling — the first-night capture measured ~45% credit crossing, where the edge shrinks ~6×.
   const curve = useMemo(() => costCurve(allRecs), [allRecs]);
+  // Liquidity read over the live sell-vol queue: of the rich plays awaiting their print, how many
+  // sit in chains tight enough to fill near mid vs where the credit is a mirage. The "route capital
+  // to tradeable chains" answer — only ~1 in 6 after-hours logs carries a two-sided quote, so most
+  // land in 'unknown' (a mild illiquidity tell in itself; the live card gives the real-time read).
+  const sellVolLiq = useMemo(() => {
+    const q = allRecs.filter((r) => r.status === "awaiting_print" && r.verdict === "rich");
+    let tight = 0, wide = 0, unknown = 0;
+    for (const r of q) {
+      const t = liquidityTier(r);
+      if (t === "tight") tight++;
+      else if (t === "wide") wide++;
+      else unknown++;
+    }
+    return { n: q.length, tight, wide, unknown };
+  }, [allRecs]);
 
   const recs = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    const get: Record<Exclude<SortKey, "play">, (r: TradeRec) => number> = {
+    const get: Record<Exclude<SortKey, "play" | "tradeable">, (r: TradeRec) => number> = {
       recent: (r) => Date.parse(r.earningsDate) || 0,
       // Sort on the same dollar-notional basis the column displays, not raw per-share
       pnl: (r) => (r.pnl != null ? dollarPnl(r.pnl, r.spotAtRec) ?? -Infinity : -Infinity),
@@ -63,7 +78,13 @@ export default function TradeRecordView({
       })
       // "play" groups by structure (strangles with strangles, condors with condors), newest print
       // first inside each group — how the P&L attribution by structure actually gets eyeballed.
-      .sort((a, b) => (sort === "play" ? a.structure.localeCompare(b.structure) || (Date.parse(b.earningsDate) || 0) - (Date.parse(a.earningsDate) || 0) : get[sort](b) - get[sort](a)));
+      .sort((a, b) =>
+        sort === "play"
+          ? a.structure.localeCompare(b.structure) || (Date.parse(b.earningsDate) || 0) - (Date.parse(a.earningsDate) || 0)
+          : sort === "tradeable"
+            ? tradeabilityRank(a) - tradeabilityRank(b) || (Date.parse(b.earningsDate) || 0) - (Date.parse(a.earningsDate) || 0) // ascending: tightest chains first
+            : get[sort](b) - get[sort](a),
+      );
   }, [allRecs, statusF, verdictF, sort, q]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
@@ -138,7 +159,7 @@ export default function TradeRecordView({
               <div key={p.crossPct} className={"rounded-lg border px-3 py-2 " + (p.total >= 0 ? "border-[var(--border)]" : "border-[#ef4444]/50")}>
                 <div className="text-[11px] text-[var(--text-4)]">
                   {p.crossPct === 0 ? "Mid price" : `Cross ${p.crossPct}%`}
-                  {p.crossPct === 45 && <span className="ml-1 text-[#f59e0b]" title="The gap the first-night leg bid/ask capture actually measured">◂ measured</span>}
+                  {p.crossPct === 45 && <span className="ml-1 text-[#f59e0b]" title="≈45% is the crossing gap seen on a SEPARATE after-hours sample of pre-print plays — an upper bound, not these names. The settled book has no captured fills, so every dollar in this column is MODELED at that rate.">◂ ≈typical gap*</span>}
                 </div>
                 <div className="font-mono text-lg font-semibold tabular-nums" style={{ color: p.total >= 0 ? GREEN : RED }}>{bigMoney(p.total)}</div>
                 <div className="text-[11px] text-[var(--text-4)]">{bigMoney(p.avgPnl)}/play · {(p.winRate * 100).toFixed(0)}% up</div>
@@ -149,7 +170,7 @@ export default function TradeRecordView({
             ))}
           </div>
           <p className="mt-2 text-[11px] text-[var(--text-4)]">
-            Modeled: the crossing % is forfeited off each play&apos;s entry credit (a short fills below mid). The edge is real but lives largely inside the bid-ask — scaling it profitably is an execution problem (patient limit orders, liquid chains), not a matter of finding more plays.
+            <b className="text-[var(--text-3)]">Entirely modeled.</b> None of the settled plays here captured a real fill, so the crossing % is forfeited off each play&apos;s mid credit at a flat assumed rate (a short fills below mid); the ≈45% anchor* is an upper bound seen on a separate after-hours sample. The point isn&apos;t the exact figure — it&apos;s that the edge lives largely inside the bid-ask, so scaling it profitably is an execution problem (patient limit orders, liquid chains), not a matter of finding more plays.
           </p>
         </div>
       )}
@@ -160,8 +181,28 @@ export default function TradeRecordView({
         <span><b className="text-[var(--text-2)]">Cleared ✓</b> = the realized move exceeded what options priced (a premium-buyer&apos;s win)</span>
         <span><b className="text-[#f59e0b]">⚠ Catalyst</b> = a disclosed strategic-alternatives / spin-off event was live when logged — elevated IV may be pricing the KNOWN event, not a vol mispricing; judge a sell-premium read accordingly</span>
         <span><b className="text-[var(--text-2)]">Pre-print</b> plays are logged &amp; awaiting their report — the live queue, shown with entry premiums.</span>
-        <span><b className="text-[#ef4444]">spread −N%</b> = crossing this chain&apos;s bid-ask would forfeit N% of the mid credit (captured after hours = worst-case). Flagged at ≥50%: the mid credit that grades the play won&apos;t survive real fills — where the modeled ~45% cost leak actually lives, name by name. The <b className="text-[var(--text-2)]">crossed</b> figure under Entry is that worse fill.</span>
+        <span><b className="text-[#ef4444]">spread −N%</b> = crossing this chain&apos;s bid-ask would forfeit N% of the mid credit (captured after hours = worst-case). Flagged at ≥50%: the mid credit that grades the play won&apos;t survive real fills. <b className="text-[var(--text-2)]">Absence of this chip is NOT a liquidity all-clear</b> — only ~1 in 6 after-hours logs carries a two-sided quote (and none of the graded book yet), so most rows simply have no read; the live earnings card gives the real-time spread. The <b className="text-[var(--text-2)]">crossed</b> figure under Entry is that worse fill.</span>
       </div>
+
+      {/* liquidity screen — the tradeable sell-vol queue: which rich chains can actually fill near mid */}
+      {sellVolLiq.n > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[12px]">
+          <span className="font-semibold text-[var(--text)]">Sell-vol queue</span>
+          <span className="text-[var(--text-3)]">{sellVolLiq.n} rich plays awaiting the print</span>
+          {sellVolLiq.tight > 0 && <span style={{ color: GREEN }}>◆ {sellVolLiq.tight} tradeable</span>}
+          {sellVolLiq.unknown > 0 && (
+            <span className="text-[var(--text-4)]" title="No two-sided quote was captured after hours (only ~1 in 5 logs carry one) — check the live earnings card for the real-time spread before trading.">◇ {sellVolLiq.unknown} liquidity unknown</span>
+          )}
+          {sellVolLiq.wide > 0 && <span style={{ color: RED }} title="The bid-ask would forfeit ≥50% of the credit at the captured quotes — the credit that grades the play won't survive a market fill.">◈ {sellVolLiq.wide} wide chains</span>}
+          <button
+            onClick={() => { setStatusF("preprint"); setVerdictF("rich"); setSort("tradeable"); }}
+            className={"ml-auto rounded-md border px-2 py-1 text-[11px] font-medium transition-colors " + (sort === "tradeable" ? "border-[var(--accent-strong)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]")}
+            title="Filter to the pre-print sell queue and rank by chain liquidity — the chains you can actually fill near mid first, the mirages last."
+          >
+            ◇ Show tradeable first
+          </button>
+        </div>
+      )}
 
       {/* filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">

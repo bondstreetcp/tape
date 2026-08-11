@@ -185,10 +185,31 @@ export const WIDE_SPREAD_PCT = 0.5;
 /** Fraction of the mid entry credit a spread-crossing fill forfeits, from the legs' captured
  *  two-sided quotes (shorts fill at bid, longs at ask). Positive = cost; works for credit and debit
  *  entries alike. null unless entryCreditCrossed was captured (needs a two-sided quote on every leg;
- *  ~20% of after-hours logs have it). The measured, per-play version of the modeled cost curve. */
+ *  only ~1 in 6 after-hours logs has it — ~5% of the whole board and NONE of the settled book yet,
+ *  which predates the capture). The measured, per-play version of the modeled cost curve. */
 export function spreadCostPct(rec: { entryCredit: number; entryCreditCrossed?: number | null }): number | null {
   if (rec.entryCreditCrossed == null || !(Math.abs(rec.entryCredit) > 0)) return null;
   return (rec.entryCredit - rec.entryCreditCrossed) / Math.abs(rec.entryCredit);
+}
+
+export type LiquidityTier = "tight" | "wide" | "unknown";
+
+/** Route-capital-to-tradeable-chains bucket: 'tight' = crossing eats < WIDE_SPREAD_PCT of the mid
+ *  credit (a fill near mid is realistic), 'wide' = the credit won't survive a market fill, 'unknown'
+ *  = no two-sided quote was captured (~80% of after-hours logs). The screen's ordering key. */
+export function liquidityTier(rec: { entryCredit: number; entryCreditCrossed?: number | null }): LiquidityTier {
+  const sc = spreadCostPct(rec);
+  if (sc == null) return "unknown";
+  return sc >= WIDE_SPREAD_PCT ? "wide" : "tight";
+}
+
+/** Sort rank for "tradeable first": tight chains (by ascending spread cost) → unknown → wide. Lower
+ *  sorts first. A rich sell play in a tight chain is where the edge is actually collectable. */
+export function tradeabilityRank(rec: { entryCredit: number; entryCreditCrossed?: number | null }): number {
+  const tier = liquidityTier(rec);
+  if (tier === "tight") return spreadCostPct(rec) ?? 0; // 0..<0.5, tightest first
+  if (tier === "unknown") return 1; // no read — after the known-tight, before the known-wide
+  return 2 + (spreadCostPct(rec) ?? 0); // wide, widest last
 }
 
 /**
