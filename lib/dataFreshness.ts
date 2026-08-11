@@ -126,6 +126,8 @@ const FEEDS: FeedSpec[] = [
   { file: "gov-contracts.json", affects: ["/gov-contracts"], label: "Government contracts", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
   // Episodic (live cash deals come and go) — age-only, no floor.
   { file: "merger-arb.json", affects: ["/merger-arb"], label: "Merger-arb spreads", tier: "core", maxAgeHours: CORE, countPath: "rows" },
+  // ~300 pre-deal SPACs hold a trust; the in-band, priceable set is ~150 — floor well below that.
+  { file: "spac-arb.json", affects: ["/spac-arb"], label: "SPAC trust arb", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 40 },
   // Gate on MEMBER rows, not chains: chains.length is a structural constant (6 hand-written defs
   // build even from an empty company cache), so a hollow night would sail past it. Steady state is
   // ~330 member rows from local-only compute; 120 = collapsed-cache territory, not a lean night.

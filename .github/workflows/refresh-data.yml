@@ -746,6 +746,13 @@ jobs:
         run: npm run refresh-merger-arb
         continue-on-error: true
 
+      # SPAC trust arbitrage: XBRL trust frames → companyfacts per-name → below-trust discount.
+      # Keyless (SEC + Yahoo). Common-share ticker only; degrades STALE via the write guard.
+      - name: Refresh SPAC trust arbitrage
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-spac-arb
+        continue-on-error: true
+
       # Value chains: hand-written ordered layers + per-layer economics from the local company
       # cache. Pure local compute — no network; membership provenance and refusals in the payload.
       - name: Refresh value chains (layer economics)

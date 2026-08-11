@@ -109,6 +109,7 @@ export const FEATURES: NavItem[] = [
   { label: "Activism & Shorts", path: "/campaigns", desc: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", group: "Event-Driven", job: "Find ideas", kw: "activist 13d proxy fight short seller muddy waters campaign icahn elliott saba radoff dissident board seats hindenburg allegation event driven" },
   { label: "Merger Arbitrage", path: "/merger-arb", desc: "Live cash-deal spreads from definitive merger proxies — annualized return to close vs deal-break risk", group: "Event-Driven", job: "Find ideas", kw: "merger arbitrage arb deal spread definitive agreement defm14a acquisition takeover cash deal annualized return break risk pending close special situations" },
   { label: "Tender Offers", path: "/tenders", desc: "Live tender offers with the odd-lot lens — offers that take <100-share holders in full, ahead of proration", group: "Event-Driven", job: "Find ideas", kw: "tender offer odd lot odd-lot priority proration self-tender dutch auction sc to-i to-t buyback going private small account arbitrage 99 shares" },
+  { label: "SPAC Trust Arbitrage", path: "/spac-arb", desc: "Pre-deal SPACs trading below their trust redemption value — the cash-in-trust floor, computed from the filings", group: "Event-Driven", job: "Find ideas", kw: "spac trust arbitrage blank check redemption floor nav discount below trust special purpose acquisition redeem deadline liquidation small account size locked" },
   // (The external "Merger Arb ↗" link to arb.bondstreetcp.com was removed 2026-08 — the separate arb
   // site is down (Vercel), and it duplicated the in-app Merger Arbitrage entry under the same path.)
   { label: "Government Contracts", path: "/gov-contracts", desc: "Federal contract-award momentum per company — obligations trend + agency mix, from USAspending", group: "Screens", job: "Find ideas", kw: "government contracts federal awards usaspending defense procurement obligations backlog momentum agency dod va pentagon contractor spending fpds" },
@@ -150,7 +151,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
   // Offers as its second tab (both are small-account SEC-filing arbs; the sub-nav bar joins them).
   "Event-Driven": [
     { label: "Corporate Event News", blurb: "The morning event-driven wire — buybacks, spin-offs, strategic alternatives, splits, and CEO/CFO changes from SEC 8-Ks, with the stock since", paths: ["/corp-events"] },
-    { label: "Merger Arbitrage", blurb: "Cash-deal spreads from definitive merger proxies + live tender offers with the odd-lot lens", paths: ["/merger-arb", "/tenders"] },
+    { label: "Merger Arbitrage", blurb: "Cash-deal spreads from definitive merger proxies + live tender offers with the odd-lot lens + SPACs below trust value", paths: ["/merger-arb", "/tenders", "/spac-arb"] },
     { label: "Spin-offs", blurb: "The separation lifecycle — upcoming spins from Form 10 filings + completed spins with the turnover clock", paths: ["/spinoffs"] },
     { label: "Activism & Shorts", blurb: "Activist stakes (13D), proxy fights, and short-seller reports — the ask/allegation + the stock since", paths: ["/campaigns"] },
     { label: "IPOs & Lockups", blurb: "Recent IPOs + the lockup-expiry calendar — when insider supply first hits the stock", paths: ["/ipos"] },

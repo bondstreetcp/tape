@@ -1901,6 +1901,31 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         "usOnly": true
       },
       {
+        "path": "/spac-arb",
+        "title": "SPAC Trust Arbitrage",
+        "question": "Which pre-deal SPACs trade below the cash-in-trust value a holder can redeem for — the low-risk floor institutions can't size into?",
+        "how": "A SPAC holds shareholders' cash in a trust account (roughly the $10 IPO price plus accrued interest) and, if you don't like its eventual deal, you can redeem your shares for the trust value per share at the merger vote or the liquidation deadline. That makes the trust a floor. This board enumerates the pre-deal SPAC universe from the XBRL trust-account tag every filer reports, then for each name computes trust-per-share directly from the filing — trust dollars divided by the shares subject to redemption — rather than trusting any headline number, and prices it against the live quote to find names trading below their floor. Three things keep it honest and are shown on every row: the floor is redemption-gated (you collect it by redeeming at the vote or deadline, not by selling in the market, so the horizon is uncertain), the trust figure is as of the last quarterly filing (a redemption or extension announced in an 8-K can move it in between, so each row stamps its as-of date and days stale), and a discount is more often a signal than a gift — thin float, a looming delisting, or a disliked deal — so trust size and a PINK/OTC flag sit beside the discount. Low-risk, small-edge, thin-liquidity; never riskless. Decision-support, not advice; read the filings and the deadline.",
+        "metrics": [
+          {
+            "term": "Trust / sh",
+            "plain": "Trust account ÷ shares subject to redemption, from the latest 10-Q — the per-share cash you can redeem for. Cross-checked against the filer's own redemption-price tag; ≠ marks a >2% mismatch worth a manual look."
+          },
+          {
+            "term": "Discount",
+            "plain": "(trust/sh − price) ÷ trust/sh. Positive = trading below the redemption floor. Only collectable by redeeming at the next vote or deadline, not by selling."
+          },
+          {
+            "term": "As of / stale",
+            "plain": "The balance-sheet date of the trust figure and how many days old it is. Over ~100 days old, trust the number less — a redemption or extension may have moved it."
+          },
+          {
+            "term": "PINK",
+            "plain": "The common trades on an OTC/pink book — a thin market with wide spreads that can eat the discount. The floor is only as good as your ability to trade and redeem."
+          }
+        ],
+        "usOnly": true
+      },
+      {
         "path": "/corp-events",
         "title": "Corporate Event News",
         "question": "Which companies just announced a one-off corporate catalyst — a buyback, spin-off, strategic review, stock split, or CEO/CFO change?",
