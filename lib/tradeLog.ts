@@ -95,6 +95,12 @@ export interface TradeRec {
   /** pnl on the capital actually tied up (marginUsd100k), not on notional — the number a sizing
    *  decision needs. Absent when the rec predates the margin field. */
   retOnMarginPct?: number | null;
+  /** Spread-cost fraction RE-MEASURED during market hours (scripts/capture-trade-spreads) — fresh
+   *  two-sided quotes on the play's strikes, so a real liquidity read, not the sparse/inflated
+   *  after-hours one. Preferred over the log-time spreadCostPct wherever it exists. */
+  liveSpreadPct?: number | null;
+  /** ISO datetime of the market-hours spread capture (so the UI can say "live" vs "after-hours"). */
+  spreadCapturedAt?: string | null;
 }
 
 export interface TradeLogData {
@@ -192,24 +198,33 @@ export function spreadCostPct(rec: { entryCredit: number; entryCreditCrossed?: n
   return (rec.entryCredit - rec.entryCreditCrossed) / Math.abs(rec.entryCredit);
 }
 
+/** Best available liquidity read: the market-hours re-measure when we have it (fresh two-sided
+ *  quotes), else the log-time after-hours spread. This is what every liquidity surface should use. */
+export function effectiveSpreadPct(rec: { entryCredit: number; entryCreditCrossed?: number | null; liveSpreadPct?: number | null }): number | null {
+  if (rec.liveSpreadPct != null) return rec.liveSpreadPct;
+  return spreadCostPct(rec);
+}
+
 export type LiquidityTier = "tight" | "wide" | "unknown";
+type LiqRec = { entryCredit: number; entryCreditCrossed?: number | null; liveSpreadPct?: number | null };
 
 /** Route-capital-to-tradeable-chains bucket: 'tight' = crossing eats < WIDE_SPREAD_PCT of the mid
  *  credit (a fill near mid is realistic), 'wide' = the credit won't survive a market fill, 'unknown'
- *  = no two-sided quote was captured (~80% of after-hours logs). The screen's ordering key. */
-export function liquidityTier(rec: { entryCredit: number; entryCreditCrossed?: number | null }): LiquidityTier {
-  const sc = spreadCostPct(rec);
+ *  = no two-sided quote captured (after hours OR the market-hours pass hasn't run). Ordering key. */
+export function liquidityTier(rec: LiqRec): LiquidityTier {
+  const sc = effectiveSpreadPct(rec);
   if (sc == null) return "unknown";
   return sc >= WIDE_SPREAD_PCT ? "wide" : "tight";
 }
 
 /** Sort rank for "tradeable first": tight chains (by ascending spread cost) → unknown → wide. Lower
  *  sorts first. A rich sell play in a tight chain is where the edge is actually collectable. */
-export function tradeabilityRank(rec: { entryCredit: number; entryCreditCrossed?: number | null }): number {
+export function tradeabilityRank(rec: LiqRec): number {
   const tier = liquidityTier(rec);
-  if (tier === "tight") return spreadCostPct(rec) ?? 0; // 0..<0.5, tightest first
+  const sc = effectiveSpreadPct(rec);
+  if (tier === "tight") return sc ?? 0; // 0..<0.5, tightest first
   if (tier === "unknown") return 1; // no read — after the known-tight, before the known-wide
-  return 2 + (spreadCostPct(rec) ?? 0); // wide, widest last
+  return 2 + (sc ?? 0); // wide, widest last
 }
 
 /**
@@ -223,6 +238,7 @@ export function computeRiskFlags(r: {
   verdict: "rich" | "cheap";
   entryCredit: number;
   entryCreditCrossed?: number | null;
+  liveSpreadPct?: number | null;
   spotAtRec: number;
   maxLoss: number | null;
   gapDays?: number | null;
@@ -232,7 +248,7 @@ export function computeRiskFlags(r: {
 }): string[] {
   const flags: string[] = [];
   if (r.verdict === "rich" && r.spotAtRec > 0 && r.entryCredit / r.spotAtRec < THIN_CREDIT_PCT) flags.push("thin-credit");
-  const sc = spreadCostPct(r);
+  const sc = effectiveSpreadPct(r);
   if (sc != null && sc >= WIDE_SPREAD_PCT) flags.push("wide-spread");
   if (r.maxLoss == null) flags.push("undefined-risk");
   if (r.gapDays != null && r.gapDays >= 5) flags.push("wide-gap");

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, spreadCostPct, liquidityTier, tradeabilityRank, THIN_CREDIT_PCT, WIDE_SPREAD_PCT, type TradeLeg } from "../lib/tradeLog";
+import { computeRiskFlags, crossedCredit, marginPerShare, prePrintDriftPct, spreadCostPct, effectiveSpreadPct, liquidityTier, tradeabilityRank, THIN_CREDIT_PCT, WIDE_SPREAD_PCT, type TradeLeg } from "../lib/tradeLog";
 
 // The 2026-08-05 "scale it up?" audit instrumentation. These pin the pure math: the Reg-T margin
 // approximation against hand-computed examples, the crossed-fill rule, the ATKR drift back-out, and
@@ -82,6 +82,17 @@ test("spreadCostPct: fraction of the mid credit a crossing fill forfeits", () =>
   assert.ok(Math.abs((spreadCostPct({ entryCredit: -6.97, entryCreditCrossed: -7.9 }) as number) - 0.1334) < 1e-3);
   assert.equal(spreadCostPct({ entryCredit: 3.3 }), null); // no crossed capture → abstain
   assert.equal(spreadCostPct({ entryCredit: 0, entryCreditCrossed: 0 }), null); // no credit
+});
+
+test("effectiveSpreadPct: the live market-hours read wins over the after-hours log", () => {
+  // Log-time after-hours read = 70% (wide); a live market-hours re-measure of 20% should override.
+  const rec = { entryCredit: 2, entryCreditCrossed: 0.6, liveSpreadPct: 0.2 };
+  assert.ok(Math.abs((effectiveSpreadPct(rec) as number) - 0.2) < 1e-9);
+  assert.equal(liquidityTier(rec), "tight"); // live 20% flips it out of 'wide'
+  assert.ok(!computeRiskFlags({ ...rec, verdict: "rich", spotAtRec: 100, maxLoss: -5, impliedMovePct: 8 }).includes("wide-spread"));
+  // No live read → falls back to the after-hours spreadCostPct.
+  assert.ok(Math.abs((effectiveSpreadPct({ entryCredit: 2, entryCreditCrossed: 0.6 }) as number) - 0.7) < 1e-9);
+  assert.equal(effectiveSpreadPct({ entryCredit: 2 }), null); // neither → abstain
 });
 
 test("liquidityTier + tradeabilityRank: tight chains sort ahead of unknown, wide last", () => {

@@ -55,6 +55,10 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   // exists because the container's env_file (tape.env) only applies on a DSM container recreate.
   { name: "Sync runner env (R2 secrets)", cmd: "npm run sync-runner-env", when: "always" },
   { name: "Refresh quotes (intraday)", cmd: "npm run refresh-quotes", when: "quotes-or-desk" }, // ONLY env set at runtime
+  // Re-measure the pre-print plays' option spreads on the intraday tick — self-gates to US market
+  // hours + once/day/play, so it does real work on the first mid-session tick and no-ops otherwise.
+  // Lifts the liquidity screen's coverage above the ~1-in-6 the after-hours logger manages.
+  { name: "Capture trade spreads (market-hours liquidity)", cmd: "npm run capture-trade-spreads", when: "quotes-or-desk" },
   // Scheduled at all because it wasn't: this only ever ran when a human typed it, so the index
   // membership the whole site reasons about drifted from the real indexes for a MONTH (found
   // 2026-07-30) — and two parser bugs rode along undetected for just as long, because nothing ran the

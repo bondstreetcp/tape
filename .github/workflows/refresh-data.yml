@@ -220,6 +220,13 @@ jobs:
         run: npm run refresh-quotes
         continue-on-error: true
 
+      # Market-hours spread capture for the liquidity screen — self-gates to US market hours +
+      # once/day/play, so on non-market intraday ticks it no-ops. Mirrors run-tick's quotes-or-desk step.
+      - name: Capture trade spreads (market-hours liquidity)
+        if: ${{ env.FULL != 'true' && env.INTL != 'true' }}
+        run: npm run capture-trade-spreads
+        continue-on-error: true
+
       # ---- Full rebuild (after close / manual). Each source is independent — keep
       # going if one hiccups (rate limits etc.); the next run fills any gaps.
 

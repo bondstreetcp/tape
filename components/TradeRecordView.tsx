@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { TradeRec } from "@/lib/tradeLog";
-import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve, spreadCostPct, liquidityTier, tradeabilityRank } from "@/lib/tradeLog";
+import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve, effectiveSpreadPct, liquidityTier, tradeabilityRank } from "@/lib/tradeLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -181,7 +181,7 @@ export default function TradeRecordView({
         <span><b className="text-[var(--text-2)]">Cleared ✓</b> = the realized move exceeded what options priced (a premium-buyer&apos;s win)</span>
         <span><b className="text-[#f59e0b]">⚠ Catalyst</b> = a disclosed strategic-alternatives / spin-off event was live when logged — elevated IV may be pricing the KNOWN event, not a vol mispricing; judge a sell-premium read accordingly</span>
         <span><b className="text-[var(--text-2)]">Pre-print</b> plays are logged &amp; awaiting their report — the live queue, shown with entry premiums.</span>
-        <span><b className="text-[#ef4444]">spread −N%</b> = crossing this chain&apos;s bid-ask would forfeit N% of the mid credit (captured after hours = worst-case). Flagged at ≥50%: the mid credit that grades the play won&apos;t survive real fills. <b className="text-[var(--text-2)]">Absence of this chip is NOT a liquidity all-clear</b> — only ~1 in 6 after-hours logs carries a two-sided quote (and none of the graded book yet), so most rows simply have no read; the live earnings card gives the real-time spread. The <b className="text-[var(--text-2)]">crossed</b> figure under Entry is that worse fill.</span>
+        <span><b className="text-[#ef4444]">spread −N%</b> = crossing this chain&apos;s bid-ask would forfeit N% of the mid credit (captured after hours = worst-case). Flagged at ≥50%: the mid credit that grades the play won&apos;t survive real fills. A <b className="text-[#ef4444]">◉</b> marks a live market-hours re-measure (vs the sparse after-hours log). <b className="text-[var(--text-2)]">Absence of a chip is NOT a liquidity all-clear</b> — a pre-print row is only read once its market-hours capture runs; the live earnings card always gives the real-time spread. The <b className="text-[var(--text-2)]">crossed</b> figure under Entry is that worse fill.</span>
       </div>
 
       {/* liquidity screen — the tradeable sell-vol queue: which rich chains can actually fill near mid */}
@@ -280,13 +280,14 @@ export default function TradeRecordView({
                         </span>
                       )}
                       {r.riskFlags?.includes("wide-spread") && (() => {
-                        const sc = spreadCostPct(r);
+                        const sc = effectiveSpreadPct(r);
+                        const live = r.liveSpreadPct != null;
                         return (
                           <span
                             className="ml-1.5 cursor-help rounded bg-[color-mix(in_oklab,#ef4444_14%,transparent)] px-1 py-0.5 align-middle text-[10px] font-semibold text-[#ef4444]"
-                            title={`Wide chain: crossing the bid-ask would forfeit ${sc != null ? Math.round(sc * 100) + "%" : "over half"} of the mid credit (captured after hours, so a worst-case/relative read). The mid credit that grades this play won't survive real fills — the edge lives inside this spread.`}
+                            title={`Wide chain: crossing the bid-ask would forfeit ${sc != null ? Math.round(sc * 100) + "%" : "over half"} of the mid credit — ${live ? "a live market-hours read on the play's strikes" : "captured after hours, so a worst-case/relative read"}. The mid credit that grades this play won't survive real fills; the edge lives inside this spread.`}
                           >
-                            {sc != null ? `spread −${Math.round(sc * 100)}%` : "wide spread"}
+                            spread −{sc != null ? Math.round(sc * 100) : 50}%{live && <span className="ml-0.5 opacity-70" title="live market-hours read">◉</span>}
                           </span>
                         );
                       })()}
