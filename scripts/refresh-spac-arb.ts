@@ -2,29 +2,29 @@
  * Nightly build of data/spac-arb.json — SPACs trading below trust redemption value (/spac-arb).
  *
  * Pipeline (keyless, all SEC + Yahoo): (1) ENUMERATE the SPAC universe from the XBRL
- * AssetsHeldInTrust(Noncurrent) instant frames over the last ~4 quarters — every pre-deal SPAC
- * holds a trust; union the CIKs. (2) Per name, companyfacts → trust$ (freshest end) + redeemable
- * shares (SHARE_CONCEPTS fallback chain, read at the SAME end) → trust-per-share, COMPUTED not
- * trusted from the lagging PPS tag. Gate to SPAC_TRUST_BAND (drops commodity/holding trusts the
- * frame also catches). (3) Map CIK→ticker (SEC company_tickers). (4) Yahoo price + exchange →
- * discount to trust + a PINK/OTC flag. Sorted by discount (below-trust first).
+ * AssetsHeldInTrust instant frames over the last ~4 quarters — every pre-deal SPAC holds a trust;
+ * union the CIKs. (2) Per name, companyfacts → trust$ (FRESHEST across the trust concepts) + the
+ * redemption FLOOR (prefer the filer's own redemption-price tag, which nets out tax-earmarked
+ * interest that trust÷shares over-counts; fall back to computed; the LOWER when they disagree) at
+ * the share count's own end → discount. (3) Map CIK→COMMON-share ticker (never a warrant/right/
+ * unit). (4) Yahoo price + exchange. A discount past PLAUSIBLE_MAX_DISCOUNT is flagged UNVERIFIED —
+ * a real pre-deal common can't trade far below its floor, so it's a stale post-deal trust or a
+ * mispicked listing. Sorted: plausible below-trust first, unverified sunk to the bottom.
  *
- * Honest by construction: every row stamps its trust as-of date + days stale, and the floor is
- * redemption-gated (see lib/spacArb). Degrades to STALE via writeFeedGuarded, never empty.
- *
+ * Every row stamps trust + share as-of dates (daysStale = the older). Degrades STALE, never empty.
  * Run: npm run refresh-spac-arb. FULL tier. SPAC_LIMIT caps the companyfacts scan for testing.
  */
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { instantFrameIds } from "../lib/secFrames";
-import { SPAC_TRUST_BAND, SHARE_CONCEPTS, trustPerShare, discountPct, type SpacRow, type SpacArbFile } from "../lib/spacArb";
+import { SPAC_TRUST_BAND, SHARE_CONCEPTS, PLAUSIBLE_MAX_DISCOUNT, pickCommon, trustPerShare, discountPct, type SpacRow, type SpacArbFile } from "../lib/spacArb";
 import { writeFeedGuarded } from "../lib/feedGuard";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
-const TRUST_CONCEPTS = ["AssetsHeldInTrustNoncurrent", "AssetsHeldInTrust"]; // current + legacy tag
+const TRUST_CONCEPTS = ["AssetsHeldInTrustNoncurrent", "AssetsHeldInTrust", "AssetsHeldInTrustCurrent"];
 const PPS_CONCEPT = "TemporaryEquityRedemptionPricePerShare";
 const LIMIT = Number(process.env.SPAC_LIMIT) || Infinity;
 const DAY = 86_400_000;
@@ -43,11 +43,12 @@ async function secJson(url: string): Promise<any | null> {
   return null;
 }
 
-/** Latest us-gaap facts array entry with end ≤ anchor (exact end preferred), for a units bucket. */
-function atEnd(units: Record<string, any[]> | undefined, anchor: string): { val: number; end: string } | null {
-  if (!units) return null;
+/** Latest fact (end ≤ anchor, exact end preferred by the caller) within the given unit buckets. */
+function atEnd(unitsObj: Record<string, any[]> | undefined, anchor: string, unitKeys: string[]): { val: number; end: string } | null {
+  if (!unitsObj) return null;
   let best: { val: number; end: string } | null = null;
-  for (const arr of Object.values(units)) {
+  for (const uk of unitKeys) {
+    const arr = unitsObj[uk];
     if (!Array.isArray(arr)) continue;
     for (const f of arr) {
       if (typeof f?.val !== "number" || !f?.end || f.end > anchor) continue;
@@ -56,10 +57,7 @@ function atEnd(units: Record<string, any[]> | undefined, anchor: string): { val:
   }
   return best;
 }
-/** Freshest entry across a concept's units (any date) — for the trust anchor itself. */
-function freshest(units: Record<string, any[]> | undefined): { val: number; end: string } | null {
-  return atEnd(units, "9999-12-31");
-}
+const freshest = (u: Record<string, any[]> | undefined, unitKeys: string[]) => atEnd(u, "9999-12-31", unitKeys);
 
 async function main() {
   // ── (1) enumerate SPAC CIKs from the trust frames ──
@@ -78,59 +76,61 @@ async function main() {
   const ciks = [...cikSet].slice(0, LIMIT);
   console.log(`spac-arb: ${cikSet.size} SPAC CIKs from ${okFrames} frames · scanning ${ciks.length}`);
 
-  // ── cik → COMMON-SHARE ticker (SEC company_tickers) ──
-  // A SPAC lists common + warrant + right + unit under ONE cik. We must price the COMMON: a warrant
-  // trades at cents, so pricing it against a $10 trust fabricates a 99% "discount" (the seed's tell).
-  // The common is the SHORTEST ticker (derivatives = base + a suffix); a hard derivative marker on
-  // the only listing means we can't get the common → drop the name rather than price the wrong one.
-  const DERIV = /(-|\.)(WS?|WT|RT|U|UN)$|(WS|WT)$|[UW]$/i; // dashed/appended warrant·unit·right forms
+  // ── cik → COMMON-share ticker (SEC company_tickers) ──
   const tmap = await secJson("https://www.sec.gov/files/company_tickers.json");
   const byCik = new Map<string, { ticker: string; title: string }[]>();
   if (tmap) for (const k in tmap) {
     const e = tmap[k];
     if (e?.cik_str == null || !e?.ticker) continue;
-    const key = cikKey(e.cik_str);
-    (byCik.get(key) ?? byCik.set(key, []).get(key)!).push({ ticker: e.ticker, title: e.title || "" });
+    (byCik.get(cikKey(e.cik_str)) ?? byCik.set(cikKey(e.cik_str), []).get(cikKey(e.cik_str))!).push({ ticker: e.ticker, title: e.title || "" });
   }
   const cikTicker = new Map<string, { ticker: string; title: string }>();
-  for (const [k, list] of byCik) {
-    const pick = [...list].sort((a, b) => a.ticker.length - b.ticker.length)[0]; // common = shortest
-    if (!DERIV.test(pick.ticker)) cikTicker.set(k, pick); // else: only a derivative listed → skip
-  }
+  for (const [k, list] of byCik) { const c = pickCommon(list); if (c) cikTicker.set(k, c); }
 
-  // ── (2) per-name companyfacts → trust-per-share ──
-  const cands: Omit<SpacRow, "price" | "exchange" | "discountPct">[] = [];
+  // ── (2) per-name companyfacts → floor per share ──
+  const cands: Omit<SpacRow, "price" | "exchange" | "discountPct" | "implausible">[] = [];
   let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0;
   for (const cik of ciks) {
     const cf = await secJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik.padStart(10, "0")}.json`);
     await sleep(120);
     const g = cf?.facts?.["us-gaap"];
     if (!g) { noTrust++; continue; }
+    // Freshest trust value ACROSS the concepts (a name mid-cycle can tag Current fresher than Noncurrent).
     let trust: { val: number; end: string } | null = null;
-    for (const c of TRUST_CONCEPTS) { trust = freshest(g[c]?.units); if (trust) break; }
+    for (const c of TRUST_CONCEPTS) { const t = freshest(g[c]?.units, ["USD"]); if (t && (!trust || t.end > trust.end)) trust = t; }
     if (!trust) { noTrust++; continue; }
-    if (trust.val < 5e6) { offBand++; continue; } // dead shell / near-liquidated (a few $M trust left)
+    if (trust.val < 5e6) { offBand++; continue; } // dead shell / near-liquidated
+    // Shares: prefer the concept tagged at the EXACT trust end; else the latest ≤, stamping its own end.
     let shares: { val: number; end: string } | null = null, sharesConcept = "";
-    for (const c of SHARE_CONCEPTS) { const s = atEnd(g[c]?.units, trust.end); if (s) { shares = s; sharesConcept = c; break; } }
+    for (const c of SHARE_CONCEPTS) { const s = atEnd(g[c]?.units, trust.end, ["shares"]); if (s?.end === trust.end) { shares = s; sharesConcept = c; break; } }
+    if (!shares) for (const c of SHARE_CONCEPTS) { const s = atEnd(g[c]?.units, trust.end, ["shares"]); if (s) { shares = s; sharesConcept = c; break; } }
     if (!shares) { noShares++; continue; }
-    const tps = trustPerShare(trust.val, shares.val);
-    if (tps == null || tps < SPAC_TRUST_BAND[0] || tps > SPAC_TRUST_BAND[1]) { offBand++; continue; }
+    const computed = trustPerShare(trust.val, shares.val);
+    if (computed == null) { noShares++; continue; }
+    // Floor: prefer the filer's redemption tag (nets out non-distributable interest); conservative on disagree.
+    const pps = atEnd(g[PPS_CONCEPT]?.units, trust.end, ["USD/shares"]);
+    const tag = pps?.val ?? null;
+    const mismatch = tag != null ? Math.abs(computed - tag) / tag > 0.02 : false;
+    const floor = tag == null ? computed : mismatch ? Math.min(computed, tag) : tag;
+    const floorSource: "tag" | "computed" | "conservative" = tag == null ? "computed" : mismatch ? "conservative" : "tag";
+    if (floor < SPAC_TRUST_BAND[0] || floor > SPAC_TRUST_BAND[1]) { offBand++; continue; }
     const t = cikTicker.get(cik);
     if (!t) { noTicker++; continue; }
-    const pps = atEnd(g[PPS_CONCEPT]?.units, trust.end);
+    const asOf = shares.end < trust.end ? shares.end : trust.end; // report the OLDER of the two
     cands.push({
       ticker: t.ticker, cik, name: (cf.entityName || t.title || "").slice(0, 60),
       trustUsd: Math.round(trust.val), trustEnd: trust.end,
-      daysStale: Math.max(0, Math.round((Date.now() - Date.parse(trust.end + "T00:00:00Z")) / DAY)),
-      shares: shares.val, sharesConcept,
-      trustPerShare: +tps.toFixed(4),
-      ppsTag: pps ? +pps.val.toFixed(2) : null,
-      ppsMismatch: pps ? Math.abs(pps.val - tps) / tps > 0.02 : false,
+      daysStale: Math.max(0, Math.round((Date.now() - Date.parse(asOf + "T00:00:00Z")) / DAY)),
+      shares: shares.val, sharesConcept, sharesEnd: shares.end,
+      trustPerShare: +computed.toFixed(4),
+      ppsTag: tag != null ? +tag.toFixed(2) : null,
+      floorPerShare: +floor.toFixed(4), floorSource,
+      ppsMismatch: mismatch,
     });
   }
   console.log(`spac-arb: ${cands.length} in-band SPACs (dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
 
-  // ── (3) Yahoo price + exchange → discount ──
+  // ── (3) Yahoo price + exchange → discount + plausibility ──
   const rows: SpacRow[] = [];
   for (const c of cands) {
     let price: number | null = null, exchange: string | null = null;
@@ -140,9 +140,11 @@ async function main() {
       exchange = q?.fullExchangeName ?? q?.exchange ?? null;
     } catch { /* uncovered */ }
     await sleep(120);
-    rows.push({ ...c, price, exchange, discountPct: discountPct(c.trustPerShare, price) });
+    const disc = discountPct(c.floorPerShare, price);
+    rows.push({ ...c, price, exchange, discountPct: disc, implausible: disc != null && disc > PLAUSIBLE_MAX_DISCOUNT });
   }
-  rows.sort((a, b) => (b.discountPct ?? -1e9) - (a.discountPct ?? -1e9));
+  // Plausible below-trust first; unverified (implausible) sunk to the bottom regardless of magnitude.
+  rows.sort((a, b) => Number(a.implausible) - Number(b.implausible) || (b.discountPct ?? -1e9) - (a.discountPct ?? -1e9));
 
   const payload: SpacArbFile = {
     generatedAt: new Date().toISOString(),
@@ -152,8 +154,8 @@ async function main() {
   };
   const w = await writeFeedGuarded("spac-arb.json", payload, { replacer: (_k, v) => (typeof v === "number" && !Number.isInteger(v) ? Math.round(v * 10000) / 10000 : v) });
   if (!w.written) { console.error(`spac-arb: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
-  const belowTrust = rows.filter((r) => (r.discountPct ?? 0) > 0).length;
-  console.log(`spac-arb: ${rows.length} SPACs · ${payload.priced} priced · ${belowTrust} below trust [${w.reason}]`);
+  const belowTrust = rows.filter((r) => (r.discountPct ?? 0) > 0 && !r.implausible).length;
+  console.log(`spac-arb: ${rows.length} SPACs · ${payload.priced} priced · ${belowTrust} plausibly below trust · ${rows.filter((r) => r.implausible).length} flagged unverified [${w.reason}]`);
 }
 
 main().catch((e) => { console.error("refresh-spac-arb failed:", e); process.exit(1); });

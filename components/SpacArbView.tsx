@@ -20,15 +20,17 @@ export default function SpacArbView({ universe, data }: { universe: string; data
   const [sort, setSort] = useState<Sort>("discount");
   const [belowOnly, setBelowOnly] = useState(false);
   const rows = useMemo(() => {
+    // Implausible rows always sink below plausible ones (a fake 90% "discount" never headlines).
     const by: Record<Sort, (a: SpacRow, b: SpacRow) => number> = {
-      discount: (a, b) => (b.discountPct ?? -1e9) - (a.discountPct ?? -1e9),
+      discount: (a, b) => Number(a.implausible) - Number(b.implausible) || (b.discountPct ?? -1e9) - (a.discountPct ?? -1e9),
       trust: (a, b) => b.trustUsd - a.trustUsd,
       stale: (a, b) => a.daysStale - b.daysStale,
     };
-    const src = belowOnly ? data.rows.filter((r) => (r.discountPct ?? 0) > 0) : data.rows;
+    const src = belowOnly ? data.rows.filter((r) => (r.discountPct ?? 0) > 0 && !r.implausible) : data.rows;
     return [...src].sort(by[sort]);
   }, [data.rows, sort, belowOnly]);
-  const belowN = useMemo(() => data.rows.filter((r) => (r.discountPct ?? 0) > 0).length, [data.rows]);
+  const belowN = useMemo(() => data.rows.filter((r) => (r.discountPct ?? 0) > 0 && !r.implausible).length, [data.rows]);
+  const unverifiedN = useMemo(() => data.rows.filter((r) => r.implausible).length, [data.rows]);
 
   const Btn = ({ k, label }: { k: Sort; label: string }) => (
     <button onClick={() => setSort(k)} className={`rounded-full border px-2.5 py-1 text-[11px] ${sort === k ? "border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>{label}</button>
@@ -50,7 +52,7 @@ export default function SpacArbView({ universe, data }: { universe: string; data
         <Btn k="trust" label="Trust size" />
         <Btn k="stale" label="Freshest filing" />
         <button onClick={() => setBelowOnly((v) => !v)} className={`ml-2 rounded-full border px-2.5 py-1 text-[11px] ${belowOnly ? "border-[#22c55e] text-[#22c55e]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>Below trust only</button>
-        <span className="ml-auto text-[11px] text-[var(--text-4)]">{data.universe} SPACs in-band · {data.priced} priced · <span className="text-[#22c55e]">{belowN} below trust</span> · {fmtDate(data.generatedAt)}</span>
+        <span className="ml-auto text-[11px] text-[var(--text-4)]">{data.universe} SPACs in-band · {data.priced} priced · <span className="text-[#22c55e]">{belowN} below trust</span>{unverifiedN > 0 && <> · <span className="text-[#ef4444]" title="Discount too large to be a real pre-deal SPAC common — a stale post-deal trust or a non-common listing. Kept out of the count.">{unverifiedN} unverified</span></>} · {fmtDate(data.generatedAt)}</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
@@ -67,7 +69,9 @@ export default function SpacArbView({ universe, data }: { universe: string; data
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.map((raw) => {
+              // Defensive coalesce so an old-schema payload (pre-tag-floor) can't crash a render.
+              const r = { ...raw, floorPerShare: raw.floorPerShare ?? raw.trustPerShare, floorSource: raw.floorSource ?? "computed", sharesEnd: raw.sharesEnd ?? raw.trustEnd, implausible: raw.implausible ?? false };
               const below = (r.discountPct ?? 0) > 0;
               return (
                 <tr key={r.cik} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface)]">
@@ -78,16 +82,19 @@ export default function SpacArbView({ universe, data }: { universe: string; data
                     </span>
                     <span className="ml-2 hidden text-[12px] text-[var(--text-4)] lg:inline">{r.name.slice(0, 30)}</span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-2)]" title={r.ppsTag != null ? `filer's redemption tag: $${r.ppsTag.toFixed(2)}` : undefined}>${r.trustPerShare.toFixed(2)}{r.ppsMismatch && <span className="ml-0.5 text-[#f59e0b]" title="computed per-share differs >2% from the filer's tag — check the filing">≠</span>}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-2)]" title={`floor from ${r.floorSource === "tag" ? "the filer's redemption tag" : r.floorSource === "conservative" ? "the lower of computed vs the filer's tag (they disagree)" : "trust ÷ shares (no filer tag)"} · computed trust÷shares $${r.trustPerShare.toFixed(2)}${r.ppsTag != null ? ` · filer tag $${r.ppsTag.toFixed(2)}` : ""}`}>${r.floorPerShare.toFixed(2)}{r.ppsMismatch && <span className="ml-0.5 text-[#f59e0b]" title="computed per-share differs >2% from the filer's redemption tag — the conservative (lower) one is used; check the filing">≠</span>}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{r.price == null ? <span className="text-[var(--text-4)]">—</span> : `$${r.price.toFixed(2)}`}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums font-semibold">
-                    {r.discountPct == null ? <span className="text-[var(--text-4)]">—</span> : <span className={below ? "text-[#22c55e]" : "text-[#ef4444]"}>{below ? "+" : ""}{(r.discountPct * 100).toFixed(1)}%</span>}
+                    {r.discountPct == null ? <span className="text-[var(--text-4)]">—</span>
+                      : r.implausible ? <span className="text-[#ef4444]" title="Too large to be a real pre-deal SPAC common (a common can't trade far below its own redemption floor). Almost certainly a stale post-deal trust or a non-common listing — not a clean arb.">{(r.discountPct * 100).toFixed(0)}% ⚠</span>
+                      : <span className={below ? "text-[#22c55e]" : "text-[#ef4444]"}>{below ? "+" : ""}{(r.discountPct * 100).toFixed(1)}%</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{usd(r.trustUsd)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-[12px] text-[var(--text-3)]">{fmtDate(r.trustEnd)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{r.daysStale}d</span></td>
+                  <td className="whitespace-nowrap px-3 py-2 text-[12px] text-[var(--text-3)]" title={r.sharesEnd !== r.trustEnd ? `trust as of ${r.trustEnd}; share count as of ${r.sharesEnd} — staleness stamped to the older` : "balance-sheet date of the trust + share figures"}>{fmtDate(r.sharesEnd < r.trustEnd ? r.sharesEnd : r.trustEnd)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{r.daysStale}d</span></td>
                   <td className="px-3 py-2 text-[11px]">
+                    {r.implausible && <span className="mr-1 rounded bg-[color-mix(in_oklab,#ef4444_16%,transparent)] px-1 py-0.5 font-semibold text-[#ef4444]" title="Discount too large to be a real pre-deal common — a stale post-deal trust or a non-common listing. Not a clean arb.">unverified</span>}
                     {isPink(r.exchange) && <span className="mr-1 rounded bg-[color-mix(in_oklab,#f59e0b_16%,transparent)] px-1 py-0.5 font-semibold text-[#d97706]" title={`Trades ${r.exchange} — a thin OTC book with wide spreads that eat the edge`}>PINK</span>}
-                    {r.daysStale > 100 && <span className="rounded bg-[var(--surface-2)] px-1 py-0.5 text-[var(--text-4)]" title="Trust figure is over a quarter old — a redemption/extension may have moved it">stale</span>}
+                    {r.daysStale > 100 && <span className="rounded bg-[var(--surface-2)] px-1 py-0.5 text-[var(--text-4)]" title="Trust/share figures are over a quarter old — a redemption/extension may have moved them">stale</span>}
                   </td>
                 </tr>
               );
