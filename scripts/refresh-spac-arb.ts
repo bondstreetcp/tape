@@ -62,6 +62,9 @@ const freshest = (u: Record<string, any[]> | undefined, unitKeys: string[]) => a
 async function main() {
   // ── (1) enumerate SPAC CIKs from the trust frames ──
   const cikSet = new Set<string>();
+  // Freshest CALENDAR trust-frame end per CIK — the "did it file a new quarterly trust value?" signal
+  // that drives the filing-detector below. Monotonic per CIK across the scanned quarters.
+  const frameEnd = new Map<string, string>();
   let okFrames = 0;
   for (const id of instantFrameIds(Date.now(), 4)) {
     for (const concept of TRUST_CONCEPTS) {
@@ -69,7 +72,12 @@ async function main() {
       await sleep(200);
       if (!j?.data?.length) continue;
       okFrames++;
-      for (const row of j.data) if (row?.cik) cikSet.add(cikKey(row.cik));
+      for (const row of j.data) {
+        if (!row?.cik) continue;
+        const k = cikKey(row.cik);
+        cikSet.add(k);
+        if (row.end && (!frameEnd.has(k) || row.end > frameEnd.get(k)!)) frameEnd.set(k, row.end);
+      }
     }
   }
   if (!okFrames) { console.error("spac-arb: no trust frames loaded (SEC unreachable) — keeping prior file"); process.exit(1); }
@@ -87,10 +95,40 @@ async function main() {
   const cikTicker = new Map<string, { ticker: string; title: string }>();
   for (const [k, list] of byCik) { const c = pickCommon(list); if (c) cikTicker.set(k, c); }
 
+  // ── FILING-DETECTOR: the feed file is its own cache (spac-arb.json round-trips via R2). A name's
+  // companyfacts-derived floor changes ONLY when it files a new quarterly trust value, which advances
+  // its freshest CALENDAR frame end. So when frameEnd matches the prior row's trustEnd, companyfacts
+  // would yield the identical freshest instant → REUSE the prior floor and skip the ~400KB pull. A
+  // non-calendar filer (trustEnd not on a scanned quarter) never matches → safely falls back to a pull;
+  // correctness is never traded for the bandwidth. (SEC-bandwidth doctrine: fetch only on a filing.)
+  type Cand = Omit<SpacRow, "price" | "exchange" | "discountPct" | "implausible">;
+  const prior = await fsp
+    .readFile(path.join(DATA, "spac-arb.json"), "utf8")
+    .then((s) => JSON.parse(s) as SpacArbFile)
+    .catch(() => null);
+  const priorByCik = new Map<string, SpacRow>();
+  for (const r of prior?.rows ?? []) priorByCik.set(cikKey(r.cik), r);
+  const staleFrom = (asOf: string) => Math.max(0, Math.round((Date.now() - Date.parse(asOf + "T00:00:00Z")) / DAY));
+
   // ── (2) per-name companyfacts → floor per share ──
-  const cands: Omit<SpacRow, "price" | "exchange" | "discountPct" | "implausible">[] = [];
-  let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0;
+  const cands: Cand[] = [];
+  let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0, reused = 0;
   for (const cik of ciks) {
+    // Filing-detector: nothing new filed since we last computed this name → reuse, no companyfacts pull.
+    const pr = priorByCik.get(cik);
+    const t0 = cikTicker.get(cik);
+    if (pr && t0 && frameEnd.get(cik) === pr.trustEnd) {
+      const asOf = pr.sharesEnd < pr.trustEnd ? pr.sharesEnd : pr.trustEnd;
+      cands.push({
+        ticker: t0.ticker, cik, name: pr.name,
+        trustUsd: pr.trustUsd, trustEnd: pr.trustEnd, daysStale: staleFrom(asOf),
+        shares: pr.shares, sharesConcept: pr.sharesConcept, sharesEnd: pr.sharesEnd,
+        trustPerShare: pr.trustPerShare, ppsTag: pr.ppsTag,
+        floorPerShare: pr.floorPerShare, floorSource: pr.floorSource, ppsMismatch: pr.ppsMismatch,
+      });
+      reused++;
+      continue;
+    }
     const cf = await secJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik.padStart(10, "0")}.json`);
     await sleep(120);
     const g = cf?.facts?.["us-gaap"];
@@ -128,7 +166,7 @@ async function main() {
       ppsMismatch: mismatch,
     });
   }
-  console.log(`spac-arb: ${cands.length} in-band SPACs (dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
+  console.log(`spac-arb: ${cands.length} in-band SPACs (${reused} reused via filing-detector, ${cands.length - reused} freshly pulled; dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
 
   // ── (3) Yahoo price + exchange → discount + plausibility ──
   const rows: SpacRow[] = [];
