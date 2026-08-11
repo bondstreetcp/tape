@@ -13,20 +13,32 @@ import type { MergerArbFile, MergerArbRow } from "@/lib/mergerArb";
 // the annualized return for holding to close; the risk is the deal breaking.
 
 type Sort = "annualized" | "spread" | "close";
+type SizeF = "all" | "sub500" | "sub1b";
+const SIZE_CAP: Record<SizeF, number> = { all: Infinity, sub500: 500e6, sub1b: 1e9 };
+const dealMoney = (v: number | null | undefined) =>
+  v == null ? "—" : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${Math.round(v / 1e6)}M` : `$${Math.round(v / 1e3)}K`;
 
 export default function MergerArbView({ universe, data }: { universe: string; data: MergerArbFile }) {
   const [sort, setSort] = useState<Sort>("annualized");
+  const [sizeF, setSizeF] = useState<SizeF>("all");
   const rows = useMemo(() => {
     const by: Record<Sort, (a: MergerArbRow, b: MergerArbRow) => number> = {
       annualized: (a, b) => (b.annualizedPct ?? -1e9) - (a.annualizedPct ?? -1e9),
       spread: (a, b) => (b.spreadPct ?? -1e9) - (a.spreadPct ?? -1e9),
       close: (a, b) => (a.expectedClose || "9999").localeCompare(b.expectedClose || "9999"),
     };
-    return [...data.rows].sort(by[sort]);
-  }, [data.rows, sort]);
+    // Size filter: a null dealValue (Yahoo omitted shares) is "unknown size" — shown, never hidden.
+    const cap = SIZE_CAP[sizeF];
+    const filtered = sizeF === "all" ? data.rows : data.rows.filter((r) => r.dealValue == null || r.dealValue < cap);
+    return [...filtered].sort(by[sort]);
+  }, [data.rows, sort, sizeF]);
+  const anySize = useMemo(() => data.rows.some((r) => r.dealValue != null), [data.rows]);
 
   const Btn = ({ k, label }: { k: Sort; label: string }) => (
     <button onClick={() => setSort(k)} className={`rounded-full border px-2.5 py-1 text-[11px] ${sort === k ? "border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>{label}</button>
+  );
+  const SzBtn = ({ k, label }: { k: SizeF; label: string }) => (
+    <button onClick={() => setSizeF(k)} className={`rounded-full border px-2.5 py-1 text-[11px] ${sizeF === k ? "border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>{label}</button>
   );
 
   return (
@@ -44,16 +56,26 @@ export default function MergerArbView({ universe, data }: { universe: string; da
         <Btn k="annualized" label="Annualized return" />
         <Btn k="spread" label="Gross spread" />
         <Btn k="close" label="Soonest close" />
-        <span className="ml-auto text-[11px] text-[var(--text-4)]">{data.rows.length} live cash deals · {data.scanned} proxies scanned ({data.spacs} SPACs dropped) · {fmtDate(data.generatedAt)}</span>
+        {anySize && (
+          <>
+            <span className="ml-2 text-[var(--text-4)]">size:</span>
+            <SzBtn k="all" label="All" />
+            <SzBtn k="sub500" label="<$500M" />
+            <SzBtn k="sub1b" label="<$1B" />
+            <InfoDot text="Deal equity value = cash price × shares outstanding. Sub-$500M deals sit below the arb funds' minimum size, so their spreads stay wider — the size-locked edge. Deals where Yahoo omitted share count show '—' and are kept, not hidden." />
+          </>
+        )}
+        <span className="ml-auto text-[11px] text-[var(--text-4)]">{rows.length}{sizeF !== "all" ? ` of ${data.rows.length}` : ""} live cash deals · {data.scanned} proxies scanned ({data.spacs} SPACs dropped) · {fmtDate(data.generatedAt)}</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-        <table className="w-full min-w-[900px] border-collapse text-[13px]">
+        <table className="w-full min-w-[980px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--surface)] text-left text-[11px] uppercase tracking-wide text-[var(--text-4)]">
               <th className="px-3 py-2">Target</th>
               <th className="px-3 py-2">Acquirer</th>
               <th className="px-3 py-2 text-right">Deal</th>
+              <th className="px-3 py-2 text-right">Size <InfoDot text="Deal equity value (cash price × shares outstanding). ◆ marks a sub-$500M deal — below where arb funds bother, so the spread runs wider. '—' = Yahoo omitted shares." /></th>
               <th className="px-3 py-2 text-right">Spot</th>
               <th className="px-3 py-2 text-right">
                 Spread <InfoDot text="Deal cash price minus the current price, as a %. A positive spread is the gross return if the deal closes at terms; a negative spread means the stock trades ABOVE the deal price — the market is pricing a bump or a competing bid." />
@@ -79,6 +101,9 @@ export default function MergerArbView({ universe, data }: { universe: string; da
                   </td>
                   <td className="px-3 py-2 text-[12px] text-[var(--text-3)]">{r.acquirer.slice(0, 28)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-medium text-[var(--text-2)]">{r.cashPerShare == null ? "—" : `$${r.cashPerShare.toFixed(2)}`}<span className="ml-1 text-[10px] text-[var(--text-4)]">cash</span></td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-3)]" title={r.dealValue != null && r.dealValue < 500e6 ? "Sub-$500M — below arb-fund minimum size" : undefined}>
+                    {r.dealValue != null && r.dealValue < 500e6 && <span className="mr-0.5 text-[#22c55e]">◆</span>}{dealMoney(r.dealValue)}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{r.spot == null ? "—" : `$${r.spot.toFixed(2)}`}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-mono tabular-nums">
                     {r.spreadPct == null ? <span className="text-[var(--text-4)]">—</span> : <span className={r.spreadPct >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}>{r.spreadPct >= 0 ? "+" : ""}{r.spreadPct}%</span>}

@@ -75,9 +75,14 @@ async function eftsDEFM14A(): Promise<any[]> {
   return all;
 }
 
-async function quote(sym: string): Promise<number | null> {
-  try { const q: any = await withDeadline(yf.quote(sym, {}, { validateResult: false }), 12_000, `quote ${sym}`); return typeof q?.regularMarketPrice === "number" && q.regularMarketPrice > 0 ? q.regularMarketPrice : null; }
-  catch { return null; }
+async function quote(sym: string): Promise<{ price: number | null; shares: number | null }> {
+  try {
+    const q: any = await withDeadline(yf.quote(sym, {}, { validateResult: false }), 12_000, `quote ${sym}`);
+    const price = typeof q?.regularMarketPrice === "number" && q.regularMarketPrice > 0 ? q.regularMarketPrice : null;
+    // sharesOutstanding rides the SAME quote object (lib/liveStock reads marketCap off it) — free.
+    const shares = typeof q?.sharesOutstanding === "number" && q.sharesOutstanding > 0 ? q.sharesOutstanding : null;
+    return { price, shares };
+  } catch { return { price: null, shares: null }; }
 }
 
 async function main() {
@@ -142,7 +147,12 @@ async function main() {
 
   // Fresh quote + spread for every kept deal (cheap: a few dozen names).
   for (const r of rows) {
-    r.spot = await quote(r.ticker);
+    const q = await quote(r.ticker);
+    r.spot = q.price;
+    // Deal equity value = cash price × shares outstanding (both in the one quote object). The size
+    // key for the small-cap lens — the sub-$500M deals big arb desks skip, where the spread is widest.
+    // null when Yahoo omits shares → the UI treats null as "unknown size", never "excluded".
+    r.dealValue = r.cashPerShare != null && q.shares != null ? Math.round(r.cashPerShare * q.shares) : null;
     const dtc = r.expectedClose ? Math.max(1, daysUntil(r.expectedClose) ?? DEFAULT_CLOSE_DAYS) : DEFAULT_CLOSE_DAYS;
     const m = spreadMath(r.cashPerShare, r.spot, dtc);
     r.spreadPct = m.spreadPct;

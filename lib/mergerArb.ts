@@ -29,6 +29,10 @@ export interface MergerArbRow {
   spreadPct: number | null;
   /** spread annualized by days-to-close (or a 120-day default when no date is stated) */
   annualizedPct: number | null;
+  /** Deal equity value ($) = cashPerShare × shares outstanding — the size key for the small-cap
+   *  lens. null when Yahoo omitted shares (treated as "unknown size", never excluded). Optional so
+   *  pre-existing JSON still parses. */
+  dealValue?: number | null;
   note: string | null; // one-line condition/status from the filing
   url: string;
 }
