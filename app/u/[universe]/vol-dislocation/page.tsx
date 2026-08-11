@@ -4,6 +4,7 @@ import path from "path";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 import type { VolDisData } from "@/lib/volDislocation";
+import type { VpLedgerFile } from "@/lib/volPremiumLedger";
 import VolDislocationView from "@/components/VolDislocationView";
 
 export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
@@ -16,10 +17,17 @@ function loadVolDis(): Promise<VolDisData | null> {
     .catch(() => null);
 }
 
+function loadLedger(): Promise<VpLedgerFile | null> {
+  return fsp
+    .readFile(path.join(process.cwd(), "data", "vol-premium-ledger.json"), "utf8")
+    .then((s) => JSON.parse(s) as VpLedgerFile)
+    .catch(() => null);
+}
+
 export default async function VolDislocationPage({ params }: { params: Promise<{ universe: string }> }) {
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Vol Dislocation" relPath="/vol-dislocation" />;
-  const data = await loadVolDis();
-  return <VolDislocationView universe={universe} data={data ?? { generatedAt: new Date().toISOString(), universe: "—", scanned: 0, rows: [] }} />;
+  const [data, ledger] = await Promise.all([loadVolDis(), loadLedger()]);
+  return <VolDislocationView universe={universe} data={data ?? { generatedAt: new Date().toISOString(), universe: "—", scanned: 0, rows: [] }} ledger={ledger} />;
 }

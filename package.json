@@ -62,6 +62,7 @@
     "refresh-vol-universe": "tsx scripts/refresh-vol-universe.ts",
     "refresh-vol-dislocation": "tsx scripts/refresh-vol-dislocation.ts",
     "refresh-vol-tags": "tsx scripts/refresh-vol-tags.ts",
+    "refresh-vol-premium-ledger": "tsx scripts/refresh-vol-premium-ledger.ts",
     "refresh-trade-ideas": "tsx scripts/refresh-trade-ideas.ts",
     "refresh-dispersion": "tsx scripts/refresh-dispersion.ts",
     "refresh-pead": "tsx scripts/refresh-pead.ts",

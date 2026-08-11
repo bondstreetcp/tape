@@ -574,6 +574,14 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
 
+      # VRP capture ledger — the forward track record for the vol-dislocation rich-vol picks: freeze the
+      # ATM IV sold tonight, grade against realized vol (vol-cone cur20) ~20 td later. Reads existing
+      # feeds only (no option fetches); runs AFTER vol-dislocation + vol-cone.
+      - name: Refresh VRP capture ledger
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-vol-premium-ledger
+        continue-on-error: true
+
       - name: Refresh earnings expected-move screen
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-earnings-move

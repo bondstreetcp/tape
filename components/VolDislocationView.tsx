@@ -8,10 +8,12 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import WatchStar from "./WatchStar";
+import VpLedgerPanel from "./VpLedgerPanel";
+import type { VpLedgerFile } from "@/lib/volPremiumLedger";
 
 type F = "rich" | "cheap" | "all";
 
-export default function VolDislocationView({ universe, data }: { universe: string; data: VolDisData }) {
+export default function VolDislocationView({ universe, data, ledger }: { universe: string; data: VolDisData; ledger?: VpLedgerFile | null }) {
   const [f, setF] = useState<F>("rich");
   const [hideEarn, setHideEarn] = useState(false);
   const [hideIlliquid, setHideIlliquid] = useState(true);
@@ -71,6 +73,8 @@ export default function VolDislocationView({ universe, data }: { universe: strin
       <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
         A code-detected read, not a call: rich vol may simply be pricing a real catalyst — earnings are flagged, and the <span style={{ color: "#f59e0b" }}>⚡</span> tag is an AI read of the name&apos;s recent headlines (a code-detected signal, contextualized — pair with the filings before trading). IV + realized vol are solved nightly from the options chain (vendor IV treated as junk). Spans the curated put-writing quality set plus a broad R1000/R3000 probe — thin-option names carry a <span className="rounded bg-[var(--surface-2)] px-1 text-[var(--text-4)]">thin</span> flag (hidden by default). Decision support, not advice.
       </div>
+
+      {ledger && <VpLedgerPanel universe={universe} ledger={ledger} />}
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full min-w-[900px] text-left text-[13px]">

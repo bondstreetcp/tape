@@ -115,6 +115,8 @@ const FEEDS: FeedSpec[] = [
   { file: "same-store-sales.json", affects: ["/comps"], label: "Same-store sales", tier: "core", maxAgeHours: CORE },
   { file: "trade-ideas.json", affects: ["/trade-desk", "/earnings-desk"], label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
   { file: "vol-dislocation.json", affects: ["/vol-dislocation", "/skew", "/term-structure", "/earnings-desk", "/trade-desk"], label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  // VRP capture ledger: forward-only, seeds small and accrues — age-only, no count floor (like trade-log).
+  { file: "vol-premium-ledger.json", affects: ["/vol-dislocation"], label: "VRP capture ledger", tier: "core", maxAgeHours: CORE },
   // biotech-vol / pead: age-only — zero forward binaries or an earnings-lull window are legitimate
   { file: "biotech-vol.json", affects: ["/biotech-vol", "/binary-week", "/confluence", "/morning-desk"], label: "Biotech event vol", tier: "core", maxAgeHours: CORE, countPath: "rows" },
   // Seasonal by nature: Polymarket lists single-name earnings markets around each season and near

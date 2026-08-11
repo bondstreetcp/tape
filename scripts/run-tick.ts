@@ -118,6 +118,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh broad vol-universe probe", cmd: "npm run refresh-vol-universe", when: "full" },
   { name: "Refresh vol-dislocation screen", cmd: "npm run refresh-vol-dislocation", when: "full" },
   { name: "Refresh vol-dislocation catalyst tags", cmd: "npm run refresh-vol-tags", when: "full" },
+  // VRP capture ledger — grades /vol-dislocation's rich-vol picks on their OWN axis (IV sold vs realized
+  // printed). Reads vol-dislocation.json + vol-cone.json only; runs AFTER both.
+  { name: "Refresh VRP capture ledger", cmd: "npm run refresh-vol-premium-ledger", when: "full" },
   { name: "Refresh earnings expected-move screen", cmd: "npm run refresh-earnings-move", when: "full" },
   // corp-events BEFORE the trade-log: the track record's catalyst overlay reads corp-events.json, and
   // running it after meant same-night 8-K disclosures (the freshest, highest-impact ones) were stamped
