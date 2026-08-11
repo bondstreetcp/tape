@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { TradeRec } from "@/lib/tradeLog";
-import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL } from "@/lib/tradeLog";
+import { summarize, markToIntrinsic, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costCurve } from "@/lib/tradeLog";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -33,7 +33,16 @@ export default function TradeRecordView({
   const [sort, setSort] = useState<SortKey>("recent");
   const [q, setQ] = useState("");
 
+  // fullStats drives the always-on sell/buy comparison; viewStats retitles the headline to the
+  // active verdict filter, so clicking "Sell" shows the sell-only book (the scalable strategy).
   const stats = useMemo(() => summarize(allRecs), [allRecs]);
+  const viewStats = useMemo(
+    () => (verdictF === "all" ? stats : summarize(allRecs.filter((r) => r.verdict === verdictF))),
+    [allRecs, verdictF, stats],
+  );
+  // The scaling curve: sell-book P&L as the assumed spread-crossing worsens. The mid-price record is
+  // the ceiling — the first-night capture measured ~45% credit crossing, where the edge shrinks ~6×.
+  const curve = useMemo(() => costCurve(allRecs), [allRecs]);
 
   const recs = useMemo(() => {
     const ql = q.trim().toLowerCase();
@@ -96,13 +105,13 @@ export default function TradeRecordView({
         <UniverseSwitcher current={universe} />
       </div>
 
-      {/* aggregate scorecard */}
+      {/* aggregate scorecard — headline retitles to the active verdict filter */}
       {stats.settledN > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="Graded" value={`${stats.settledN}`} sub={`${stats.preprintN} pre-print queued`} />
-          <Stat label="Win rate" value={wr == null ? "—" : `${(wr * 100).toFixed(0)}%`} color={wr == null ? undefined : wr >= 0.5 ? GREEN : RED} sub={`${stats.wins}W · ${stats.losses}L · ${stats.scratches} scratch`} />
-          <Stat label="Avg P&L" value={bigMoney(stats.avgPnl)} color={stats.avgPnl == null ? undefined : stats.avgPnl >= 0 ? GREEN : RED} sub={`per play, ${NOTIONAL_K} notional`} />
-          <Stat label="Total P&L" value={bigMoney(stats.totalPnl)} color={stats.totalPnl >= 0 ? GREEN : RED} sub={`${NOTIONAL_K} notional each`} />
+          <Stat label={verdictF === "all" ? "Graded" : verdictF === "rich" ? "Graded (sell only)" : "Graded (buy only)"} value={`${viewStats.settledN}`} sub={`${viewStats.preprintN} pre-print queued`} />
+          <Stat label="Win rate" value={viewStats.winRate == null ? "—" : `${(viewStats.winRate * 100).toFixed(0)}%`} color={viewStats.winRate == null ? undefined : viewStats.winRate >= 0.5 ? GREEN : RED} sub={`${viewStats.wins}W · ${viewStats.losses}L · ${viewStats.scratches} scratch`} />
+          <Stat label="Avg P&L" value={bigMoney(viewStats.avgPnl)} color={viewStats.avgPnl == null ? undefined : viewStats.avgPnl >= 0 ? GREEN : RED} sub={`per play, ${NOTIONAL_K} notional`} />
+          <Stat label="Total P&L" value={bigMoney(viewStats.totalPnl)} color={viewStats.totalPnl >= 0 ? GREEN : RED} sub={`${NOTIONAL_K} notional each`} />
           <Stat label="Sell-premium" value={rich.n ? `${rich.wins}/${rich.n}` : "—"} color={rich.avgPnl == null ? undefined : rich.avgPnl >= 0 ? GREEN : RED} sub={rich.avgPnl == null ? "rich → short" : `avg ${bigMoney(rich.avgPnl)}`} />
           <Stat label="Buy-premium" value={cheap.n ? `${cheap.wins}/${cheap.n}` : "—"} color={cheap.avgPnl == null ? undefined : cheap.avgPnl >= 0 ? GREEN : RED} sub={cheap.avgPnl == null ? "cheap → long" : `avg ${bigMoney(cheap.avgPnl)}`} />
           {onMargin != null && (
@@ -113,6 +122,35 @@ export default function TradeRecordView({
               sub="avg per play on Reg-T capital"
             />
           )}
+        </div>
+      )}
+
+      {/* scaling curve — the sell book's P&L as fills worsen. The single most important number for
+          "can we scale this": the mid record is the ceiling, not the expectation. */}
+      {curve[0]?.n >= 20 && (
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4">
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Does it survive real fills? — sell book, {curve[0].n} graded</span>
+            <span className="text-[11px] text-[var(--text-4)]">crossing the spread forfeits a slice of every credit; the mid-price record is the ceiling</span>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            {curve.map((p, i) => (
+              <div key={p.crossPct} className={"rounded-lg border px-3 py-2 " + (p.total >= 0 ? "border-[var(--border)]" : "border-[#ef4444]/50")}>
+                <div className="text-[11px] text-[var(--text-4)]">
+                  {p.crossPct === 0 ? "Mid price" : `Cross ${p.crossPct}%`}
+                  {p.crossPct === 45 && <span className="ml-1 text-[#f59e0b]" title="The gap the first-night leg bid/ask capture actually measured">◂ measured</span>}
+                </div>
+                <div className="font-mono text-lg font-semibold tabular-nums" style={{ color: p.total >= 0 ? GREEN : RED }}>{bigMoney(p.total)}</div>
+                <div className="text-[11px] text-[var(--text-4)]">{bigMoney(p.avgPnl)}/play · {(p.winRate * 100).toFixed(0)}% up</div>
+                {i > 0 && curve[0].total > 0 && (
+                  <div className="text-[10px] text-[var(--text-4)]">{(100 * p.total / curve[0].total).toFixed(0)}% of mid</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--text-4)]">
+            Modeled: the crossing % is forfeited off each play&apos;s entry credit (a short fills below mid). The edge is real but lives largely inside the bid-ask — scaling it profitably is an execution problem (patient limit orders, liquid chains), not a matter of finding more plays.
+          </p>
         </div>
       )}
 
@@ -218,15 +256,20 @@ export default function TradeRecordView({
                           {signPct(r.realizedMovePct)}{r.moveCleared ? <span title="cleared the implied move" className="ml-0.5 text-[var(--text-3)]">✓</span> : null}
                         </span>
                       )}
-                      {r.driftMovePct != null && Math.abs(r.driftMovePct) >= r.impliedMovePct / 2 && (
-                        <div
-                          className="cursor-help text-[10px]"
-                          style={{ color: Math.abs(r.driftMovePct) > r.impliedMovePct ? "#f59e0b" : "var(--text-4)" }}
-                          title={`The stock drifted ${signPct(r.driftMovePct)} between logging and the print — the strikes were set ${r.gapDays != null ? r.gapDays + " day(s) " : ""}before the event, so this move hit the position before earnings did. The realized figure above is the print alone.`}
-                        >
-                          drift {signPct(r.driftMovePct)}
-                        </div>
-                      )}
+                      {(() => {
+                        const db = driftBreach(r);
+                        if (r.driftMovePct == null || Math.abs(r.driftMovePct) < r.impliedMovePct / 2) return null;
+                        const breached = !!db?.breached;
+                        return (
+                          <div
+                            className="cursor-help text-[10px]"
+                            style={{ color: breached ? "#f59e0b" : "var(--text-4)" }}
+                            title={`The stock drifted ${signPct(r.driftMovePct)} between logging and the print — the strikes were set ${r.gapDays != null ? r.gapDays + " day(s) " : ""}before the event, so this move hit the position before earnings did (the realized figure above is the print alone).${breached ? ` That's ${db!.ratio}× the implied move — the short strikes were breached going in. Context, not a filter: a walk-forward test showed drift breaches don't reliably predict P&L (the in-sample loss is almost entirely one name).` : ""}`}
+                          >
+                            drift {signPct(r.driftMovePct)}{breached ? ` · ${db!.ratio}× breach` : ""}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td
                       className="px-2 py-2 text-right font-mono tabular-nums"

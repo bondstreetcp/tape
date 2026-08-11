@@ -338,3 +338,46 @@ export function summarize(recs: TradeRec[]): TradeStats {
     preprintN: recs.filter((r) => r.status === "awaiting_print").length,
   };
 }
+
+/**
+ * Pre-print drift breach: the underlying drifted past the implied move BEFORE the print, so the
+ * short strikes were already breached going into the event. `ratio` = |drift| / implied.
+ *
+ * ⚠ INFORMATIONAL ONLY — deliberately NOT a suppression gate. A chronological walk-forward split
+ * (2026-08-10) showed this does NOT reliably predict P&L: of the 9 in-sample breaches 4 WON, and
+ * the −$17k the rule "catches" is almost entirely ONE name (ATKR, drift +31.8% vs 12.8% implied).
+ * Remove ATKR and the bucket is a −$2k wash. Gating on it would be the hurricane-composite overfit
+ * repeated. So it renders as a risk-context chip — "your short is breached going in" is true and
+ * worth seeing — but the play still logs and grades, and nothing is hidden on its account.
+ */
+export function driftBreach(rec: TradeRec): { ratio: number; breached: boolean } | null {
+  if (rec.driftMovePct == null || !(rec.impliedMovePct > 0)) return null;
+  const ratio = Math.abs(rec.driftMovePct) / rec.impliedMovePct;
+  return { ratio: +ratio.toFixed(2), breached: ratio >= 1 };
+}
+
+/**
+ * Execution-cost model: crossing the spread forfeits `crossFrac` of the entry credit on EVERY play
+ * (a short fills below mid), applied to the $100k-notional dollar P&L. The mid-price record is the
+ * CEILING, not the expectation — the first-night capture measured the gap at ~45% of the mid
+ * credit, at which the whole sell book's edge shrinks ~6× and by ~60% it goes negative. This is the
+ * real scaling constraint, so the board shows the curve rather than one flattering number.
+ */
+export function costAdjustedDollarPnl(rec: TradeRec, crossFrac: number, notional = PLAY_NOTIONAL): number | null {
+  const base = dollarPnl(rec.pnl as number, rec.spotAtRec, notional);
+  if (base == null) return null;
+  const shares = notional / rec.spotAtRec;
+  return base - crossFrac * Math.abs(rec.entryCredit) * shares;
+}
+
+export interface CostPoint { crossPct: number; total: number; avgPnl: number; winRate: number; n: number }
+
+/** The SELL book's settled P&L across modeled crossing fractions — the "can we scale it" curve. */
+export function costCurve(recs: TradeRec[], fractions = [0, 0.25, 0.45, 0.6], notional = PLAY_NOTIONAL): CostPoint[] {
+  const sells = recs.filter((r) => r.status === "settled" && r.pnl != null && r.verdict === "rich");
+  return fractions.map((f) => {
+    const ds = sells.map((r) => costAdjustedDollarPnl(r, f, notional)).filter((x): x is number => x != null);
+    const total = ds.reduce((a, b) => a + b, 0);
+    return { crossPct: Math.round(f * 100), total, avgPnl: ds.length ? total / ds.length : 0, winRate: ds.length ? ds.filter((x) => x > 0).length / ds.length : 0, n: ds.length };
+  });
+}

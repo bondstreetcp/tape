@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, dollarPnl, contractsFor, PLAY_NOTIONAL, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+import { netCredit, settleLegs, payoffBounds, summarize, settlePostPrint, dollarPnl, contractsFor, PLAY_NOTIONAL, driftBreach, costAdjustedDollarPnl, costCurve, type TradeLeg, type TradeRec } from "../lib/tradeLog";
 import { bsPrice, ivFromPrice } from "../lib/blackScholes";
 
 // The settlement math IS the track record's scorecard — a sign error here silently reports losing
@@ -53,6 +53,38 @@ test("payoffBounds: long put is bounded (downside floored at S=0)", () => {
   const b = payoffBounds([longPut(100, 3)]);
   assert.equal(b.maxProfit, 97); // S=0 → 100 intrinsic − 3
   assert.equal(b.maxLoss, -3);
+});
+
+// driftBreach: informational chip — ratio = |drift|/implied, breached at ≥1. Not a gate.
+test("driftBreach: ratio and threshold; abstains without drift", () => {
+  const base = { name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "", dte: 7, spotAtRec: 100, avgRealizedPct: 6, richnessRatio: 1.3, legs: [], entryCredit: 0, maxProfit: null, maxLoss: null, verdict: "rich" as const, status: "settled" as const };
+  assert.deepEqual(driftBreach({ ...base, id: "x", symbol: "X", impliedMovePct: 8, driftMovePct: 12 }), { ratio: 1.5, breached: true });
+  assert.deepEqual(driftBreach({ ...base, id: "x", symbol: "X", impliedMovePct: 8, driftMovePct: -4 }), { ratio: 0.5, breached: false });
+  assert.equal(driftBreach({ ...base, id: "x", symbol: "X", impliedMovePct: 8 }), null); // no drift recorded
+  assert.equal(driftBreach({ ...base, id: "x", symbol: "X", impliedMovePct: 0, driftMovePct: 3 }), null); // no implied
+});
+
+// costAdjustedDollarPnl + costCurve: crossing forfeits a fraction of the credit on every play.
+test("costAdjustedDollarPnl: subtracts crossFrac × credit × shares from the notional P&L", () => {
+  const base = { name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "", dte: 7, spotAtRec: 100, impliedMovePct: 8, avgRealizedPct: 6, richnessRatio: 1.3, legs: [], maxProfit: null, maxLoss: null, verdict: "rich" as const, status: "settled" as const };
+  const rec: TradeRec = { ...base, id: "A", symbol: "A", entryCredit: 2, pnl: 1.5, outcome: "win" };
+  // notional P&L = 1.5 × 100_000/100 = 1500; shares = 1000; cross 45% of $2 credit = 0.9/sh × 1000 = 900.
+  assert.ok(Math.abs((costAdjustedDollarPnl(rec, 0) as number) - 1500) < 1e-6);
+  assert.ok(Math.abs((costAdjustedDollarPnl(rec, 0.45) as number) - 600) < 1e-6);
+});
+
+test("costCurve: sell-only, monotone non-increasing, excludes buys/open", () => {
+  const base = { name: "", loggedAt: "", asOfDate: "", earningsDate: "", structure: "", legsText: "", expiry: "", dte: 7, spotAtRec: 100, impliedMovePct: 8, avgRealizedPct: 6, richnessRatio: 1.3, legs: [], maxProfit: null, maxLoss: null };
+  const recs: TradeRec[] = [
+    { ...base, id: "A", symbol: "A", verdict: "rich", status: "settled", entryCredit: 2, pnl: 1.5, outcome: "win" },
+    { ...base, id: "B", symbol: "B", verdict: "rich", status: "settled", entryCredit: 2, pnl: -1.0, outcome: "loss" },
+    { ...base, id: "C", symbol: "C", verdict: "cheap", status: "settled", entryCredit: -2, pnl: 5.0, outcome: "win" }, // BUY — excluded
+    { ...base, id: "D", symbol: "D", verdict: "rich", status: "awaiting_print", entryCredit: 2 }, // open — excluded
+  ];
+  const c = costCurve(recs, [0, 0.45]);
+  assert.equal(c[0].n, 2); // only the two settled sells
+  assert.ok(c[0].total > c[1].total); // cost only reduces P&L
+  assert.ok(Math.abs(c[0].total - 500) < 1e-6); // (1.5 − 1.0) × 1000
 });
 
 // summarize aggregates the scorecard: win rate over settled, split by rich/cheap, plus how often the
