@@ -13,16 +13,22 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [sector, setSector] = useState<string | null>(null);
   const [mode, setMode] = useState<"all" | "up" | "down">("all");
+  // Coverage lens: PEAD/revisions drift is academically strongest in UNDER-covered names — fewer
+  // analysts = slower price adjustment = more drift left to capture, and those small caps are
+  // exactly where a small account can trade. ≤5 / ≤2 analysts isolate that tail (735 / 212 names).
+  const [cov, setCov] = useState<"all" | "low" | "thin">("all");
+  const covCap = cov === "thin" ? 2 : cov === "low" ? 5 : Infinity;
 
   const sectors = useMemo(() => Array.from(new Set(data.rows.map((r) => r.sector).filter(Boolean))).sort(), [data.rows]);
   const rows = useMemo(() => {
     let r = data.rows.filter((x) => !sector || x.sector === sector);
+    if (cov !== "all") r = r.filter((x) => x.analysts != null && x.analysts <= covCap);
     if (mode === "up") r = r.filter((x) => (x.drift90 != null && x.drift90 > 0) || x.netUp > 0);
     // Downside lens: names the Street is CUTTING — biggest negative drift first (the feed is
     // sorted by upside momentum, so the cutters need their own sort to surface).
     if (mode === "down") r = r.filter((x) => (x.drift90 != null && x.drift90 < 0) || x.netUp < 0).sort((a, b) => (a.drift90 ?? 0) - (b.drift90 ?? 0));
     return r.slice(0, 150);
-  }, [data.rows, sector, mode]);
+  }, [data.rows, sector, mode, cov, covCap]);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -75,12 +81,19 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
           <option value="">All sectors</option>
           {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        {(sector || mode !== "all") && <button onClick={() => { setSector(null); setMode("all"); }} className="text-xs text-[var(--text-3)] underline hover:text-[var(--text)]">clear</button>}
+        <span className="ml-1 inline-flex overflow-hidden rounded-md border border-[var(--border)]" title="The revisions/PEAD drift runs strongest in under-covered names — fewer analysts, slower price adjustment. This lens isolates that tail.">
+          {(["all", "low", "thin"] as const).map((c) => (
+            <button key={c} onClick={() => setCov(c)} className={"px-2 py-1 text-xs font-medium transition-colors " + (cov === c ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>
+              {c === "all" ? "All cov." : c === "low" ? "Low <6" : "Thin <3"}
+            </button>
+          ))}
+        </span>
+        {(sector || mode !== "all" || cov !== "all") && <button onClick={() => { setSector(null); setMode("all"); setCov("all"); }} className="text-xs text-[var(--text-3)] underline hover:text-[var(--text)]">clear</button>}
         <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} of {data.coverage} covered · {uname}</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-        <table className="w-full min-w-[720px] text-xs">
+        <table className="w-full min-w-[780px] text-xs">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--surface)] text-left text-[var(--text-3)]">
               <th className="px-3 py-2 font-medium">#</th>
@@ -89,6 +102,7 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
               <th className="px-2 py-2 text-right font-medium" title="Change in current-year consensus EPS over 90 days">EPS Δ 90d</th>
               <th className="px-2 py-2 text-right font-medium">EPS Δ 30d</th>
               <th className="px-2 py-2 text-center font-medium" title="Analysts revising up vs down, last 30 days">Revisions</th>
+              <th className="px-2 py-2 text-right font-medium" title="Analyst coverage. The revisions/PEAD edge is strongest at low coverage — fewer eyes, slower price adjustment.">Cov</th>
               <th className="px-2 py-2 text-right font-medium" title="Change in NEXT-year consensus EPS over 90 days">Next-yr Δ</th>
               <th className="px-3 py-2 text-right font-medium" title="Mean price target vs current price">Upside</th>
             </tr>
@@ -118,6 +132,7 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
                 <td className="px-2 py-2 text-center tabular-nums whitespace-nowrap">
                   <span className="text-[#22c55e]">↑{r.up30d}</span> <span className="text-[#ef4444]">↓{r.down30d}</span>
                 </td>
+                <td className="px-2 py-2 text-right tabular-nums" style={{ color: r.analysts != null && r.analysts <= 5 ? "var(--accent)" : "var(--text-4)" }} title={r.analysts != null && r.analysts <= 5 ? "under-covered — where the drift runs strongest" : undefined}>{r.analysts ?? "—"}</td>
                 <td className="px-2 py-2 text-right tabular-nums" style={{ color: col(r.nyDrift90) }}>{pct(r.nyDrift90)}</td>
                 <td className="px-3 py-2 text-right tabular-nums" style={{ color: col(r.upsidePct) }}>{pct(r.upsidePct, 0)}</td>
               </tr>
@@ -125,7 +140,7 @@ export default function RevisionsView({ data, universe, record }: { data: Revisi
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-[11px] text-[var(--text-4)]">Momentum = blended percentile of 90-day EPS drift (60%) and net analyst revisions (40%). Snapshot of consensus from data/estimates.json{data.asOf ? ` · as of ${data.asOf}` : ""}. Not investment advice.</p>
+      <p className="mt-3 text-[11px] text-[var(--text-4)]">Momentum = blended percentile of 90-day EPS drift (60%) and net analyst revisions (40%). The <b className="text-[var(--text-3)]">coverage lens</b> isolates under-followed names, where the post-earnings-drift factor is academically strongest and least arbitraged — and which a small account can actually trade; it&apos;s a filter, not a claim, and the /signal-record grades whether it beats the full board over time. Snapshot of consensus from data/estimates.json{data.asOf ? ` · as of ${data.asOf}` : ""}. Not investment advice.</p>
     </main>
   );
 }
