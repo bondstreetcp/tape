@@ -139,6 +139,14 @@ export default function IndicatorChart({
 
   const points = useMemo(() => source.slice(windowStart), [source, windowStart]);
 
+  // ORDINAL x-axis: plot every panel by BAR INDEX, not clock time, so non-trading gaps (weekends,
+  // holidays, the overnight close) collapse instead of stretching into a flat line that reads like
+  // the market was open. idxToT maps a slot back to its timestamp for labels; tIndex maps a bar's
+  // timestamp to its slot so the separately-built volume panel lines up with the price panel.
+  const idxToT = useMemo(() => points.map((p) => p.t), [points]);
+  const tIndex = useMemo(() => { const m = new Map<number, number>(); points.forEach((p, i) => m.set(p.t, i)); return m; }, [points]);
+  const maxIdx = Math.max(0, idxToT.length - 1);
+
   // Prior session's close — the 1D line plots today's session from the open, so a dashed reference
   // line here makes the overnight gap (and the vs-prev-close move shown in the header) visible.
   const prevClose = useMemo(() => priorCloseFor(effIntraday, daily, tf, now), [effIntraday, daily, tf, now]);
@@ -155,10 +163,10 @@ export default function IndicatorChart({
     const t0 = points[0].t;
     const t1 = points[points.length - 1].t;
     const rows = src
-      .filter((b: any) => b.t >= t0 && b.t <= t1 && b.v != null)
-      .map((b: any) => ({ t: b.t, v: b.v, vup: b.c >= b.o }));
+      .filter((b: any) => b.t >= t0 && b.t <= t1 && b.v != null && tIndex.has(b.t))
+      .map((b: any) => ({ i: tIndex.get(b.t)!, t: b.t, v: b.v, vup: b.c >= b.o }));
     return rows.length ? rows : null;
-  }, [ohlc, tf, points]);
+  }, [ohlc, tf, points, tIndex]);
 
   const { priceData, lineSeries } = useMemo(() => {
     const cols: Record<string, (number | null)[]> = {};
@@ -173,7 +181,7 @@ export default function IndicatorChart({
     }
     const priceData: Record<string, number | null>[] = [];
     for (let i = windowStart; i < source.length; i++) {
-      const row: Record<string, number | null> = { t: source[i].t, c: source[i].c };
+      const row: Record<string, number | null> = { i: priceData.length, t: source[i].t, c: source[i].c };
       for (const k in cols) row[k] = cols[k][i];
       priceData.push(row);
     }
@@ -185,7 +193,7 @@ export default function IndicatorChart({
     const m = macd(closes);
     const out = [];
     for (let i = windowStart; i < source.length; i++)
-      out.push({ t: source[i].t, macd: m.macd[i], signal: m.signal[i], hist: m.hist[i] });
+      out.push({ i: out.length, t: source[i].t, macd: m.macd[i], signal: m.signal[i], hist: m.hist[i] });
     return out;
   }, [source, windowStart, closes, enabled]);
 
@@ -194,24 +202,28 @@ export default function IndicatorChart({
     const r = rsi(closes, 14);
     const out = [];
     for (let i = windowStart; i < source.length; i++)
-      out.push({ t: source[i].t, rsi: r[i] });
+      out.push({ i: out.length, t: source[i].t, rsi: r[i] });
     return out;
   }, [source, windowStart, closes, enabled]);
 
-  // X-axis: on the 1W intraday view, place one tick per trading day — otherwise the
-  // many 15-min bars all format to the same weekday and repeat ("Mon Mon Mon Tue …").
+  // X-axis ticks are INDICES (the axis is ordinal now) placed at natural calendar boundaries — one
+  // per hour on 1D, per day on 1W, per month on 3M–1Y, per year on 3Y/5Y — so labels land on real
+  // breaks and don't repeat ("Mon Mon Mon") across the many bars inside each unit.
   const xTicks = useMemo(() => {
-    if (tf !== "1w") return undefined;
+    const unit = tf === "1d" ? "hour" : tf === "1w" ? "day" : tf === "3y" || tf === "5y" ? "year" : "month";
     const seen = new Set<string>();
     const ticks: number[] = [];
-    for (const row of priceData) {
-      const t = row.t as number;
+    idxToT.forEach((t, i) => {
       const d = new Date(t);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      if (!seen.has(key)) { seen.add(key); ticks.push(t); }
-    }
+      const key =
+        unit === "hour" ? `${d.getHours()}` :
+        unit === "year" ? `${d.getFullYear()}` :
+        unit === "month" ? `${d.getFullYear()}-${d.getMonth()}` :
+        `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!seen.has(key)) { seen.add(key); ticks.push(i); }
+    });
     return ticks.length ? ticks : undefined;
-  }, [priceData, tf]);
+  }, [idxToT, tf]);
 
   // Y-axis: use enough decimals that ticks stay distinct on a narrow range — a $44–46
   // ETF with 0 decimals rounds every tick to "$45".
@@ -227,15 +239,16 @@ export default function IndicatorChart({
   const fmt = tickFmt(tf);
   const xAxis = (
     <XAxis
-      dataKey="t"
+      dataKey="i"
       type="number"
-      scale="time"
-      domain={["dataMin", "dataMax"]}
+      domain={[0, maxIdx]}
       ticks={xTicks}
-      tickFormatter={fmt}
+      tickFormatter={(i: number) => fmt(idxToT[Math.round(i)] ?? 0)}
       tick={{ fill: "var(--text-3)", fontSize: 11 }}
       stroke="var(--border)"
       minTickGap={xTicks ? 12 : 48}
+      allowDecimals={false}
+      interval="preserveStartEnd"
     />
   );
 
@@ -364,7 +377,7 @@ export default function IndicatorChart({
                   {xAxis}
                   <YAxis orientation="right" tick={{ fill: "var(--text-3)", fontSize: 10 }} stroke="var(--border)" width={48} />
                   <ReferenceLine y={0} stroke="var(--border-strong)" />
-                  <Tooltip isAnimationActive={false} contentStyle={tipStyle} />
+                  <Tooltip isAnimationActive={false} contentStyle={tipStyle} labelFormatter={(_l: any, p: any) => (p?.[0]?.payload?.t ? fmt(p[0].payload.t) : "")} />
                   <Bar dataKey="hist" isAnimationActive={false}>
                     {macdData.map((d, i) => (
                       <Cell
@@ -389,7 +402,7 @@ export default function IndicatorChart({
                   <YAxis orientation="right" domain={[0, 100]} ticks={[30, 50, 70]} tick={{ fill: "var(--text-3)", fontSize: 10 }} stroke="var(--border)" width={48} />
                   <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" />
                   <ReferenceLine y={30} stroke="#22c55e" strokeDasharray="3 3" />
-                  <Tooltip isAnimationActive={false} contentStyle={tipStyle} />
+                  <Tooltip isAnimationActive={false} contentStyle={tipStyle} labelFormatter={(_l: any, p: any) => (p?.[0]?.payload?.t ? fmt(p[0].payload.t) : "")} />
                   <Line type="monotone" dataKey="rsi" stroke="#c084fc" strokeWidth={1.4} dot={false} connectNulls isAnimationActive={false} />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -464,10 +477,11 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function PriceTip({ active, payload, label, tf, series, currency = "USD" }: any) {
+function PriceTip({ active, payload, tf, series, currency = "USD" }: any) {
   if (!active || !payload?.length) return null;
   const price = payload.find((p: any) => p.dataKey === "c")?.value;
-  const d = new Date(label);
+  // The x-axis is an ordinal index now, so read the real timestamp off the hovered data row.
+  const d = new Date(payload[0]?.payload?.t);
   const dateStr =
     tf === "1d" || tf === "1w"
       ? d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
