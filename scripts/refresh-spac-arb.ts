@@ -31,7 +31,10 @@ const DAY = 86_400_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const cikKey = (c: string | number) => String(Number(String(c).replace(/\D/g, "")));
 
-async function secJson(url: string): Promise<any | null> {
+// Returns the parsed JSON, `null` for a genuine 404 (legitimate ABSENCE), or `undefined` when all
+// retries fail (a FETCH FAILURE — reset/429/5xx/timeout). Callers must distinguish the two: a partial
+// frame map from silent failures is worse than no map (it drives a false filing-detector reuse).
+async function secJson(url: string): Promise<any | null | undefined> {
   for (let i = 0; i < 3; i++) {
     try {
       const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30_000) });
@@ -40,7 +43,7 @@ async function secJson(url: string): Promise<any | null> {
     } catch { /* retry */ }
     await sleep(600 * (i + 1));
   }
-  return null;
+  return undefined; // retries exhausted — a failure, NOT an absence
 }
 
 /** Latest fact (end ≤ anchor, exact end preferred by the caller) within the given unit buckets. */
@@ -65,12 +68,13 @@ async function main() {
   // Freshest CALENDAR trust-frame end per CIK — the "did it file a new quarterly trust value?" signal
   // that drives the filing-detector below. Monotonic per CIK across the scanned quarters.
   const frameEnd = new Map<string, string>();
-  let okFrames = 0;
+  let okFrames = 0, failedFrames = 0;
   for (const id of instantFrameIds(Date.now(), 4)) {
     for (const concept of TRUST_CONCEPTS) {
       const j = await secJson(`https://data.sec.gov/api/xbrl/frames/us-gaap/${concept}/USD/${id}.json`);
       await sleep(200);
-      if (!j?.data?.length) continue;
+      if (j === undefined) { failedFrames++; continue; } // FETCH FAILED — the frameEnd map is now incomplete
+      if (!j?.data?.length) continue; // legit empty / absent frame (404 or no filers this quarter)
       okFrames++;
       for (const row of j.data) {
         if (!row?.cik) continue;
@@ -81,6 +85,10 @@ async function main() {
     }
   }
   if (!okFrames) { console.error("spac-arb: no trust frames loaded (SEC unreachable) — keeping prior file"); process.exit(1); }
+  // A partial frame map is worse than no map: a CIK that filed a new quarter inside a FAILED frame keeps
+  // its stale frameEnd, which then spuriously matches the prior trustEnd and reuses a now-stale floor.
+  // So the filing-detector runs ONLY when every frame loaded — otherwise fall back to fresh pulls for all.
+  const detectorOk = failedFrames === 0;
   const ciks = [...cikSet].slice(0, LIMIT);
   console.log(`spac-arb: ${cikSet.size} SPAC CIKs from ${okFrames} frames · scanning ${ciks.length}`);
 
@@ -115,9 +123,10 @@ async function main() {
   let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0, reused = 0;
   for (const cik of ciks) {
     // Filing-detector: nothing new filed since we last computed this name → reuse, no companyfacts pull.
+    // Only when the frame map is COMPLETE (detectorOk) — a partial map would false-match a stale floor.
     const pr = priorByCik.get(cik);
     const t0 = cikTicker.get(cik);
-    if (pr && t0 && frameEnd.get(cik) === pr.trustEnd) {
+    if (detectorOk && pr && t0 && frameEnd.get(cik) === pr.trustEnd) {
       const asOf = pr.sharesEnd < pr.trustEnd ? pr.sharesEnd : pr.trustEnd;
       cands.push({
         ticker: t0.ticker, cik, name: pr.name,
@@ -166,7 +175,7 @@ async function main() {
       ppsMismatch: mismatch,
     });
   }
-  console.log(`spac-arb: ${cands.length} in-band SPACs (${reused} reused via filing-detector, ${cands.length - reused} freshly pulled; dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
+  console.log(`spac-arb: ${cands.length} in-band SPACs (${reused} reused via filing-detector, ${cands.length - reused} freshly pulled${detectorOk ? "" : ` — DETECTOR OFF: ${failedFrames} frame(s) failed, all re-pulled`}; dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
 
   // ── (3) Yahoo price + exchange → discount + plausibility ──
   const rows: SpacRow[] = [];

@@ -34,6 +34,17 @@ export const MAX_HOLD_TD = 32;
  *  calendar days — rich vol persists for weeks and we want roughly non-overlapping monthly samples. */
 export const RELOG_COOLDOWN_DAYS = 30;
 
+/** Match vol-dislocation's IV/RV floor (0.08): a realized vol below this is a flat/halted/stale series
+ *  artifact, not a real read. Grading atmIV − (glitch-low RV) would book a fake near-maximal capture. */
+export const RV_FLOOR = 0.08;
+
+/** The realized-vol feed (vol-cone) and the aging clock (vol-dislocation) are SEPARATE feeds that fail
+ *  independently — and the feed-guard doctrine keeps a STALE file on a failed refresh. If the cone's
+ *  stamp sits more than this many calendar days from the grading clock, cur20's 20-td window no longer
+ *  covers [entry, maturity] (it can end weeks before maturity, missing the terminal blow-up), so the
+ *  close must be DEFERRED, not booked against a misaligned window. */
+export const CONE_TOLERANCE_DAYS = 3;
+
 /** How many of the richest picks to freeze per night. */
 export const OPEN_PER_NIGHT = 40;
 
@@ -117,6 +128,33 @@ export function calDaysBetween(a: string, b: string): number {
 /** Idealized vol points a delta-hedged straddle seller captures: IV sold minus realized printed. */
 export function capturedVolPts(atmIVEntry: number, rvRealized: number): number {
   return atmIVEntry - rvRealized;
+}
+
+/** Is a vol-cone cur20 read usable for grading? Rejects null and glitch-low RV (flat/halted series). */
+export function rvUsable(cur20: number | null | undefined): boolean {
+  return cur20 != null && cur20 >= RV_FLOOR;
+}
+
+/** Is the realized-vol feed fresh enough (vs the aging clock) that cur20's window covers the holding
+ *  period? A cone stamped far from `today` grades a misaligned window → defer the close instead. */
+export function coneFreshEnough(coneDate: string, today: string, tol = CONE_TOLERANCE_DAYS): boolean {
+  return Math.abs(calDaysBetween(coneDate, today)) <= tol;
+}
+
+export type MaturityAction = "hold-immature" | "discard-overhold" | "grade" | "defer";
+
+/** The close-loop decision for ONE open position — pure, so the state machine the review scrutinized is
+ *  directly testable rather than buried in the engine. Order matters:
+ *   1. td < MATURE_TD                     → hold (not yet matured)
+ *   2. td > MAX_HOLD_TD                    → DISCARD, even if an RV is present: the cur20 window no longer
+ *      overlaps [entry, maturity], so grading it would be dishonest (finding 4).
+ *   3. cone fresh AND rv usable            → GRADE.
+ *   4. otherwise (stale cone / glitch-low / missing rv) → DEFER within the grace window (findings 1/2/5/10). */
+export function maturityDecision(td: number, coneFresh: boolean, rv: number | null | undefined): MaturityAction {
+  if (td < MATURE_TD) return "hold-immature";
+  if (td > MAX_HOLD_TD) return "discard-overhold";
+  if (coneFresh && rvUsable(rv)) return "grade";
+  return "defer";
 }
 
 /**

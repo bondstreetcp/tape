@@ -22,8 +22,8 @@ import {
   calDaysBetween,
   capturedVolPts,
   computeStats,
-  MATURE_TD,
-  MAX_HOLD_TD,
+  coneFreshEnough,
+  maturityDecision,
   RELOG_COOLDOWN_DAYS,
   CLOSED_CAP,
   type VpLedgerFile,
@@ -42,41 +42,68 @@ async function main() {
     console.error("vol-premium-ledger: no data/vol-dislocation.json — run `npm run refresh-vol-dislocation` first.");
     process.exit(1);
   }
-  // vol-cone gives per-name realized vol; cur20 (20-td RV) is the holding-window read.
-  const cone = await readJson<{ rows?: { symbol: string; cur20?: number | null }[] }>("vol-cone.json");
+  // vol-cone gives per-name realized vol; cur20 (20-td RV) is the holding-window read. Store the RAW
+  // value — the glitch-low floor (a flat/halted series) is applied in maturityDecision (single source).
+  const cone = await readJson<{ generatedAt?: string; rows?: { symbol: string; cur20?: number | null }[] }>("vol-cone.json");
   const rvBy = new Map<string, number>();
-  for (const r of cone?.rows ?? []) if (r.symbol && r.cur20 != null && r.cur20 > 0) rvBy.set(r.symbol, r.cur20);
+  for (const r of cone?.rows ?? []) if (r.symbol && r.cur20 != null) rvBy.set(r.symbol, r.cur20);
 
   // The pick's timestamp IS the source feed's stamp — one calendar anchor for entry and aging.
   const today = (disloc.generatedAt || new Date().toISOString()).slice(0, 10);
 
-  // Load existing ledger. Exists-but-unreadable = corrupted hydration → abort, never seed over history.
+  // The realized-vol feed and the aging clock are SEPARATE feeds that fail independently, and a failed
+  // refresh leaves a STALE file (feed-guard doctrine). If the cone's stamp is far from `today`, cur20's
+  // window doesn't cover [entry, maturity] — so grade NOTHING this run and let matured opens wait in the
+  // grace window for a night when a fresh cone is present (findings 1/2/10).
+  const coneOk = !!cone?.generatedAt && coneFreshEnough(cone.generatedAt.slice(0, 10), today);
+
+  // Load existing ledger. A file that EXISTS but can't be read/parsed = corrupted hydration or a
+  // transient fd/IO error (the NAS runs under camera-stack contention) → ABORT, never seed over the
+  // unrebuildable history. Only a genuine ENOENT (first run) is allowed to proceed with no prior.
   let existing: VpLedgerFile | null = null;
+  let raw: string | null = null;
   try {
-    const raw = await fsp.readFile(path.join(DATA, FILE), "utf8").catch(() => null);
-    if (raw != null) existing = JSON.parse(raw) as VpLedgerFile;
-  } catch {
-    console.error(`vol-premium-ledger: data/${FILE} exists but is unreadable — refusing to overwrite history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
-    process.exit(1);
+    raw = await fsp.readFile(path.join(DATA, FILE), "utf8");
+  } catch (e: any) {
+    if (e?.code !== "ENOENT") {
+      console.error(`vol-premium-ledger: data/${FILE} exists but is unreadable (${e?.code ?? e}) — refusing to overwrite history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
+      process.exit(1);
+    }
+  }
+  if (raw != null) {
+    try {
+      existing = JSON.parse(raw) as VpLedgerFile;
+    } catch {
+      console.error(`vol-premium-ledger: data/${FILE} exists but does not parse — refusing to overwrite history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
+      process.exit(1);
+    }
   }
   const prevOpen: VpOpen[] = existing?.open ?? [];
   const closed: VpClosed[] = existing?.closed ?? [];
 
-  // ── CLOSE / DISCARD matured opens ────────────────────────────────────────────────────────────────
+  // ── CLOSE / DISCARD / DEFER matured opens (decision is the pure, tested maturityDecision) ──────────
   const stillOpen: VpOpen[] = [];
-  let closedNow = 0, discarded = 0;
+  let closedNow = 0, discarded = 0, deferred = 0;
   for (const o of prevOpen) {
     const td = bizDaysBetween(o.entryDate, today);
-    if (td < MATURE_TD) { stillOpen.push(o); continue; }
     const rv = rvBy.get(o.symbol);
-    if (rv != null) {
-      const cap = capturedVolPts(o.atmIVEntry, rv);
-      closed.push({ ...o, maturedDate: today, rvRealized: rv, capturedVolPts: cap, capturedFrac: cap / o.atmIVEntry, won: cap > 0 });
-      closedNow++;
-    } else if (td <= MAX_HOLD_TD) {
-      stillOpen.push(o); // matured but no RV yet — give it a grace window before giving up
-    } else {
-      discarded++; // ungradeable (dropped out of vol-cone) — discard rather than invent a number
+    switch (maturityDecision(td, coneOk, rv)) {
+      case "hold-immature":
+        stillOpen.push(o);
+        break;
+      case "discard-overhold":
+        discarded++; // window no longer overlaps the hold — ungradeable
+        break;
+      case "grade": {
+        const cap = capturedVolPts(o.atmIVEntry, rv!); // "grade" ⟹ rv is usable
+        closed.push({ ...o, maturedDate: today, rvRealized: rv!, capturedVolPts: cap, capturedFrac: cap / o.atmIVEntry, won: cap > 0 });
+        closedNow++;
+        break;
+      }
+      case "defer":
+        stillOpen.push(o); // matured, in [MATURE, MAX_HOLD] but cone stale / no usable RV — wait
+        if (!coneOk) deferred++;
+        break;
     }
   }
 
@@ -100,9 +127,12 @@ async function main() {
     openedNow++;
   }
 
-  // Bound the closed history (newest kept).
+  // Bound the closed history (newest kept) — but NEVER evict a close still inside the cooldown window.
+  // The cooldown map is rebuilt from the PERSISTED `closed` each run, so dropping a recent close would
+  // let that name re-open early (findings 8/9/11). In-cooldown closes are the newest, so this only
+  // widens the file in an extreme high-turnover regime; it makes cooldown correctness independent of CAP.
   closed.sort((a, b) => (a.maturedDate < b.maturedDate ? 1 : a.maturedDate > b.maturedDate ? -1 : 0));
-  const closedKept = closed.slice(0, CLOSED_CAP);
+  const closedKept = closed.filter((c, i) => i < CLOSED_CAP || calDaysBetween(c.maturedDate, today) < RELOG_COOLDOWN_DAYS);
 
   const out: VpLedgerFile = {
     generatedAt: new Date().toISOString(),
@@ -115,8 +145,9 @@ async function main() {
   if (!w.written) { console.error(`refresh-vol-premium-ledger: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
   const s = out.stats;
   console.log(
-    `vol-premium-ledger: +${openedNow} opened, ${closedNow} closed, ${discarded} discarded · ` +
-    `${out.open.length} open / ${closedKept.length} closed` +
+    `vol-premium-ledger: +${openedNow} opened, ${closedNow} closed, ${discarded} discarded` +
+    (deferred ? `, ${deferred} deferred (cone stale — ${cone?.generatedAt?.slice(0, 10) ?? "missing"} vs ${today})` : "") +
+    ` · ${out.open.length} open / ${closedKept.length} closed` +
     (s ? ` · hit ${(s.hitRate * 100).toFixed(0)}% · median captured ${(s.medianCaptured * 100).toFixed(1)} vol-pts` : " · (grading accrues)"),
   );
 }
