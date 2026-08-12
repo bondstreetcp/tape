@@ -69,13 +69,23 @@ export function fmtDate(d: string | number | Date, opts?: { year?: boolean }): s
   }
 }
 
+/**
+ * "As of <date, time>" stamp for a nightly feed's `generatedAt`/`asOf`. Pinned to en-US + US-Eastern
+ * (the market day) so the SERVER (SSR/static build, UTC) and the CLIENT (browser-local) render the SAME
+ * string — an `undefined` locale/timezone renders in the runtime's zone and desyncs on hydration (a
+ * React text-content mismatch + a visible time flash). ET matches fmtFresh so a feed built ~6–8pm ET
+ * doesn't read as "tomorrow" to a US reader. Returns the raw input on a bad value.
+ */
 export function fmtDateTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return iso;
+    return dt.toLocaleString("en-US", {
       month: "short",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: "America/New_York",
     });
   } catch {
     return iso;

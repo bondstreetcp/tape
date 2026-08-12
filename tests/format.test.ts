@@ -4,7 +4,7 @@ process.env.TZ = "America/Los_Angeles";
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fmtDate } from "../lib/format";
+import { fmtDate, fmtDateTime } from "../lib/format";
 
 const EXPIRY = "2026-08-21"; // a real Friday option expiry — a bare CALENDAR date
 const INSTANT = "2026-08-04T12:30:00.000Z"; // a real earnings timestamp — 5:30am in LA
@@ -53,4 +53,25 @@ test("fmtDate: junk degrades to the input rather than 'Invalid Date'", () => {
 test("fmtDate: year-end bare date doesn't roll back into the prior year", () => {
   // The nastiest form of this bug: Jan 1 rendering as Dec 31 of the PREVIOUS year.
   assert.equal(fmtDate("2027-01-01"), "Jan 1, 2027");
+});
+
+test("fmtDateTime: pinned to ET regardless of the runtime's timezone (the hydration fix)", () => {
+  // The bug: `toLocaleString(undefined, ...)` renders in the runtime's zone, so an SSR build in UTC and
+  // a browser in LA disagree on hydration. Pinned to ET, BOTH must produce the same string. This process
+  // is LA, so a correct ET render is demonstrably NOT the LA-local one.
+  // 2026-08-11T23:56Z = 7:56pm ET (EDT) = 4:56pm LA = 11:56pm UTC. Must be the ET value.
+  assert.equal(fmtDateTime("2026-08-11T23:56:12.459Z"), "Aug 11, 7:56 PM");
+  // 12:30Z = 8:30am ET, not 5:30am LA / 12:30pm UTC.
+  assert.equal(fmtDateTime("2026-08-04T12:30:00.000Z"), "Aug 4, 8:30 AM");
+});
+
+test("fmtDateTime: the calendar day is ET, not UTC — an after-8pm-ET stamp keeps its ET day", () => {
+  // 2026-08-12T02:30Z is Aug 12 in UTC but 10:30pm on Aug 11 in ET. A market-day stamp must read Aug 11.
+  assert.equal(fmtDateTime("2026-08-12T02:30:00.000Z"), "Aug 11, 10:30 PM");
+});
+
+test("fmtDateTime: junk degrades to the input, never 'Invalid Date'", () => {
+  // toLocaleString does not throw on an Invalid Date — it returns "Invalid Date" — so the NaN guard,
+  // not the try/catch, is what preserves the raw input.
+  assert.equal(fmtDateTime("not a date"), "not a date");
 });
