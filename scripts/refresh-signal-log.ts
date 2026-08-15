@@ -139,10 +139,16 @@ async function main() {
   // or corrupted hydration — abort loudly rather than treat it as a first run and seed OVER history.
   let existing: SignalLogFile | null = null;
   try {
-    const raw = await fsp.readFile(FILE, "utf8").catch(() => null);
+    // ONLY a genuine ENOENT is a first run. A transient read error (EIO/EBUSY/EACCES under the NAS's
+    // documented contention mode) must NOT reclassify months of unrebuildable history as "no log yet"
+    // — that path re-seeds, passes the shrink guard, and ships the wipe to R2 (2026-08-15 sweep).
+    const raw = await fsp.readFile(FILE, "utf8").catch((e: any) => {
+      if (e?.code === "ENOENT") return null;
+      throw e; // any other errno → the abort below, prior file untouched
+    });
     if (raw != null) existing = JSON.parse(raw) as SignalLogFile;
-  } catch {
-    console.error("signal-log: data/signal-log.json exists but is unreadable — refusing to overwrite history. Restore it (R2/NAS) or delete it deliberately to re-seed.");
+  } catch (e: any) {
+    console.error(`signal-log: data/signal-log.json exists but is unreadable (${e?.code ?? "parse error"}) — refusing to overwrite history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
     process.exit(1);
   }
   const events: SignalEvent[] = existing?.events ?? [];

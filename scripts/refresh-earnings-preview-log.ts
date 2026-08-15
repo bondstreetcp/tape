@@ -63,7 +63,13 @@ async function main() {
   const existing: PreviewLogData = await fsp
     .readFile(FILE, "utf8")
     .then((s) => JSON.parse(s) as PreviewLogData)
-    .catch(() => ({ generatedAt: nowISO, recs: [] as PreviewRec[] }));
+    .catch((e: any) => {
+      // ONLY ENOENT is a first run — a read/parse failure must not wipe the forward accuracy history
+      // (the same one-bad-read class as signal-log/trade-log; 2026-08-15 sweep). Abort, prior stands.
+      if (e?.code === "ENOENT") return { generatedAt: nowISO, recs: [] as PreviewRec[] };
+      console.error(`preview-log: ${FILE} exists but is unreadable (${e?.code ?? "parse error"}) — refusing to overwrite the accuracy history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
+      return process.exit(1);
+    });
   const byId = new Map<string, PreviewRec>(existing.recs.map((r) => [r.id, r]));
   // Same-print dedup across DATE JITTER: Yahoo shifts an AMC print's date across a UTC day boundary
   // night-to-night, which would mint a second id for the same print. Treat any existing rec for the

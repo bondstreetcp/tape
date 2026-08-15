@@ -110,7 +110,14 @@ async function main() {
   const existing: TradeLogData = await fsp
     .readFile(FILE, "utf8")
     .then((s) => JSON.parse(s) as TradeLogData)
-    .catch(() => ({ generatedAt: nowISO, recs: [] as TradeRec[] }));
+    .catch((e: any) => {
+      // ONLY ENOENT is a first run. A truncated file (a step killed mid-write) or a transient read
+      // error must never reclassify the append-only MONEY log as empty — that write would wipe every
+      // graded play and ship the wipe to R2 (2026-08-15 sweep). Abort; the prior file stands.
+      if (e?.code === "ENOENT") return { generatedAt: nowISO, recs: [] as TradeRec[] };
+      console.error(`trade-log: data/trade-log.json exists but is unreadable (${e?.code ?? "parse error"}) — refusing to overwrite the play history. Restore it (R2/NAS) or delete it deliberately to re-seed.`);
+      return process.exit(1);
+    });
   const byId = new Map<string, TradeRec>(existing.recs.map((r) => [r.id, r]));
 
   // ── catalyst overlay: names with a LIVE disclosed strategic-alt / spin-off event ──
