@@ -212,6 +212,72 @@ function isDigestDue(now = new Date()): boolean {
   return now.getUTCDay() === 1 && now.getUTCHours() === 13;
 }
 
+// ── Remote ops levers (both ride the entrypoint's per-tick `git pull` — the ONE execution channel
+// into the container when docker/DSM access isn't available; R2 is the return channel) ─────────────
+
+/** One-shot forced tick: ops/force-tick.json (committed) = {mode, notBeforeUtc, expiresUtc, key}.
+ *  `auto` runs it once inside the window — the done-stamp (data/.tmp, container-local, excluded from
+ *  the tar) is written BEFORE the run so a crash can't re-fire it hourly. Built 2026-08-15 to make the
+ *  NAS run an instrumented FULL off-schedule while diagnosing the 4-night all-steps-failing outage. */
+function forcedMode(): Mode | null {
+  try {
+    const f = JSON.parse(readFileSync(path.join("ops", "force-tick.json"), "utf8"));
+    const m = String(f?.mode ?? "");
+    if (!["full", "quotes", "intl", "desk", "narration", "news"].includes(m) || !f?.key) return null;
+    const now = Date.now();
+    if (f.notBeforeUtc && now < Date.parse(f.notBeforeUtc)) return null;
+    if (!f.expiresUtc || now >= Date.parse(f.expiresUtc)) return null; // no expiry = never fires (safety)
+    const stamp = path.join("data", ".tmp", `force-tick-done-${String(f.key).replace(/[^\w.-]/g, "_")}`);
+    if (existsSync(stamp)) return null;
+    try { writeFileSync(stamp, new Date().toISOString()); } catch { return null; } // can't stamp → don't risk a loop
+    log(`force-tick: running mode=${m} (key ${f.key})`);
+    return m as Mode;
+  } catch { return null; } // no file / unreadable → nothing forced
+}
+
+/** Idle-hour env probe: on auto invocations that map to NO tick (nights, weekends), spend ~10s probing
+ *  the vendors FROM INSIDE THE CONTAINER + host load/mem, and upload site-data/runner-diag.json to R2.
+ *  This is how a broken runner gets diagnosed without docker access — the 2026-08-15 outage was invisible
+ *  precisely because the container's stdout was the only witness. Best-effort: never throws. */
+async function runnerDiag(): Promise<void> {
+  try {
+    const probe = async (url: string) => {
+      const t0 = Date.now();
+      try {
+        const r = await fetch(url, { headers: { "User-Agent": "tape-runner-diag research jameslyeh@gmail.com" }, signal: AbortSignal.timeout(15_000) });
+        try { await r.body?.cancel(); } catch { /* body already gone */ }
+        return { status: r.status, ms: Date.now() - t0 };
+      } catch (e: any) {
+        return { status: 0, ms: Date.now() - t0, err: String(e?.cause?.code ?? e?.name ?? e).slice(0, 60) };
+      }
+    };
+    const [yahoo, sec, efts, openrouter] = await Promise.all([
+      probe("https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=1d"),
+      probe("https://data.sec.gov/submissions/CIK0000320193.json"),
+      probe("https://efts.sec.gov/LATEST/search-index?q=%22diag%22"),
+      probe("https://openrouter.ai/api/v1/models"),
+    ]);
+    let sha = "?";
+    try { sha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim(); } catch { /* n/a */ }
+    const read = (f: string) => { try { return readFileSync(f, "utf8"); } catch { return ""; } };
+    const diag = {
+      generatedAt: new Date().toISOString(),
+      host: (await import("node:os")).hostname(), // provenance — a PC-side test run must not read as the NAS
+      sha, node: process.version,
+      loadavg: read("/proc/loadavg").trim(),
+      memAvailableKb: Number(/MemAvailable:\s+(\d+)/.exec(read("/proc/meminfo"))?.[1] ?? 0),
+      alertWebhookSet: !!process.env.ALERT_WEBHOOK_URL,
+      openrouterKeySet: !!process.env.OPENROUTER_API_KEY,
+      probes: { yahoo, sec, efts, openrouter },
+    };
+    const { putObject } = await import("../lib/r2");
+    await putObject("site-data/runner-diag.json", Buffer.from(JSON.stringify(diag, null, 1)), "application/json");
+    log(`runner-diag uploaded (yahoo ${yahoo.status}/${yahoo.ms}ms · sec ${sec.status}/${sec.ms}ms · load ${diag.loadavg.split(" ")[0]})`);
+  } catch (e) {
+    log(`runner-diag failed (non-fatal): ${String(e).slice(0, 120)}`);
+  }
+}
+
 /** Same wall-clock session pick as the workflow's "Pick session universes" step. */
 function sessionOnly(): string {
   const h = new Date().getUTCHours();
@@ -279,9 +345,13 @@ async function main() {
   let mode: Mode;
   let autoDigest = false; // auto also fires the weekly digest on Monday
   if (fromAuto) {
-    const m = autoMode();
+    const m = autoMode() ?? forcedMode(); // the schedule wins the hour; a force-tick fills an idle one
     autoDigest = isDigestDue();
-    if (!m && !autoDigest) { console.log("run-tick: not a tick hour — exiting."); return; }
+    if (!m && !autoDigest) {
+      console.log("run-tick: not a tick hour — running the idle diag, then exiting.");
+      await runnerDiag(); // ~10s; uploads site-data/runner-diag.json so the container is observable
+      return;
+    }
     mode = m ?? "digest"; // Monday 13:00 with no data tick → digest-only
     if (!m && autoDigest) autoDigest = false; // already the primary mode; don't double-run
   } else if (arg === "full" || arg === "quotes" || arg === "intl" || arg === "desk" || arg === "narration" || arg === "digest" || arg === "news") {
@@ -392,8 +462,11 @@ async function main() {
     try {
       let sha = "?";
       try { sha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim(); } catch { /* not a repo? */ }
+      const readProc = (f: string) => { try { return readFileSync(f, "utf8").trim(); } catch { return ""; } };
       writeFileSync(path.join("data", "tick-report.json"), JSON.stringify({
         generatedAt: new Date().toISOString(), mode, sha, node: process.version,
+        loadavgEnd: readProc("/proc/loadavg"), // was the box starved while the steps ran? (Eufy contention)
+        memAvailableKb: Number(/MemAvailable:\s+(\d+)/.exec(readProc("/proc/meminfo"))?.[1] ?? 0),
         fails, total: plan.length, steps: stepReport,
       }, null, 1));
     } catch (e) { log(`tick-report write failed (non-fatal): ${String(e).slice(0, 120)}`); }
