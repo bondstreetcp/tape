@@ -1,6 +1,10 @@
 # Forward-grader bug sweep — 2026-08-15 (39-agent find→verify)
 
-33 of 34 findings survived adversarial verification. The two classes: **cross-feed clock divergence** (grading frozen entries against a possibly-stale sibling feed) and **failure-vs-absence** (one sentinel for both a 404 and a dead network). FIXED same day (d9a4714d, 62ca0770): the three history-wipe reads (signal-log/trade-log/preview-log ENOENT-only), signal-log stale-snapshot vintage gate + spx-null entry deferral. THE REST, ranked, below — each verified with a concrete failure scenario (full detail in the sweep transcript).
+33 of 34 findings survived adversarial verification. The two classes: **cross-feed clock divergence** (grading frozen entries against a possibly-stale sibling feed) and **failure-vs-absence** (one sentinel for both a 404 and a dead network). FIXED same day (d9a4714d, 62ca0770): the three history-wipe reads (signal-log/trade-log/preview-log ENOENT-only), signal-log stale-snapshot vintage gate + spx-null entry deferral. **STATUS 2026-08-15 late: 23 of 25 worked down same-day** (27ac76fd, 7f91df04, 3251d80e, fdce9de9, 576c6773, 03b12941, a434bd6e, 1721601b — plus the horizon-aware track record 73a17e22). **The two DELIBERATE deferrals:**
+- **[HIGH] VRP per-row cone staleness (refresh-vol-premium-ledger)** — needs vol-cone to stamp each row's own last-series date (a feed schema change + writer edit). No deadline pressure: the ledger's first grades mature ~Sep; do it before then.
+- **[LOW] valuation 'current' multiple pinned to first close after quarter-end** — a methodology change to PUBLISHED numbers; this file has a documented output-preservation trap (the KEEP=200 incident), so it needs a byte-regression exercise like that one, not a drive-by edit.
+
+The original ranked list (kept for the failure scenarios + fix hints):
 
 ## [HIGH·cross-feed-clock] refresh-trade-log.ts:278 — Post-print grade fires on the snapshot-frozen scheduled earnings date with zero verification the print happened — a rescheduled print grades a random non-event session, permanently
 
