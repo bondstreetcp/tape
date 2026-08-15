@@ -88,6 +88,10 @@ export interface TradeRec {
   pnl?: number | null; // per-share P&L — the PRIMARY grade (post-print for new recs; see settleBasis)
   outcome?: Outcome | null;
   settleBasis?: "post-print" | "expiry"; // how pnl was graded (older recs: expiry; new: the print)
+  /** The settle ran without FILING EVIDENCE the print happened (no Item 2.02 on record within the
+   *  grace window after the scheduled date — a rescheduled print, a CIK-less name, or a non-8-K
+   *  reporter). The grade may measure a non-event session; analysis should filter or discount it. */
+  printUnverified?: boolean;
   pnlToExpiry?: number | null; // secondary, informational: what it would have been if held to expiry
   /** Pre-print drift: how far the stock moved between logging and the print-eve close (the print's
    *  own move backed out of the reaction close). The tail the "bet on the print" framing hides. */

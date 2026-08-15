@@ -49,45 +49,61 @@ export function isRecentReport8K(form: string, items: string | undefined, filedD
 
 const repMemo = new Map<string, { date: string; daysAgo: number } | null>();
 
-/** Did `sym` file an earnings 8-K (Item 2.02) in the last `maxDays` days? Best-effort, memoized. */
-export async function detectRecentReport(sym: string, nowMs: number, maxDays = 7): Promise<{ date: string; daysAgo: number } | null> {
+/** Checked variant: `checked` is TRUE only when the submissions index was actually READ — a null
+ *  `rep` then means "verified: did not report". checked=false means the CHECK DIDN'T RUN (SEC
+ *  unreachable / CIK unresolvable) and callers persisting decisions must not record a clean result.
+ *  Failures are NEVER memoized (the 2026-08-15 sweep: a 6s SEC blip became a cached same-day
+ *  "did not report", flipping the desk's earnings-outrank-everything rule for the whole run). */
+export async function detectRecentReportChecked(sym: string, nowMs: number, maxDays = 7): Promise<{ rep: { date: string; daysAgo: number } | null; checked: boolean }> {
   const todayDay = new Date(nowMs).toISOString().slice(0, 10);
   const key = `${sym.toUpperCase()}|${todayDay}|${maxDays}`;
-  if (repMemo.has(key)) return repMemo.get(key)!;
+  if (repMemo.has(key)) return { rep: repMemo.get(key)!, checked: true }; // memo holds CHECKED results only
   let out: { date: string; daysAgo: number } | null = null;
   try {
     const bounded = <T>(p: Promise<T>): Promise<T | null> =>
       Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), 6_000))]);
     const cik = await bounded(tickerToCik(sym));
-    if (cik) {
-      const recent = (await bounded(getSubmissions(cik)))?.filings?.recent;
-      const forms: string[] = recent?.form ?? [];
-      const dates: string[] = recent?.filingDate ?? [];
-      const items: string[] = recent?.items ?? [];
-      for (let i = 0; i < forms.length; i++) {
-        const d = daysBefore(dates[i], todayDay);
-        if (d != null && d > maxDays) break; // newest-first — nothing older can qualify
-        if (isRecentReport8K(forms[i], items[i], dates[i], todayDay, maxDays)) {
-          out = { date: dates[i], daysAgo: d! };
-          break;
-        }
+    if (!cik) return { rep: null, checked: false }; // unresolved ticker OR transport — either way, unproven
+    const recent = (await bounded(getSubmissions(cik)))?.filings?.recent;
+    if (!recent || !Array.isArray(recent.form)) return { rep: null, checked: false }; // index unread — unproven
+    const forms: string[] = recent.form ?? [];
+    const dates: string[] = recent.filingDate ?? [];
+    const items: string[] = recent.items ?? [];
+    for (let i = 0; i < forms.length; i++) {
+      const d = daysBefore(dates[i], todayDay);
+      if (d != null && d > maxDays) break; // newest-first — nothing older can qualify
+      if (isRecentReport8K(forms[i], items[i], dates[i], todayDay, maxDays)) {
+        out = { date: dates[i], daysAgo: d! };
+        break;
       }
     }
-  } catch { /* submissions unreachable — no fact */ }
+  } catch {
+    return { rep: null, checked: false }; // submissions unreachable — no fact, NOT a negative
+  }
   repMemo.set(key, out);
-  return out;
+  return { rep: out, checked: true };
+}
+
+/** Did `sym` file an earnings 8-K (Item 2.02) in the last `maxDays` days? Best-effort convenience —
+ *  a null can mean EITHER "didn't report" or "couldn't check"; persistence callers must use the
+ *  Checked variant. */
+export async function detectRecentReport(sym: string, nowMs: number, maxDays = 7): Promise<{ date: string; daysAgo: number } | null> {
+  return (await detectRecentReportChecked(sym, nowMs, maxDays)).rep;
 }
 
 // Per-process memo (sym+earnings day → flag or null) — the live card re-renders; the submissions
 // fetch should happen once per name per process, not per view.
 const memo = new Map<string, CatalystFlag | null>();
 
-export async function detectPreannounce(sym: string, earningsISO: string | null): Promise<CatalystFlag | null> {
-  if (!earningsISO) return null;
+/** Checked variant — `checked` TRUE only when the submissions index was actually read; failures are
+ *  never memoized. Persistence callers (the trade-log's "looked, clean" re-stamp) must use this:
+ *  recording a clean result from an unreached SEC silently disables the stand-aside forever. */
+export async function detectPreannounceChecked(sym: string, earningsISO: string | null): Promise<{ flag: CatalystFlag | null; checked: boolean }> {
+  if (!earningsISO) return { flag: null, checked: false };
   const earningsDay = earningsISO.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(earningsDay)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(earningsDay)) return { flag: null, checked: false };
   const key = `${sym.toUpperCase()}|${earningsDay}`;
-  if (memo.has(key)) return memo.get(key)!;
+  if (memo.has(key)) return { flag: memo.get(key)!, checked: true }; // memo holds CHECKED results only
   let flag: CatalystFlag | null = null;
   try {
     // Internally time-bound so EVERY caller (the live card's hot path, the nightly logger) is
@@ -95,26 +111,32 @@ export async function detectPreannounce(sym: string, earningsISO: string | null)
     const bounded = <T>(p: Promise<T>): Promise<T | null> =>
       Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), 6_000))]);
     const cik = await bounded(tickerToCik(sym));
-    if (cik) {
-      const recent = (await bounded(getSubmissions(cik)))?.filings?.recent;
-      const forms: string[] = recent?.form ?? [];
-      const dates: string[] = recent?.filingDate ?? [];
-      const items: string[] = recent?.items ?? [];
-      // Newest-first; anything filed >40d before the print can't qualify and nothing older can either.
-      for (let i = 0; i < forms.length; i++) {
-        const db = daysBefore(dates[i], earningsDay);
-        if (db != null && db > 40) break;
-        if (isPreannouncement8K(forms[i], items[i], dates[i], earningsDay)) {
-          flag = {
-            kind: "preannounce",
-            headline: `8-K Item 2.02 (prelim results) filed ${dates[i]}, ${db}d ahead of the scheduled print`,
-            date: dates[i],
-          };
-          break;
-        }
+    if (!cik) return { flag: null, checked: false };
+    const recent = (await bounded(getSubmissions(cik)))?.filings?.recent;
+    if (!recent || !Array.isArray(recent.form)) return { flag: null, checked: false };
+    const forms: string[] = recent.form ?? [];
+    const dates: string[] = recent.filingDate ?? [];
+    const items: string[] = recent.items ?? [];
+    // Newest-first; anything filed >40d before the print can't qualify and nothing older can either.
+    for (let i = 0; i < forms.length; i++) {
+      const db = daysBefore(dates[i], earningsDay);
+      if (db != null && db > 40) break;
+      if (isPreannouncement8K(forms[i], items[i], dates[i], earningsDay)) {
+        flag = {
+          kind: "preannounce",
+          headline: `8-K Item 2.02 (prelim results) filed ${dates[i]}, ${db}d ahead of the scheduled print`,
+          date: dates[i],
+        };
+        break;
       }
     }
-  } catch { /* submissions unreachable — no flag */ }
+  } catch {
+    return { flag: null, checked: false }; // submissions unreachable — no fact, NOT a clean bill
+  }
   memo.set(key, flag);
-  return flag;
+  return { flag, checked: true };
+}
+
+export async function detectPreannounce(sym: string, earningsISO: string | null): Promise<CatalystFlag | null> {
+  return (await detectPreannounceChecked(sym, earningsISO)).flag;
 }

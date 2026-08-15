@@ -23,7 +23,7 @@ import { loadSnapshot } from "../lib/data";
 import { buildEarningsTrade } from "../lib/earningsTrade";
 import { computeRiskFlags, crossedCredit, marginPerShare, netCredit, payoffBounds, prePrintDriftPct, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
 import { loadCatalystOverlay } from "../lib/catalystOverlay";
-import { detectPreannounce } from "../lib/preannounce";
+import { detectPreannounceChecked, detectRecentReportChecked } from "../lib/preannounce";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
@@ -168,8 +168,12 @@ async function main() {
     await throttle();
     // Overlay first (strategic-alt / spin-off / acquisition), then the per-symbol preannouncement
     // check — the SAME resolution computeQuant uses, so the logger can never log a play the card
-    // would withhold (the KVUE long-straddle / IBM preannounced-print class).
-    const catFlag = flagFor(s.symbol) ?? (await detectPreannounce(s.symbol, eIso).catch(() => null));
+    // would withhold (the KVUE long-straddle / IBM preannounced-print class). CHECKED: an SEC
+    // transport failure must not be recorded as "looked, clean" — the rec keeps catalystFlag
+    // UNDEFINED (never-checked) so the nightly back-fill re-checks it (2026-08-15 sweep).
+    const overlayFlag = flagFor(s.symbol);
+    const preRes = overlayFlag ? { flag: overlayFlag, checked: true } : await detectPreannounceChecked(s.symbol, eIso).catch(() => ({ flag: null, checked: false }));
+    const catFlag = preRes.flag;
     const built = await buildEarningsTrade(s.symbol, eIso, catFlag).catch(() => null);
     if (!built || !built.trade.legsData) return;
     const legs = built.trade.legsData;
@@ -197,7 +201,7 @@ async function main() {
       maxProfit: maxProfit != null ? +maxProfit.toFixed(2) : null,
       maxLoss: maxLoss != null ? +maxLoss.toFixed(2) : null,
       // undefined (no live catalyst) is dropped by JSON.stringify — the field only appears when flagged
-      catalystFlag: catFlag ?? undefined,
+      catalystFlag: preRes.checked ? catFlag : undefined, // undefined = never-checked → the back-fill re-checks; null = LOOKED, clean
       status: "awaiting_print",
     };
     // ── risk instrumentation (all annotation, never a gate — see lib/tradeLog) ──
@@ -266,9 +270,14 @@ async function main() {
     // pre-print by construction (2-35d before), so the annotation stays honest on settled recs.
     if (rec.catalystFlag === undefined) {
       preChecked++;
-      const pre = await detectPreannounce(rec.symbol, rec.earningsDate).catch(() => null);
-      rec.catalystFlag = pre && Date.parse(pre.date) < Date.parse(rec.earningsDate) ? pre : null;
-      if (rec.catalystFlag) restamped++;
+      // CHECKED: persist a result (flag OR the "looked, clean" null) ONLY when the submissions index
+      // was actually read. A transport failure leaves undefined so tomorrow re-checks — the old code
+      // persisted the failure as a permanent clean bill (2026-08-15 sweep).
+      const { flag: pre, checked } = await detectPreannounceChecked(rec.symbol, rec.earningsDate).catch(() => ({ flag: null, checked: false }));
+      if (checked) {
+        rec.catalystFlag = pre && Date.parse(pre.date) < Date.parse(rec.earningsDate) ? pre : null;
+        if (rec.catalystFlag) restamped++;
+      }
     }
   }
   if (restamped || preChecked) console.log(`catalyst restamp: ${restamped} flags added (${preChecked} preannounce checks run against SEC submissions)`);
@@ -283,6 +292,18 @@ async function main() {
     // (a) print has happened → get the reaction (move + reaction-day close) and GRADE the play there.
     // The chart is the source of truth: close before the print vs the first COMPLETED session after it.
     if (rec.status !== "settled" && Number.isFinite(eT) && now >= eT) {
+      // PRINT VERIFICATION (2026-08-15 sweep): "now ≥ the scheduled date" is not "the print happened"
+      // — a rescheduled print graded a random session into the money log. Require an Item 2.02 on
+      // record on/after the scheduled date (−2d for AMC/BMO date jitter). SEC unreachable → DEFER
+      // this run (settling a day late is safe and idempotent). Still no filing PRINT_GRACE_DAYS past
+      // the date → settle anyway but stamp printUnverified (CIK-less names and non-8-K reporters must
+      // not stay open forever; the analysis side can filter the flag).
+      const PRINT_GRACE_DAYS = 5;
+      const { rep, checked } = await detectRecentReportChecked(rec.symbol, now, 45).catch(() => ({ rep: null, checked: false as const }));
+      const printConfirmed = checked && rep != null && Date.parse(rep.date) >= eT - 2 * DAY;
+      const daysPast = (now - eT) / DAY;
+      if (!printConfirmed && daysPast <= PRINT_GRACE_DAYS) return; // wait for the 8-K (or for SEC to come back)
+      if (!printConfirmed) rec.printUnverified = true;
       const rx = await reactionFromChart(rec.symbol, eT);
       if (rx != null) {
         rec.realizedMovePct = +(rx.move * 100).toFixed(2);
