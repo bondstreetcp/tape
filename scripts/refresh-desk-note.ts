@@ -21,6 +21,7 @@ import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
 import { getNews, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
+import { buildMoveEvidence } from "../lib/moveEvidence";
 import { detectRecentReport } from "../lib/preannounce";
 import { buildBinaryWeek } from "../lib/binaryWeek";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
@@ -38,7 +39,7 @@ const readJson = async <T,>(f: string): Promise<T | null> =>
 const SYSTEM =
   "You are a senior markets-desk strategist writing the morning brief for a sharp portfolio manager. You are given PRE-SELECTED overnight data WITH CONTEXT (trend, 52-week position, valuation, next-earnings, options skew, implied upside). " +
   "Do NOT just relist the data — for every development write the SECOND LAYER: WHY it matters, the mechanism / read-through, whether it looks like real signal or just noise, and what it sets up or what to watch next. Tie each section together with a one-line thematic 'synthesis' (the so-what for the group). Surface CONNECTIONS the raw feeds don't show on their own — e.g. a stock that is weak AND has heavy near-dated put premium AND just got downgraded is positioning into a catalyst; an unexplained move with no catalyst on file is itself notable. Give the bull AND the bear when it's a genuine debate. " +
-  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. ATTRIBUTION RULE — EARNINGS OUTRANK EVERYTHING: when a mover is marked 'REPORTED EARNINGS …' (a results 8-K is on record), that print IS the driver of its same-day and next-session move — lead with the report (use headlines for the beat/miss/guide color), and treat any analyst upgrade/downgrade dated at or after the print as REACTION to it, never the cause. A move 2-7 days after a marked report with no fresh catalyst is a CONTINUED post-earnings move — say so and tag it Earnings, never 'no specific catalyst'. Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found AND no recent report is marked, and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Earnings | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
+  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. ATTRIBUTION RULE — EARNINGS OUTRANK EVERYTHING: when a mover is marked 'REPORTED EARNINGS …' (a results 8-K is on record), that print IS the driver of its same-day and next-session move — lead with the report (use headlines for the beat/miss/guide color), and treat any analyst upgrade/downgrade dated at or after the print as REACTION to it, never the cause. A move 2-7 days after a marked report with no fresh catalyst is a CONTINUED post-earnings move — say so and tag it Earnings, never 'no specific catalyst'. MECHANISM RULE — NEVER headline a mover 'no specific catalyst' or 'no catalyst found': every mover carries MOVE EVIDENCE computed from the data (its sector's own 1-day move and the RESIDUAL the sector does not explain; the largest and hottest same-industry peers' moves; elevated short volume when present). When no fresh headline exists, USE IT to state the best-evidenced mechanism as the fact line and the read: a small residual = a sector/theme move (name the sector's move, and when one peer clearly led with news, name the leader — 'sector sympathy: semis ripped, SNDK +18% led'); a large residual with elevated short volume on an up-move = squeeze-flavored positioning; a large residual with no news = idiosyncratic positioning/de-grossing — say which and cite the numbers supplied. NEVER invent a mechanism the evidence doesn't support — the evidence numbers are the ONLY figures you may cite for it. Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found AND no recent report is marked AND the move evidence itself is flat/absent — and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Earnings | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
   "DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: combine ONE name's threads (its move + filing + options + upgrade) into its single bullet. FORMAT (CRITICAL): each bullet's 'fact' describes exactly ONE ticker's move/event — at most one ticker's price change per fact, kept to a short scannable line. NEVER list two or more tickers' moves in a single fact, even when they share a theme: a four-name sector move is FOUR separate bullets under one section heading, tied together by that section's 'synthesis' line — not one run-on bullet. (You may reference a related ticker inside the 'read', but the 'fact' stays single-ticker.) COVERAGE: every stock that moved ±8% or more in the data MUST appear somewhere in the brief — fold it into the right section; never silently drop a double-digit move (those are exactly what the reader scans for). " +
   "SECTIONS (FIXED): use EXACTLY these headings, in this order, and omit a section only when it has no bullets — 1) the movers section (heading given in the run context), 2) 'Filings that matter', 3) 'Analyst actions', 4) 'Options desk'. Do NOT invent other section headings; the structure carries the meaning, the synthesis line carries the theme. " +
   NO_ADVICE;
@@ -71,6 +72,23 @@ async function main() {
   ]);
   const flow = getOptionsFlow();
   const analyst = await getAnalystActions(BASE).catch(() => []);
+
+  // ── MOVE EVIDENCE context (lib/moveEvidence): sector residual + peer tape + short-vol pressure,
+  // all computed from feeds already on disk. This is what lets the model state a MECHANISM for a
+  // no-headline mover ("sector sympathy", "squeeze-flavored") instead of shrugging "no catalyst" —
+  // without ever guessing: every number it may cite is arithmetic, not inference.
+  const sectorRet1d = new Map<string, number>(
+    (snap?.sectors ?? []).filter((x: any) => x?.etf && x?.returns?.["1d"] != null).map((x: any) => [x.etf as string, x.returns["1d"] as number]),
+  );
+  const shortMech = await readJson<{ rows?: { symbol: string; latestShortVolPct?: number | null; shortVolTrendPp?: number | null }[] }>("short-mechanics.json");
+  const shortVol = new Map(
+    (shortMech?.rows ?? [])
+      .filter((r) => r.symbol && r.latestShortVolPct != null)
+      .map((r) => [r.symbol, { pct: r.latestShortVolPct as number, trendPp: r.shortVolTrendPp }]),
+  );
+  const peerRows = (snap?.stocks ?? []).map((s) => ({
+    symbol: s.symbol, industry: (s as any).industry, sector: s.sector, marketCap: s.marketCap, ret1d: s.returns["1d"],
+  }));
 
   const now = Date.now();
   // Calendar-day countdown, not an elapsed-ms round — otherwise the window flips with the clock (the
@@ -124,16 +142,20 @@ async function main() {
         const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS["1d"], limit: 3 });
         driver = heads.length
           ? `recent news: ${heads.map((h) => `${h.date ? `[${h.date}] ` : "[undated] "}${h.title}`).join(" | ")}`
-          : "no catalyst or recent news found";
+          : "no name-specific news in the causal window — attribute via MOVE EVIDENCE";
       }
       if (rep) {
         const when = rep.daysAgo === 0 ? "TODAY" : rep.daysAgo === 1 ? "YESTERDAY" : `${rep.date} (${rep.daysAgo}d ago)`;
         driver = `REPORTED EARNINGS ${when} — 8-K results filing on record${driver ? ` · ${driver}` : ""}`;
       }
+      const evidence = buildMoveEvidence(
+        { symbol: s.symbol, sector: s.sector, industry: (s as any).industry, etf: (s as any).etf, ret1d: s.returns["1d"] as number },
+        { sectorRet1d, rows: peerRows, shortVol },
+      );
       const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
       return (
         `${s.symbol} ${pct(s.returns["1d"])} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
-        `${val ? ` · ${val}` : ""} · ${pct(s.pctFromHigh)} vs 52w-high${earnSoon(s.earningsDate)} · ${driver}`
+        `${val ? ` · ${val}` : ""} · ${pct(s.pctFromHigh)} vs 52w-high${earnSoon(s.earningsDate)} · ${driver}${evidence ? ` · ${evidence}` : ""}`
       );
     }),
   );
@@ -254,7 +276,7 @@ async function main() {
   const user =
     FRAME +
     `${SCHEMA_HINT}\n` +
-    block("BIGGEST MOVES (1-day, S&P 500; with 1w/YTD trend, sector, size, valuation, 52w-position, next-earnings, catalyst)", movers) +
+    block("BIGGEST MOVES (1-day, S&P 500; with 1w/YTD trend, sector, size, valuation, 52w-position, next-earnings, catalyst/news, MOVE EVIDENCE: sector residual + peer tape + short-vol)", movers) +
     block("MATERIAL NEW SEC FILINGS (with what-changed + the model's takeaway)", filings) +
     block("UNUSUAL OPTIONS FLOW (aggregated per name → call/put skew)", flows) +
     // Each line is prefixed with its OWN date. The model must use it — an item from two sessions ago
