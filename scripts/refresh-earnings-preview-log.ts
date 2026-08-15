@@ -151,7 +151,12 @@ async function main() {
     // before the forecast was logged, the "forecast" was made with the answer available — a stale
     // snapshot date slipped through. Deleting it is the only honest outcome; grading it would launder
     // hindsight into the accuracy record. Code-verifiable, so it can't be argued with.
-    if (Date.parse(rx.date) < Date.parse(rec.loggedAt)) { byId.delete(rec.id); invalidated++; return; }
+    // CALENDAR-DAY compare, not instants (the calendar-date-vs-instant class, 2026-08-15 sweep):
+    // rx.date is EDGAR's filing DAY ("2026-08-13" → midnight UTC), loggedAt is an instant — the old
+    // instant compare read midnight < 07:00Z and deleted every legitimate same-day pre-print forecast
+    // logged that morning. Hindsight = filed on a STRICTLY EARLIER day than the forecast; the log-time
+    // guard (a fresh print invalidates a stale "upcoming" date) covers the same-day-after-print edge.
+    if (rx.date.slice(0, 10) < rec.loggedAt.slice(0, 10)) { byId.delete(rec.id); invalidated++; return; }
     // Actual EPS from the stats surprises. `quarter` is the QUARTER-END date, and the report lands
     // 25-90d AFTER it (annual prints at the long end) — so match DIRECTIONALLY: the latest quarter-end
     // at/before the print, within 110d. A symmetric ±45d window silently never graded late reporters.
@@ -167,11 +172,12 @@ async function main() {
     const actualMovePct = rx.move != null ? +(rx.move * 100).toFixed(2) : null;
     const reactionHit = gradeReaction(rec.reactionDir, actualMovePct);
     const dirHit = dir != null ? rec.vsConsensus === dir : null;
-    // Settle only when something is actually GRADABLE — Yahoo's surprise/actuals can lag the reaction
-    // by days, and freezing an all-null "settled" rec would exclude it from the record forever. Keep
-    // retrying nightly; give up (settle with whatever we have) two weeks past the print.
-    const gradable = eps != null || dirHit != null || reactionHit != null;
-    if (!gradable && now - eT < 14 * DAY) return;
+    // Settle only when FULLY graded — the reaction (chart) lands DAYS before Yahoo's surprise/actuals,
+    // and the old any-one-grade gate settled on the reaction alone, freezing epsHit/dirHit as null
+    // FOREVER (settled recs are never revisited; 2026-08-15 sweep). Keep retrying nightly while
+    // anything is missing; give up (settle with whatever we have) two weeks past the print.
+    const fullyGraded = eps != null && dirHit != null && reactionHit != null;
+    if (!fullyGraded && now - eT < 14 * DAY) return;
     rec.actualEps = actualEps;
     rec.actualSurprise = rx.surprise;
     rec.actualMovePct = actualMovePct;
