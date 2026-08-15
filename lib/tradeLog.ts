@@ -108,7 +108,11 @@ export interface TradeRec {
 }
 
 export interface TradeLogData {
+  /** Stamped ONLY by the nightly logger (refresh-trade-log) — the freshness gate reads this, so the
+   *  intraday spread capture must never touch it (a capture re-stamp hid a dead logger for a day). */
   generatedAt: string;
+  /** Stamped by the intraday spread capture (capture-trade-spreads) — its own clock, kept separate. */
+  spreadsCapturedAt?: string;
   recs: TradeRec[];
 }
 

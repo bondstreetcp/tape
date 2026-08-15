@@ -55,30 +55,48 @@ async function main() {
   }
   const today = now.toISOString().slice(0, 10);
   const due = data.recs.filter(
-    (r) => r.status === "awaiting_print" && Array.isArray(r.legs) && r.legs.length > 0 && (r.spreadCapturedAt ?? "").slice(0, 10) !== today,
+    (r) =>
+      r.status === "awaiting_print" &&
+      Array.isArray(r.legs) &&
+      r.legs.length > 0 &&
+      (r.spreadCapturedAt ?? "").slice(0, 10) !== today &&
+      // PRE-print only (2026-08-15 sweep): the field's meaning is the liquidity you could have traded
+      // BEFORE the event. Without this clock guard the last capture landed on the post-print session
+      // (IV crushed, book tightened) and overwrote the honest pre-print read for nearly every play.
+      Number.isFinite(Date.parse(r.earningsDate)) && Date.parse(r.earningsDate) > now.getTime(),
   );
   if (!due.length) { console.log("capture-spreads: nothing due (all pre-print plays captured today)"); return; }
 
-  let captured = 0, twoSided = 0;
+  let captured = 0, twoSided = 0, failed = 0;
   for (const rec of due) {
     if (!rec.expiry) continue;
-    const chain = await getOptions(rec.symbol, rec.expiry).catch(() => null);
+    // Failure ≠ absence (2026-08-15 sweep): a THROWN fetch (429/timeout) must not burn the day's
+    // attempt or overwrite yesterday's valid read — skip unstamped so a later intraday tick retries
+    // (2-hourly cadence bounds the retries). Only a REAL read (fetched chain, whatever it shows)
+    // stamps and overwrites.
+    let chain: Awaited<ReturnType<typeof getOptions>> | null = null;
+    let fetchFailed = false;
+    try { chain = await getOptions(rec.symbol, rec.expiry); } catch { fetchFailed = true; }
     await sleep(150); // pace the options endpoint
-    rec.spreadCapturedAt = now.toISOString(); // stamp the attempt so a dead chain doesn't retry all day
+    if (fetchFailed) { failed++; continue; }
+    rec.spreadCapturedAt = now.toISOString(); // a real attempt — don't re-capture today
     captured++;
-    if (!chain || chain.selected !== rec.expiry) { rec.liveSpreadPct = null; continue; }
+    if (!chain || chain.selected !== rec.expiry) { rec.liveSpreadPct = null; rec.riskFlags = computeRiskFlags(rec); continue; }
     const fresh = freshLegs(rec, chain.calls, chain.puts);
-    if (!fresh) { rec.liveSpreadPct = null; continue; } // one-sided even intraday — genuinely illiquid
+    if (!fresh) { rec.liveSpreadPct = null; rec.riskFlags = computeRiskFlags(rec); continue; } // one-sided even intraday — genuinely illiquid
     const mid = netCredit(fresh);
     const xc = crossedCredit(fresh);
-    if (xc == null || !(Math.abs(mid) > 0)) { rec.liveSpreadPct = null; continue; }
+    if (xc == null || !(Math.abs(mid) > 0)) { rec.liveSpreadPct = null; rec.riskFlags = computeRiskFlags(rec); continue; }
     rec.liveSpreadPct = +((mid - xc) / Math.abs(mid)).toFixed(4);
     rec.riskFlags = computeRiskFlags(rec); // re-derive wide-spread off the live read
     twoSided++;
   }
-  data.generatedAt = now.toISOString();
+  // OWN stamp, never generatedAt (2026-08-15 sweep): this intraday pass re-stamping the file's main
+  // stamp made a DEAD nightly logger look fresh to the freshness gate all day — the heartbeat-lie
+  // mechanism inside one feed. generatedAt belongs to refresh-trade-log alone.
+  data.spreadsCapturedAt = now.toISOString();
   await fsp.writeFile(FILE, JSON.stringify(data));
-  console.log(`capture-spreads: re-measured ${captured} pre-print plays · ${twoSided} got a live two-sided read (${captured - twoSided} still one-sided/illiquid)`);
+  console.log(`capture-spreads: re-measured ${captured} pre-print plays · ${twoSided} got a live two-sided read (${captured - twoSided} one-sided/illiquid${failed ? ` · ${failed} fetch-failed, retry next tick` : ""})`);
 }
 
 main().catch((e) => { console.error("capture-trade-spreads failed:", e); process.exit(1); });
