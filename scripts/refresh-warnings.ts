@@ -12,7 +12,7 @@ import { loadSnapshot } from "../lib/data";
 import { loadValuationHistory } from "../lib/valuationHistory";
 import { loadSuperInvestors } from "../lib/superinvestors";
 import { buildSmartMoneySell } from "../lib/smartMoneySell";
-import { getAnalystActions } from "../lib/analystActions";
+import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { WarningsData, WarningName, WarningSignal, WarningRead, WarningKind } from "../lib/warnings";
@@ -29,7 +29,8 @@ const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 
 async function main() {
   const [snap, vh, si] = await Promise.all([loadSnapshot(UNIVERSE).catch(() => null), loadValuationHistory().catch(() => null), loadSuperInvestors().catch(() => null)]);
   const flow = getOptionsFlow();
-  const analyst = await getAnalystActions("sp500").catch(() => [] as any[]);
+  const { actions: analyst, ok: _aOk, attempted: _aAtt } = await getAnalystActionsDetailed("sp500").catch(() => ({ actions: [] as any[], ok: 0, attempted: 1 }));
+  if (_aAtt > 0 && _aOk / _aAtt < 0.8) console.error(`warnings: ⚠ analyst scan DEGRADED (${_aOk}/${_aAtt}) — the downgrade kind under-scores tonight (a 429 storm is not a quiet week)`);
   const estimates = await fs.readFile(path.join(DATA, "estimates.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const guidance = await fs.readFile(path.join(DATA, "guidance-board.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const campaigns = await fs.readFile(path.join(DATA, "campaigns.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);

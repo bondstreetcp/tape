@@ -21,7 +21,7 @@ import { decodeVec, cosineSim, type FilingVec } from "../lib/filingIndex";
 import { embedMany, EMBED_MODEL } from "../lib/embedLocal";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { daysUntil } from "../lib/calendar";
-import { getAnalystActions } from "../lib/analystActions";
+import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { DEBATES } from "../lib/debateRegistry";
 import { assignEvidence, mergeLedgerAccumulate, summarise, DEFAULT_TAU, type Candidate, type EvidenceEntry, type Standing } from "../lib/debates";
 
@@ -103,7 +103,8 @@ async function main() {
   // analyst activity is "maintains". The signal is in the PRICE TARGET. 242 rows carry both a from and
   // a to, and 215 of those moved: 157 raised, 58 cut. A raised target is a bullish revision by the
   // analyst who set it, which is exactly the dated directional evidence a debate ledger wants.
-  const analyst = await getAnalystActions(BASE).catch(() => [] as any[]);
+  const { actions: analyst, ok: _aOk, attempted: _aAtt } = await getAnalystActionsDetailed(BASE).catch(() => ({ actions: [] as any[], ok: 0, attempted: 1 }));
+  if (_aAtt > 0 && _aOk / _aAtt < 0.8) console.error(`debates: ⚠ analyst scan DEGRADED (${_aOk}/${_aAtt}) — analyst evidence rows are incomplete tonight`);
   const directionOf = (a: { action: string; targetFrom: number | null; targetTo: number | null }) =>
     a.action === "up" ? 1 : a.action === "down" ? -1
     : a.targetFrom && a.targetTo && a.targetTo !== a.targetFrom ? (a.targetTo > a.targetFrom ? 1 : -1) : 0;

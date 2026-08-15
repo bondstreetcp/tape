@@ -16,7 +16,7 @@ import { loadValuationHistory } from "../lib/valuationHistory";
 import { loadSuperInvestors } from "../lib/superinvestors";
 import { loadCongress } from "../lib/congress";
 import { loadCatalysts } from "../lib/catalysts";
-import { getAnalystActions } from "../lib/analystActions";
+import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { ConfluenceData, ConfluenceName, ConfluenceSignal, ConfluenceRead, SignalKind } from "../lib/confluence";
@@ -40,7 +40,8 @@ async function main() {
     loadCatalysts().catch(() => ({} as Record<string, { why?: string }>)),
   ]);
   const flow = getOptionsFlow(); // synchronous
-  const analyst = await getAnalystActions("sp500").catch(() => [] as any[]);
+  const { actions: analyst, ok: _aOk, attempted: _aAtt } = await getAnalystActionsDetailed("sp500").catch(() => ({ actions: [] as any[], ok: 0, attempted: 1 }));
+  if (_aAtt > 0 && _aOk / _aAtt < 0.8) console.error(`confluence: ⚠ analyst scan DEGRADED (${_aOk}/${_aAtt}) — the analyst kind under-scores tonight (a 429 storm is not a quiet week)`);
   // per-name companyStats snapshot (estimates + short interest) and the Form 4 buy scan
   const estimates = await fs.readFile(path.join(DATA, "estimates.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
   const insiders = await fs.readFile(path.join(DATA, "insiders.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);

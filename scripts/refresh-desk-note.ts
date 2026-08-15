@@ -19,7 +19,7 @@ import { selectDeskActions, actionVerb } from "../lib/deskAnalyst";
 import { fmtDate } from "../lib/format";
 import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
-import { getAnalystActions } from "../lib/analystActions";
+import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getNewsChecked, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
 import { buildMoveEvidence } from "../lib/moveEvidence";
 import { detectRecentReport } from "../lib/preannounce";
@@ -71,7 +71,12 @@ async function main() {
     loadOvernightFilings().catch(() => null),
   ]);
   const flow = getOptionsFlow();
-  const analyst = await getAnalystActions(BASE).catch(() => []);
+  // Coverage-aware (2026-08-15 sweep): a 429 storm thins the ~140-name scan to a handful of survivors
+  // and still returns a well-formed array — indistinguishable from a quiet week. Below the same 80%
+  // threshold the API route uses, the brief must not present the thin list as "the day's actions".
+  const { actions: analyst, ok: aOk, attempted: aAtt } = await getAnalystActionsDetailed(BASE).catch(() => ({ actions: [], ok: 0, attempted: 1 }));
+  const analystDegraded = aAtt > 0 && aOk / aAtt < 0.8;
+  if (analystDegraded) console.error(`desk-note: ⚠ analyst scan DEGRADED (${aOk}/${aAtt} fetches ok) — the section will say so instead of reading as a quiet day`);
 
   // ── MOVE EVIDENCE context (lib/moveEvidence): sector residual + peer tape + short-vol pressure,
   // all computed from feeds already on disk. This is what lets the model state a MECHANISM for a
@@ -286,7 +291,10 @@ async function main() {
     block("UNUSUAL OPTIONS FLOW (aggregated per name → call/put skew)", flows) +
     // Each line is prefixed with its OWN date. The model must use it — an item from two sessions ago
     // is not today's news, and saying so ("Friday's downgrade…") is the honest framing.
-    block(`ANALYST ACTIONS from the last ${ANALYST_WINDOW_DAYS} days — each line starts with the date it happened; say WHEN if it is not today (with implied upside vs current price)`, actions);
+    block(
+      `ANALYST ACTIONS from the last ${ANALYST_WINDOW_DAYS} days — each line starts with the date it happened; say WHEN if it is not today (with implied upside vs current price)${analystDegraded ? ` — ⚠ THE SCAN WAS DEGRADED THIS RUN (${aOk}/${aAtt} fetches succeeded): the list below is INCOMPLETE, not a quiet day — if you mention analyst activity at all, say the scan was partial; never state or imply there were few/no analyst actions today` : ""}`,
+      actions,
+    );
 
   const counts = { movers: movers.length, filings: filings.length, flow: flows.length, analyst: actions.length };
   if (movers.length + filings.length + flows.length + actions.length === 0) {
