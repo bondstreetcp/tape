@@ -12,7 +12,7 @@
  * page, not hidden. No new feed, no LLM: the log is the source of truth and the inbox inherits its
  * integrity.
  */
-import { SIGNAL_META, type SignalDirection, type SignalEvent, type SignalKey, type SignalSummary } from "./signalLog";
+import { bestHorizon, SIGNAL_META, type HorizonKey, type SignalDirection, type SignalEvent, type SignalKey, type SignalSummary } from "./signalLog";
 
 /** m1 sample size below which a board's record is treated as unproven. */
 export const MIN_GRADED = 15;
@@ -24,8 +24,12 @@ export interface BoardWeight {
   label: string;
   color: string;
   path: string;
-  weight: number; // max(0, m1 avgEdge) once proven; NEUTRAL_WEIGHT before that
-  n: number; // graded m1 events behind the weight (0 = unproven)
+  weight: number; // max(0, best-horizon avgEdge) once proven; NEUTRAL_WEIGHT before that
+  n: number; // graded events at the weighting horizon (0 = unproven)
+  /** WHICH horizon the weight was measured at — a fast board (revisions: the edge lives at 1w and is
+   *  gone by 1m) and a slow one (positioning-puts: compounds into 1m) are now each judged where their
+   *  own edge actually lives, not at one fixed horizon (the 2026-08-15 grading finding). */
+  horizon: HorizonKey | null;
 }
 
 export interface IdeaArrival {
@@ -59,20 +63,23 @@ export interface IdeaInbox {
 
 const DAY = 86_400_000;
 
-/** Per-board weight from the graded record: the 1-month direction-adjusted edge, floored at zero
- *  (a bad record means "no evidence", not "evidence against the name"). */
+/** Per-board weight from the graded record: the direction-adjusted edge at the board's own BEST
+ *  horizon, floored at zero (a bad record means "no evidence", not "evidence against the name").
+ *  Best-horizon, not fixed-m1: weighting revisions by its m1 (+0.26%) buried the strongest fast
+ *  board (+3.3% at w1) while a slow board got full credit — each board is judged where its own
+ *  measured edge lives. */
 export function boardWeights(summaries: SignalSummary[]): BoardWeight[] {
   return summaries.map((s) => {
-    const m1 = s.horizons.m1;
-    const proven = !!m1 && m1.n >= MIN_GRADED && m1.avgEdge != null;
+    const best = bestHorizon(s.horizons, MIN_GRADED);
     const meta = SIGNAL_META[s.signal];
     return {
       signal: s.signal,
       label: meta.label,
       color: meta.color,
       path: meta.path,
-      weight: proven ? Math.max(0, m1!.avgEdge!) : NEUTRAL_WEIGHT,
-      n: proven ? m1!.n : 0,
+      weight: best ? Math.max(0, best.hz.avgEdge!) : NEUTRAL_WEIGHT,
+      n: best ? best.hz.n : 0,
+      horizon: best ? best.key : null,
     };
   });
 }

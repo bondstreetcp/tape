@@ -1,7 +1,7 @@
 import Link from "next/link";
 import InfoDot from "./InfoDot";
 import { loadBoardRecord } from "@/lib/boardRecord";
-import { HORIZONS, type SignalKey } from "@/lib/signalLog";
+import { bestHorizon, HORIZONS, type SignalKey } from "@/lib/signalLog";
 
 // The receipts, on the board making the claim. Every idea board's picks are already logged and
 // graded nightly against the S&P (/signal-record); this strip surfaces THAT board's own numbers
@@ -31,6 +31,10 @@ export default async function BoardTrackRecord({ universe, signal }: { universe:
     <section className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5">
       {graded.map((r) => {
         const hs = HORIZONS.map((h) => ({ ...h, s: r.summary.horizons[h.key] })).filter((h) => h.s && h.s.n > 0);
+        // Where this board's measured edge actually LIVES (2026-08-15 grading: revisions is a 1-2wk
+        // edge that's gone by 1m; the short-side boards compound into 1m) — starred so a reader
+        // judges the board at ITS horizon, not a blended one.
+        const best = bestHorizon(r.summary.horizons, 10);
         return (
           <div key={r.signal} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-relaxed">
             <span className="flex items-center gap-1.5 font-semibold text-[var(--text-2)]">
@@ -42,8 +46,9 @@ export default async function BoardTrackRecord({ universe, signal }: { universe:
               />
             </span>
             {hs.map(({ key, label, s }) => (
-              <span key={key} className="text-[var(--text-3)]">
+              <span key={key} className="text-[var(--text-3)]" title={best?.key === key ? "★ this board's edge is strongest at this horizon — judge it here" : undefined}>
                 <span className="text-[var(--text-4)]">{label}:</span>{" "}
+                {best?.key === key && <span className="text-[var(--accent)]">★</span>}
                 <span className="font-medium text-[var(--text-2)]">{s!.hitRate == null ? "—" : `${Math.round(s!.hitRate * 100)}% hit`}</span>
                 {s!.avgExcess != null && <> · {pct(s!.avgExcess)} vs S&P</>}
                 <span className="text-[var(--text-4)]"> (n={s!.n})</span>

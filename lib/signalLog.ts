@@ -305,6 +305,24 @@ export interface SignalSummary {
   horizons: Partial<Record<HorizonKey, HorizonSummary>>;
 }
 
+/** The horizon where a board's direction-adjusted edge is STRONGEST (among horizons with n ≥ minN).
+ *  The 2026-08-15 one-month grading proved edges are horizon-SPECIFIC: revisions' drift is captured
+ *  inside 1-2 weeks and fully mean-reverts by 1m (+3.3% w1 → +0.26% m1), while the short-side boards
+ *  compound INTO 1m (positioning-puts −0.2% w1 → +3.8% m1). Grading or weighting every board at one
+ *  fixed horizon misreads both — consumers (the Idea Inbox weights, the board strips) use this. */
+export function bestHorizon(
+  horizons: Partial<Record<HorizonKey, HorizonSummary>>,
+  minN = 10,
+): { key: HorizonKey; hz: HorizonSummary } | null {
+  let best: { key: HorizonKey; hz: HorizonSummary } | null = null;
+  for (const h of HORIZONS) {
+    const hz = horizons[h.key];
+    if (!hz || hz.n < minN || hz.avgEdge == null) continue;
+    if (!best || hz.avgEdge > best.hz.avgEdge!) best = { key: h.key, hz };
+  }
+  return best;
+}
+
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);

@@ -310,3 +310,18 @@ test("summarizeSignals: seed filter", () => {
   assert.equal(summarizeSignals([seed, fresh]).find((x) => x.signal === "squeeze")!.horizons.w1!.n, 2);
   assert.equal(summarizeSignals([seed, fresh], { includeSeed: false }).find((x) => x.signal === "squeeze")!.horizons.w1!.n, 1);
 });
+
+test("bestHorizon: picks the horizon with the strongest edge, honors the sample floor", async () => {
+  const { bestHorizon } = await import("../lib/signalLog");
+  // The 2026-08-15 shape: a fast board — big w1 edge, faded m1.
+  const fast = { w1: { n: 50, avgRet: 3, medRet: 2, hitRate: 0.6, hitN: 50, avgExcess: 3.3, avgEdge: 3.3 }, m1: { n: 41, avgRet: 1, medRet: 0, hitRate: 0.49, hitN: 41, avgExcess: 0.26, avgEdge: 0.26 } };
+  assert.equal(bestHorizon(fast as any, 10)?.key, "w1");
+  // A slow board — edge compounds into m1.
+  const slow = { w1: { n: 71, avgRet: 0, medRet: 0, hitRate: 0.51, hitN: 71, avgExcess: -0.17, avgEdge: -0.17 }, m1: { n: 16, avgRet: 2, medRet: 2, hitRate: 0.75, hitN: 16, avgExcess: 3.8, avgEdge: 3.8 } };
+  assert.equal(bestHorizon(slow as any, 10)?.key, "m1");
+  // Sample floor: a huge edge on 3 picks must not win over a proven horizon.
+  const thin = { w1: { n: 3, avgRet: 9, medRet: 9, hitRate: 1, hitN: 3, avgExcess: 9, avgEdge: 9 }, m1: { n: 20, avgRet: 1, medRet: 1, hitRate: 0.55, hitN: 20, avgExcess: 1.1, avgEdge: 1.1 } };
+  assert.equal(bestHorizon(thin as any, 10)?.key, "m1");
+  // Nothing proven → null (the caller falls back to the neutral weight).
+  assert.equal(bestHorizon({ w1: { n: 4, avgRet: 1, medRet: 1, hitRate: 0.5, hitN: 4, avgExcess: 1, avgEdge: 1 } } as any, 10), null);
+});

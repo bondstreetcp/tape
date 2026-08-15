@@ -47,7 +47,7 @@ export default function IdeaInboxView({ universe, inbox, generatedAt }: { univer
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
           <h1 className="mt-1 text-2xl font-bold">Idea Inbox</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            What just <b>arrived</b> across the idea boards, fused by name — each board&apos;s vote weighted by its own graded record on <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline">/signal-record</Link> (1-month edge vs the S&amp;P; unproven boards get a small neutral weight). Star a name to hand it to <Link href={`/u/${universe}/my-names`} className="text-[var(--accent)] hover:underline">My Names</Link> monitoring. As of {fmtDateTime(generatedAt)} · decision-support, not advice.
+            What just <b>arrived</b> across the idea boards, fused by name — each board&apos;s vote weighted by its own graded record on <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline">/signal-record</Link> (edge vs the S&amp;P at the board&apos;s own best horizon; unproven boards get a small neutral weight). Star a name to hand it to <Link href={`/u/${universe}/my-names`} className="text-[var(--accent)] hover:underline">My Names</Link> monitoring. As of {fmtDateTime(generatedAt)} · decision-support, not advice.
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -55,15 +55,16 @@ export default function IdeaInboxView({ universe, inbox, generatedAt }: { univer
 
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-4)]">
         <span className="font-semibold uppercase tracking-wide">Board weights</span>
-        <InfoDot text="Each board's 1-month direction-adjusted edge vs the S&P from its graded record — the multiplier its arrivals get below. Negative records floor at zero; boards without ~15 graded picks get a neutral 0.5." />
+        <InfoDot text="Each board's direction-adjusted edge vs the S&P at its own BEST horizon (1w/1m/3m — the horizon where its measured edge is strongest; a fast board like Revisions earns its edge inside 1-2 weeks, a slow one compounds to a month). Negative records floor at zero; boards without ~15 graded picks at any horizon get a neutral 0.5." />
         {proven.length > 0 ? (
           proven.map((w) => (
-            <span key={w.signal} title={`${w.n} graded picks`}>
+            <span key={w.signal} title={`${w.n} graded picks at the ${w.horizon ?? "?"} horizon`}>
               <span style={{ color: w.color }}>{w.label}</span> {w.weight.toFixed(1)}
+              {w.horizon && <span className="text-[var(--text-4)]">@{w.horizon}</span>}
             </span>
           ))
         ) : (
-          <span>all boards still maturing — arrivals count equally (neutral 0.5) until a board has ~15 graded 1-month picks; the weights differentiate on their own as <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline">the record</Link> fills.</span>
+          <span>all boards still maturing — arrivals count equally (neutral 0.5) until a board has ~15 graded picks at some horizon; the weights differentiate on their own as <Link href={`/u/${universe}/signal-record`} className="text-[var(--accent)] hover:underline">the record</Link> fills.</span>
         )}
       </div>
 
