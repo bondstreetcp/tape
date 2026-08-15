@@ -257,6 +257,29 @@ async function runnerDiag(): Promise<void> {
       probe("https://efts.sec.gov/LATEST/search-index?q=%22diag%22"),
       probe("https://openrouter.ai/api/v1/models"),
     ]);
+    // 2026-08-15 finding: yahoo = UND_ERR_CONNECT_TIMEOUT from IN here while the HOST reaches it fine.
+    // Family-pinned raw TCP probes discriminate the two candidate causes: broken container IPv6 with
+    // AAAA-preferring resolution (fixable in code — force IPv4) vs a FORWARD-chain/iptables block on
+    // Yahoo's ranges (needs a DSM-side fix). Dependency-free (node:net), never throws.
+    const dnsMod = await import("node:dns/promises");
+    const netMod = await import("node:net");
+    const yahooDns = await dnsMod.lookup("query1.finance.yahoo.com", { all: true, verbatim: true }).then(
+      (a) => a.map((x) => `${x.family}:${x.address}`),
+      (e: any) => [`err:${String(e?.code ?? e).slice(0, 40)}`],
+    );
+    const tcp = (host: string, family: 4 | 6) =>
+      new Promise<{ ok: boolean; ms: number; err?: string }>((res) => {
+        const t0 = Date.now();
+        const s = netMod.connect({ host, port: 443, family, autoSelectFamily: false, timeout: 8000 } as any);
+        s.once("connect", () => { s.destroy(); res({ ok: true, ms: Date.now() - t0 }); });
+        s.once("timeout", () => { s.destroy(); res({ ok: false, ms: Date.now() - t0, err: "ETIMEDOUT" }); });
+        s.once("error", (e: any) => res({ ok: false, ms: Date.now() - t0, err: String(e?.code ?? e).slice(0, 40) }));
+      });
+    const [yahooV4, yahooV6, secV4] = await Promise.all([
+      tcp("query1.finance.yahoo.com", 4),
+      tcp("query1.finance.yahoo.com", 6),
+      tcp("data.sec.gov", 4), // control: a host the fetch probe already showed working
+    ]);
     let sha = "?";
     try { sha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim(); } catch { /* n/a */ }
     const read = (f: string) => { try { return readFileSync(f, "utf8"); } catch { return ""; } };
@@ -268,7 +291,10 @@ async function runnerDiag(): Promise<void> {
       memAvailableKb: Number(/MemAvailable:\s+(\d+)/.exec(read("/proc/meminfo"))?.[1] ?? 0),
       alertWebhookSet: !!process.env.ALERT_WEBHOOK_URL,
       openrouterKeySet: !!process.env.OPENROUTER_API_KEY,
+      autoSelectFamily: (netMod as any).getDefaultAutoSelectFamily?.() ?? "n/a",
       probes: { yahoo, sec, efts, openrouter },
+      yahooDns,
+      tcpFamily: { yahooV4, yahooV6, secV4 },
     };
     const { putObject } = await import("../lib/r2");
     await putObject("site-data/runner-diag.json", Buffer.from(JSON.stringify(diag, null, 1)), "application/json");
