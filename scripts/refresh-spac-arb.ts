@@ -89,8 +89,6 @@ async function main() {
   // its stale frameEnd, which then spuriously matches the prior trustEnd and reuses a now-stale floor.
   // So the filing-detector runs ONLY when every frame loaded — otherwise fall back to fresh pulls for all.
   const detectorOk = failedFrames === 0;
-  const ciks = [...cikSet].slice(0, LIMIT);
-  console.log(`spac-arb: ${cikSet.size} SPAC CIKs from ${okFrames} frames · scanning ${ciks.length}`);
 
   // ── cik → COMMON-share ticker (SEC company_tickers) ──
   const tmap = await secJson("https://www.sec.gov/files/company_tickers.json");
@@ -117,29 +115,48 @@ async function main() {
   const priorByCik = new Map<string, SpacRow>();
   for (const r of prior?.rows ?? []) priorByCik.set(cikKey(r.cik), r);
   const staleFrom = (asOf: string) => Math.max(0, Math.round((Date.now() - Date.parse(asOf + "T00:00:00Z")) / DAY));
+  /** A candidate rebuilt from the prior row's companyfacts-derived fields — shared by the
+   *  filing-detector reuse and the transport-failure carry (staleness recomputed, ticker fresh). */
+  const candFromPrior = (pr: SpacRow, cik: string, ticker: string): Cand => {
+    const asOf = pr.sharesEnd < pr.trustEnd ? pr.sharesEnd : pr.trustEnd;
+    return {
+      ticker, cik, name: pr.name,
+      trustUsd: pr.trustUsd, trustEnd: pr.trustEnd, daysStale: staleFrom(asOf),
+      shares: pr.shares, sharesConcept: pr.sharesConcept, sharesEnd: pr.sharesEnd,
+      trustPerShare: pr.trustPerShare, ppsTag: pr.ppsTag,
+      floorPerShare: pr.floorPerShare, floorSource: pr.floorSource, ppsMismatch: pr.ppsMismatch,
+    };
+  };
+
+  // Enumeration carry (2026-08-15 sweep): frames that FAILED to load can be the only place a CIK is
+  // visible — without this, those names silently VANISH from the feed for the night. Union in the
+  // prior file's CIKs whenever the frame map is incomplete, so the universe degrades stale, not shrunk.
+  if (!detectorOk) for (const k of priorByCik.keys()) cikSet.add(k);
+  const ciks = [...cikSet].slice(0, LIMIT);
+  console.log(`spac-arb: ${cikSet.size} SPAC CIKs from ${okFrames} frames${detectorOk ? "" : ` (+ prior-file carry — ${failedFrames} frame(s) failed)`} · scanning ${ciks.length}`);
 
   // ── (2) per-name companyfacts → floor per share ──
   const cands: Cand[] = [];
-  let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0, reused = 0;
+  let noTrust = 0, noShares = 0, offBand = 0, noTicker = 0, reused = 0, carriedFail = 0, carryMiss = 0;
   for (const cik of ciks) {
     // Filing-detector: nothing new filed since we last computed this name → reuse, no companyfacts pull.
     // Only when the frame map is COMPLETE (detectorOk) — a partial map would false-match a stale floor.
     const pr = priorByCik.get(cik);
     const t0 = cikTicker.get(cik);
     if (detectorOk && pr && t0 && frameEnd.get(cik) === pr.trustEnd) {
-      const asOf = pr.sharesEnd < pr.trustEnd ? pr.sharesEnd : pr.trustEnd;
-      cands.push({
-        ticker: t0.ticker, cik, name: pr.name,
-        trustUsd: pr.trustUsd, trustEnd: pr.trustEnd, daysStale: staleFrom(asOf),
-        shares: pr.shares, sharesConcept: pr.sharesConcept, sharesEnd: pr.sharesEnd,
-        trustPerShare: pr.trustPerShare, ppsTag: pr.ppsTag,
-        floorPerShare: pr.floorPerShare, floorSource: pr.floorSource, ppsMismatch: pr.ppsMismatch,
-      });
+      cands.push(candFromPrior(pr, cik, t0.ticker));
       reused++;
       continue;
     }
     const cf = await secJson(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik.padStart(10, "0")}.json`);
     await sleep(120);
+    // Transport failure ≠ "no facts" (2026-08-15 sweep): a failed pull must CARRY the prior row
+    // (staleness recomputed) instead of silently dropping the name from the feed for the night.
+    if (cf === undefined) {
+      if (pr && t0) { cands.push(candFromPrior(pr, cik, t0.ticker)); carriedFail++; }
+      else carryMiss++;
+      continue;
+    }
     const g = cf?.facts?.["us-gaap"];
     if (!g) { noTrust++; continue; }
     // Freshest trust value ACROSS the concepts (a name mid-cycle can tag Current fresher than Noncurrent).
@@ -175,7 +192,7 @@ async function main() {
       ppsMismatch: mismatch,
     });
   }
-  console.log(`spac-arb: ${cands.length} in-band SPACs (${reused} reused via filing-detector, ${cands.length - reused} freshly pulled${detectorOk ? "" : ` — DETECTOR OFF: ${failedFrames} frame(s) failed, all re-pulled`}; dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker)`);
+  console.log(`spac-arb: ${cands.length} in-band SPACs (${reused} reused via filing-detector, ${carriedFail} carried on fetch-failure, ${cands.length - reused - carriedFail} freshly pulled${detectorOk ? "" : ` — DETECTOR OFF: ${failedFrames} frame(s) failed, all re-pulled`}; dropped ${noTrust} no-trust, ${noShares} no-shares, ${offBand} off-band, ${noTicker} no-ticker${carryMiss ? `, ${carryMiss} fetch-failed with no prior to carry` : ""})`);
 
   // ── (3) Yahoo price + exchange → discount + plausibility ──
   const rows: SpacRow[] = [];
