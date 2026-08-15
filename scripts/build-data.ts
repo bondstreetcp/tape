@@ -421,11 +421,19 @@ async function main() {
     etfReturns.set(etf, r);
     // Don't overwrite a good series with an empty fetch (rate-limit at the tail of a
     // big run) — leaving the prior file keeps the sector's returns from going blank.
-    if (daily.length > 0)
-      await fs.writeFile(
-        path.join(SYMBOL_DIR, symbolFile(etf)),
-        JSON.stringify({ daily: toXY(daily), intraday: toXY(intraday) }),
-      );
+    // Same guard for the INTRADAY block alone: a good daily + rate-limited 15m fetch
+    // must not wipe previously good intraday bars (the Sector-Compare 1D fan bug class).
+    if (daily.length > 0) {
+      const f = path.join(SYMBOL_DIR, symbolFile(etf));
+      let intradayXY = toXY(intraday);
+      if (intradayXY.length === 0) {
+        try {
+          const prev = JSON.parse(await fs.readFile(f, "utf8"));
+          if (Array.isArray(prev?.intraday)) intradayXY = prev.intraday;
+        } catch { /* no prior */ }
+      }
+      await fs.writeFile(f, JSON.stringify({ daily: toXY(daily), intraday: intradayXY }));
+    }
   }
 
   // Carry trend fundamentals over from the previous snapshots — they're refreshed

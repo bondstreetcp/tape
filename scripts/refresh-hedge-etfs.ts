@@ -56,7 +56,17 @@ async function main() {
   for (const { etf, name } of HEDGE_ETFS) {
     const daily = await fetchDaily(etf);
     if (!daily) { console.error(`hedge-etfs: ${etf} — no series (kept previous if any)`); fail++; continue; }
-    await fs.writeFile(path.join(DIR, etf + ".json"), JSON.stringify({ daily, intraday: [] }));
+    // PRESERVE the file's intraday: this script only needs the DAILY return matrix, but it writes to
+    // the SAME data/series/symbols/<ETF>.json the charts read — and 8 of the 11 SPDR sector ETFs are
+    // in the hedge menu, so a hardcoded `intraday: []` here CLOBBERED the 15-min bars patch-sectors
+    // had written earlier in the SAME nightly (the Sector-Compare 1D straight-line fan, 2026-08-15).
+    // Keep whatever intraday the file already carries — stale beats wiped (STALE-not-EMPTY doctrine).
+    let prevIntraday: [number, number][] = [];
+    try {
+      const prev = JSON.parse(await fs.readFile(path.join(DIR, etf + ".json"), "utf8"));
+      if (Array.isArray(prev?.intraday)) prevIntraday = prev.intraday;
+    } catch { /* no prior file — first run */ }
+    await fs.writeFile(path.join(DIR, etf + ".json"), JSON.stringify({ daily, intraday: prevIntraday }));
     const price = daily[daily.length - 1][1];
     const beta = market ? computeBeta(bucketByDay(daily), market, 1300) : null;
     meta[etf] = { name, price, beta: beta != null ? Math.round(beta * 1000) / 1000 : null, returns: etfReturns(daily) };

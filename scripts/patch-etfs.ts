@@ -99,10 +99,22 @@ async function main() {
       /* keep computed 1d */
     }
     etfReturns.set(etf, r);
-    await fs.writeFile(
-      path.join(SYMBOL_DIR, symbolFile(etf)),
-      JSON.stringify({ daily: toXY(daily), intraday: toXY(intraday) }),
-    );
+    // Never wipe a good series file with a failed fetch: skip the write entirely when daily came
+    // back empty, and keep the prior file's intraday when only the 15m fetch failed (the
+    // Sector-Compare 1D fan bug class). Stale beats wiped.
+    if (daily.length > 0) {
+      const f = path.join(SYMBOL_DIR, symbolFile(etf));
+      let intradayXY = toXY(intraday);
+      if (intradayXY.length === 0) {
+        try {
+          const prev = JSON.parse(await fs.readFile(f, "utf8"));
+          if (Array.isArray(prev?.intraday)) intradayXY = prev.intraday;
+        } catch { /* no prior */ }
+      }
+      await fs.writeFile(f, JSON.stringify({ daily: toXY(daily), intraday: intradayXY }));
+    } else {
+      console.warn(`  ${etf}: daily fetch empty — keeping the prior series file untouched`);
+    }
     console.log(`  ${etf}: ${daily.length} daily, ${intraday.length} intraday, 1d=${r["1d"]?.toFixed(2) ?? "—"}% ytd=${r.ytd?.toFixed(1) ?? "—"}%`);
   }
 

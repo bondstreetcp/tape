@@ -71,7 +71,13 @@ async function main() {
   // Every 2-hourly intraday tick refreshes the manifest, so it can look fresh while the FULL run — which
   // alone rebuilds the options/earnings feeds — has been dead for days. This object only moves on a FULL.
   if (isFull) {
-    await putObject(KEY_HEARTBEAT, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length })), "application/json");
+    // stepFails/stepTotal: the run's HEALTH rides with the stamp (run-tick passes them). A heartbeat
+    // that only proves "an upload happened" reads green while every refresh step fails and the same
+    // stale tree re-ships nightly (the 2026-08-15 four-night silent outage). alert-freshness alarms
+    // on a majority-failed heartbeat even when it is fresh.
+    const stepFails = process.env.TICK_FAILS != null ? Number(process.env.TICK_FAILS) : null;
+    const stepTotal = process.env.TICK_TOTAL != null ? Number(process.env.TICK_TOTAL) : null;
+    await putObject(KEY_HEARTBEAT, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length, stepFails, stepTotal })), "application/json");
   }
   rmSync(tarPath, { force: true });
   console.log(`data-to-r2: uploaded ${KEY_TAR} (${(buf.length / 1e6).toFixed(1)} MB) + manifest${companyMsg}${isFull ? " + FULL heartbeat" : ""} to R2`);

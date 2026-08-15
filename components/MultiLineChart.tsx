@@ -178,6 +178,10 @@ export default function MultiLineChart({
         {visible.map((s) => {
           const dim = highlight !== null && highlight !== s.symbol;
           const emphasized = highlight === s.symbol || s.isRef;
+          // A series with ≤2 defined points can't be seen as a line (1 pt draws NOTHING with
+          // dot=false; 2 pts draw an ambiguous straight segment) — give sparse series visible dots
+          // so a daily-fallback series (no intraday yet) reads as data points, not a fake trend.
+          const nPts = rows.reduce((n, r) => n + (r[s.symbol] !== undefined ? 1 : 0), 0);
           return (
             <Line
               key={s.symbol}
@@ -188,7 +192,7 @@ export default function MultiLineChart({
               strokeWidth={emphasized ? 2.6 : 1.4}
               strokeOpacity={dim ? 0.15 : 1}
               strokeDasharray={s.isRef ? "6 3" : undefined}
-              dot={false}
+              dot={nPts <= 2 ? { r: 3, fill: s.color, strokeWidth: 0, fillOpacity: dim ? 0.15 : 1 } : false}
               connectNulls
               isAnimationActive={false}
             >

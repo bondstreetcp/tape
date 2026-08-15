@@ -27,6 +27,41 @@ test("1W falls back to daily when intraday is empty", () => {
   assert.ok(meta[0].endPct! > 0, `expected a positive 1w move, got ${meta[0].endPct}`);
 });
 
+test("1D MIXED population: a daily-fallback series must not stretch the shared axis left of the session", () => {
+  // The 2026-08-15 fan bug: 8 sector ETFs had their intraday clobbered to [] (refresh-hedge-etfs)
+  // while 3 kept dense bars. The fallback's [priorClose, lastClose] admitted a PRIOR-session bar
+  // onto the shared axis — every sparse series drew a straight line from the chart's left edge.
+  // Post-fix: the prior bar stays as the % BASELINE but is dropped from the RENDER, so the sparse
+  // series contributes only its in-session point and the axis spans just the session.
+  const d = new Date(); d.setHours(14, 0, 0, 0);
+  const now = d.getTime();
+  const sessionStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dense: ComparisonItem = {
+    symbol: "XLC",
+    intraday: [
+      { t: sessionStart + 10 * 3600_000, c: 100 },
+      { t: sessionStart + 12 * 3600_000, c: 101 },
+      { t: sessionStart + 14 * 3600_000, c: 102 },
+    ],
+    daily: mkDaily(now, [98, 99, 100]),
+  };
+  const sparse: ComparisonItem = {
+    symbol: "XLK",
+    intraday: [], // clobbered/absent intraday → daily fallback
+    daily: [
+      { t: sessionStart - 3 * DAY + 13.5 * 3600_000, c: 100 }, // prior session (a "Friday")
+      { t: sessionStart + 13.5 * 3600_000, c: 104 }, // today's bar
+    ],
+  };
+  const { rows, meta } = buildComparison([dense, sparse], "1d", now);
+  // The sparse series' endPct is still measured from the PRIOR close (+4%)…
+  assert.ok(Math.abs(meta[1].endPct! - 4) < 0.05, `sparse endPct should be ≈+4%, got ${meta[1].endPct}`);
+  // …but no rendered row may predate the shared session start (the axis must not stretch back).
+  assert.ok(rows.every((r) => r.t >= sessionStart), "no row may predate the shared session start");
+  // And the sparse series still contributes its in-session point (visible as a dot, not invisible).
+  assert.ok(rows.some((r) => r["XLK"] !== undefined), "sparse series must still contribute a point");
+});
+
 test("a name WITH intraday still renders 1D (fallback is gated on empty intraday only)", () => {
   // Local-midnight-aligned so the session window is timezone-robust: prior close on the previous
   // local day, then two ticks today.

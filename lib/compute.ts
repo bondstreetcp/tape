@@ -193,10 +193,18 @@ export function buildComparison(
   const perStock = items.map((it) => {
     const sliced = sliceSeries(it.intraday, it.daily, tf, now, sessionStart);
     const base = rebaseBaseline(it.intraday, it.daily, tf, sliced);
-    const points =
+    let points =
       base && base !== 0
         ? sliced.map((p) => ({ t: p.t, v: (p.c / base - 1) * 100 }))
         : [];
+    // 1D, MIXED population (some series have real intraday, this one fell back to daily bars): the
+    // fallback's prior-session bar is the % BASELINE, but drawing it would stretch the shared axis
+    // days left of the session and render a straight "fan" line from the chart's left edge (the
+    // 2026-08-15 sector-compare bug). Keep the baseline math, drop the out-of-session point(s) from
+    // the render — the series shows as a dot at its close-to-close move inside the session instead.
+    if (tf === "1d" && sessionStart != null && it.intraday.length === 0) {
+      points = points.filter((p) => p.t >= sessionStart!);
+    }
     const endPct = points.length ? points[points.length - 1].v : null;
     const map = new Map<number, number>();
     for (const p of points) map.set(p.t, p.v);

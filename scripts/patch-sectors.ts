@@ -62,7 +62,17 @@ async function main() {
     const r = returnsFromPoints(daily);
     try { const q: any = await yf.quote(etf, {}, { validateResult: false }); if (q && typeof q.regularMarketChangePercent === "number") r["1d"] = q.regularMarketChangePercent; } catch {}
     etfReturns.set(etf, r);
-    if (daily.length > 0) { fs.writeFileSync(path.join("data", "series", "symbols", `${etf}.json`), JSON.stringify({ daily: toXY(daily), intraday: toXY(intraday) })); ok++; }
+    if (daily.length > 0) {
+      const f = path.join("data", "series", "symbols", `${etf}.json`);
+      // A rate-limited 15m fetch (the bare catch above) must not WIPE a previously good intraday
+      // block with [] — keep the prior file's bars instead. Stale beats wiped (STALE-not-EMPTY).
+      let intradayXY = toXY(intraday);
+      if (intradayXY.length === 0) {
+        try { const prev = JSON.parse(fs.readFileSync(f, "utf8")); if (Array.isArray(prev?.intraday)) intradayXY = prev.intraday; } catch { /* no prior */ }
+      }
+      fs.writeFileSync(f, JSON.stringify({ daily: toXY(daily), intraday: intradayXY }));
+      ok++;
+    }
     process.stderr.write(`  ${etf}: ${daily.length} pts · 5y ${r["5y"] == null ? "—" : r["5y"].toFixed(0) + "%"}\n`);
   }
 

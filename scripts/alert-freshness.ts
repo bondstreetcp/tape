@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  let hb: { generatedAt?: string };
+  let hb: { generatedAt?: string; stepFails?: number | null; stepTotal?: number | null };
   try {
     hb = JSON.parse((await getObject(KEY_HEARTBEAT)).toString());
   } catch {
@@ -61,7 +61,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log("alert-freshness: ✓ data is fresh.");
+  // FRESH-BUT-BROKEN: the stamp only proves an upload happened. A full that failed a majority of its
+  // refresh steps re-ships the same stale tree with a fresh stamp — for 4 nights (2026-08-15) that
+  // read as "✓ fresh" here while 84/85 feeds rotted. The heartbeat now carries the run's step health.
+  if (hb.stepFails != null && hb.stepTotal != null && hb.stepTotal > 0 && hb.stepFails > hb.stepTotal / 2) {
+    const msg =
+      `⚠️ Tape nightly is BROKEN despite a fresh stamp — the last FULL failed ${hb.stepFails}/${hb.stepTotal} ` +
+      `refresh steps and re-shipped the prior (stale) tree. See data/tick-report.json in the R2 tar for ` +
+      `per-step exits, or docker logs tape-runner on the NAS.`;
+    await notify(msg);
+    console.error(msg);
+    process.exit(1);
+  }
+
+  console.log(`alert-freshness: ✓ data is fresh${hb.stepTotal != null ? ` (last FULL: ${hb.stepFails ?? 0}/${hb.stepTotal} steps failed)` : ""}.`);
 }
 
 main().catch((e) => {

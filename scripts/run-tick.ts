@@ -220,18 +220,31 @@ function sessionOnly(): string {
   return ""; // US daytime → all universes
 }
 
+/** Per-step outcomes of THIS tick — written to data/tick-report.json before the upload, so the report
+ *  rides the tar into R2 and a broken runner is diagnosable REMOTELY (2026-08-15: the NAS failed every
+ *  refresh step for 4 nights while stamping a fresh heartbeat, and the only evidence was inside docker
+ *  logs nobody could reach; the tar itself is the one channel that provably still works). */
+const stepReport: { name: string; cmd: string; ok: boolean; exit: number | string | null; mins: number; stderrTail?: string }[] = [];
+
 function step(name: string, cmd: string, extraEnv: Record<string, string> = {}): boolean {
   const t0 = Date.now();
   log(`▶ ${name}`);
+  // stderr is CAPTURED (then re-emitted below, so docker logs keep it) — a failed step's tail goes in
+  // the tick report. stdout stays inherited: live streaming, and stdout tails rarely carry the error.
   const r = spawnSync(cmd, {
     shell: true,
-    stdio: "inherit",
+    stdio: ["inherit", "inherit", "pipe"],
     env: { ...process.env, ...extraEnv },
     timeout: STEP_TIMEOUT_MIN * 60_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
-  const mins = ((Date.now() - t0) / 60_000).toFixed(1);
+  const stderr = r.stderr ? String(r.stderr) : "";
+  if (stderr) process.stderr.write(stderr); // preserve the old docker-logs behavior
+  const mins = +(((Date.now() - t0) / 60_000).toFixed(1));
   const ok = r.status === 0;
-  log(`${ok ? "✓" : "✗"} ${name} (${mins}min${ok ? "" : ` — exit ${r.status ?? "timeout/signal"}`})`);
+  const exit = r.status ?? (r.signal ? `signal:${r.signal}` : r.error ? `spawn:${String((r.error as any)?.code ?? r.error).slice(0, 60)}` : "timeout");
+  stepReport.push({ name, cmd, ok, exit, mins, ...(ok ? {} : { stderrTail: stderr.slice(-800) }) });
+  log(`${ok ? "✓" : "✗"} ${name} (${mins}min${ok ? "" : ` — exit ${exit}`})`);
   return ok;
 }
 
@@ -372,6 +385,28 @@ async function main() {
       if (!step(s.name, s.cmd, extra)) fails++;
     }
 
+    // ── Tick report: land THIS run's per-step outcomes inside the tar (remote diagnosability) ──────
+    // Written before the upload so it ships with the tree it describes. Plain write, no guard — it is
+    // diagnostic metadata, not a feed. Includes the checkout sha: a wedged git tree is the first thing
+    // to rule out when every step fails but the upload works (the 2026-08-15 incident's exact shape).
+    try {
+      let sha = "?";
+      try { sha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim(); } catch { /* not a repo? */ }
+      writeFileSync(path.join("data", "tick-report.json"), JSON.stringify({
+        generatedAt: new Date().toISOString(), mode, sha, node: process.version,
+        fails, total: plan.length, steps: stepReport,
+      }, null, 1));
+    } catch (e) { log(`tick-report write failed (non-fatal): ${String(e).slice(0, 120)}`); }
+
+    // A majority-failed tick is a BROKEN RUNNER, not a quiet market — say so out loud (ntfy), because
+    // the upload below will still succeed and stamp fresh, and without this push the outage is silent.
+    if (plan.length > 0 && fails > plan.length / 2) {
+      void notifyAlert(
+        `run-tick mode=${mode}: ${fails}/${plan.length} steps FAILED — the runner is broken (data will read stale). First failure: ${stepReport.find((s) => !s.ok)?.name ?? "?"} (exit ${stepReport.find((s) => !s.ok)?.exit}). See data/tick-report.json in the R2 tar.`,
+        "Tape runner broken",
+      );
+    }
+
     // ── Upload + gate + deploy (workflow tail) ────────────────────────────────────────────────────
     // FULL propagates into data-to-r2's env so its FULL-only writes fire on the NAS pipeline too — the
     // per-stock cache object (company.tar.gz) and the freshness heartbeat. In GitHub Actions `env.FULL`
@@ -379,7 +414,15 @@ async function main() {
     // data/company from the tarball but never re-ships company.tar.gz, and never writes the heartbeat).
     // TAPE_WRITER stamps the R2 manifest so refresh-data.yml's primary-check can see the NAS is alive
     // and stand its scheduled runs down (the dual-writer clobber fix — see data-to-r2.ts).
-    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", { TAPE_WRITER: "nas", ...(mode === "full" ? { FULL: "true" } : {}) });
+    const uploaded = step("Upload site data to R2 (build-time hydration)", "npm run data-to-r2", {
+      TAPE_WRITER: "nas",
+      // The heartbeat must carry the run's HEALTH, not just its existence — a full that failed every
+      // step still uploads (stale-tree re-ship is deliberate), and before these two fields the alert
+      // pipeline read that as "all good" for 4 straight nights (2026-08-15).
+      TICK_FAILS: String(fails),
+      TICK_TOTAL: String(plan.length),
+      ...(mode === "full" ? { FULL: "true" } : {}),
+    });
     let gateOk = true;
     // The gate runs on FULL ONLY, and intraday ticks deploy ungated BY DESIGN — do not "fix" this by
     // gating them. Observed 2026-08-05 (news tape dead 5 days, gate red): the 23:00 FULL skipped its
