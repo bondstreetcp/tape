@@ -97,10 +97,27 @@ function parseFeed(xml: string, out: NewsItem[], seen: Set<string>) {
   });
 }
 
+export interface CheckedNews {
+  items: NewsItem[];
+  /** TRUE = every RSS query DIED at transport (timeout/reset/non-OK) — `items: []` then means
+   *  "UNKNOWN", never "no news exists". Callers that make ABSENCE CLAIMS ("no catalyst found",
+   *  clearing a cached why) MUST branch on this: during the 2026-08 outage, [] from a dead network
+   *  was indistinguishable from a quiet tape, and the desk/catalysts published false absence as fact
+   *  (the failure-vs-absence class). Partial failure (one query ok) keeps fetchFailed=false — some
+   *  real signal beats none, and pickHeadlines' recency gate handles the thinner corpus honestly. */
+  fetchFailed: boolean;
+}
+
 /** News from Google News RSS. For a company we fetch its OFFICIAL PRESS RELEASES first
  *  (the IR-page announcements, via the newswires) then general coverage, and rank wires →
- *  top wire services → other reputable outlets. `query` is a ticker/company or "market". */
+ *  top wire services → other reputable outlets. `query` is a ticker/company or "market".
+ *  This convenience wrapper DISCARDS the fetch outcome — fine for browsing surfaces; any
+ *  caller asserting absence must use getNewsChecked instead. */
 export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
+  return (await getNewsChecked(query, count)).items;
+}
+
+export async function getNewsChecked(query: string, count = 12): Promise<CheckedNews> {
   const isMarket = query.toLowerCase() === "market";
   // Press releases are less frequent than media articles, so cast a wider time window.
   const queries = isMarket
@@ -108,13 +125,14 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
     : [`${query} press release when:120d`, `${query} stock when:30d`];
   const out: NewsItem[] = [];
   const seen = new Set<string>();
+  let okQueries = 0;
   for (const q of queries) {
     const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
     try {
       const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; stock-screener/1.0)" }, signal: deadline(12_000) });
-      if (res.ok) parseFeed(await res.text(), out, seen);
+      if (res.ok) { parseFeed(await res.text(), out, seen); okQueries++; }
     } catch {
-      /* skip this query */
+      /* this query failed — counted via okQueries */
     }
   }
   // Allow-list, ranked: company newswires (IR press releases) → top wire services & major
@@ -128,7 +146,7 @@ export async function getNews(query: string, count = 12): Promise<NewsItem[]> {
   void archiveNews(query, ranked);
   // ⚠ This order is by SOURCE, deliberately — see pickHeadlines below before consuming it.
   // `count` only truncates an already-parsed list, so asking for more costs nothing.
-  return ranked.slice(0, count);
+  return { items: ranked.slice(0, count), fetchFailed: okQueries === 0 };
 }
 
 // ── Explaining a MOVE is a different job from listing news ────────────────────────────────────────

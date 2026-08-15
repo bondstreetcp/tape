@@ -20,7 +20,7 @@ import { fmtDate } from "../lib/format";
 import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActions } from "../lib/analystActions";
-import { getNews, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
+import { getNewsChecked, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
 import { buildMoveEvidence } from "../lib/moveEvidence";
 import { detectRecentReport } from "../lib/preannounce";
 import { buildBinaryWeek } from "../lib/binaryWeek";
@@ -138,11 +138,16 @@ async function main() {
       // weigh recency if it can see it, and "recent news:" must not be a lie.
       let driver = why ? `catalyst: ${why}` : "";
       if (!why) {
-        const news = await getNews(s.name || s.symbol, 30).catch(() => []);
+        // CHECKED fetch: "the news check DIED" and "no news exists" are different facts, and the brief
+        // must never publish the second when the first happened (2026-08-15 sweep — during the outage
+        // every mover read "no catalyst found" because the fetch was down, a false absence claim).
+        const { items: news, fetchFailed } = await getNewsChecked(s.name || s.symbol, 30).catch(() => ({ items: [], fetchFailed: true }));
         const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS["1d"], limit: 3 });
         driver = heads.length
           ? `recent news: ${heads.map((h) => `${h.date ? `[${h.date}] ` : "[undated] "}${h.title}`).join(" | ")}`
-          : "no name-specific news in the causal window — attribute via MOVE EVIDENCE";
+          : fetchFailed
+            ? "news check UNAVAILABLE this run (fetch failed — absence of headlines is NOT evidence of no news); attribute via MOVE EVIDENCE only and say the news check didn't run"
+            : "no name-specific news in the causal window — attribute via MOVE EVIDENCE";
       }
       if (rep) {
         const when = rep.daysAgo === 0 ? "TODAY" : rep.daysAgo === 1 ? "YESTERDAY" : `${rep.date} (${rep.daysAgo}d ago)`;

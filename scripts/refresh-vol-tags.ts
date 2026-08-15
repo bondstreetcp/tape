@@ -10,7 +10,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { getNews, pickHeadlines } from "../lib/news";
+import { getNewsChecked, pickHeadlines } from "../lib/news";
 import { cleanTicker } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
 
@@ -41,10 +41,13 @@ async function main() {
   const NOW = Date.now();
   const ctx = await Promise.all(
     targets.map(async (r) => {
-      const news = await getNews(r.symbol, 30).catch(() => []);
+      // CHECKED fetch: a dead news fetch must not read as "no headlines" — downstream, an untagged
+      // name gets its PERSISTED catalyst tag deleted, so a transport blip erased real pending-catalyst
+      // tags from the board (2026-08-15 sweep). fetchFailed names keep their prior tag below.
+      const { items: news, fetchFailed } = await getNewsChecked(r.symbol, 30).catch(() => ({ items: [], fetchFailed: true }));
       const heads = pickHeadlines(news, { nowMs: NOW, windowDays: 45, limit: 8 })
         .map((h) => `- ${h.date ? h.date + " " : ""}${h.title}`).join("\n");
-      return { symbol: r.symbol, name: r.name, ivPremium: r.ivPremium, heads };
+      return { symbol: r.symbol, name: r.name, ivPremium: r.ivPremium, heads, fetchFailed };
     }),
   );
   const withNews = ctx.filter((c) => c.heads);
@@ -70,19 +73,22 @@ Return JSON: { "tags": [ { "symbol": "TICKER", "kind": "event" | "none" | "uncle
     if (s) bySym.set(s, t);
   }
   const allowed = new Set(targets.map((r) => r.symbol)); // only trust tags for names we actually asked about
-  let tagged = 0;
+  const fetchDied = new Set(ctx.filter((c) => c.fetchFailed).map((c) => c.symbol));
+  let tagged = 0, preserved = 0;
   for (const r of data.rows) {
     const t = allowed.has(r.symbol) ? bySym.get(r.symbol) : undefined;
     if (t && t.kind && t.kind !== "none" && typeof t.catalyst === "string" && t.catalyst.trim()) {
       r.catalyst = { text: t.catalyst.trim().slice(0, 80), kind: t.kind === "event" ? "event" : "unclear", confidence: Math.max(0, Math.min(1, Number(t.confidence) || 0)) };
       tagged++;
+    } else if (fetchDied.has(r.symbol) && r.catalyst) {
+      preserved++; // the news fetch DIED for this name — keep the prior tag rather than erase it on a blip
     } else {
-      delete r.catalyst; // clear any stale tag from a prior run
+      delete r.catalyst; // clear any stale tag from a prior run (a REAL no-catalyst read)
     }
   }
   data.taggedAt = new Date().toISOString();
   await fs.writeFile(p, JSON.stringify(data));
-  console.log(`vol-tags: tagged ${tagged}/${withNews.length} rich non-earnings names with a grounded catalyst.`);
+  console.log(`vol-tags: tagged ${tagged}/${withNews.length} rich non-earnings names with a grounded catalyst${preserved ? ` · ${preserved} prior tag(s) preserved (news fetch died)` : ""}.`);
 }
 
 main().catch((e) => {

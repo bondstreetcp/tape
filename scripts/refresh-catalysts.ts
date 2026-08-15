@@ -16,7 +16,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { UNIVERSES } from "../lib/universes";
 import { loadSnapshot } from "../lib/data";
-import { getNews, pickHeadlines, NEWS_JUNK, CAUSAL_WINDOW_DAYS } from "../lib/news";
+import { getNewsChecked, pickHeadlines, NEWS_JUNK, CAUSAL_WINDOW_DAYS } from "../lib/news";
+import { buildMoveEvidence } from "../lib/moveEvidence";
 import type { CatalystMap } from "../lib/catalysts";
 
 const DATA = path.join(process.cwd(), "data");
@@ -42,7 +43,8 @@ const RESTATE = /\b(under|out)perform(s|ed|ing)?\b|compared to (its )?(competito
 const SYSTEM =
   "You are a markets desk writing the one-line reason a stock moved. Output a single terse fragment of at most 12 words naming the SPECIFIC catalyst — e.g. 'Q3 earnings beat, raised FY guidance', 'agreed to be acquired by Synopsys', 'FDA approval for its lead drug', 'guidance cut on soft demand', 'added to the S&P 500'. Base it ONLY on the provided dated headlines — never invent. " +
   "CRUCIAL recency rule: the catalyst must be recent enough to plausibly CAUSE a move over the stated window. For a move 'today', only an event from the last day or two qualifies — ignore older items (last quarter's earnings, a board change from weeks ago, an old partnership) even if important; they do NOT explain today's move. " +
-  "No company name or ticker (already shown), no hype adjectives, no 'the company', no trailing period. Ignore promotional, legal, and analyst-rating-only items. If no recent headline clearly explains the move, output exactly: NONE.";
+  "No company name or ticker (already shown), no hype adjectives, no 'the company', no trailing period. Ignore promotional, legal, and analyst-rating-only items. " +
+  "MECHANISM FALLBACK: when no recent headline explains the move but a MOVE EVIDENCE line is supplied (sector residual, same-industry peer moves, elevated short volume — all computed from market data), state THAT mechanism as the reason, citing only its numbers — e.g. 'sector-wide semis move (+2.9%)', 'asset-manager group rally, peers +4-7%', 'squeeze-flavored: short volume 61% of tape', 'idiosyncratic de-grossing, sector flat'. Never invent a mechanism the evidence line doesn't show. If headlines and evidence both explain nothing, output exactly: NONE.";
 
 async function geminiKey(): Promise<string> {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -50,9 +52,9 @@ async function geminiKey(): Promise<string> {
   return (env.match(/^GEMINI_API_KEY=(.*)$/m) || [])[1]?.trim() || "";
 }
 
-async function ask(key: string, today: string, name: string, symbol: string, dir: string, pct: string, tfLabel: string, heads: { title: string; date: string }[]): Promise<string> {
-  const list = heads.map((h) => `- ${h.date ? `[${h.date}] ` : ""}${h.title}`).join("\n");
-  const prompt = `Today is ${today}.\nCompany: ${name} (${symbol}).\nMove: ${dir} ${pct}% ${tfLabel}.\nRecent news headlines (with dates):\n${list}\n\nWhy did it move ${tfLabel}? Cite only an event recent enough to plausibly cause this move; if none of the headlines explain it, output NONE.`;
+async function ask(key: string, today: string, name: string, symbol: string, dir: string, pct: string, tfLabel: string, heads: { title: string; date: string }[], evidence?: string): Promise<string> {
+  const list = heads.length ? heads.map((h) => `- ${h.date ? `[${h.date}] ` : ""}${h.title}`).join("\n") : "(none found in the causal window)";
+  const prompt = `Today is ${today}.\nCompany: ${name} (${symbol}).\nMove: ${dir} ${pct}% ${tfLabel}.\nRecent news headlines (with dates):\n${list}\n${evidence ? `\n${evidence}\n` : ""}\nWhy did it move ${tfLabel}? Cite only an event recent enough to plausibly cause this move; if no headline explains it, fall back to the MOVE EVIDENCE mechanism per your instructions; if neither explains it, output NONE.`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -77,10 +79,23 @@ async function main() {
   const today = new Date(now).toISOString().slice(0, 10);
 
   // Collect movers, keeping each symbol's SHORTEST timeframe (most-recent move) as the context.
-  const movers = new Map<string, { name: string; dir: string; pct: string; tf: string }>();
+  // 1-DAY movers also get a MOVE EVIDENCE line (lib/moveEvidence: sector residual + peer tape +
+  // short-vol pressure, all computed from the same snapshot) so a no-headline mover can carry a
+  // grounded MECHANISM why ("semis group move") instead of a blank chip — same fix as the desk brief.
+  const shortMechRaw: any = await fs.readFile(path.join(DATA, "short-mechanics.json"), "utf8").then((s) => JSON.parse(s)).catch(() => null);
+  const shortVol = new Map<string, { pct: number; trendPp?: number | null }>(
+    (shortMechRaw?.rows ?? [])
+      .filter((r: any) => r.symbol && r.latestShortVolPct != null)
+      .map((r: any) => [r.symbol, { pct: r.latestShortVolPct, trendPp: r.shortVolTrendPp }]),
+  );
+  const movers = new Map<string, { name: string; dir: string; pct: string; tf: string; evidence?: string }>();
   for (const u of UNIVERSES) {
     const snap = await loadSnapshot(u.id).catch(() => null);
     if (!snap?.stocks?.length) continue;
+    const sectorRet1d = new Map<string, number>(
+      ((snap as any).sectors ?? []).filter((x: any) => x?.etf && x?.returns?.["1d"] != null).map((x: any) => [x.etf as string, x.returns["1d"] as number]),
+    );
+    const peerRows = snap.stocks.map((s: any) => ({ symbol: s.symbol, industry: s.industry, sector: s.sector, marketCap: s.marketCap, ret1d: s.returns["1d"] }));
     for (const tf of TFS) {
       const ranked = snap.stocks.filter((s) => s.returns[tf] != null).sort((a, b) => (b.returns[tf] as number) - (a.returns[tf] as number));
       if (ranked.length < 2) continue;
@@ -88,7 +103,13 @@ async function main() {
         const cur = movers.get(s.symbol);
         if (cur && TF_RANK[cur.tf] <= TF_RANK[tf]) continue; // already have a shorter/equal window
         const ret = s.returns[tf] as number;
-        movers.set(s.symbol, { name: s.name, dir: ret >= 0 ? "up" : "down", pct: Math.abs(ret).toFixed(0), tf });
+        const evidence = tf === "1d" && s.returns["1d"] != null
+          ? buildMoveEvidence(
+              { symbol: s.symbol, sector: s.sector, industry: (s as any).industry, etf: (s as any).etf, ret1d: s.returns["1d"] as number },
+              { sectorRet1d, rows: peerRows, shortVol },
+            ) || undefined
+          : undefined;
+        movers.set(s.symbol, { name: s.name, dir: ret >= 0 ? "up" : "down", pct: Math.abs(ret).toFixed(0), tf, evidence });
       }
     }
   }
@@ -118,9 +139,15 @@ async function main() {
         try {
           // Generous count — it only truncates an already-parsed list (free), and getNews ranks by
           // SOURCE, so a small count can drop today's wire story before we ever rank by date.
-          const news = await getNews(m.name || sym, 30).catch(() => []);
+          // CHECKED fetch: a dead network must THROW into the anti-clobber catch below (keep prior /
+          // backdate), never masquerade as "no news exists" — the old `.catch(() => [])` wrote a
+          // fresh-stamped why:"" over real catalysts for a whole TTL during outages (2026-08-15 sweep).
+          const { items: news, fetchFailed } = await getNewsChecked(m.name || sym, 30);
+          if (fetchFailed) throw new Error("news fetch unavailable (transport) — keeping the prior catalyst");
           const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS[m.tf] ?? 100, limit: 8 });
-          const why = heads.length ? await ask(key, today, m.name, sym, m.dir, m.pct, TF_LABEL[m.tf], heads) : "";
+          // Evidence-only movers (no headlines, but a computed mechanism) still get asked — the
+          // MECHANISM FALLBACK rule lets the model state the group-move/squeeze read, never invent.
+          const why = heads.length || m.evidence ? await ask(key, today, m.name, sym, m.dir, m.pct, TF_LABEL[m.tf], heads, m.evidence) : "";
           out[sym] = { why, ts: new Date().toISOString(), tf: m.tf };
           if (why) withWhy++;
         } catch (e: any) {
