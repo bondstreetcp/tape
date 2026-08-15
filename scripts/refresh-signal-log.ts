@@ -51,12 +51,27 @@ async function loadBroadUs(): Promise<Snapshot | null> {
   return null;
 }
 
+/** A snapshot older than this cannot price tonight's entries or marks. Healthy pipelines re-stamp
+ *  snapshots 2-hourly (quote ticks) or nightly (FULL), so 30h = the feed missed a full day = its
+ *  closes are NOT the latest session's. A stale-priced entry/mark writes a WRONG number into the
+ *  unrebuildable log, stamped with today's date and paired with a live SPX close (the cross-feed
+ *  clock class, 2026-08-15 sweep) — whereas a MISSING price simply defers into the existing retry
+ *  machinery (entries stay "new" until priced; marks refill within MARK_GRACE_DAYS). */
+const SNAP_FRESH_H = 30;
+
 async function loadUsUnion(): Promise<Map<string, any>> {
   const by = new Map<string, any>(); // first snapshot wins per symbol (broadest first)
+  const skipped: string[] = [];
   for (const u of US_UNIVERSES) {
     const snap = await loadSnapshot(u).catch(() => null);
-    for (const s of snap?.stocks ?? []) if (s?.symbol && !by.has(s.symbol)) by.set(s.symbol, s);
+    if (!snap?.stocks?.length) continue;
+    // Vintage gate: a stale snapshot contributes NO prices — stale must behave as missing, never as
+    // current. Per-file, because vintages differ per universe (the mixed-vintage union finding).
+    const ageH = (Date.now() - Date.parse(snap.generatedAt ?? 0)) / 3_600_000;
+    if (!Number.isFinite(ageH) || ageH > SNAP_FRESH_H) { skipped.push(`${u} (${Number.isFinite(ageH) ? ageH.toFixed(0) + "h" : "unstamped"})`); continue; }
+    for (const s of snap.stocks) if (s?.symbol && !by.has(s.symbol)) by.set(s.symbol, s);
   }
+  if (skipped.length) console.error(`signal-log: ⚠ STALE snapshots excluded from pricing (entries/marks for their exclusive symbols DEFER, not misprice): ${skipped.join(", ")}`);
   return by;
 }
 
@@ -178,8 +193,14 @@ async function main() {
   }
 
   // ── Log new appearances ─────────────────────────────────────────────────────────────────────────
+  // DEFER the whole pass when the S&P leg is missing: an entry logged with spxEntry:null bakes a
+  // permanently benchmark-less event into the forward-only log (a transient ^GSPC fetch blip became
+  // forever — 2026-08-15 sweep). Skipping the pass leaves lastMembership/lastSeen untouched, so
+  // tomorrow's run logs the same names one day late with a real benchmark — the same one-night-gap
+  // semantics as a missing feed. applyDueMarks already had this exact spx==null guard; entries now match.
   let newN = 0, skippedNoPrice = 0;
-  for (const signal of SIGNAL_KEYS) {
+  if (spx == null) console.error("signal-log: ⚠ no S&P close tonight — DEFERRING new-entry logging (marks pass is already spx-gated).");
+  for (const signal of spx == null ? [] : SIGNAL_KEYS) {
     const current = membership[signal];
     if (!current) continue; // feed missing tonight → keep lastMembership so a one-night gap doesn't re-seed
     for (const { member, seed } of pickNewEntries(signal, current, lastMembership[signal], lastSeen[signal], events, todayISO)) {
