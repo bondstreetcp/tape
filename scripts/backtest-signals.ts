@@ -23,6 +23,13 @@ async function main() {
     if (Array.isArray(daily) && daily.length >= 320) series.set(s.symbol, daily as [number, number][]);
   }
   console.log(`backtest-signals: ${series.size}/${snap.stocks.length} S&P 500 names have ≥320 stored daily bars`);
+  // Coverage floor (2026-08-15 sweep): a partially-hydrated series store (a truncated tar, a purge)
+  // silently ran the "S&P 500" backtest over whatever loaded — 120 names is a different experiment
+  // than 480 and the published methodology line wouldn't say so. Below half coverage, keep the prior.
+  if (series.size < snap.stocks.length * 0.5) {
+    console.error(`backtest-signals: only ${series.size}/${snap.stocks.length} names have stored series — the store looks partially hydrated; keeping the prior backtest.`);
+    process.exit(1);
+  }
   const result = runBacktest(series, "sp500");
   if (!result) throw new Error("backtest produced no result (not enough aligned history)");
   await fsp.writeFile(OUT, JSON.stringify(result));

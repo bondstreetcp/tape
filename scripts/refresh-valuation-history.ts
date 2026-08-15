@@ -241,7 +241,7 @@ async function fetchPanel(cik: string): Promise<PanelEntry | null> {
 interface PricePoint { t: number; c: number }
 interface Split { t: number; ratio: number }
 
-async function fetchPrices(symbol: string): Promise<{ quotes: PricePoint[]; splits: Split[] }> {
+async function fetchPrices(symbol: string): Promise<{ quotes: PricePoint[]; splits: Split[] } | undefined> {
   try {
     const ch: any = await yf.chart(
       symbol,
@@ -259,7 +259,9 @@ async function fetchPrices(symbol: string): Promise<{ quotes: PricePoint[]; spli
       .filter((s) => Number.isFinite(s.t) && s.ratio > 0 && Math.abs(s.ratio - 1) > 1e-6);
     return { quotes, splits };
   } catch {
-    return { quotes: [], splits: [] };
+    // Transport failure ≠ "no price history" (2026-08-15 sweep): an empty-quotes return made a
+    // throttled fetch indistinguishable from a genuinely thin chart, and the paneled name DROPPED.
+    return undefined;
   }
 }
 
@@ -400,7 +402,7 @@ const DUAL_CLASS_EXCLUDE = new Set(["BRK-B", "BRK.B", "BRK-A", "BRK.A", "BF-B", 
 /** Compute a name's full ValuationName from its CACHED panel + fresh prices, or null if we can't
  *  build anything usable. No SEC traffic here — the panel was refreshed (or not) upstream; prices
  *  are re-fetched every run so `current` multiples track the live tape even on a no-SEC night. */
-async function computeFromPanel(symbol: string, entry: PanelEntry, meta: SnapMeta | undefined): Promise<ValuationName | null> {
+async function computeFromPanel(symbol: string, entry: PanelEntry, meta: SnapMeta | undefined): Promise<ValuationName | null | "fetch-failed"> {
   if (DUAL_CLASS_EXCLUDE.has(symbol.toUpperCase())) return null;
   // Reconstruct exactly the FinPeriod fields the math below reads (the panel stores only those).
   const periods = entry.q.map((c) => ({
@@ -412,6 +414,7 @@ async function computeFromPanel(symbol: string, entry: PanelEntry, meta: SnapMet
   })) as any[];
   const supplement: Supplement = { shortTermDebt: new Map(entry.std), basicShares: new Map(entry.bshs) };
   const prices = await fetchPrices(symbol);
+  if (prices === undefined) return "fetch-failed"; // transport — the caller CARRIES the prior row
   if (!periods.length || prices.quotes.length < 60) return null;
 
   // sort quarters oldest→newest by date, dedup near-duplicate ends (<25 days apart)
@@ -730,11 +733,13 @@ async function main() {
   // ── Phase 4: compute EVERY paneled name against fresh prices (no SEC — Yahoo only) ─────────
   const names: Record<string, ValuationName> = {};
   let done = 0, ok = 0;
+  const priceFailed = new Set<string>(); // Yahoo transport casualties — carried, never dropped
   const computable = symbols.filter((s) => panel.bySymbol[s]?.q?.length);
   await mapPool(computable, 6, async (sym) => {
     try {
       const vn = await computeFromPanel(sym, panel.bySymbol[sym], meta.get(sym));
-      if (vn) {
+      if (vn === "fetch-failed") priceFailed.add(sym);
+      else if (vn) {
         names[sym] = vn;
         ok++;
       }
@@ -758,7 +763,9 @@ async function main() {
       const inScope = new Set(symbols);
       let carried = 0, expired = 0;
       for (const [sym, vn] of Object.entries(existing.names)) {
-        if (names[sym] || panel.bySymbol[sym] || !inScope.has(sym)) continue;
+        // A paneled name whose PRICE fetch died is a transport casualty, not evaluated-and-
+        // suppressed — carry its prior row (same 270d age bound) instead of dropping it.
+        if (names[sym] || (panel.bySymbol[sym] && !priceFailed.has(sym)) || !inScope.has(sym)) continue;
         // Age bound: a name that can NEVER acquire a panel (lost ticker→CIK mapping, permanently
         // consolidated CIK) must not be re-carried verbatim forever — a frozen `current` multiple
         // presented as live is worse than the honest gap the legacy pipeline left (review finding).
@@ -767,7 +774,7 @@ async function main() {
         names[sym] = vn;
         carried++;
       }
-      if (carried || expired) console.log(`  carried forward ${carried} not-yet-paneled names (cold-start fill-in)${expired ? ` · ${expired} expired (asOf >270d — permanently unpanelable)` : ""}`);
+      if (carried || expired || priceFailed.size) console.log(`  carried forward ${carried} names (cold-start + ${priceFailed.size} price-fetch casualties)${expired ? ` · ${expired} expired (asOf >270d — permanently unpanelable)` : ""}`);
     } catch { /* no existing file — nothing to carry */ }
   }
 

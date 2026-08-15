@@ -217,6 +217,12 @@ function buildRow(s: any, f: CachedFacts): BuybackRow | null {
 async function main() {
   const snap = await loadSnapshot("sp500");
   if (!snap?.stocks?.length) throw new Error("sp500 snapshot missing — hydrate data/ first");
+  // Stamp check (2026-08-15 sweep): the yields are recomputed every run FROM this snapshot's prices —
+  // the whole point of not caching them. Pricing them off a stale snapshot silently defeats that and
+  // stamps the board fresh anyway. Warn loudly (the tick report carries it); the guard keeps degrading
+  // to stale-not-empty either way.
+  const snapAgeH = (Date.now() - Date.parse(snap.generatedAt ?? "")) / 3_600_000;
+  if (!Number.isFinite(snapAgeH) || snapAgeH > 30) console.error(`buybacks: ⚠ pricing snapshot is ${Number.isFinite(snapAgeH) ? snapAgeH.toFixed(0) + "h" : "un"}-stamped/stale — yields recomputed from OLD prices tonight`);
   let names = snap.stocks.filter((s) => s.marketCap > 0);
   if (ONLY.length) names = names.filter((s) => ONLY.includes(s.symbol));
   if (CAP) names = names.slice(0, CAP);

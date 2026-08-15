@@ -65,8 +65,11 @@ async function closeOn(sym: string, iso: string): Promise<number | null> {
   const quotes = (ch?.quotes || []).filter((q: any) => q?.close != null);
   if (!quotes.length) return null;
   const onOrBefore = quotes.filter((q: any) => new Date(q.date).getTime() <= target + DAY);
-  const pick = onOrBefore.length ? onOrBefore[onOrBefore.length - 1] : quotes[quotes.length - 1];
-  return pick?.close ?? null;
+  // ON-OR-BEFORE only (2026-08-15 sweep): the old fallback grabbed the first bar AFTER the target
+  // when none existed before it — a name halted into expiry settled at its post-resumption price,
+  // days later, stamped as the expiry close. No bar on/before = no honest read → null (retry/defer).
+  if (!onOrBefore.length) return null;
+  return onOrBefore[onOrBefore.length - 1]?.close ?? null;
 }
 
 // The post-print reaction straight from the chart: prior close → the first COMPLETED session after
@@ -129,10 +132,17 @@ async function main() {
   const overlay = await loadCatalystOverlay(now);
   const flagFor = overlay.flagFor;
   // Regime stamp for every rec logged tonight — VIX from the macro feed (best-effort: a missing
-  // macro file costs the annotation, never the log).
+  // macro file costs the annotation, never the log). STAMP-CHECKED (2026-08-15 sweep): a stale
+  // macro.json must not stamp a days-old VIX as the log-night regime in the permanent record —
+  // an old reading is dropped (null annotation beats a wrong one).
   const vixNow: number | null = await fsp
     .readFile(path.join(DATA, "macro.json"), "utf8")
-    .then((s) => JSON.parse(s).indicators?.find((i: any) => i.key === "vix")?.value ?? null)
+    .then((s) => {
+      const j = JSON.parse(s);
+      const stamp = Date.parse(j.asOf ?? j.generatedAt ?? "");
+      if (!Number.isFinite(stamp) || now - stamp > 3 * DAY) return null; // stale regime read — skip
+      return j.indicators?.find((i: any) => i.key === "vix")?.value ?? null;
+    })
     .catch(() => null);
   if (overlay.size) console.log(`catalyst overlay: ${overlay.size} ticker keys with a LIVE strategic-alt/spin-off disclosure (resolved filtered, class roots aliased)`);
 
