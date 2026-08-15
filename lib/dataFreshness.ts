@@ -105,7 +105,9 @@ const FEEDS: FeedSpec[] = [
   { file: "iv-history.json", affects: ["/portfolio"], label: "IV history", tier: "core", maxAgeHours: CORE },
   { file: "earnings-move.json", affects: ["/earnings-move", "/earnings-week", "/earnings-setup", "/earnings-desk", "/earnings"], label: "Earnings expected-move", tier: "core", maxAgeHours: CORE },
   { file: "putwrite.json", affects: ["/put-writing", "/covered-call", "/credit-spreads", "/portfolio-income", "/vol-dislocation"], label: "Put-writing screen", tier: "core", maxAgeHours: CORE },
-  { file: "insiders.json", affects: ["/insiders", "/confluence", "/signal-record"], label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec" },
+  // countPath+minCount added 2026-08-15: an EDGAR outage wrote a fresh-stamped near-EMPTY file (the
+  // GH heal run shipped 5 names vs a healthy ~84+) — the floor gives writeFeedGuarded teeth here.
+  { file: "insiders.json", affects: ["/insiders", "/confluence", "/signal-record"], label: "Insider buys", tier: "core", maxAgeHours: CORE, origin: "sec", countPath: "names", minCount: 15 },
   { file: "short-mechanics.json", affects: ["/short-mechanics", "/squeeze"], label: "Short mechanics (FINRA/FTD)", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 500 },
   { file: "spinoffs.json", affects: ["/spinoffs", "/confluence"], label: "Spinoff turnover", tier: "core", maxAgeHours: CORE },
   { file: "trade-log.json", affects: ["/track-record"], label: "Earnings-play track record", tier: "core", maxAgeHours: CORE },

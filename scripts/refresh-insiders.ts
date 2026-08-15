@@ -15,6 +15,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { UNIVERSES } from "../lib/universes";
 import { tickerToCik, getForm4List, parseForm4, pool } from "../lib/edgar";
+import { writeFeedGuarded } from "../lib/feedGuard";
 import type { Snapshot } from "../lib/types";
 import type { InsiderBuy, InsidersFile, NameBuys } from "../lib/insiders";
 
@@ -112,18 +113,24 @@ async function main() {
 
   console.log(`Scanning Form 4 open-market buys (last ${WINDOW_DAYS}d) for ${symbols.length} symbols${onlyUniverse ? ` (${onlyUniverse})` : ""}…`);
   const names: Record<string, NameBuys> = {};
-  let done = 0, hit = 0;
+  let done = 0, hit = 0, failed = 0;
   await mapPool(symbols, 3, async (sym) => {
     try {
       const nb = await scanSymbol(sym);
       if (nb) { names[sym] = nb; hit++; }
     } catch {
-      /* skip a bad name */
+      failed++; // a FAILED scan is not "no buys" — counted so a mass failure can't write an empty feed
     }
     await sleep(120); // keep us comfortably under EDGAR's ~10 req/s
     if (++done % 50 === 0) console.log(`  ${done}/${symbols.length} (${hit} with buys)`);
   });
-  console.log(`  ${hit}/${symbols.length} names had open-market buys in the window`);
+  console.log(`  ${hit}/${symbols.length} names had open-market buys in the window (${failed} scans FAILED)`);
+  // Mass-failure gate: when most scans errored, the empty result reflects EDGAR being unreachable,
+  // not a quiet tape — keep the prior file (STALE-not-EMPTY; 2026-08-15 sweep).
+  if (!explicit.length && failed > symbols.length * 0.5) {
+    console.error(`insiders: ${failed}/${symbols.length} scans failed — EDGAR likely unreachable; keeping the prior file.`);
+    process.exit(1);
+  }
 
   if (explicit.length) {
     for (const s of symbols) console.log(`${s}: ${JSON.stringify(names[s] ?? null)}`);
@@ -143,8 +150,11 @@ async function main() {
       /* no existing file */
     }
   }
-  await fs.writeFile(outPath, JSON.stringify(out));
-  console.log(`Wrote ${outPath} (${Object.keys(out.names).length} names with buys)`);
+  // Guarded write (floor from the freshness registry): a shrunken bad night degrades to STALE,
+  // never destroys the prior board — the same contract every other floored feed carries.
+  const w = await writeFeedGuarded("insiders.json", out);
+  if (!w.written) { console.error(`insiders: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
+  console.log(`Wrote ${outPath} (${Object.keys(out.names).length} names with buys) [${w.reason}]`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
