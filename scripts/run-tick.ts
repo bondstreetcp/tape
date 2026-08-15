@@ -371,6 +371,13 @@ async function main() {
   let mode: Mode;
   let autoDigest = false; // auto also fires the weekly digest on Monday
   if (fromAuto) {
+    // News-tape fallback: the 5-min DSM task tape-news-tick.sh was written for was NEVER CREATED
+    // (discovered 2026-08-15 — the tape had been dead since Aug 5 with no scheduler at all). Hourly
+    // from here beats dead; the proper 5-min loop lives in tape-entrypoint.sh and supersedes this at
+    // the next container restart. Safe to double-fire: `news` serializes on its own lock, never
+    // touches the main tree, and merges pull→refresh→push on one R2 object. Best-effort — a news
+    // failure must never dent the real tick.
+    step("News tape (hourly fallback)", "npx tsx scripts/run-tick.ts news");
     const m = autoMode() ?? forcedMode(); // the schedule wins the hour; a force-tick fills an idle one
     autoDigest = isDigestDue();
     if (!m && !autoDigest) {
