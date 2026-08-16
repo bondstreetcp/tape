@@ -131,6 +131,7 @@ export async function askGemini(
   question: string,
   ctx: { name: string; text: string },
   history: { q: string; a: string }[] = [],
+  opts: { model?: string } = {},
 ): Promise<AskResult | null> {
   if (!KEY) return null;
   const system =
@@ -195,15 +196,19 @@ export async function askGemini(
     return { answer, sources };
   };
 
+  // Primary model: the caller can override (the desk-note batch runs the cheap search-grounded flash to
+  // keep its per-run bill down; the live per-view Ask leaves it unset → the sharper default). The rescue
+  // stays FALLBACK_MODEL either way.
+  const primaryModel = opts.model || MODEL;
   try {
-    return await attempt(MODEL, PRIMARY_MS, -1);
+    return await attempt(primaryModel, PRIMARY_MS, -1);
   } catch (e: any) {
     // Rescue only what a different/faster model can actually cure: a deadline, a 429, a 5xx. A 400
     // or 403 is OUR configuration (bad key, bad model name) — flash would fail identically, and the
     // retry would bury the one message that says what to fix.
     const cureable = isDeadline(e) || /Gemini (429|5\d\d)/.test(String(e?.message || e));
     if (!cureable) throw e;
-    console.warn(`askGemini: ${MODEL} ${isDeadline(e) ? `timed out at ${PRIMARY_MS}ms` : String(e?.message || e).slice(0, 80)} — rescuing with ${FALLBACK_MODEL}`);
+    console.warn(`askGemini: ${primaryModel} ${isDeadline(e) ? `timed out at ${PRIMARY_MS}ms` : String(e?.message || e).slice(0, 80)} — rescuing with ${FALLBACK_MODEL}`);
     try {
       return await attempt(FALLBACK_MODEL, RESCUE_MS, 0);
     } catch (e2: any) {

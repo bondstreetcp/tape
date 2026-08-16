@@ -34,6 +34,10 @@ const BASE = "sp500"; // headline US universe the brief is keyed to
 // A note younger than this is fresh enough — makes the scheduler-resilience RETRY crons free (they
 // no-op when the primary tick ran) without ever blocking the real morning/evening runs (~8h apart).
 const FRESH_MIN = 150;
+// The grounded "why did it move" ask defaults to flash — it's search-grounded (Google Search does the
+// fact-finding) and ~20x cheaper on input than a Pro model, and its output is a 1-2 sentence reason, not
+// heavy reasoning. Bump via DESK_GROUNDED_MODEL (e.g. gemini-3.1-pro-preview) if the answers thin out.
+const GROUNDED_MODEL = process.env.DESK_GROUNDED_MODEL || "gemini-2.5-flash";
 
 const readJson = async <T,>(f: string): Promise<T | null> =>
   fs.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
@@ -234,7 +238,7 @@ async function main() {
           `Name the dated catalyst — earnings or guidance, an analyst rating/price-target change, product/regulatory/legal news, or M&A — ` +
           `or say plainly if it was mostly a sector/market move. Cite the date of the development; if nothing specific is findable, say so rather than guessing.`;
         try {
-          const res = await askGemini(q, await gatherContext(m.symbol, m.name));
+          const res = await askGemini(q, await gatherContext(m.symbol, m.name), [], { model: GROUNDED_MODEL });
           if (res?.answer) {
             m.driver = `grounded (web search): ${res.answer.replace(/\s+/g, " ").trim()}`;
             if (res.sources.length) moveSources.push({ ticker: m.symbol, sources: res.sources.slice(0, 4) });
