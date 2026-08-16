@@ -172,49 +172,62 @@ async function main() {
       // list, so it's free — and let pickHeadlines do the ranking. DATES STAY IN: the model can only
       // weigh recency if it can see it, and "recent news:" must not be a lie.
       let driver = why ? `catalyst: ${why}` : "";
-      let noCatalyst = false; // no report, no cached catalyst, no name-specific news → the grounded ask
       if (!why) {
         // CHECKED fetch: "the news check DIED" and "no news exists" are different facts, and the brief
         // must never publish the second when the first happened (2026-08-15 sweep — during the outage
         // every mover read "no catalyst found" because the fetch was down, a false absence claim).
         const { items: news, fetchFailed } = await getNewsChecked(s.name || s.symbol, 30).catch(() => ({ items: [], fetchFailed: true }));
         const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS["1d"], limit: 3 });
-        if (heads.length) {
-          driver = `recent news: ${heads.map((h) => `${h.date ? `[${h.date}] ` : "[undated] "}${h.title}`).join(" | ")}`;
-        } else if (fetchFailed) {
-          driver = "news check UNAVAILABLE this run (fetch failed — absence of headlines is NOT evidence of no news); attribute via MOVE EVIDENCE only and say the news check didn't run";
-        } else {
-          driver = "no name-specific news in the causal window — attribute via MOVE EVIDENCE";
-          noCatalyst = true; // ← the grounded web-search ask targets exactly this population
-        }
+        driver = heads.length
+          ? `recent news: ${heads.map((h) => `${h.date ? `[${h.date}] ` : "[undated] "}${h.title}`).join(" | ")}`
+          : fetchFailed
+            ? "news check UNAVAILABLE this run (fetch failed — absence of headlines is NOT evidence of no news); attribute via MOVE EVIDENCE only and say the news check didn't run"
+            : "no name-specific news in the causal window — attribute via MOVE EVIDENCE";
       }
       if (rep) {
         const when = rep.daysAgo === 0 ? "TODAY" : rep.daysAgo === 1 ? "YESTERDAY" : `${rep.date} (${rep.daysAgo}d ago)`;
         driver = `REPORTED EARNINGS ${when} — 8-K results filing on record${driver ? ` · ${driver}` : ""}`;
-        noCatalyst = false; // a fresh report IS the catalyst — don't spend a grounded call on it
       }
+      const ret1d = s.returns["1d"] as number;
       const evidence = buildMoveEvidence(
-        { symbol: s.symbol, sector: s.sector, industry: (s as any).industry, etf: (s as any).etf, ret1d: s.returns["1d"] as number },
+        { symbol: s.symbol, sector: s.sector, industry: (s as any).industry, etf: (s as any).etf, ret1d },
         { sectorRet1d, rows: peerRows, shortVol, social },
       );
+      // Does this mover need the grounded web-search "why"? Fire it for a big IDIOSYNCRATIC move (the
+      // sector does NOT explain it) with no CONFIRMED catalyst (no fresh 8-K report, no fresh cached
+      // catalyst). ⚠ Do NOT gate on "Yahoo returned zero headlines" — that was the AVGO miss
+      // (2026-08-16): AVGO fell 5.9% on an actively-exploited VMware CVE + a BofA debt downgrade that
+      // Yahoo's feed never carried, so a stale/irrelevant headline slipped through, the gate saw "has
+      // headlines" and skipped the ask, and the brief shrugged "no fresh catalyst" while the grounded
+      // model (run by hand) found BOTH drivers. The web search finds what the feed misses. Sector-
+      // sympathy moves (small residual) skip it — MOVE EVIDENCE already explains those — so cost stays bounded.
+      const secRet = (s as any).etf != null ? sectorRet1d.get((s as any).etf) : undefined;
+      const residual = secRet != null ? ret1d - secRet : ret1d;
+      const sectorExplains = secRet != null && Math.sign(secRet) === Math.sign(ret1d) && Math.abs(residual) < Math.abs(ret1d) * 0.5;
+      const needsGrounding = !rep && !why && !sectorExplains;
       const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
       const prefix =
-        `${s.symbol} ${pct(s.returns["1d"])} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
+        `${s.symbol} ${pct(ret1d)} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
         `${val ? ` · ${val}` : ""} · ${pct(s.pctFromHigh)} vs 52w-high${earnSoon(s.earningsDate)}`;
-      return { symbol: s.symbol, name: s.name || s.symbol, ret1d: s.returns["1d"] as number, prefix, driver, evidence, noCatalyst };
+      return { symbol: s.symbol, name: s.name || s.symbol, ret1d, prefix, driver, evidence, needsGrounding };
     }),
   );
 
   // ── GROUNDED "why did it move" — extend the stock-page ExplainMove engine (lib/ask: Gemini + Google
-  // Search grounding, with dated source citations) to the desk brief. ONLY the no-catalyst movers — the
-  // exact names that used to read "no fresh catalyst" — so cost stays bounded (search grounding is free
-  // to 5k/mo, and this is a handful of calls per run). Degrade-don't-error: any failure just leaves the
-  // base MOVE EVIDENCE attribution in place, never a fabricated reason.
+  // Search grounding, with dated source citations) to the desk brief. Targets big IDIOSYNCRATIC movers
+  // with no confirmed catalyst (see needsGrounding above) — the names that would otherwise shrug "no
+  // fresh catalyst" despite a real, findable driver (the AVGO case) — biggest move first, capped by
+  // DESK_GROUNDED_MAX so a wild tape can't run up the bill. Grounding is free to 5k searches/mo.
+  // Degrade-don't-error: any failure just leaves the base MOVE EVIDENCE attribution, never a fabrication.
   const moveSources: { ticker: string; sources: DeskSource[] }[] = [];
   if (askConfigured()) {
-    const need = moverData.filter((m) => m.noCatalyst);
+    const GROUNDED_MAX = Number(process.env.DESK_GROUNDED_MAX) || 10;
+    const need = moverData
+      .filter((m) => m.needsGrounding)
+      .sort((a, b) => Math.abs(b.ret1d) - Math.abs(a.ret1d))
+      .slice(0, GROUNDED_MAX);
     if (need.length) {
-      console.log(`desk-note: grounded why-move ask for ${need.length} no-catalyst mover(s): ${need.map((m) => m.symbol).join(", ")}`);
+      console.log(`desk-note: grounded why-move ask for ${need.length} idiosyncratic mover(s) with no confirmed catalyst: ${need.map((m) => m.symbol).join(", ")}`);
       await mapPool(need, 3, async (m) => {
         const q =
           `In 1-2 sentences, what specifically drove ${m.name} (${m.symbol})'s ${pct(m.ret1d)} share-price move in its latest trading session? ` +
