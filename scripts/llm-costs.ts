@@ -41,7 +41,14 @@ function table(title: string, rows: Record<string, Bucket>): void {
 }
 
 console.log(`LLM usage since ${f.since?.slice(0, 10) ?? "?"} — ${obsDays} day(s) observed`);
-console.log(`TOTAL ${usd(f.totals.estUsd)} (${tok(f.totals.inTok)} in / ${tok(f.totals.outTok)} out) → ~${usd(perMo)}/mo run-rate`);
+console.log(`TOTAL ${usd(f.totals.estUsd)} (${tok(f.totals.inTok)} in / ${tok(f.totals.outTok)} out) → ~${usd(perMo)}/mo all-time avg`);
+// Recent-window rate — the all-time average can be inflated by a since-superseded config (e.g. a pricier
+// PRO_MODEL before a model switch), so the last 7 observed days is the truer CURRENT run-rate.
+const recentDays = Object.keys(f.byDay || {}).sort().slice(-7);
+if (recentDays.length) {
+  const rb = recentDays.reduce((a, d) => a + (f.byDay[d]?.estUsd || 0), 0);
+  console.log(`RECENT ${recentDays.length}d: ${usd(rb)} → ~${usd((rb / recentDays.length) * 30)}/mo (current-config rate; ${recentDays[0]}…${recentDays[recentDays.length - 1]})`);
+}
 console.log("(estUsd is a ballpark from lib/llmUsage.ts PRICES — edit to match your dashboards; token counts are exact)");
 table("By job", f.byJob);
 table("By model", f.byModel);
