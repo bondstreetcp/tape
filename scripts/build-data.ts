@@ -14,7 +14,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { UNIVERSES } from "../lib/universes";
+import { UNIVERSES, DEFAULT_UNIVERSE } from "../lib/universes";
 import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
@@ -196,19 +196,44 @@ async function fetchQuotes(symbols: string[]): Promise<Map<string, any>> {
 
 async function main() {
   // 1) Load universe lists, build union + classification + intraday set.
+  //
+  // ⚠ RESILIENT LOAD (2026-08-16). This was a bare fs.readFile per universe with NO guard, so a SINGLE
+  // missing/broken constituents file aborted the ENTIRE nightly pull before a single quote was fetched:
+  // russell1000 after Wikipedia split its table into "List of Russell 1000 companies"; russell3000
+  // (needs the hand-placed IWV export) or the 13 international universes (built by a separate
+  // refresh-intl) on any box that hasn't run those yet. One universe with no list must cost THAT
+  // universe, not every board — the same keep-prior contract as fetch-constituents and the per-universe
+  // write-guard below: a skipped universe simply isn't rebuilt this run and keeps its prior snapshot.
   const universeLists: Record<string, Entry[]> = {};
+  const skippedUniverses: string[] = [];
   for (const u of UNIVERSES) {
-    const raw = await fs.readFile(
-      path.join(DATA_DIR, "constituents", `${u.id}.json`),
-      "utf8",
-    );
-    universeLists[u.id] = JSON.parse(raw) as Entry[];
+    try {
+      const raw = await fs.readFile(path.join(DATA_DIR, "constituents", `${u.id}.json`), "utf8");
+      const list = JSON.parse(raw) as Entry[];
+      if (!Array.isArray(list) || list.length === 0) throw new Error("empty or non-array list");
+      universeLists[u.id] = list;
+    } catch (e: any) {
+      skippedUniverses.push(u.id);
+      console.error(`  ⚠ ${u.id}: constituents not loaded (${String(e?.code || e?.message || e).slice(0, 80)}) — skipping this universe; its prior snapshot is kept.`);
+    }
   }
+  // Build only over the universes that actually loaded. A skipped one drops out of the union (not
+  // fetched) and out of the snapshot pass (prior snapshot untouched); the run still exits non-zero
+  // at the end so the gap is visible rather than looking like a clean pass.
+  const loaded = UNIVERSES.filter((u) => universeLists[u.id]);
+  if (loaded.length === 0) {
+    console.error("build-data: NO universe constituent lists could be loaded — run `npm run fetch-constituents` first. Nothing to build; aborting.");
+    process.exit(1);
+  }
+  // The headline universe is the GICS-classification backbone and the app's default route. Building
+  // without it is a degraded run worth flagging — but not a reason to skip the boards that DID load.
+  if (!universeLists[DEFAULT_UNIVERSE])
+    console.error(`  ⚠ the default universe '${DEFAULT_UNIVERSE}' has no constituents list — classification may be degraded this run.`);
 
   const intradayUniverses = new Set(UNIVERSES.filter((u) => u.intraday).map((u) => u.id));
   const classBySym = new Map<string, Klass>();
   const needIntraday = new Set<string>();
-  for (const u of UNIVERSES) {
+  for (const u of loaded) {
     for (const e of universeLists[u.id]) {
       const existing = classBySym.get(e.symbol);
       const ov = sectorOverrideFromIndustry(e.industry); // correct e.g. a bank tagged "Health Care"
@@ -452,7 +477,7 @@ async function main() {
   console.log("Writing per-universe snapshots…");
   const blocked: string[] = []; // universes whose snapshot collapsed this run (write-guard kept the prior)
   const shortfalls: string[] = []; // universes shipping fewer names than the index lists (absolute check)
-  for (const u of UNIVERSES) {
+  for (const u of loaded) {
     const stocks: StockRow[] = [];
     const seen = new Set<string>();
     // Prior snapshot, read BEFORE the row loop (it used to be read only for the carry below):
@@ -585,6 +610,17 @@ async function main() {
     );
   }
   if (blocked.length) console.error(`\n⚠ write-guard kept the prior snapshot for ${blocked.length} universe(s): ${blocked.join(", ")} (partial fetch this run). npm run check-freshness will flag any that stay stale.`);
+  if (skippedUniverses.length) {
+    // A universe with NO constituents list was never rebuilt this run (its prior snapshot stands). Make
+    // it loud + non-zero so a scheduled run surfaces it instead of reading as clean — the same
+    // partial-failure exit contract as fetch-constituents. NON-FATAL: everything that COULD build did.
+    console.error(`\n⚠ ${skippedUniverses.length} universe(s) had NO constituents list and were skipped (prior snapshots kept): ${skippedUniverses.join(", ")}. Run \`npm run fetch-constituents\` (US) or \`npm run refresh-intl\` (international) to restore them.`);
+    await notifyAlert(
+      `build-data skipped ${skippedUniverses.length} universe(s) with no constituents list: ${skippedUniverses.join(", ")}. Their snapshots were NOT rebuilt (prior kept). Run fetch-constituents / refresh-intl to restore.`,
+      "Tape universe list missing",
+    );
+    process.exitCode = 1;
+  }
 
   // 7) Split ledger — free: step 4 already fetched these events for the countermeasure.
   // Non-fatal by design: this is a by-product, and a snapshot run that otherwise succeeded must not
