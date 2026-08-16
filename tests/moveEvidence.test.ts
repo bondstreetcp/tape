@@ -1,15 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMoveEvidence, pickPeers, SHORT_VOL_ELEVATED, type PeerRow } from "../lib/moveEvidence";
+import { buildMoveEvidence, buildSocialEvidence, pickPeers, SHORT_VOL_ELEVATED, type PeerRow, type SocialBuzz } from "../lib/moveEvidence";
 
 const R = (symbol: string, ret1d: number | null, industry = "Semiconductors", marketCap = 1e11): PeerRow => ({
   symbol, ret1d, industry, sector: "Information Technology", marketCap,
 });
 
-const CTX = (rows: PeerRow[], sec?: [string, number][], shortVol?: [string, { pct: number; trendPp?: number }][]) => ({
+const CTX = (
+  rows: PeerRow[],
+  sec?: [string, number][],
+  shortVol?: [string, { pct: number; trendPp?: number }][],
+  social?: [string, SocialBuzz][],
+) => ({
   sectorRet1d: new Map(sec ?? []),
   rows,
   shortVol: shortVol ? new Map(shortVol) : undefined,
+  social: social ? new Map(social) : undefined,
 });
 
 test("sector-sympathy case: small residual reads 'mostly a sector move' with the numbers", () => {
@@ -63,4 +69,26 @@ test("no industry → falls back to sector peers; no sector either → no peers"
   assert.equal(withSector.length, 2);
   const without = pickPeers({ symbol: "C", sector: null, industry: null, ret1d: 4 }, rows);
   assert.equal(without.length, 0);
+});
+
+test("social: a Reddit mention surge surfaces as retail attention on a mover", () => {
+  const ev = buildMoveEvidence(
+    { symbol: "GME", etf: "XLY", ret1d: 12 },
+    CTX([], [["XLY", 0.4]], undefined, [
+      ["GME", { redditMentions: 240, redditMentionChangePct: 420, redditRank: 3, redditRankChange: 38 }],
+    ]),
+  );
+  assert.match(ev, /social: Reddit mentions \+420% d\/d, rank #3, climbed 38/);
+});
+
+test("social: a quiet name stays silent — a modest mention change adds nothing", () => {
+  assert.equal(buildSocialEvidence({ redditMentions: 200, redditMentionChangePct: 5, redditRank: 120, redditRankChange: 2 }), "");
+});
+
+test("social: a surge off a tiny base is floored out (3→9 mentions is +200% but meaningless)", () => {
+  assert.equal(buildSocialEvidence({ redditMentions: 9, redditMentionChangePct: 200, redditRank: 500, redditRankChange: 5 }), "");
+});
+
+test("social: a big rank climb alone qualifies, even with no mention-change base", () => {
+  assert.equal(buildSocialEvidence({ redditMentions: 60, redditMentionChangePct: null, redditRank: 22, redditRankChange: 40 }), "social: Reddit rank #22, climbed 40");
 });

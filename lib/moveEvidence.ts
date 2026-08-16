@@ -5,13 +5,17 @@
  * model was STARVED: it had the name's own returns and headlines-or-nothing, so when no fresh headline
  * existed it could only shrug. But "there's always a reason" — and most reasons that aren't a headline
  * are VISIBLE IN DATA WE ALREADY HOLD: the sector moved (sympathy/rotation), a same-industry peer had
- * the actual news and dragged the group (SNDK lighting the storage complex), or positioning pressure
- * (elevated short volume) unwound. This module computes that evidence so the model can STATE a
- * grounded mechanism instead of shrugging — and, critically, so it never has to GUESS one.
+ * the actual news and dragged the group (SNDK lighting the storage complex), positioning pressure
+ * (elevated short volume) unwound, or — when the crowd is loud — a Reddit mention surge flags retail
+ * crowding the move. This module computes that evidence so the model can STATE a grounded mechanism
+ * instead of shrugging — and, critically, so it never has to GUESS one. (The named CAUSE of a
+ * no-headline move now comes from the grounded web-search ask in refresh-desk-note; this stays the
+ * arithmetic backbone that keeps that ask honest.)
  *
- * Doctrine (the move-attribution trap): code verifies, models propose. Everything here is arithmetic
- * on the same-day snapshot + FINRA short volume — no fetched text, no room to fabricate. The prompt
- * still forbids inventing headlines; this only widens what the model may legitimately cite.
+ * Doctrine (the move-attribution trap): code verifies, models propose. Everything here is arithmetic —
+ * the same-day snapshot, FINRA short volume, and Reddit mention COUNTS; never a fetched post's words,
+ * so there is no room to fabricate. The prompt still forbids inventing headlines, and treats social as
+ * positioning CORROBORATION, never a cause; this only widens what the model may legitimately cite.
  */
 
 export interface MoverLite {
@@ -38,10 +42,44 @@ export interface EvidenceCtx {
   rows: PeerRow[];
   /** Symbol → {pct, trendPp}: FINRA short volume as % of tape + its recent trend (short-mechanics). */
   shortVol?: Map<string, { pct: number; trendPp?: number | null }>;
+  /** Symbol → computed social attention/positioning (Reddit buzz + StockTwits tilt). */
+  social?: Map<string, SocialBuzz>;
+}
+
+/**
+ * Social attention for a name, computed UPSTREAM from the ApeWisdom snapshot on disk. Numbers only —
+ * exactly like the rest of this module, the model may cite these figures but never the raw posts, so
+ * there is nothing to fabricate. This is ATTENTION (how loudly Reddit is talking), NOT direction: a
+ * mention surge corroborates that retail is CROWDING a move, it is never proof of the CAUSE (buzz
+ * reacts to a move as often as it drives one).
+ *
+ * (StockTwits bull/bear sentiment was evaluated and deliberately NOT used: it skews so heavily bullish
+ * that "% bullish" is platform baseline, not signal — a name DOWN 5% still shows ~100% bullish off its
+ * few tagged posts. Direction/why now comes from the grounded web-search ask instead.)
+ */
+export interface SocialBuzz {
+  /** ApeWisdom: mentions across Reddit in the trailing 24h. */
+  redditMentions?: number | null;
+  /** ApeWisdom: day-over-day change in mentions (%) — the surge signal. */
+  redditMentionChangePct?: number | null;
+  /** ApeWisdom: current rank on the all-stocks board (1 = most-mentioned). */
+  redditRank?: number | null;
+  /** ApeWisdom: places climbed vs 24h ago (positive = climbing the board). */
+  redditRankChange?: number | null;
 }
 
 /** Short volume ≥ this % of the tape reads as elevated shorting pressure — worth surfacing. */
 export const SHORT_VOL_ELEVATED = 50;
+
+// ── Social materiality bars: below these, a name's chatter is background noise, not a signal, and the
+// social part stays silent (the same discipline as short-vol above). A mover earns a social line only
+// when the crowd's attention actually MOVED — not merely because a big name is always talked about.
+/** Reddit mentions up ≥ this % day-over-day is an attention SURGE. */
+export const REDDIT_SURGE_PCT = 50;
+/** …or climbing ≥ this many places up the all-stocks board in a day. */
+export const REDDIT_RANK_JUMP = 15;
+/** But ignore a surge off a tiny base (3→9 mentions is +200% and means nothing) — require this floor. */
+export const REDDIT_MIN_MENTIONS = 10;
 
 const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
@@ -62,6 +100,27 @@ export function pickPeers(m: MoverLite, rows: PeerRow[], maxN = 4): PeerRow[] {
   if (leader && !picked.some((p) => p.symbol === leader.symbol)) picked.unshift(leader);
   // Biggest movers first — the leader reads first.
   return picked.sort((a, b) => Math.abs(b.ret1d!) - Math.abs(a.ret1d!)).slice(0, maxN);
+}
+
+/**
+ * The social part of the evidence line: a Reddit attention SURGE — but only when it clears the
+ * materiality bars above, so a name nobody is talking about stays silent instead of padding every
+ * mover with noise. Attention is corroboration of retail crowding, NOT the cause of the move; the desk
+ * prompt is told to treat it that way. "" when nothing is notable.
+ */
+export function buildSocialEvidence(b: SocialBuzz | undefined): string {
+  if (!b) return "";
+  const chg = b.redditMentionChangePct;
+  const jump = b.redditRankChange;
+  const bigEnough = (b.redditMentions ?? 0) >= REDDIT_MIN_MENTIONS;
+  const redditSurge = bigEnough && ((chg != null && chg >= REDDIT_SURGE_PCT) || (jump != null && jump >= REDDIT_RANK_JUMP));
+  if (!redditSurge) return "";
+  const seg = [
+    chg != null ? `mentions ${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% d/d` : "",
+    b.redditRank != null ? `rank #${b.redditRank}` : "",
+    jump != null && jump >= REDDIT_RANK_JUMP ? `climbed ${jump}` : "",
+  ].filter(Boolean).join(", ");
+  return seg ? `social: Reddit ${seg}` : "";
 }
 
 /**
@@ -91,6 +150,9 @@ export function buildMoveEvidence(m: MoverLite, ctx: EvidenceCtx): string {
     const trend = sv.trendPp != null && Math.abs(sv.trendPp) >= 1 ? `, ${sv.trendPp > 0 ? "+" : ""}${sv.trendPp.toFixed(0)}pp trend` : "";
     parts.push(`short volume ${sv.pct.toFixed(0)}% of tape (elevated${trend})`);
   }
+
+  const social = buildSocialEvidence(ctx.social?.get(m.symbol));
+  if (social) parts.push(social);
 
   return parts.length ? `MOVE EVIDENCE: ${parts.join(" · ")}` : "";
 }

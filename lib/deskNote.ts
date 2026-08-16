@@ -31,6 +31,11 @@ export interface DeskNoteWatch {
   text: string; // a concrete upcoming catalyst (earnings tonight, a deal vote, an FDA date, a close)
   tickers: string[];
 }
+/** A grounded web-search citation (from lib/ask) backing a mover's "why did it move" explanation. */
+export interface DeskSource {
+  title: string;
+  uri: string;
+}
 /** CODE-BUILT market context strip (no LLM) — cap-weighted S&P 1-day, breadth, VIX, dealer gamma. */
 export interface DeskTape {
   avg1d: number | null; // cap-weighted S&P 500 1-day return, %
@@ -57,6 +62,9 @@ export interface DeskNote {
   calendar?: DeskCalendar | null; // code-built forward calendar
   sections: DeskNoteSection[];
   watchToday: DeskNoteWatch[];
+  /** Grounded web-search citations for movers explained via the ask engine, keyed by ticker — rendered
+   *  as chips under the matching bullets (mirrors the stock-page ExplainMove UX). Absent on old notes. */
+  moveSources?: { ticker: string; sources: DeskSource[] }[];
   counts: { movers: number; filings: number; flow: number; analyst: number };
 }
 

@@ -14,6 +14,27 @@ function Tickers({ tickers, universe }: { tickers: string[]; universe: string })
   );
 }
 
+// Grounded web-search citations for a bullet — matched to its tickers, deduped by URL. Mirrors the
+// stock-page ExplainMove source chips so a reader can spot-check the AI's "why did it move".
+function BulletSources({ tickers, moveSources }: { tickers: string[]; moveSources?: DeskNote["moveSources"] }) {
+  if (!moveSources?.length || !tickers.length) return null;
+  const seen = new Set<string>();
+  const srcs = tickers
+    .flatMap((t) => moveSources.find((m) => m.ticker === t)?.sources ?? [])
+    .filter((s) => s.uri && !seen.has(s.uri) && (seen.add(s.uri), true))
+    .slice(0, 4);
+  if (!srcs.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {srcs.map((s, i) => (
+        <a key={i} href={s.uri} target="_blank" rel="noreferrer" title={s.title} className="max-w-[220px] truncate rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 text-[10px] text-[var(--accent)] hover:border-[var(--border-strong)]">
+          {s.title} ↗
+        </a>
+      ))}
+    </div>
+  );
+}
+
 // Morning Desk Note — the night's GLM-authored two-layer overnight brief.
 export default function DeskNote({ note, universe }: { note: DeskNote | null; universe: string }) {
   if (!note || !note.sections.length) return null;
@@ -48,6 +69,7 @@ export default function DeskNote({ note, universe }: { note: DeskNote | null; un
                     <Tickers tickers={b.tickers} universe={universe} />
                   </p>
                   {b.read && <p className="mt-0.5 text-[13px] leading-snug text-[var(--text-2)]">{b.read}</p>}
+                  <BulletSources tickers={b.tickers} moveSources={note.moveSources} />
                 </li>
               ))}
             </ul>
