@@ -343,14 +343,20 @@ function step(name: string, cmd: string, extraEnv: Record<string, string> = {}):
 // ── Checkout-age alarm ──
 // The runner ran a 3-week-stale checkout without anyone noticing (2026-08-09) — the entrypoint now
 // pulls per tick, and THIS is the alarm if that ever silently stops working again (a stuck pull, a
-// diverged branch, a detached volume). Cheap: one ls-remote per tick; alerts at most once a day via
-// a state file. Best-effort end to end — a git/network hiccup must never block the tick.
+// diverged branch, a detached volume). Cheap: one shallow fetch of main per tick; alerts at most once
+// a day via a state file. Best-effort end to end — a git/network hiccup must never block the tick.
 function checkCheckoutAge(): void {
   try {
     const localSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-    const remote = execSync("git ls-remote origin main", { encoding: "utf8", timeout: 15_000 }).split(/\s/)[0]?.trim();
+    // FETCH the remote tip — don't just ls-remote it. rev-list needs the remote commit's OBJECTS to be
+    // present locally; the old code measured HEAD..<ls-remote-sha> against a sha it had NEVER fetched,
+    // so it failed with "fatal: Invalid revision range" EXACTLY when the checkout was behind — defeating
+    // this alarm and leaking that fatal into the tick log (observed 2026-08-16, right after a push).
+    // Fetch first (quiet + stdio:ignore so nothing leaks), then count against FETCH_HEAD.
+    execSync("git fetch --quiet origin main", { timeout: 20_000, stdio: "ignore" });
+    const remote = execSync("git rev-parse FETCH_HEAD", { encoding: "utf8" }).trim();
     if (!remote || remote === localSha) return;
-    const behind = Number(execSync(`git rev-list --count HEAD..${remote}`, { encoding: "utf8" }).trim());
+    const behind = Number(execSync("git rev-list --count HEAD..FETCH_HEAD", { encoding: "utf8" }).trim());
     if (!Number.isFinite(behind) || behind < 20) return; // a tick-to-push race is normal; 20+ commits behind is a dead updater
     const stamp = path.join("data", ".tmp", "checkout-age-alerted.json");
     const today = new Date().toISOString().slice(0, 10);
