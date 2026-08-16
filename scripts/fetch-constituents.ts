@@ -56,7 +56,16 @@ const SOURCES: Record<string, SourceCfg> = {
   },
   russell1000: {
     name: "Russell 1000",
-    urls: ["https://en.wikipedia.org/wiki/Russell_1000_Index"],
+    // ⚠ SAME SPLIT AS NASDAQ-100 (see below). The constituents table was moved off
+    // /wiki/Russell_1000_Index into its own "List of Russell 1000 companies" article, leaving the index
+    // page with only the all-time-highs and annual-returns tables — a clean HTTP 200 with ZERO
+    // constituent rows (observed 2026-08-16). The split-out list is the source now; the index page is
+    // kept as a second candidate in case the tables are ever re-merged. Both share the same column
+    // layout: Company | Symbol | GICS Sector | GICS Sub-Industry.
+    urls: [
+      "https://en.wikipedia.org/wiki/List_of_Russell_1000_companies",
+      "https://en.wikipedia.org/wiki/Russell_1000_Index",
+    ],
     symbolCol: 1,
     nameCol: 0,
     sectorCol: 2,
