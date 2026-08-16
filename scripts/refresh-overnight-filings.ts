@@ -281,7 +281,13 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
   }
 
   const newClip = newText.slice(0, newCap);
-  const priorClip = (priorTextRaw || "").slice(0, newCap);
+  // The prior filing is only a COMPARISON baseline (risk-factor changes are already machine-diffed into
+  // rfAdded/rfRemoved above), so it doesn't need the full newCap — capping it well below the new filing
+  // trims the biggest input-token line in the whole bill (overnight-filings ≈ 83% of LLM input, per the
+  // 2026-08-16 llm-costs run) while the NEW filing is preserved in full. Env-tunable; set
+  // OVERNIGHT_PRIOR_CAP=110000 (≥ newCap) to restore the old behavior. Eyeball a night's digests after.
+  const priorCap = Math.min(newCap, Number(process.env.OVERNIGHT_PRIOR_CAP) || 50_000);
+  const priorClip = (priorTextRaw || "").slice(0, priorCap);
   const rfLine =
     rfAdded != null || rfRemoved != null
       ? `\n\nRISK-FACTOR REDLINE (vs prior, machine-diffed): ${rfAdded ?? 0} risk-factor sentences added, ${rfRemoved ?? 0} removed.`
