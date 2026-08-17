@@ -244,6 +244,28 @@ async function main() {
     } catch { /* list unreadable → membership unknown, forcedFlow stays absent */ }
   }
 
+  // RemainCo benchmark: the S&P over each spin's window. One ^GSPC pull (back to the oldest spin),
+  // then slice per parent — the parent's return since its spin date vs the S&P over the SAME window.
+  const oldestSpin = SPINOFF_ROSTER.reduce((m, s) => Math.min(m, Date.parse(s.spinDate)), Date.now());
+  const spxBars = await bars("^GSPC", new Date(oldestSpin).toISOString().slice(0, 10));
+  const spxCloseOnOrAfter = (t: number): number | null => {
+    const hit = spxBars.find((x) => x.t >= t && x.close != null);
+    return hit?.close ?? null;
+  };
+  const spxLast = spxBars.length ? spxBars[spxBars.length - 1].close : null;
+  /** Parent return since the spin vs the S&P over the same window (the RemainCo leg). */
+  const remainCoFor = async (parentTicker: string, spinT: number): Promise<import("../lib/spinoffs").RemainCo | undefined> => {
+    const pb = await bars(parentTicker, new Date(spinT).toISOString().slice(0, 10));
+    const preg = pb.filter((x) => x.t >= spinT && x.close != null);
+    if (preg.length < 2) return undefined; // unpriceable parent (foreign/ADR gap) — omit, never guess
+    const pFirst = preg[0].close as number, pLast = preg[preg.length - 1].close as number;
+    const parentReturnPct = pFirst > 0 ? +(((pLast / pFirst) - 1) * 100).toFixed(1) : null;
+    const sFirst = spxCloseOnOrAfter(spinT);
+    const spxReturnPct = sFirst && spxLast && sFirst > 0 ? +(((spxLast / sFirst) - 1) * 100).toFixed(1) : null;
+    const excessPct = parentReturnPct != null && spxReturnPct != null ? +(parentReturnPct - spxReturnPct).toFixed(1) : null;
+    return { parentReturnPct, spxReturnPct, excessPct };
+  };
+
   const rows: SpinoffRow[] = [];
   for (const seed of SPINOFF_ROSTER) {
     const spinT = Date.parse(seed.spinDate);
@@ -272,9 +294,11 @@ async function main() {
         weekly.push({ d: new Date(x.t).toISOString().slice(0, 10), pct: +(((cum + wiVol) / shares) * 100).toFixed(1) });
     });
     const turnoverPct = shares ? +(((cum + wiVol) / shares) * 100).toFixed(1) : null;
+    const remainCo = await remainCoFor(seed.parentTicker, spinT);
     rows.push({
       ...seed,
       forcedFlow: memberOf.size ? computeForcedFlow(memberOf.get(seed.parentTicker) ?? [], memberOf.get(seed.ticker) ?? []) : undefined,
+      remainCo,
       daysSince: Math.round((Date.now() - spinT) / DAY),
       price: last,
       sincePct: first > 0 ? +(((last / first) - 1) * 100).toFixed(1) : null,

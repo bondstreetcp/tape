@@ -82,9 +82,21 @@ export function computeForcedFlow(parentIndexes: string[], spinIndexes: string[]
   };
 }
 
+/** How the PARENT ("RemainCo") has done since it spun the SpinCo off — the other half of the trade
+ *  (2026-08-16 ask: "how have the RemainCos done since the spin?"). The academic edge is usually the
+ *  SpinCo, but the slimmed parent is the more investable, liquid leg; excess vs the S&P over the same
+ *  window is the honest read. Absent when the parent's series can't be priced (foreign/ADR gaps). */
+export interface RemainCo {
+  parentReturnPct: number | null; // parent total price return since the spin date, %
+  spxReturnPct: number | null; // S&P 500 over the SAME window, %
+  excessPct: number | null; // parent − S&P (the value the separation actually added vs the tape)
+}
+
 export interface SpinoffRow extends SpinoffSeed {
   /** Index-fund forced-selling read — absent when the constituent lists weren't readable. */
   forcedFlow?: ForcedFlow;
+  /** Parent-since-spin performance vs the S&P — the RemainCo leg. */
+  remainCo?: RemainCo;
   daysSince: number;
   price: number | null;
   sincePct: number | null; // vs first regular-way close

@@ -140,8 +140,9 @@ export default function SpinoffsView({ universe, data }: { universe: string; dat
               <tr>
                 <th className="px-3 py-2 font-medium">Spinco</th>
                 <th className="px-2 py-2 font-medium">Parent</th>
+                <th className="px-2 py-2 text-right font-medium" title="The RemainCo leg: how the PARENT has done since it spun this SpinCo off, and its EXCESS vs the S&P over the same window — the slimmed parent is the more liquid, investable half of the trade.">RemainCo vs S&P</th>
                 <th className="px-2 py-2 font-medium">Spun</th>
-                <th className="px-2 py-2 text-right font-medium">Since spin</th>
+                <th className="px-2 py-2 text-right font-medium" title="The SpinCo's own price return since its first regular-way close.">SpinCo since</th>
                 <th className="px-2 py-2 font-medium" title="Cumulative volume since the spin (+ when-issued) ÷ shares outstanding. Bar spans 0-200%; ticks at 100% and 150% — the backtested signal zone.">Register turned</th>
                 <th className="px-2 py-2 text-right font-medium">Shares out</th>
                 <th className="px-2 py-2 text-right font-medium" title="When-issued volume captured pre-spin (0 = Yahoo carries no WI line)">WI vol</th>
@@ -166,6 +167,16 @@ export default function SpinoffsView({ universe, data }: { universe: string; dat
                     <div className="max-w-[200px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                   </td>
                   <td className="px-2 py-2.5 text-[12px] text-[var(--text-3)]">{r.parent} <span className="font-mono text-[var(--text-4)]">({r.parentTicker})</span></td>
+                  <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[12px]" title={r.remainCo ? `Parent ${pct(r.remainCo.parentReturnPct)} vs S&P ${pct(r.remainCo.spxReturnPct)} since ${fmtDate(r.spinDate)}` : "Parent series not priceable (e.g. a foreign/ADR parent)"}>
+                    {r.remainCo?.parentReturnPct != null ? (
+                      <>
+                        <span style={{ color: r.remainCo.parentReturnPct >= 0 ? "#22c55e" : "#ef4444" }}>{pct(r.remainCo.parentReturnPct)}</span>
+                        {r.remainCo.excessPct != null && (
+                          <span className="ml-1 text-[10px]" style={{ color: r.remainCo.excessPct >= 0 ? "#22c55e" : "#ef4444" }} title="excess vs the S&P over the same window">({r.remainCo.excessPct >= 0 ? "+" : ""}{r.remainCo.excessPct}pp)</span>
+                        )}
+                      </>
+                    ) : <span className="text-[var(--text-4)]">—</span>}
+                  </td>
                   <td className="px-2 py-2.5 whitespace-nowrap text-[12px] text-[var(--text-3)]">{fmtDate(r.spinDate)} <span className="text-[var(--text-4)]">· {r.daysSince}d</span></td>
                   <td className="px-2 py-2.5 text-right font-mono tabular-nums font-semibold" style={{ color: (r.sincePct ?? 0) >= 0 ? "#22c55e" : "#ef4444" }}>{pct(r.sincePct)}</td>
                   <td className="px-2 py-2.5"><TurnoverBar r={r} /></td>
@@ -177,7 +188,7 @@ export default function SpinoffsView({ universe, data }: { universe: string; dat
           </table>
         </div>
       )}
-      <p className="mt-3 text-[11px] text-[var(--text-4)]">Turnover counts every share traded, so the same share changing hands twice counts twice, which is why the classic 50% rule fires too early today — our 2020-24 backtest calibrates the exhaustion zone at ~100-150% (see scripts/backtest-spinoff-turnover.ts). When-issued volume included where Yahoo carries the WI line. Research, not advice.</p>
+      <p className="mt-3 text-[11px] text-[var(--text-4)]">Turnover counts every share traded, so the same share changing hands twice counts twice, which is why the classic 50% rule fires too early today — our 2020-24 backtest calibrates the exhaustion zone at ~100-150% (see scripts/backtest-spinoff-turnover.ts). When-issued volume included where Yahoo carries the WI line. <b className="text-[var(--text-3)]">RemainCo vs S&P</b> is the other leg — the parent&apos;s total return since it spun this SpinCo off, and its excess over the S&P across the same window (the slimmed parent is usually the more liquid, investable half). Research, not advice.</p>
     </main>
   );
 }
