@@ -125,6 +125,13 @@ export interface ChainMember {
   mcap: number | null;
   /** Own TTM gross margin (fraction) — lets the UI show dispersion inside a layer. */
   gm: number | null;
+  /** The rest of the per-company economics the layer medians are computed FROM — carried so the UI can
+   *  show the constituents, not just the aggregate (the 2026-08-16 "show each company, not the median"
+   *  ask). Same units/definitions as the layer stats. */
+  op?: number | null; // TTM operating margin (fraction)
+  roa?: number | null; // TTM return on assets (fraction)
+  rg?: number | null; // TTM revenue growth YoY (fraction)
+  gmYoY?: number | null; // GM change latest FY vs prior, percentage POINTS
 }
 
 export interface LayerEcon {

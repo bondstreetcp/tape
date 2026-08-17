@@ -13,8 +13,18 @@ const signed = (v: number | null, d = 0) => (v == null ? "—" : `${v >= 0 ? "+"
 export default function InsidersView({ data, universe, record }: { data: InsidersData; universe: string; record?: React.ReactNode }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const [clusterOnly, setClusterOnly] = useState(false);
+  // Sort was opaque (2026-08-16 call — "I don't understand the ordering"): the default rank is the
+  // composite cluster score (recency is only 20% of it, so dates jump), which read as random. Make
+  // the active sort EXPLICIT and offer a plain recency sort.
+  const [sort, setSort] = useState<"score" | "recent">("score");
 
-  const rows = useMemo(() => data.rows.filter((r) => !clusterOnly || r.buyers >= 2).slice(0, 120), [data.rows, clusterOnly]);
+  const rows = useMemo(() => {
+    const r = data.rows.filter((x) => !clusterOnly || x.buyers >= 2);
+    const sorted = sort === "recent"
+      ? [...r].sort((a, b) => (Date.parse(b.lastBuy) || 0) - (Date.parse(a.lastBuy) || 0) || b.clusterScore - a.clusterScore)
+      : [...r].sort((a, b) => b.clusterScore - a.clusterScore); // score is the build order, but sort explicitly so it's owned here
+    return sorted.slice(0, 120);
+  }, [data.rows, clusterOnly, sort]);
   const clusters = useMemo(() => data.rows.filter((r) => r.buyers >= 2).length, [data.rows]);
 
   return (
@@ -36,6 +46,13 @@ export default function InsidersView({ data, universe, record }: { data: Insider
           ⊕ Clusters only ({clusters})
         </button>
         {clusterOnly && <button onClick={() => setClusterOnly(false)} className="text-xs text-[var(--text-3)] underline hover:text-[var(--text)]">clear</button>}
+        <span className="ml-2 inline-flex items-center gap-1 text-xs text-[var(--text-4)]">
+          Sort:
+          <span className="inline-flex overflow-hidden rounded-md border border-[var(--border)]">
+            <button onClick={() => setSort("score")} className={"px-2 py-1 font-medium transition-colors " + (sort === "score" ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")} title="Composite cluster score: # buyers 50%, $ ÷ market cap 30%, recency 20%">Cluster score</button>
+            <button onClick={() => setSort("recent")} className={"px-2 py-1 font-medium transition-colors " + (sort === "recent" ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")} title="Most recent buy first">Most recent</button>
+          </span>
+        </span>
         <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} of {data.coverage} buying · {uname}</span>
       </div>
 

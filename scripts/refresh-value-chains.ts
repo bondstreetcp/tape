@@ -130,12 +130,17 @@ async function main() {
       }
       const members: ChainMember[] = memberSyms
         .map(({ symbol, source, via }) => {
-          const st = records.get(symbol)?.stats;
+          const rec = records.get(symbol);
+          const st = rec?.stats;
           return {
             symbol, source, ...(via ? { via } : {}),
             name: names.get(symbol) ?? null,
             mcap: st?.marketCap ?? null,
             gm: st?.grossMargins ?? null,
+            op: st?.operatingMargins ?? null,
+            roa: st?.returnOnAssets ?? null,
+            rg: st?.revenueGrowth ?? null,
+            gmYoY: rec ? gmYoYpp(rec) : null,
           };
         })
         .sort((a, b) => (b.mcap ?? 0) - (a.mcap ?? 0));

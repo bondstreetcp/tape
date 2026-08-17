@@ -69,6 +69,7 @@ function gateSummary(members: ChainMember[]): string | null {
 
 function LayerCard({ layer, universe, last }: { layer: ChainLayerRow; universe: string; last: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [table, setTable] = useState(false);
   const shown = expanded ? layer.members : layer.members.slice(0, COLLAPSE_AT);
   const hidden = layer.members.length - shown.length;
   const e = layer.econ;
@@ -96,7 +97,45 @@ function LayerCard({ layer, universe, last }: { layer: ChainLayerRow; universe: 
               +{hidden} more
             </button>
           )}
+          <button onClick={() => setTable((v) => !v)} className="ml-auto rounded-md px-1.5 py-0.5 text-[11px] text-[var(--accent)] hover:underline">
+            {table ? "hide" : "per-company"} table
+          </button>
         </div>
+        {/* Per-company economics (2026-08-16 ask): the layer medians hide the members — this shows the
+            same stats one row per constituent, so a reader sees the dispersion the median collapses. */}
+        {table && (
+          <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="w-full min-w-[520px] text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-[10px] uppercase tracking-wide text-[var(--text-4)]">
+                  <th className="px-2 py-1.5 font-medium">Company</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Mkt cap</th>
+                  <th className="px-2 py-1.5 text-right font-medium">GM</th>
+                  <th className="px-2 py-1.5 text-right font-medium">GM YoY</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Op mgn</th>
+                  <th className="px-2 py-1.5 text-right font-medium">ROA</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Rev gr</th>
+                </tr>
+              </thead>
+              <tbody>
+                {layer.members.map((m) => (
+                  <tr key={m.symbol} className="border-b border-[var(--divider)] last:border-0">
+                    <td className="px-2 py-1.5">
+                      <Link href={`/u/${universe}/stock/${encodeURIComponent(m.symbol)}`} className="font-mono font-semibold text-[var(--text)] hover:text-[var(--accent)]">{m.symbol}</Link>
+                      {m.source === "seed" && <span className="ml-1 text-[9px] text-[var(--text-4)]">seed</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{m.mcap != null ? mcap(m.mcap) : "—"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pct(m.gm ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{pp(m.gmYoY ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{pct(m.op ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{pct(m.roa ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{pct(m.rg ?? null)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         {gates && <div className="mt-2 text-[11px] text-[var(--text-4)]">Expanded via: {gates}</div>}
         {layer.missingSeeds.length > 0 && (
           <div className="mt-1 text-[11px] text-[var(--text-4)]">Seeds not in the company cache: {layer.missingSeeds.join(", ")}</div>
