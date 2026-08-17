@@ -80,7 +80,7 @@ export default function PreviewRecordView({
       <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
         <div className="flex flex-wrap gap-x-5 gap-y-1">
           <span><b className="text-[var(--text-2)]">Left block</b> = committed the night before the print · <b className="text-[var(--text-2)]">right block</b> = what actually happened, graded by code</span>
-          <span><b className="text-[var(--text-2)]">Call</b> = predicted <b>B</b>eat / <b>M</b>iss / <b>I</b>nline vs consensus · <b className="text-[var(--text-2)]">Result</b> = how the print actually landed vs consensus (|surprise| ≤ 0.5% = inline) · <b className="text-[var(--text-2)]">Call ✓</b> grades Call against Result</span>
+          <span><b className="text-[var(--text-2)]">Call</b> = predicted <b>B</b>eat / <b>M</b>iss / <b>I</b>nline vs consensus · <b className="text-[var(--text-2)]">Result</b> = how the print actually landed vs consensus (|surprise| ≤ 0.5% = inline) · <b className="text-[var(--text-2)]">Call ✓</b> grades Call against Result · <b className="text-[var(--text-2)]">Actual</b> is on the consensus (adjusted) basis — the same basis the forecast targets — so EPS ✓ and Result can never disagree about which basis "beat" means</span>
           <span><b className="text-[var(--text-2)]">EPS ✓</b> = predicted EPS within ±2¢ or ±5% of actual · <b className="text-[var(--text-2)]">Rx ✓</b> = predicted reaction direction vs the realized move (|move| &lt; 0.5% = flat, ungraded)</span>
           <span>Click a row for the qualitative calls — recorded, not auto-graded.</span>
         </div>
@@ -131,7 +131,7 @@ export default function PreviewRecordView({
                 <th className="px-2 py-2 text-center font-medium" title="predicted Beat / Miss / Inline vs consensus">Call</th>
                 <th className="px-2 py-2 text-center font-medium" title="predicted 1-day reaction direction">Rx</th>
                 <th className="px-2 py-2 text-center font-medium">Conf</th>
-                <th className="border-l border-[var(--border)] px-2 py-2 text-right font-medium">Actual</th>
+                <th className="border-l border-[var(--border)] px-2 py-2 text-right font-medium" title="actual EPS on the SAME adjusted basis the forecast was made on (consensus × (1+surprise)); the stats-file number is only a fallback — grading against a different basis was the AMAT wrong-grade bug">Actual</th>
                 <th className="px-2 py-2 text-center font-medium" title="predicted EPS within ±2c or ±5% of actual">EPS ✓</th>
                 <th className="px-2 py-2 text-center font-medium" title="how the print actually landed vs consensus (|surprise| ≤ 0.5% = inline)">Result</th>
                 <th className="px-2 py-2 text-center font-medium" title="did the predicted B/M/I call match the result">Call ✓</th>
@@ -153,13 +153,13 @@ export default function PreviewRecordView({
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap text-[var(--text-2)]">{dateLabel(r.earningsDate)}</td>
                       {/* ── ex-ante: committed before the print ── */}
-                      <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text)]">{r.predEps ?? "—"}</td>
+                      <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text)]" title={r.predMethod ?? undefined}>{r.predEps ?? "—"}{r.predMethod && <span className="ml-0.5 text-[10px] text-[var(--text-4)]" title={r.predMethod}>ⓘ</span>}</td>
                       <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{r.consEps ?? "—"}</td>
                       <td className="px-2 py-2 text-center font-mono text-[12px] uppercase text-[var(--text-2)]">{r.vsConsensus.slice(0, 1)}</td>
                       <td className="px-2 py-2 text-center font-mono text-[12px] text-[var(--text-2)]">{r.reactionDir === "up" ? "↑" : "↓"}</td>
                       <td className="px-2 py-2 text-center text-[11px] text-[var(--text-3)]">{r.confidence}</td>
                       {/* ── ex-post: graded against the actuals ── */}
-                      <td className="border-l border-[var(--border)] px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{r.actualEps ?? "—"}</td>
+                      <td className="border-l border-[var(--border)] px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]" title={r.epsBasis === "consensus-implied" ? "adjusted actual, same basis as consensus (consensus × (1+surprise))" : r.epsBasis === "stats" ? "stats-file actual — basis may differ from consensus" : undefined}>{r.actualEps ?? "—"}</td>
                       <td className="px-2 py-2 text-center" title={r.epsErrPct != null ? `error ${r.epsErrPct}% of actual` : undefined}>{hitMark(r.epsHit)}</td>
                       <td className="px-2 py-2 text-center font-mono text-[12px] uppercase text-[var(--text-2)]">
                         {(() => { const d = actualDirection(r.actualSurprise ?? null); return d ? d.slice(0, 1) : "—"; })()}

@@ -127,6 +127,7 @@ async function main() {
       vsConsensus: p.vsConsensus,
       reactionDir: p.reactionDir,
       confidence: p.confidence,
+      predMethod: p.epsMethod ?? null,
       calls: p.calls,
       status: "awaiting_print",
     };
@@ -161,12 +162,21 @@ async function main() {
     // 25-90d AFTER it (annual prints at the long end) — so match DIRECTIONALLY: the latest quarter-end
     // at/before the print, within 110d. A symmetric ±45d window silently never graded late reporters.
     const stats = await cachedStats(rec.symbol).catch(() => null);
-    let actualEps: number | null = null, bestT = -Infinity;
+    let statsActual: number | null = null, bestT = -Infinity;
     for (const s of stats?.surprises ?? []) {
       const t = Date.parse(s.quarter);
       if (!Number.isFinite(t) || s.actual == null) continue;
-      if (t <= eT + DAY && eT - t <= 110 * DAY && t > bestT) { bestT = t; actualEps = s.actual; }
+      if (t <= eT + DAY && eT - t <= 110 * DAY && t > bestT) { bestT = t; statsActual = s.actual; }
     }
+    // BASIS-CONSISTENT actual (the AMAT case, 2026-08-16 call): the model forecasts vs CONSENSUS
+    // (adjusted basis) and rx.surprise is measured vs consensus — so consEps×(1+surprise) IS the
+    // adjusted actual, the same basis the prediction was made on. The stats-file actual can be a
+    // DIFFERENT basis (AMAT: graded ✗ against 2.86 while the true adjusted actual was 3.50 and the
+    // model's 3.45 beat the 3.39 consensus — while the SAME row said "beat", because the direction
+    // column already used the surprise). Prefer the surprise-implied actual; stats is the fallback.
+    const surpriseImplied = rec.consEps != null && rx.surprise != null ? +(rec.consEps * (1 + rx.surprise)).toFixed(2) : null;
+    const actualEps = surpriseImplied ?? statsActual;
+    rec.epsBasis = surpriseImplied != null ? "consensus-implied" : statsActual != null ? "stats" : null;
     const eps = gradeEps(rec.predEps, actualEps);
     const dir = actualDirection(rx.surprise);
     const actualMovePct = rx.move != null ? +(rx.move * 100).toFixed(2) : null;

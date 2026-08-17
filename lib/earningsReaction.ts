@@ -81,14 +81,17 @@ export async function getEarningsReactions(symbol: string, n = 10): Promise<Earn
     if (idx < 1 || idx + 1 >= closes.length) continue;
     const moveOn = closes[idx].c / closes[idx - 1].c - 1; // before-open reporters
     const moveNext = closes[idx + 1].c / closes[idx].c - 1; // after-close reporters
-    // Use the 8-K acceptance hour (ET) when we have it: ≥16:00 → after-close
-    // (reaction is the next session), <10:00 → before-open (reaction is this
-    // session). Only mid-day/unknown filings fall back to the larger move.
+    // Use the 8-K acceptance hour (ET) when we have it: ≥16:00 → after-close (reaction is the next
+    // session), <16:00 → before-open (reaction is THIS session). A MID-SESSION acceptance is a BMO
+    // release whose 8-K lagged the wire — companies do not release results mid-session, and the old
+    // larger-magnitude fallback here systematically stole the grade whenever the NON-reaction day
+    // happened to move more (MSGS: BMO Thursday, −0.3% reaction, graded with Friday's −1.4% — the
+    // 2026-08-16 call). The magnitude guess survives only for the rare no-timestamp filing.
     const accept = acceptByDate.get(d) || "";
     const hour = accept.length >= 13 ? parseInt(accept.slice(11, 13), 10) : NaN;
     let move: number, j: number;
     if (hour >= 16) { move = moveNext; j = idx + 1; }
-    else if (hour >= 0 && hour < 10) { move = moveOn; j = idx; }
+    else if (hour >= 0 && hour < 16) { move = moveOn; j = idx; }
     else { const useOn = Math.abs(moveOn) >= Math.abs(moveNext); move = useOn ? moveOn : moveNext; j = useOn ? idx : idx + 1; }
     const dt = Date.parse(d + "T00:00:00Z"); // for matching the nearest EPS surprise
     // Surprise: the announcement is ~30–45 days after the fiscal quarter end.

@@ -183,6 +183,10 @@ export interface PredictedPrint {
   vsConsensus: "beat" | "miss" | "inline"; // the call vs the supplied consensus EPS
   reactionDir: "up" | "down"; // predicted 1-day reaction direction
   confidence: "high" | "medium" | "low";
+  /** ONE line: HOW predEps was built — the basis (adjusted, as consensus is quoted) + the anchor
+   *  (guidance midpoint, sequential trend, segment build). Sam's 2026-08-16 ask: "how does it come
+   *  up with the numbers?" — recorded with the forecast so the record can answer. */
+  epsMethod: string | null;
   calls: { claim: string; rationale: string }[]; // 2-4 specific, checkable qualitative calls
 }
 
@@ -197,6 +201,7 @@ export async function predictPrint(c: PreviewContext): Promise<PredictedPrint | 
     "'vsConsensus' = 'beat' | 'miss' | 'inline' — your EPS call vs the supplied consensus. " +
     "'reactionDir' = 'up' | 'down' — your predicted 1-day price reaction (weigh the setup/positioning signals: a beat can still sell off when the bar is high). " +
     "'confidence' = 'high' | 'medium' | 'low'. " +
+    "'epsMethod' = ONE short line stating HOW you built predEps: the BASIS (adjusted/non-GAAP, exactly as the consensus is quoted — never a GAAP number) and the anchor (e.g. 'adjusted; guidance midpoint 3.40-3.50 plus the 4-qtr avg +2% beat'). " +
     "'calls' = 2-4 SPECIFIC, CHECKABLE qualitative predictions with a one-line rationale each — e.g. {claim: 'guides FY revenue above Street', rationale: '...'}, {claim: 'datacenter segment accelerates sequentially', rationale: '...'}. Claims must be verifiable from the report/reaction, never vague. " +
     NO_ADVICE;
   const SCHEMA = '\n\nReturn ONLY JSON: {"predEps": number|null, "predRevB": number|null, "vsConsensus": "beat"|"miss"|"inline", "reactionDir": "up"|"down", "confidence": "high"|"medium"|"low", "calls": [{"claim": string, "rationale": string}]}';
@@ -216,6 +221,7 @@ export async function predictPrint(c: PreviewContext): Promise<PredictedPrint | 
     vsConsensus: vs,
     reactionDir: dir,
     confidence: ["high", "medium", "low"].includes(out.confidence) ? out.confidence : "medium",
+    epsMethod: typeof out.epsMethod === "string" && out.epsMethod.trim() ? out.epsMethod.trim().slice(0, 200) : null,
     calls,
   };
 }

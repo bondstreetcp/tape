@@ -30,11 +30,17 @@ export interface PreviewRec {
   vsConsensus: "beat" | "miss" | "inline";
   reactionDir: "up" | "down";
   confidence: "high" | "medium" | "low";
+  /** The model's own one-line account of HOW predEps was built (basis + anchor) — provenance. */
+  predMethod?: string | null;
   calls: PreviewCall[];
 
   // ── settlement (code-graded once the print lands) ──
   status: PreviewStatus;
   actualEps?: number | null;
+  /** Where actualEps came from: "consensus-implied" = consEps×(1+surprise), the SAME adjusted basis
+   *  the forecast was made on (preferred); "stats" = the stats-file actual (can be GAAP/other-basis —
+   *  the AMAT wrong-basis grade, 2026-08-16 call). */
+  epsBasis?: "consensus-implied" | "stats" | null;
   actualSurprise?: number | null; // EPS surprise vs consensus AT PRINT TIME (decimal, from the reaction feed)
   actualMovePct?: number | null; // signed 1-day reaction, %
   epsHit?: boolean | null; // predicted EPS within the accuracy band of the actual
