@@ -101,9 +101,12 @@ export default function OvernightFilingsView({ universe, data, known, sectors = 
       if (needle && !`${it.ticker} ${it.name} ${it.headline}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-    // Surface the market-movers: high-impact first, then (stable) newest-first within a tier.
+    // Ordering (explicit, 2026-08-16 call — the order read as almost-chronological-but-not, because
+    // it leaned on the incoming array's order within a tier): high-impact first (the market-movers a
+    // reader scans for), then strictly newest-filed first WITHIN each tier. Not pure chronological, by
+    // design — but a stated, deterministic rule.
     const rank = (i: OvernightItem) => (i.impact === "high" ? 0 : i.impact === "medium" ? 1 : 2);
-    return out.sort((a, b) => rank(a) - rank(b));
+    return out.sort((a, b) => rank(a) - rank(b) || Date.parse(b.filedAt) - Date.parse(a.filedAt));
   }, [universeItems, formF, sentF, sectorF, moversOnly, q, sectors]);
   // Accessions ACTUALLY rendered on this page (post universe + client filters) → a related neighbour
   // that's on screen deep-links to its sibling card; anything else (out-of-universe, filtered out, or
