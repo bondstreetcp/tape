@@ -30,5 +30,5 @@ export default async function BreadthPage({ params }: { params: Promise<{ univer
   } catch {
     /* regime strip is optional */
   }
-  return <BreadthView data={data} regime={regime} universe={universe} />;
+  return <BreadthView data={data} regime={regime} universe={universe} asOf={snap.generatedAt} />;
 }

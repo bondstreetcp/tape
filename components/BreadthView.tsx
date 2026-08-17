@@ -2,6 +2,7 @@
 import Link from "next/link";
 import PageHeader from "./PageHeader";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { fmtDateTime } from "@/lib/format";
 import type { BreadthData, RegimeItem } from "@/lib/breadth";
 
 const TONE: Record<"up" | "neutral" | "down", string> = { up: "#22c55e", neutral: "#f59e0b", down: "#ef4444" };
@@ -20,7 +21,7 @@ function Gauge({ label, pct, sub }: { label: string; pct: number; sub: string })
   );
 }
 
-export default function BreadthView({ data, regime, universe }: { data: BreadthData; regime: RegimeItem[]; universe: string }) {
+export default function BreadthView({ data, regime, universe, asOf }: { data: BreadthData; regime: RegimeItem[]; universe: string; asOf?: string }) {
   const uname = UNIVERSE_BY_ID[universe]?.name ?? universe;
   const advTotal = data.advancers + data.decliners + data.unchanged || 1;
   const advPct = Math.round((data.advancers / advTotal) * 100);
@@ -34,6 +35,7 @@ export default function BreadthView({ data, regime, universe }: { data: BreadthD
         title="Breadth & Regime"
         desc="Market internals: how many names actually participate in the move (above their moving averages, at new highs, positive on the year) and the macro risk backdrop. Tells you whether a rally is broad or a few names carrying the tape. Decision-support, not advice."
       />
+      {asOf && <div className="-mt-2 mb-3 text-[11px] text-[var(--text-4)]">Breadth computed from the {uname} close snapshot · as of {fmtDateTime(asOf)}</div>}
 
       {/* Verdict */}
       <div className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: TONE[data.verdict.tone] + "55", background: TONE[data.verdict.tone] + "12" }}>

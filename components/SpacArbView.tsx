@@ -40,8 +40,10 @@ export default function SpacArbView({ universe, data }: { universe: string; data
     <main className="mx-auto max-w-[82rem] px-4 py-6 sm:px-6">
       <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
       <div className="mt-1" />
+      {/* No universe switcher (2026-08-16 call): the SPAC list is a GLOBAL trust-filing scan, identical
+          across universes — pre-deal SPACs aren't index members — so a switcher that changes nothing is
+          misleading. The back-link above still carries the universe for navigation. */}
       <PageHeader
-        universe={universe}
         title="SPAC Trust Arbitrage"
         desc="Pre-deal SPACs priced against their trust-account redemption value — the cash-in-trust floor a holder can redeem for at the next vote or deadline. A price below trust is a low-risk claim institutions can't size into, but it is redemption-gated (you collect by redeeming, not selling), the trust figure is as of the last 10-Q (a redemption or extension moves it between filings), and a discount is often a signal — thin float, looming delisting, a disliked deal — not a gift. Trust-per-share is computed from the filing (trust ÷ redeemable shares), never a headline number. Decision-support, not advice; read the filings and the deadline before acting."
       />
