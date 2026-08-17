@@ -22,6 +22,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
+import { EARNINGS_EXTRA_NAMES } from "../lib/earningsExtraNames";
 import { daysUntil } from "../lib/calendar";
 import { getOptions } from "../lib/options";
 import { getEarningsReactions } from "../lib/earningsReaction";
@@ -171,6 +172,25 @@ async function main() {
       }
     }
   }
+
+  // EXTRA UNIVERSE (2026-08-16 call): liquid US-optionable names outside the tracked indices — big
+  // China/HK ADRs (BABA, JD, PDD…) + recent IPOs (AS, VIK…). Fetch a minimal quote so each becomes a
+  // snapshot-like record in uniBySym; the Nasdaq second-source below then admits any reporting
+  // in-window, exactly like an index name. A name Yahoo can't price, or one with no options, drops
+  // out naturally downstream (no cap / no straddle → no row).
+  const extra = EARNINGS_EXTRA_NAMES.filter((t) => !uniBySym.has(t));
+  let extraAdded = 0;
+  for (const t of extra) {
+    try {
+      const q: any = await yf.quote(t, {}, { validateResult: false });
+      const mc = typeof q?.marketCap === "number" ? q.marketCap : 0;
+      const px = typeof q?.regularMarketPrice === "number" ? q.regularMarketPrice : null;
+      if (!(mc > MIN_MKTCAP) || px == null) continue; // stay liquid — a delisted/thin ADR is skipped
+      uniBySym.set(t, { symbol: t, name: q.longName || q.shortName || t, sector: null, marketCap: mc, price: px, earningsDate: null });
+      extraAdded++;
+    } catch { /* unpriceable — skip */ }
+  }
+  if (extraAdded) console.log(`extra universe: +${extraAdded}/${EARNINGS_EXTRA_NAMES.length} liquid non-index names available for the Nasdaq merge (ADRs + recent IPOs)`);
 
   // Live recheck of recently-passed dates (bounded): a company that MOVED its print leaves the
   // snapshot pointing at the old date. One calendarEvents call per candidate; a fresh in-window

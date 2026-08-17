@@ -209,8 +209,13 @@ export default function TradeRecordView({
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setStatusF("all")} className={TB(statusF === "all")}>All</button>
           <button onClick={() => setStatusF("preprint")} className={TB(statusF === "preprint")} title="Logged and awaiting the print — the live pre-print queue">Pre-print</button>
-          <button onClick={() => setStatusF("settled")} className={TB(statusF === "settled")} title="Graded at the post-print">Graded</button>
+          <button onClick={() => setStatusF("settled")} className={TB(statusF === "settled")} title="Closed and graded at the post-print — NOT held to expiry">Graded</button>
         </div>
+        {/* Exit rule made unmissable (2026-08-16 call — a "Graded" win with time left to expiry read as
+            premature; it isn't, the play is CLOSED at the post-print by design). */}
+        <span className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-3)]" title="Every play is defined as: enter pre-print, exit the morning after the report (event vol stripped from the reprice). We never hold to expiry — so a 'Graded' play is complete even when its listed option still has weeks to run.">
+          Exit rule: <b className="text-[var(--text-2)]">closed the session after the print</b>, never held to expiry
+        </span>
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setVerdictF("all")} className={TB(verdictF === "all")}>Both</button>
           <button onClick={() => setVerdictF("rich")} className={TB(verdictF === "rich")} title="Options priced the move rich → sell premium">Sell</button>

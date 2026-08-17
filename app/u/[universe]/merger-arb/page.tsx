@@ -1,24 +1,12 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { notFound } from "next/navigation";
-import { UNIVERSE_BY_ID } from "@/lib/universes";
-import MergerArbView from "@/components/MergerArbView";
-import EmptyState from "@/components/EmptyState";
-import type { MergerArbFile } from "@/lib/mergerArb";
+import { redirect } from "next/navigation";
 
-export const revalidate = 600;
 export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
 
-// Merger-arb: live cash-deal spreads from EDGAR definitive merger proxies. Global, not universe-filtered.
-export default async function MergerArbPage({ params }: { params: Promise<{ universe: string }> }) {
-  const { universe } = await params;
-  if (!UNIVERSE_BY_ID[universe]) notFound();
-  const data = await fs
-    .readFile(path.join(process.cwd(), "data", "merger-arb.json"), "utf8")
-    .then((s) => JSON.parse(s) as MergerArbFile)
-    .catch(() => null);
-  if (!data) return <EmptyState universe={universe} title="Merger Arbitrage" note="Builds on the nightly refresh once the EDGAR merger-proxy scan has run." />;
-  if (!data.rows.length)
-    return <EmptyState universe={universe} title="Merger Arbitrage" note={`No live cash deals right now — the scan saw ${data.scanned} definitive proxies in the last few months, but they were stock-for-stock or SPAC combinations. Cash deals are episodic.`} />;
-  return <MergerArbView universe={universe} data={data} />;
+// Merger-arb moved to our dedicated ARB tool (2026-08-16, Richard): the standalone site carries the
+// full deal book with path-to-close, far richer than the in-app screen ever was. The nav entry opens
+// it externally; any deep-link to the old in-app route redirects there too. The refresh-merger-arb
+// FEED stays — it still powers the earnings-play stand-aside (lib/catalystOverlay marks acquisition
+// targets so a name under a signed deal doesn't get a vol play). This page is just the redirect.
+export default function MergerArbPage() {
+  redirect("https://arb.truporchhomesvm.com");
 }
