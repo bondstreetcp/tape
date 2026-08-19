@@ -34,7 +34,11 @@ import { stripHtml } from "../lib/edgarSearch";
 
 const CONTENDERS = (process.env.MODELS || "z-ai/glm-5.2,google/gemini-3.1-pro-preview,qwen/qwen3.8-max")
   .split(",").map((s) => s.trim()).filter(Boolean);
-const JUDGES = ["deepseek/deepseek-v3.2", "moonshotai/kimi-k3"];
+// Two OUT-OF-RACE judges that must NOT share a lab with any contender (else self-scoring bias).
+// Override to re-lineup: e.g. to make DeepSeek/Moonshot models CONTENDERS, move judges to other labs
+// (JUDGES=google/gemini-3.1-pro-preview,openai/gpt-oss-120b).
+const JUDGES = (process.env.JUDGES || "deepseek/deepseek-v3.2,moonshotai/kimi-k3")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 const LEGS = (process.env.LEGS || "abcd").toLowerCase();
 const NO_ADVICE = "This is analytical commentary, not personalized investment advice.";
 
