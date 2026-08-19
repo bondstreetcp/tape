@@ -124,11 +124,18 @@ const FOCUSED_TEXT_CAP = 30_000;
 // 80-110k head-slice). Short filings (≤ cap) pass through whole; no anchor found → falls back to the
 // head-slice, so a detection miss is never worse than today. OFF by default (see the header knob) —
 // validate on a night's digests before enabling in tape.env.
-const MATERIAL_ANCHOR = /management['’]?s discussion|results of operations|financial statements|item\s*2\.02|item\s*1\.01|use of proceeds|the offering/i;
+// Prefer the MD&A / results narrative — the most material part for a digest — over the financial-
+// statement notes, which physically come FIRST in a 10-Q (Item 1 before Item 2 MD&A) and can fill the
+// cap with fair-value/balance-sheet boilerplate before the results are reached (the JPM 10-Q miss in
+// the 2026-08-19 A/B). Fall back to any material anchor (8-Ks, deal/offering forms), then head-slice.
+const MDNA_ANCHOR = /management['’]?s discussion|results of operations/i;
+const MATERIAL_ANCHOR = /financial statements|item\s*2\.02|item\s*1\.01|use of proceeds|the offering/i;
 function materialSections(text: string, cap: number, head = 6000): string {
   if (text.length <= cap) return text; // already fits — unchanged
-  const rel = text.slice(head).search(MATERIAL_ANCHOR);
-  if (rel < 0) return text.slice(0, cap); // no material anchor (short/unfamiliar) → today's head-slice
+  const body = text.slice(head);
+  let rel = body.search(MDNA_ANCHOR); // MD&A / results first — the narrative that drives the digest
+  if (rel < 0) rel = body.search(MATERIAL_ANCHOR); // else an 8-K item / deal / offering / statements
+  if (rel < 0) return text.slice(0, cap); // unfamiliar layout → today's head-slice, never worse
   const start = head + rel;
   return `${text.slice(0, head)}\n…\n${text.slice(start, start + (cap - head))}`;
 }
