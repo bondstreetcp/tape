@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { localEligible, escalatedMaxTokens, FLASH_MODEL, PRO_MODEL } from "../lib/llm";
+import { localEligible, escalatedMaxTokens, FLASH_MODEL, PRO_MODEL, EXTRACT_MODEL } from "../lib/llm";
 
 // The local-inference routing contract: which chat calls are eligible to be served by the local
 // overnight box (when LLM_LOCAL_* is configured). localEligible() is the whole decision; wantLocal
@@ -13,6 +13,12 @@ test("bare-default nightly extraction routes local (ipo, corp-events, biotech, c
 
 test("PRO judgment tier stays cloud (campaigns, transcript-analysis, supply-chain…)", () => {
   assert.equal(localEligible({ model: PRO_MODEL }), false);
+});
+
+test("EXTRACT seat (SSS comps, IPO rescue) stays cloud — precise extraction, GLM-pinned not local", () => {
+  // The judgment/extraction split (2026-08-19): PRO_MODEL → kimi (synthesis), EXTRACT_MODEL → glm
+  // (numbers/classify). Both pin an explicit model, so neither is ever pulled onto the local batch box.
+  assert.equal(localEligible({ model: EXTRACT_MODEL }), false);
 });
 
 test("Flash-pinned LIVE routes stay cloud by default (compensation, exec-bios)", () => {

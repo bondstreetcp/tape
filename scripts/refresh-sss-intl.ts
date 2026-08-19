@@ -3,7 +3,7 @@
  * the US extractor writes, keyed by Yahoo symbol). Phase 3: European (UK/RNS) retailers.
  *
  * Source: the issuer's quarterly RNS "trading statement" / interim / final results, fetched from
- * Investegate (lib/irText.ts). Extraction is LLM (chatJSON / PRO_MODEL) with an intl-tuned prompt —
+ * Investegate (lib/irText.ts). Extraction is LLM (chatJSON / EXTRACT_MODEL) with an intl-tuned prompt —
  * UK/EU comps are phrased as like-for-like, LFL, comparable store sales, full-price sales (Next),
  * or organic growth, and a single release often carries BOTH a quarter and an H1/FY figure.
  *
@@ -14,7 +14,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, EXTRACT_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { getLatestUkResults } from "../lib/irText";
 import { INTL_COMPS } from "../lib/intlComps";
 import type { SssData, SssPeriod, SssTicker } from "../lib/sameStoreSales";
@@ -76,7 +76,7 @@ interface Extracted extends Omit<SssPeriod, "fpEnd" | "source"> { periodEnd?: st
 
 async function extract(sym: string, text: string, metricHint: string): Promise<Extracted | null> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nThe issuer's comp metric is typically: "${metricHint}".\n\nTrading-statement text for ${sym}:\n${grepWindows(text)}`, {
-    model: PRO_MODEL,
+    model: EXTRACT_MODEL,
     maxTokens: MAXTOK,
     reasoningEffort: "low",
   });
