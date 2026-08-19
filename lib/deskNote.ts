@@ -11,8 +11,8 @@
  * buy/sell/hold call. Built offline → data/desk-note.json; this module owns the
  * types + the cached loader.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export interface DeskNoteBullet {
   fact: string; // what happened (concise)
@@ -68,13 +68,13 @@ export interface DeskNote {
   counts: { movers: number; filings: number; flow: number; analyst: number };
 }
 
-let _cache: Promise<DeskNote | null> | null = null;
-
+// mtime+size-keyed (lib/jsonCache), NOT a permanent module cache: the NAS refreshes data/ IN PLACE
+// under a live server (tape-web-entrypoint.sh), so the loader MUST re-read when desk-note.json is
+// re-hydrated. The old `let _cache` singleton was set once per process and never invalidated — the
+// desk note froze at process boot and only changed on a rebuild/restart, so across a gap between code
+// pushes the home page's brief went stale for DAYS while every jsonCache-backed feed refreshed hourly
+// (diagnosed 2026-08-19: "Morning run · 2d ago" sitting on a fully healthy pipeline). cachedFile
+// self-invalidates on the next read after a rewrite — the same contract the whole in-place refresh relies on.
 export function loadDeskNote(): Promise<DeskNote | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "desk-note.json"), "utf8")
-      .then((s) => JSON.parse(s) as DeskNote)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "desk-note.json"), (s) => JSON.parse(s) as DeskNote);
 }
