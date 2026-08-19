@@ -1,5 +1,7 @@
 /**
- * PRO-tier model shootout (the 2026-08-04 rematch): glm-5.2 vs gemini-3.1-pro-preview vs qwen3.8-max.
+ * PRO-tier model shootout — code verifies, models propose. Default contenders are set below (MODELS=
+ * overrides). The 2026-08-19 run that SPLIT the PRO seat pitted z-ai/glm-5.2 vs moonshotai/kimi-k3
+ * (kimi won the synthesis legs C/D → PRO_MODEL; glm held the extraction legs A/B → EXTRACT_MODEL).
  *
  * Successor to eval-local-model.ts (the 2026-07-03 "can a local 72B do it" eval). Same doctrine —
  * code verifies, models propose — but aimed at the PRO_MODEL seat, so it runs BOTH kinds of work:
@@ -22,9 +24,11 @@
  * Latency is recorded per call — after 2026-08-04 (gemini-3.1-preview blowing 40s deadlines in
  * ask.ts) it is a first-class result, not a footnote. Cost comes from the llm-usage byModel delta.
  *
- *   npx tsx scripts/eval-model-shootout.ts            # all legs
+ *   npx tsx scripts/eval-model-shootout.ts            # all legs, one pass
  *   LEGS=ab npx tsx scripts/eval-model-shootout.ts    # extraction only (a|b|c|d, any combo)
  *   MODELS=x,y,z ...                                  # override the contender list
+ *   RUNS=3 npx tsx scripts/eval-model-shootout.ts     # repeat every leg 3× and print an AGGREGATE
+ *                                                     #   (best-vote tally + panel-mean) — de-noises the panel
  */
 import { promises as fsp } from "fs";
 import path from "path";
@@ -32,14 +36,18 @@ import { chatJSON } from "../lib/llm";
 import { flushSync } from "../lib/llmUsage";
 import { stripHtml } from "../lib/edgarSearch";
 
-const CONTENDERS = (process.env.MODELS || "z-ai/glm-5.2,google/gemini-3.1-pro-preview,qwen/qwen3.8-max")
+const CONTENDERS = (process.env.MODELS || "z-ai/glm-5.2,moonshotai/kimi-k3")
   .split(",").map((s) => s.trim()).filter(Boolean);
-// Two OUT-OF-RACE judges that must NOT share a lab with any contender (else self-scoring bias).
-// Override to re-lineup: e.g. to make DeepSeek/Moonshot models CONTENDERS, move judges to other labs
-// (JUDGES=google/gemini-3.1-pro-preview,openai/gpt-oss-120b).
-const JUDGES = (process.env.JUDGES || "deepseek/deepseek-v3.2,moonshotai/kimi-k3")
+// OUT-OF-RACE judges that must NOT share a lab with any contender (else self-scoring bias). Default is
+// the neutral Gemini pair — valid while the contenders are GLM/Kimi/DeepSeek. If you move a Gemini model
+// INTO the race, move the judges to other labs. (A startup guard below hard-fails on any judge∩contender.)
+const JUDGES = (process.env.JUDGES || "google/gemini-3.1-pro-preview,google/gemini-3.7-flash")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const LEGS = (process.env.LEGS || "abcd").toLowerCase();
+// Repeat the WHOLE shootout N× and print an AGGREGATE (best-vote tally + panel-mean per model). The
+// blind panel is noisy at n=1 — the 2026-08-19 Leg C winner flipped between two single runs — so RUNS≥3
+// is how you separate a real synthesis edge from judge variance. Capped at 10.
+const RUNS = Math.max(1, Math.min(10, Number(process.env.RUNS) || 1));
 const NO_ADVICE = "This is analytical commentary, not personalized investment advice.";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -177,9 +185,11 @@ async function legB() {
 // ── Synthesis legs: run one production prompt per model, code-check, then judge blind ──────────────
 interface SynthOut { model: string; raw: any; text: string; violations: string[]; checkNote: string }
 
-async function judgePanel(taskLabel: string, taskInput: string, outs: SynthOut[]): Promise<Record<string, number[]>> {
+interface PanelResult { scores: Record<string, number[]>; bests: string[] }
+async function judgePanel(taskLabel: string, taskInput: string, outs: SynthOut[]): Promise<PanelResult> {
   // Anonymize + shuffle per judge so neither name nor position leaks into the score.
   const scores: Record<string, number[]> = {};
+  const bests: string[] = []; // each judge's stated BEST model — tallied across RUNS to de-noise the panel
   for (const o of outs) scores[o.model] = [];
   for (const judge of JUDGES) {
     const order = [...outs].sort(() => Math.random() - 0.5);
@@ -197,12 +207,14 @@ async function judgePanel(taskLabel: string, taskInput: string, outs: SynthOut[]
       const total = s ? (Number(s.grounding) || 0) + (Number(s.insight) || 0) + (Number(s.clarity) || 0) : 0;
       if (total > 0) scores[order[i].model].push(total);
     }
-    console.log(`    judge ${short(judge).padEnd(14)} best=${short(order[labels.indexOf(out.best)]?.model || "?")}  «${String(out.note || "").slice(0, 100)}»`);
+    const bestModel = order[labels.indexOf(out.best)]?.model;
+    if (bestModel) bests.push(bestModel);
+    console.log(`    judge ${short(judge).padEnd(14)} best=${short(bestModel || "?")}  «${String(out.note || "").slice(0, 100)}»`);
   }
-  return scores;
+  return { scores, bests };
 }
 
-async function legC(): Promise<{ input: string; outs: SynthOut[]; judged: Record<string, number[]> }> {
+async function legC(): Promise<{ input: string; outs: SynthOut[]; judged: PanelResult }> {
   const ti = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "trade-ideas.json"), "utf8"));
   const pool = (ti.ideas || []).map((p: any) => ({ symbol: p.symbol, name: p.name, side: p.side, structure: p.structure, stat: p.stat, event: p.event }));
   const PICK = Math.min(5, pool.length);
@@ -240,7 +252,7 @@ Return JSON: { "picks": [ { "symbol": "TICKER", "thesis": "...", "risk": "...", 
   return { input: user, outs, judged };
 }
 
-async function legD(): Promise<{ input: string; outs: SynthOut[]; judged: Record<string, number[]> }> {
+async function legD(): Promise<{ input: string; outs: SynthOut[]; judged: PanelResult }> {
   const MULT_LABEL: Record<string, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
   const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : `$${(v / 1e6).toFixed(0)}M`);
   const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
@@ -286,34 +298,85 @@ async function legD(): Promise<{ input: string; outs: SynthOut[]; judged: Record
   return { input: user, outs, judged };
 }
 
-// ── main ───────────────────────────────────────────────────────────────────────────────────────────
-(async () => {
-  console.log(`Contenders: ${CONTENDERS.join("  vs  ")}`);
-  const usageBefore = await fsp.readFile(path.join(process.cwd(), "data", "llm-usage.json"), "utf8").then((s) => JSON.parse(s).byModel ?? {}).catch(() => ({}));
+// ── per-run summary (also the entire output when RUNS=1) ─────────────────────────────────────────────
+type LegAScore = Record<string, { exact: number; close: number; wrong: number; fail: number }>;
+type LegBScore = Record<string, { ticker: number; price: number; size: number; n: number; fail: number }>;
+type SynthRun = { input: string; outs: SynthOut[]; judged: PanelResult };
 
-  const a = LEGS.includes("a") ? await legA() : null;
-  const b = LEGS.includes("b") ? await legB() : null;
-  const c = LEGS.includes("c") ? await legC() : null;
-  const d = LEGS.includes("d") ? await legD() : null;
-
-  console.log(`\n══ SUMMARY ══`);
+function printSummary(tag: string, a: LegAScore | null, b: LegBScore | null, c: SynthRun | null, d: SynthRun | null) {
+  console.log(`\n══ ${tag}SUMMARY ══`);
   if (a) { console.log(`Leg A (SSS comps vs verified gold):`); for (const [m, s] of Object.entries(a)) console.log(`  ${short(m).padEnd(26)} exact ${s.exact} · close(≤0.3) ${s.close} · wrong ${s.wrong} · fail ${s.fail}`); }
   if (b) { console.log(`Leg B (IPO fields vs stored refs):`); for (const [m, s] of Object.entries(b)) console.log(`  ${short(m).padEnd(26)} ticker ${s.ticker}/${s.n} · price ${s.price}/${s.n} · size(±15%) ${s.size}/${s.n} · classify-fail ${s.fail}`); }
   for (const [label, leg] of [["Leg C (trade narration)", c], ["Leg D (valuation verdicts)", d]] as const) {
     if (!leg) continue;
-    console.log(`${label} — code checks + blind panel (sum of 2 judges × 30 max each):`);
+    console.log(`${label} — code checks + blind panel (${JUDGES.length} judges × 30 max each):`);
     for (const o of leg.outs) {
-      const js = leg.judged[o.model] || [];
+      const js = leg.judged.scores[o.model] || [];
       const panel = js.length ? `panel ${js.reduce((x, y) => x + y, 0)}/${js.length * 30}` : "panel —";
       console.log(`  ${short(o.model).padEnd(26)} ${panel} · ${o.checkNote}`);
     }
   }
-  console.log(`Latency (all calls this run):`);
+}
+
+// ── main ───────────────────────────────────────────────────────────────────────────────────────────
+(async () => {
+  const overlap = JUDGES.filter((j) => CONTENDERS.includes(j));
+  if (overlap.length) { console.error(`⚠ judge(s) also in the race (self-scoring bias): ${overlap.join(", ")}. Set JUDGES= to out-of-race labs.`); process.exit(1); }
+  console.log(`Contenders: ${CONTENDERS.join("  vs  ")}   ·   judges: ${JUDGES.map(short).join(", ")}${RUNS > 1 ? `\nRUNS=${RUNS} — repeating every leg and aggregating (de-noises the blind panel)` : ""}`);
+  const usageBefore = await fsp.readFile(path.join(process.cwd(), "data", "llm-usage.json"), "utf8").then((s) => JSON.parse(s).byModel ?? {}).catch(() => ({}));
+
+  const aRuns: LegAScore[] = [], bRuns: LegBScore[] = [], cRuns: SynthRun[] = [], dRuns: SynthRun[] = [];
+  for (let run = 1; run <= RUNS; run++) {
+    if (RUNS > 1) console.log(`\n╔══════════════ RUN ${run}/${RUNS} ══════════════╗`);
+    const a = LEGS.includes("a") ? await legA() : null;
+    const b = LEGS.includes("b") ? await legB() : null;
+    const c = LEGS.includes("c") ? await legC() : null;
+    const d = LEGS.includes("d") ? await legD() : null;
+    printSummary(RUNS > 1 ? `RUN ${run}/${RUNS} ` : "", a, b, c, d);
+    if (a) aRuns.push(a);
+    if (b) bRuns.push(b);
+    if (c) cRuns.push(c);
+    if (d) dRuns.push(d);
+  }
+
+  if (RUNS > 1) {
+    console.log(`\n╔══════════════ AGGREGATE across ${RUNS} runs ══════════════╗`);
+    if (aRuns.length) {
+      console.log(`Leg A (SSS comps) — summed over ${aRuns.length} runs:`);
+      for (const m of CONTENDERS) {
+        const s = aRuns.reduce((x, r) => ({ exact: x.exact + (r[m]?.exact || 0), close: x.close + (r[m]?.close || 0), wrong: x.wrong + (r[m]?.wrong || 0), fail: x.fail + (r[m]?.fail || 0) }), { exact: 0, close: 0, wrong: 0, fail: 0 });
+        console.log(`  ${short(m).padEnd(26)} exact ${s.exact} · close ${s.close} · wrong ${s.wrong} · fail ${s.fail}`);
+      }
+    }
+    if (bRuns.length) {
+      console.log(`Leg B (IPO classify) — summed over ${bRuns.length} runs:`);
+      for (const m of CONTENDERS) {
+        const s = bRuns.reduce((x, r) => ({ ticker: x.ticker + (r[m]?.ticker || 0), price: x.price + (r[m]?.price || 0), size: x.size + (r[m]?.size || 0), n: x.n + (r[m]?.n || 0), fail: x.fail + (r[m]?.fail || 0) }), { ticker: 0, price: 0, size: 0, n: 0, fail: 0 });
+        console.log(`  ${short(m).padEnd(26)} ticker ${s.ticker}/${s.n} · price ${s.price}/${s.n} · size ${s.size}/${s.n} · classify-fail ${s.fail}`);
+      }
+    }
+    // The headline de-noise: across every run×judge, who was voted BEST, and the mean panel total.
+    for (const [label, runs] of [["Leg C (trade narration)", cRuns], ["Leg D (valuation verdicts)", dRuns]] as const) {
+      if (!runs.length) continue;
+      const votes = runs.flatMap((r) => r.judged.bests); // one BEST vote per judge per run
+      console.log(`${label} — ${runs.length} runs × ${JUDGES.length} judges = ${votes.length} blind best-votes:`);
+      const ranked = CONTENDERS.map((m) => {
+        const totals = runs.flatMap((r) => r.judged.scores[m] || []);
+        const mean = totals.length ? totals.reduce((x, y) => x + y, 0) / totals.length : 0;
+        const wins = votes.filter((v) => v === m).length;
+        const invented = runs.reduce((acc, r) => acc + (r.outs.find((o) => o.model === m)?.violations.length || 0), 0);
+        return { m, mean, wins, invented, n: totals.length };
+      }).sort((x, y) => y.wins - x.wins || y.mean - x.mean);
+      for (const r of ranked) console.log(`  ${short(r.m).padEnd(26)} best-votes ${r.wins}/${votes.length} · panel-mean ${r.mean.toFixed(1)}/30 (n=${r.n}) · invented-# ${r.invented} total`);
+    }
+  }
+
+  console.log(`\nLatency (all calls${RUNS > 1 ? `, ${RUNS} runs` : ""}):`);
   for (const m of [...CONTENDERS, ...JUDGES]) if (lat[m]?.length) console.log(`  ${short(m).padEnd(26)} n=${lat[m].length} · ${stats(lat[m])}`);
 
   flushSync();
   const usageAfter = await fsp.readFile(path.join(process.cwd(), "data", "llm-usage.json"), "utf8").then((s) => JSON.parse(s).byModel ?? {}).catch(() => ({}));
-  console.log(`Cost this run (llm-usage byModel delta):`);
+  console.log(`Cost (llm-usage byModel delta${RUNS > 1 ? `, all ${RUNS} runs` : " this run"}):`);
   for (const m of [...CONTENDERS, ...JUDGES]) {
     const d0 = usageBefore[m]?.estUsd ?? 0, d1 = usageAfter[m]?.estUsd ?? 0;
     if (d1 > d0) console.log(`  ${short(m).padEnd(26)} $${(d1 - d0).toFixed(3)}`);
