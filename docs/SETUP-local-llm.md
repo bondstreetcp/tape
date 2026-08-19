@@ -88,3 +88,62 @@ savings that quality loss is a bad trade, so the fleet stays on cloud for now. E
 stays staged; when a stronger open model appears, run
 `CANDIDATE=<openrouter-model-id> npx tsx scripts/eval-local-model.ts`
 and port only if it beats GLM on both tasks.
+
+## Update 2026-08-19 — KTransformers re-opens the MoE path; the split; the prefill bench
+
+The "GPU-resident only, no CPU MoEs" call above was made against **llama.cpp** (~10 tok/s prefill).
+**KTransformers** (CPU/GPU-hybrid, MoE-specialised) is 7–27× faster — DeepSeek-V3 prefill ~54 tok/s
+(32 cores) → ~74 (dual-socket) → **255 with Intel AMX kernels** (SOSP'25). The EPYC box has no AMX,
+so expect the ~74 end, not 255 — but that's enough to make a frontier MoE worth benchmarking rather
+than dismissing. `qwen3.8-27b` eval (2026-08-19): fails SSS extraction (3/10 exact) but passes IPO
+classification (9/10) — so a modest local model is fine for the low-input CLASSIFY fleet; precise
+NUMBER extraction (sss/guidance) needs a stronger model or stays cloud.
+
+### What runs where
+- **Low-input jobs → LOCAL.** Everything on the bare-default tier auto-routes local the moment
+  `LLM_LOCAL_*` is set (see `localEligible()` in lib/llm.ts): IPO classify/summary, catalysts, the
+  event feeds. Small prompts ⇒ prefill speed is a non-issue. This IS the "offload the low-input jobs"
+  step — **no code change, just the env vars below.**
+- **overnight-filings → STAYS CLOUD until the bench says otherwise.** ~4.5M tokens/night; to fit
+  run-tick's 45-min step it needs **~1,700 tok/s aggregate** prefill. A 40B-active model won't reach
+  that on a non-AMX box; a small-active MoE might. Measure before moving it.
+- **Precise-extraction judgment (sss, guidance, valuation) → CLOUD** unless a local model clears the eval.
+
+### Model choice
+- **Fastest prefill** (to chase overnight-filings): a *small-active* MoE — `gpt-oss-120b` (~5B active)
+  or a `deepseek-v4-flash`-class (13B active). Prefill scales with ACTIVE params, so these run ~3–7×
+  faster than a 40B-active model.
+- **Best quality, zero eval risk:** run **GLM-5.2 itself** locally (744B/40B active, 4-bit ≈ 370 GB,
+  fits 512 GB) — the exact model you already use via OpenRouter, so no quality regression. But its 40B
+  active makes it the slow-prefill option, so pair it with the low-input fleet, not overnight-filings.
+
+### Serve + benchmark (on the EPYC/3090 box)
+```bash
+pip install ktransformers
+# Serve an OpenAI-compatible endpoint — see ktransformers' DeepseekR1_V3 tutorial for the exact
+# --model / --optimize_config_path / --cpu_infer flags for your MoE: https://github.com/kvcache-ai/ktransformers
+# then smoke-test:
+curl -s http://localhost:8000/v1/chat/completions -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"<served-id>","messages":[{"role":"user","content":"Return {\"ok\":true}"}],"max_tokens":16}'
+```
+Then measure the prefill throughput that decides the big job (expose via the same Cloudflare Tunnel as
+the vLLM section, or run the bench on the box itself against localhost):
+```bash
+LLM_LOCAL_BASE_URL=http://localhost:8000/v1 LLM_LOCAL_MODEL=<served-id> LLM_LOCAL_API_KEY=<TOKEN> \
+  npm run bench-prefill
+```
+It prints aggregate tok/s at a few concurrency levels and the verdict: ≥ ~1,700 tok/s ⇒ overnight-filings
+can go local too; below ⇒ keep it on cloud flash-lite, low-input jobs still win.
+
+### Activate the low-input offload
+Set these three where the jobs run — `tape.env` on the NAS runner (primary), `.env.local` for local
+runs, GitHub Actions secrets for the workflow fallback:
+```
+LLM_LOCAL_BASE_URL=https://<tunnel-host>/v1
+LLM_LOCAL_MODEL=<served-id>
+LLM_LOCAL_API_KEY=<TOKEN>
+```
+The code routes the eligible jobs local automatically and falls back to OpenRouter on any local failure,
+so the box being offline never drops a feed. Confirm with the first nightly log (no `local …` fallback
+warnings) and `npm run llm-costs` (those jobs metering near $0).

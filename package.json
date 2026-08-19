@@ -20,6 +20,7 @@
     "push-binary-digest": "tsx scripts/push-binary-digest.ts",
     "alert-llm-credits": "tsx scripts/alert-llm-credits.ts",
     "llm-costs": "tsx scripts/llm-costs.ts",
+    "bench-prefill": "tsx scripts/bench-prefill.ts",
     "build-lake": "tsx scripts/build-lake.ts",
     "backfill-prices": "tsx scripts/build-lake.ts --backfill",
     "q": "tsx scripts/q.ts",
