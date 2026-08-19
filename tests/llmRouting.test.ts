@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { localEligible, FLASH_MODEL, PRO_MODEL } from "../lib/llm";
+import { localEligible, escalatedMaxTokens, FLASH_MODEL, PRO_MODEL } from "../lib/llm";
 
 // The local-inference routing contract: which chat calls are eligible to be served by the local
 // overnight box (when LLM_LOCAL_* is configured). localEligible() is the whole decision; wantLocal
@@ -32,4 +32,21 @@ test("explicit local flag always wins over the model heuristic", () => {
   assert.equal(localEligible({ model: PRO_MODEL, local: true }), true); // forced local
   assert.equal(localEligible({ local: false }), false); // forced cloud even bare-default
   assert.equal(localEligible({ model: undefined, local: undefined }), true); // heuristic fallthrough
+});
+
+// Empty-content escalation: a reasoning model that empty-shells (reasoning ate max_tokens) must get
+// MORE budget on the retry — re-sending the identical request just re-empties AND re-bills the input.
+test("escalatedMaxTokens: first attempt unchanged, then grows per empty retry", () => {
+  assert.equal(escalatedMaxTokens(2000, 0), 2000); // attempt 0 — exactly what the caller set
+  assert.equal(escalatedMaxTokens(2000, 1), 4000); // after 1 empty → 2x
+  assert.equal(escalatedMaxTokens(2000, 2), 6000); // after 2 → 3x
+});
+
+test("escalatedMaxTokens: capped so a pathological loop can't request an absurd budget", () => {
+  assert.equal(escalatedMaxTokens(8000, 3), 16000); // 8000*4 = 32000 → capped at 16000
+  assert.equal(escalatedMaxTokens(1200, 99), 16000);
+});
+
+test("escalatedMaxTokens: no cap set → nothing to grow (the API default applies)", () => {
+  assert.equal(escalatedMaxTokens(undefined, 3), undefined);
 });

@@ -140,6 +140,16 @@ export function localEligible(opts: { model?: string; local?: boolean }): boolea
   return opts.local ?? !opts.model;
 }
 
+/** Empty content from a reasoning model (GLM-5.2 / Gemini) means the reasoning consumed the whole
+ *  max_tokens budget, leaving nothing to emit — and re-sending the IDENTICAL request just re-empties
+ *  while re-billing the input (the "gave up after 4 attempts — empty content" waste, which also DROPS
+ *  the item). Grow the budget on each successive empty retry so content survives the reasoning; capped
+ *  so a pathological loop can't request an absurd budget. Pure + exported for the test. */
+export function escalatedMaxTokens(base: number | undefined, emptyRetries: number): number | undefined {
+  if (!base || emptyRetries <= 0) return base;
+  return Math.min(Math.round(base * (1 + emptyRetries)), 16_000);
+}
+
 async function callChat(
   messages: ChatMessage[],
   opts: ChatOpts,
@@ -154,6 +164,7 @@ async function callChat(
   const retries = opts.retries ?? 4;
 
   let lastInfo = "";
+  let emptyRetries = 0; // consecutive empty-content replies → grow the token budget (escalatedMaxTokens)
   for (let attempt = 0; attempt < retries; attempt++) {
     if (attempt) {
       // Exponential backoff + jitter so concurrent/sequential calls de-sync under a
@@ -170,7 +181,9 @@ async function callChat(
       messages,
     };
     if (jsonMode) body.response_format = { type: "json_object" };
-    if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+    // Grow the budget on empty-content retries (reasoning ate it) — see escalatedMaxTokens.
+    const maxTok = escalatedMaxTokens(opts.maxTokens, emptyRetries);
+    if (maxTok) body.max_tokens = maxTok;
     // `reasoning` is an OpenRouter extension — local vLLM servers may reject unknown fields.
     if (opts.reasoningEffort && !useLocal) body.reasoning = { effort: opts.reasoningEffort };
     // `provider` (routing pinning) is an OpenRouter extension too — never send it locally.
@@ -204,7 +217,8 @@ async function callChat(
       if (j?.usage) recordUsage(targetModel, j.usage.prompt_tokens, j.usage.completion_tokens);
       const content: string = j?.choices?.[0]?.message?.content ?? "";
       if (content.trim()) return content;
-      lastInfo = `${useLocal ? "local " : ""}empty content`; // transient (truncated/blank) → retry
+      lastInfo = `${useLocal ? "local " : ""}empty content`; // reasoning likely ate the budget → grow it + retry
+      emptyRetries++;
     } catch (e: any) {
       lastInfo = `${useLocal ? "local " : ""}${e?.name === "AbortError" ? `timeout (${Math.round(abortMs / 1000)}s)` : e?.message || String(e)}`; // network/timeout → retry
     } finally {
