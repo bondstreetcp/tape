@@ -21,6 +21,9 @@
  * Testing knobs (frugal with LLM credits):
  *   WINDOW_HOURS=336  widen the detection window to 14 days
  *   TEST_SYMBOLS="AAPL MSFT …"  restrict the watch-set to a handful of names
+ *   OVERNIGHT_SECTIONS=1  section-target long filings (head + first material section) instead of a
+ *     blind head-slice — cuts input AND captures the MD&A/financials a head-slice truncates past.
+ *     Default OFF; validate a night's digests before setting it in tape.env. OVERNIGHT_SECTION_CAP tunes it.
  */
 import { promises as fs } from "fs";
 import path from "path";
@@ -112,6 +115,23 @@ interface Digest {
 // (30k text cap, compact 4-field schema, NO background snapshot), run concurrently with the digest
 // so the nightly's wall-clock doesn't move. Wording below mirrors the eval's variant A verbatim.
 const FOCUSED_TEXT_CAP = 30_000;
+
+// ── Section-targeting for long filings (env-gated: OVERNIGHT_SECTIONS=1) ──────────────────────────
+// A blind head-slice of a long 10-K spends the cap on cover/TOC/business boilerplate and TRUNCATES
+// before the MD&A + financial statements that actually drive the digest. materialSections keeps the
+// head (cover: form, dates, parties, 8-K/deal terms), then jumps to the first MATERIAL anchor and takes
+// a contiguous block from there — the substance a head-slice misses, in FEWER tokens (cap 70k vs the
+// 80-110k head-slice). Short filings (≤ cap) pass through whole; no anchor found → falls back to the
+// head-slice, so a detection miss is never worse than today. OFF by default (see the header knob) —
+// validate on a night's digests before enabling in tape.env.
+const MATERIAL_ANCHOR = /management['’]?s discussion|results of operations|financial statements|item\s*2\.02|item\s*1\.01|use of proceeds|the offering/i;
+function materialSections(text: string, cap: number, head = 6000): string {
+  if (text.length <= cap) return text; // already fits — unchanged
+  const rel = text.slice(head).search(MATERIAL_ANCHOR);
+  if (rel < 0) return text.slice(0, cap); // no material anchor (short/unfamiliar) → today's head-slice
+  const start = head + rel;
+  return `${text.slice(0, head)}\n…\n${text.slice(start, start + (cap - head))}`;
+}
 const FOCUSED_SYSTEM =
   "You are an equity analyst writing the overnight desk note on a new SEC filing. You get the FILING text — your ONLY source for every claim and number you cite. " +
   "Identify ONLY what materially changed or what the filing announces: revenue/margin/EPS vs the prior period, guidance, segment trends, new/dropped risk factors, buybacks/dividends, M&A (parties/price/structure), capital raises (size/coupon/use of proceeds), management changes, accounting/restatements. Ground every claim in the FILING text — never invent or infer a number that isn't stated there. Ignore boilerplate and unchanged repeated language. " +
@@ -281,7 +301,11 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
     }
   }
 
-  const newClip = newText.slice(0, newCap);
+  // Section-target long filings when enabled (OVERNIGHT_SECTIONS=1); default is the blind head-slice,
+  // unchanged, until an A/B on real filings confirms the digests hold up. See materialSections.
+  const newClip = process.env.OVERNIGHT_SECTIONS === "1"
+    ? materialSections(newText, Math.min(newCap, Number(process.env.OVERNIGHT_SECTION_CAP) || 70_000))
+    : newText.slice(0, newCap);
   // The prior filing is only a COMPARISON baseline (risk-factor changes are already machine-diffed into
   // rfAdded/rfRemoved above), so it doesn't need the full newCap — capping it well below the new filing
   // trims the biggest input-token line in the whole bill (overnight-filings ≈ 83% of LLM input, per the
