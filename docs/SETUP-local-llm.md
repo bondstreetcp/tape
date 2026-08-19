@@ -108,12 +108,6 @@ NUMBER extraction (sss/guidance) needs a stronger model or stays cloud.
   run-tick's 45-min step it needs **~1,700 tok/s aggregate** prefill. A 40B-active model won't reach
   that on a non-AMX box; a small-active MoE might. Measure before moving it.
 - **Precise-extraction judgment (sss, guidance, valuation) → CLOUD** unless a local model clears the eval.
-- **Within CLOUD, the judgment tier is itself split (2026-08-19 shootout, `scripts/eval-model-shootout.ts`):**
-  synthesis/narration → `PRO_MODEL` = **kimi-k3** (won Legs C/D on the blind panel, cleanest grounding —
-  1 invented # vs glm's 5); precise numbers/classify (SSS/LFL comps, IPO rescue) → `EXTRACT_MODEL` =
-  **glm-5.2** (won the code-verified Legs A/B — kimi & deepseek both rejected a real $464M IPO glm caught).
-  Both are cloud-only (explicit-model pins never route local); to unify back to one model set
-  `LLM_PRO_MODEL=z-ai/glm-5.2`. deepseek-v4-pro was rejected (lost both panels, 5.7× cost, a 198s tail).
 
 ### Model choice
 - **Fastest prefill** (to chase overnight-filings): a *small-active* MoE — `gpt-oss-120b` (~5B active)

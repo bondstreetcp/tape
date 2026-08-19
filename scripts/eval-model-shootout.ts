@@ -1,7 +1,9 @@
 /**
  * PRO-tier model shootout — code verifies, models propose. Default contenders are set below (MODELS=
- * overrides). The 2026-08-19 run that SPLIT the PRO seat pitted z-ai/glm-5.2 vs moonshotai/kimi-k3
- * (kimi won the synthesis legs C/D → PRO_MODEL; glm held the extraction legs A/B → EXTRACT_MODEL).
+ * overrides). The 2026-08-19 RUNS=3 run pitted z-ai/glm-5.2 vs moonshotai/kimi-k3 (neutral Gemini pair
+ * judging): glm HELD the whole PRO seat — won narration 5/6 best-votes + IPO 30/30; kimi took only
+ * valuation verdicts (4/6, marginal + worse-grounded), failed the "win both synthesis legs" bar. A
+ * single run had flipped narration to kimi — judge variance, which is why RUNS≥3 exists (see below).
  *
  * Successor to eval-local-model.ts (the 2026-07-03 "can a local 72B do it" eval). Same doctrine —
  * code verifies, models propose — but aimed at the PRO_MODEL seat, so it runs BOTH kinds of work:

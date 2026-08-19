@@ -2,7 +2,7 @@
  * Same-store / comparable sales extractor → data/same-store-sales.json.
  *
  * Primary source: the 8-K Exhibit 99.1 earnings press release (getFilingText already prefers EX-99);
- * fallback: 10-Q MD&A. Extraction is LLM (chatJSON / EXTRACT_MODEL) — comps have no us-gaap XBRL tag.
+ * fallback: 10-Q MD&A. Extraction is LLM (chatJSON / PRO_MODEL) — comps have no us-gaap XBRL tag.
  * Scope: US names whose industry ∈ SSS_INDUSTRIES across S&P500 ∪ Nasdaq100 ∪ Russell 1000.
  *
  * Modes:
@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getFilings, getFilingText } from "../lib/edgar";
 import { getFilingDoc } from "../lib/filingDoc";
-import { chatJSON, EXTRACT_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { loadSnapshot } from "../lib/data";
 import { SSS_INDUSTRIES, type SssData, type SssPeriod, type SssTicker } from "../lib/sameStoreSales";
 
@@ -88,7 +88,7 @@ interface Extracted extends Omit<SssPeriod, "fpEnd" | "source"> { periodEnd?: st
 
 async function extract(sym: string, text: string): Promise<Extracted | null> {
   const raw = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nEarnings text for ${sym}:\n${grepWindows(text)}`, {
-    model: EXTRACT_MODEL,
+    model: PRO_MODEL,
     maxTokens: MAXTOK,
     reasoningEffort: "low",
   });

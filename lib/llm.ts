@@ -21,30 +21,28 @@ import { recordUsage } from "./llmUsage";
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "z-ai/glm-5.2";
 
-// The premium reasoning model for ANALYTICAL/SYNTHESIS + grounded-judgment generation — narration and
-// theses, NOT precise number extraction: the Morning Desk note, trade-idea theses, valuation verdicts,
-// Confluence/warnings reads, 13F story, campaign & Congress summaries, vol-tags, and the live per-view
-// judgment routes. Pass `{ model: PRO_MODEL }` to chatJSON/chatText. Bulk mechanical work
-// (overnight-filings scan) stays on DEFAULT_MODEL; precise number/label extraction on EXTRACT_MODEL
-// below. Override with LLM_PRO_MODEL.
+// The premium reasoning model for ANALYTICAL/judgment generation (Confluence thesis, valuation
+// verdicts, 13F story, the chatter/Congress summaries). Routed through the same OpenRouter client
+// — pass `{ model: PRO_MODEL }` to chatJSON/chatText. Bulk mechanical work (overnight-filings
+// scan) stays on DEFAULT_MODEL. Override with LLM_PRO_MODEL.
 //
-// kimi-k3 since 2026-08-19 (was z-ai/glm-5.2): the eval-model-shootout re-ran GLM vs kimi-k3 vs
-// deepseek-v4-pro on the production prompts (blind Gemini panel + code checks). Kimi WON both synthesis
-// legs — trade narration (Leg C) and valuation verdicts (Leg D) — with the CLEANEST grounding of the
-// three (1 invented number vs glm's 5) and the only clean pass on the JSON-only constraint, fastest at
-// 3.3s median, for pennies/mo more on this low-volume tier. GLM moved to EXTRACT_MODEL, where the same
-// run's code-verified legs kept it ahead (IPO classify 10/10 — kimi & deepseek both missed JAN — and
-// precise SSS comps). deepseek-v4-pro was rejected: lost both panels, 5.7x the cost, a 198s tail.
-// Instant rollback: LLM_PRO_MODEL=z-ai/glm-5.2. Provider pinning (below) already excludes Moonshot AI's
-// first-party PRC endpoint, so kimi routes to a data_collection:deny host.
-export const PRO_MODEL = process.env.LLM_PRO_MODEL || "moonshotai/kimi-k3";
-
-// The premium EXTRACTION/classification seat — precise NUMBERS and hard labels, where a wrong figure is
-// worse than a duller sentence: SSS/LFL comps (refresh-sss/-intl) and the IPO rescue pass (refresh-ipo).
-// The eval-model-shootout's code-verified legs (A: comps, B: IPO classify) kept GLM here even as kimi
-// took the synthesis seat above — kimi & deepseek each rejected a real $464M IPO (JAN) that GLM caught.
-// Override with LLM_EXTRACT_MODEL.
-export const EXTRACT_MODEL = process.env.LLM_EXTRACT_MODEL || "z-ai/glm-5.2";
+// glm-5.2 since 2026-08-04 (was google/gemini-3.1-pro-preview): the eval-model-shootout rematch
+// scored them a TIE on the production synthesis prompts (blind out-of-race panel split 2-2, one
+// point apart on both legs) with glm ahead on both code-verified extraction legs — at 6x less
+// ($0.047 vs $0.281 for the identical run). Gemini kept a slight grounding edge on narration
+// (0 invented facts vs glm's 2), so if trade-desk theses start drifting from their stat lines,
+// LLM_PRO_MODEL=google/gemini-3.1-pro-preview is the instant rollback. qwen3.8-max was DQ'd:
+// Alibaba-first-party-only on OpenRouter, unroutable under the provider pinning below.
+//
+// 2026-08-19 — moonshotai/kimi-k3 challenge, RUNS=3 to de-noise the blind panel (glm vs kimi, judged by
+// the neutral Gemini pair; see scripts/eval-model-shootout.ts). glm HELD the seat and kimi was NOT
+// promoted: glm won trade narration 5/6 best-votes (panel 24.2 vs 21.8) and IPO classify 30/30 (kimi
+// missed the JAN IPO 2/3), and shipped fewer WRONG SSS numbers (5 vs 9). kimi won ONLY valuation
+// verdicts (4/6) — but by ~1 panel point AND with 2 invented figures vs glm's 0, i.e. worse-grounded on
+// the single leg it took. It failed the pre-registered "must win BOTH synthesis legs" bar, so the whole
+// PRO tier stays glm. A single run had briefly flipped narration to kimi — that was judge variance,
+// which is exactly why we re-ran ×3. Don't re-run without a materially stronger open challenger.
+export const PRO_MODEL = process.env.LLM_PRO_MODEL || "z-ai/glm-5.2";
 
 // The CHEAP high-volume tier for MECHANICAL, schema-driven extraction (pull guidance numbers from a
 // filing, summarize an overnight 8-K). ~20x cheaper than PRO_MODEL and ~4x cheaper than GLM for the

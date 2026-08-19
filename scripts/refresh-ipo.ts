@@ -10,7 +10,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
-import { chatJSON, NO_ADVICE, llmConfigured, EXTRACT_MODEL } from "../lib/llm";
+import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { cleanTicker } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
@@ -40,7 +40,7 @@ async function classifyIpo(hit: EftsHit, text: string) {
   // a false negative (model-quality eval: the cheap tier rejected real IPOs). Before dropping the
   // filing, re-ask the PRO model — a reject must be confirmed twice to stand. ~$0.002/reject.
   if (!out || out.isIpo === false) {
-    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: EXTRACT_MODEL }).catch(() => null);
+    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: PRO_MODEL }).catch(() => null);
     if (second && second.isIpo !== false) { console.log(`  ${hit.ticker || hit.issuer.slice(0, 20)}: reject overturned by second opinion`); out = second; }
     else return null;
   }
@@ -59,7 +59,7 @@ async function classifyUpcoming(hit: EftsHit, text: string) {
   // Second opinion on rejects — but ONLY for TICKERED registrations (a reserved exchange ticker is
   // the strongest tell of a real deal; the tickerless S-1 pile is mostly shells and not worth 2×).
   if ((!out || out.isIpo === false) && hit.ticker) {
-    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: EXTRACT_MODEL }).catch(() => null);
+    const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: PRO_MODEL }).catch(() => null);
     if (second && second.isIpo !== false) { console.log(`  ${hit.ticker}: upcoming reject overturned by second opinion`); out = second; }
     else return null;
   }
