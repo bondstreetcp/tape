@@ -7,8 +7,8 @@
  *
  * AI-generated from the supplied filing text — spot-check claims against the source.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export type Sentiment = "bullish" | "neutral" | "bearish";
 export type Surprise = "beat" | "inline" | "miss" | "na";
@@ -93,13 +93,7 @@ export function isMassLlmFailure(attempted: number, llmFails: number, deferred: 
   return attempted >= 5 || deferred > 0;
 }
 
-let _cache: Promise<OvernightData | null> | null = null;
-
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadOvernightFilings(): Promise<OvernightData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "overnight-filings.json"), "utf8")
-      .then((s) => JSON.parse(s) as OvernightData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "overnight-filings.json"), (s) => JSON.parse(s) as OvernightData);
 }

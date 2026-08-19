@@ -8,8 +8,8 @@
  * Built offline by scripts/refresh-earnings-move.ts → data/earnings-move.json (chain straddle +
  * lib/earningsReaction history). This module owns the types + the loader.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export interface EarningsMoveRow {
   symbol: string;
@@ -44,12 +44,7 @@ export interface EarningsMoveData {
   rows: EarningsMoveRow[];
 }
 
-let _cache: Promise<EarningsMoveData | null> | null = null;
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadEarningsMove(): Promise<EarningsMoveData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "earnings-move.json"), "utf8")
-      .then((s) => JSON.parse(s) as EarningsMoveData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "earnings-move.json"), (s) => JSON.parse(s) as EarningsMoveData);
 }

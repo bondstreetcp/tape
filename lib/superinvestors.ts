@@ -10,8 +10,8 @@
  * managers get confidential treatment for building positions — so it's a lagged, partial
  * view, not a live portfolio.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export interface Investor {
   slug: string;
@@ -138,13 +138,7 @@ export const INVESTORS: Investor[] = [
 ];
 
 
-let _cache: Promise<SuperInvestorsData | null> | null = null;
-
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadSuperInvestors(): Promise<SuperInvestorsData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "superinvestors.json"), "utf8")
-      .then((s) => JSON.parse(s) as SuperInvestorsData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "superinvestors.json"), (s) => JSON.parse(s) as SuperInvestorsData);
 }

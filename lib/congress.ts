@@ -9,8 +9,8 @@
  * ($1,001–$15,000 …), Senate only for now (House PTRs are PDFs that parse poorly), and a trade
  * can surface up to 45 days late.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export type TradeType = "buy" | "sell" | "exchange";
 
@@ -56,15 +56,9 @@ export interface CongressData {
   topMembers: MemberTally[];
 }
 
-let _cache: Promise<CongressData | null> | null = null;
-
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadCongress(): Promise<CongressData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "congress.json"), "utf8")
-      .then((s) => JSON.parse(s) as CongressData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "congress.json"), (s) => JSON.parse(s) as CongressData);
 }
 
 // President Trump's OGE Form 278-T trades (chamber "Executive"), built separately by
@@ -78,13 +72,6 @@ export interface TrumpData {
   trades: CongressTrade[];
 }
 
-let _trumpCache: Promise<TrumpData | null> | null = null;
-
 export function loadTrump(): Promise<TrumpData | null> {
-  if (!_trumpCache)
-    _trumpCache = fsp
-      .readFile(path.join(process.cwd(), "data", "trump-trades.json"), "utf8")
-      .then((s) => JSON.parse(s) as TrumpData)
-      .catch(() => null);
-  return _trumpCache;
+  return cachedFile(path.join(process.cwd(), "data", "trump-trades.json"), (s) => JSON.parse(s) as TrumpData);
 }

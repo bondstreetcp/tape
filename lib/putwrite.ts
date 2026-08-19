@@ -13,8 +13,8 @@
  * "IV Rank" needs stored IV history so it comes online over time — the realized-vol rank is
  * the immediate elevated-vol proxy; and this is a research screen, not investment advice.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export interface PutSuggestion {
   expiry: string; // YYYY-MM-DD
@@ -221,13 +221,7 @@ export function ivPercentile(history: number[], current: number, minDays = 30): 
   return (history.filter((v) => v <= current).length / history.length) * 100;
 }
 
-let _cache: Promise<PutWriteData | null> | null = null;
-
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadPutWrite(): Promise<PutWriteData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "putwrite.json"), "utf8")
-      .then((s) => JSON.parse(s) as PutWriteData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "putwrite.json"), (s) => JSON.parse(s) as PutWriteData);
 }

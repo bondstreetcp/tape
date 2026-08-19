@@ -6,8 +6,8 @@
  * the discount z-score vs the fund's own history, distribution rate, leverage, etc.).
  * Built offline by scripts/refresh-cef.ts → data/cef.json.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 // Coarse asset-class buckets for the quick filter ("which class is out of favor").
 // "Alternatives" = private equity / property / infrastructure / renewables / commodities —
@@ -79,15 +79,9 @@ export interface CefData {
   funds: Cef[];
 }
 
-let _cache: Promise<CefData | null> | null = null;
-
+// mtime-keyed (lib/jsonCache) — re-reads after an in-place data/ hydrate; see loadDeskNote (2026-08-19).
 export function loadCef(): Promise<CefData | null> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "cef.json"), "utf8")
-      .then((s) => JSON.parse(s) as CefData)
-      .catch(() => null);
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "cef.json"), (s) => JSON.parse(s) as CefData);
 }
 
 /** Bucket a Morningstar category / strategy into a coarse asset class. Order matters —

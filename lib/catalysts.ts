@@ -5,8 +5,8 @@
  * latest headline (which devolved into earnings-PR boilerplate and law-firm spam). When the
  * news doesn't clearly explain a move, the catalyst is empty and the UI simply shows nothing.
  */
-import { promises as fsp } from "fs";
 import path from "path";
+import { cachedFile } from "./jsonCache";
 
 export interface Catalyst {
   why: string; // the catalyst clause ("" = no clear catalyst)
@@ -21,16 +21,11 @@ export interface CatalystData {
   bySymbol: CatalystMap;
 }
 
-let _cache: Promise<CatalystMap> | null = null;
-
+// mtime-keyed (lib/jsonCache) so an in-place data/ hydrate is picked up — NOT a permanent module cache
+// that freezes at process boot until a rebuild/restart (the loadDeskNote bug, 2026-08-19).
 export function loadCatalysts(): Promise<CatalystMap> {
-  if (!_cache)
-    _cache = fsp
-      .readFile(path.join(process.cwd(), "data", "catalysts.json"), "utf8")
-      .then((s) => {
-        const raw = JSON.parse(s) as CatalystData | CatalystMap;
-        return ((raw as CatalystData).bySymbol ?? raw) as CatalystMap;
-      })
-      .catch(() => ({}));
-  return _cache;
+  return cachedFile(path.join(process.cwd(), "data", "catalysts.json"), (s) => {
+    const raw = JSON.parse(s) as CatalystData | CatalystMap;
+    return ((raw as CatalystData).bySymbol ?? raw) as CatalystMap;
+  }).then((m) => m ?? {});
 }
