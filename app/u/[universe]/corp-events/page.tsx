@@ -5,8 +5,11 @@ import { UNIVERSE_BY_ID } from "@/lib/universes";
 import type { CorpEventsData } from "@/lib/corpEvents";
 import CorpEventsView from "@/components/CorpEventsView";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: this is a freshness-sensitive "what just happened" feed — read the latest
+// corp-events on every visit rather than serving a cached weekend render that no traffic regenerated
+// (the Friday-shows-Thursday report). Matches morning-desk/flow. (If the DATA itself is stale, that's a
+// pipeline matter — this only removes the render cache as a cause.)
+export const dynamic = "force-dynamic";
 
 function loadCorpEvents(): Promise<CorpEventsData | null> {
   return fsp

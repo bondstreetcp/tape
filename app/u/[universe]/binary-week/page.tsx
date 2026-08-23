@@ -6,8 +6,9 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import { buildBinaryWeek } from "@/lib/binaryWeek";
 import BinaryWeekView from "@/components/BinaryWeekView";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: the week's binaries are computed relative to Date.now() (buildBinaryWeek), so an
+// ISR render bakes a stale clock — the same weekend-freeze the catalyst calendar hit. Matches morning-desk/flow.
+export const dynamic = "force-dynamic";
 
 const read = (f: string): Promise<any> =>
   fsp.readFile(path.join(process.cwd(), "data", f), "utf8").then((s) => JSON.parse(s)).catch(() => null);

@@ -6,8 +6,11 @@ import UsOnlyNotice from "@/components/UsOnlyNotice";
 import { buildCatalystCalendar } from "@/lib/catalystCalendar";
 import CalendarView from "@/components/CalendarView";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: the calendar's forward/past split and "in Nd" labels are keyed to Date.now()
+// (lib/catalystCalendar). Under ISR the render — with its baked Date.now() — was cached Thursday and,
+// with no weekend traffic to regenerate it, served unchanged on Sunday, so past Thursday events showed
+// as "today". force-dynamic reruns the clock (and re-reads the feeds) every visit. Matches morning-desk/flow.
+export const dynamic = "force-dynamic";
 
 const read = (f: string): Promise<any> =>
   fsp.readFile(path.join(process.cwd(), "data", f), "utf8").then((s) => JSON.parse(s)).catch(() => null);
