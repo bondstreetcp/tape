@@ -13,13 +13,26 @@ const COIL = "#22c55e"; // quiet / coiled (RV low in own history)
 const BLOWN = "#ef4444"; // blown out (RV high)
 const coneColor = (p: number | null) => (p == null ? "var(--text-4)" : p <= 25 ? COIL : p >= 75 ? BLOWN : "#f59e0b");
 
-type Sort = "coiled" | "blown" | "expanding" | "contracting" | "highRv";
-const SORTS: { key: Sort; label: string }[] = [
-  { key: "coiled", label: "Coiled (low in cone)" },
-  { key: "blown", label: "Blown out (high)" },
-  { key: "expanding", label: "Vol expanding" },
-  { key: "contracting", label: "Vol contracting" },
-  { key: "highRv", label: "Highest RV" },
+type SortKey = "symbol" | "sector" | "cur20" | "pct20" | "cur63" | "cur252" | "termSlope";
+const getVal = (r: VolConeFeedRow, k: SortKey): number | string | null => {
+  switch (k) {
+    case "symbol": return r.symbol;
+    case "sector": return r.sector ?? "";
+    case "cur20": return r.cur20;
+    case "pct20": return r.pct20;
+    case "cur63": return r.cur63;
+    case "cur252": return r.cur252;
+    case "termSlope": return r.termSlope;
+  }
+};
+// Preset quick-screens — each just sets a (column, direction) pair, so they stay in sync with the
+// clickable column headers (a lit preset means the table is sorted that way).
+const PRESETS: { key: string; label: string; sortKey: SortKey; dir: 1 | -1 }[] = [
+  { key: "coiled", label: "Coiled (low in cone)", sortKey: "pct20", dir: 1 },
+  { key: "blown", label: "Blown out (high)", sortKey: "pct20", dir: -1 },
+  { key: "expanding", label: "Vol expanding", sortKey: "termSlope", dir: -1 },
+  { key: "contracting", label: "Vol contracting", sortKey: "termSlope", dir: 1 },
+  { key: "highRv", label: "Highest RV", sortKey: "cur20", dir: -1 },
 ];
 
 // The "position in cone" bar: min→max range, a median tick, and a marker at current RV.
@@ -65,19 +78,29 @@ function Row({ universe, r }: { universe: string; r: VolConeFeedRow }) {
 }
 
 export default function VolConeView({ universe, data }: { universe: string; data: VolConeData }) {
-  const [sort, setSort] = useState<Sort>("coiled");
+  const [sortKey, setSortKey] = useState<SortKey>("pct20");
+  const [dir, setDir] = useState<1 | -1>(1); // pct ascending = coiled-first (the old default)
   const all = data.rows ?? [];
+
+  // Click a column header to sort by it; click again to flip direction (the house CefScreenerView pattern).
+  const onSort = (k: SortKey) => {
+    if (sortKey === k) setDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setDir(k === "symbol" || k === "sector" ? 1 : -1); } // text asc, numbers desc by default
+  };
+  const thBtn = "cursor-pointer select-none hover:text-[var(--text)]";
+  const Arrow = ({ k }: { k: SortKey }) => (sortKey === k ? <span className="ml-0.5 text-[var(--accent)]">{dir === 1 ? "▲" : "▼"}</span> : null);
 
   const rows = useMemo(() => {
     const r = all.filter((x) => x.pct20 != null);
-    switch (sort) {
-      case "blown": return [...r].sort((a, b) => (b.pct20 ?? 0) - (a.pct20 ?? 0));
-      case "expanding": return [...r].sort((a, b) => (b.termSlope ?? -9) - (a.termSlope ?? -9));
-      case "contracting": return [...r].sort((a, b) => (a.termSlope ?? 9) - (b.termSlope ?? 9));
-      case "highRv": return [...r].sort((a, b) => (b.cur20 ?? 0) - (a.cur20 ?? 0));
-      default: return [...r].sort((a, b) => (a.pct20 ?? 999) - (b.pct20 ?? 999)); // coiled
-    }
-  }, [all, sort]);
+    return [...r].sort((a, b) => {
+      const va = getVal(a, sortKey), vb = getVal(b, sortKey);
+      if (typeof va === "string" || typeof vb === "string") return String(va ?? "").localeCompare(String(vb ?? "")) * dir;
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;  // nulls always last, regardless of direction
+      if (vb == null) return -1;
+      return (va - vb) * dir;
+    });
+  }, [all, sortKey, dir]);
 
   return (
     <main className="mx-auto max-w-[82rem] px-4 py-6 sm:px-6">
@@ -95,14 +118,15 @@ export default function VolConeView({ universe, data }: { universe: string; data
       <HowToRead>
         <p><b>What this measures:</b> each stock&apos;s volatility is compared only to <b>its own history</b> — 10/21/63/126/252-day realized vol vs the full range those horizons have spanned in the past (the &quot;cone&quot;). No cross-stock comparison, so a sleepy utility and a meme name each get judged against themselves.</p>
         <p><b>The percentile</b> is where today&apos;s 21-day realized vol sits in that history: <b style={{ color: COIL }}>0–25th</b> = about as quiet as this name ever gets (coiled — options tend to be cheap right before regime changes); <b style={{ color: BLOWN }}>75–100th</b> = blown out (vol tends to mean-revert — premium selling territory).</p>
-        <p><b>Default sort is &quot;coiled first&quot;</b> — lowest percentile at the top. The other tabs re-sort by blown-out, vol expanding/contracting (term slope), or highest raw vol.</p>
+        <p><b>Default sort is &quot;coiled first&quot;</b> — lowest percentile at the top. Use the quick-screen buttons, or <b>click any column header</b> to sort by it (click again to flip direction).</p>
         <p><b>The mini-cone graphic:</b> the dot is today, the tick is the median, the band is the historical min→max. A dot hugging the bottom of its band with a rising term slope is the classic pre-breakout compression.</p>
       </HowToRead>
 
       <div className="mb-2 flex flex-wrap gap-1 text-[12px]">
-        {SORTS.map((s) => (
-          <button key={s.key} onClick={() => setSort(s.key)} className={`rounded-md border px-2 py-1 ${sort === s.key ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>{s.label}</button>
-        ))}
+        {PRESETS.map((s) => {
+          const active = sortKey === s.sortKey && dir === s.dir;
+          return <button key={s.key} onClick={() => { setSortKey(s.sortKey); setDir(s.dir); }} className={`rounded-md border px-2 py-1 ${active ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)]"}`}>{s.label}</button>;
+        })}
       </div>
 
       {!rows.length ? (
@@ -114,14 +138,14 @@ export default function VolConeView({ universe, data }: { universe: string; data
           <table className="w-full min-w-[720px] text-left text-[13px]">
             <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
               <tr>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="hidden px-2 py-2 font-medium sm:table-cell">Sector</th>
-                <th className="px-2 py-2 text-right font-medium">RV 21d</th>
+                <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("symbol")}>Name<Arrow k="symbol" /></th>
+                <th className={"hidden px-2 py-2 font-medium sm:table-cell " + thBtn} onClick={() => onSort("sector")}>Sector<Arrow k="sector" /></th>
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("cur20")}>RV 21d<Arrow k="cur20" /></th>
                 <th className="px-2 py-2 font-medium" style={{ minWidth: 110 }}>Position in cone</th>
-                <th className="px-2 py-2 text-right font-medium">Pct<InfoDot term="Realized vol cone" /></th>
-                <th className="hidden px-2 py-2 text-right font-medium md:table-cell">RV 63d</th>
-                <th className="hidden px-2 py-2 text-right font-medium md:table-cell">RV 1y</th>
-                <th className="px-3 py-2 text-right font-medium">Term</th>
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("pct20")}>Pct<InfoDot term="Realized vol cone" /><Arrow k="pct20" /></th>
+                <th className={"hidden px-2 py-2 text-right font-medium md:table-cell " + thBtn} onClick={() => onSort("cur63")}>RV 63d<Arrow k="cur63" /></th>
+                <th className={"hidden px-2 py-2 text-right font-medium md:table-cell " + thBtn} onClick={() => onSort("cur252")}>RV 1y<Arrow k="cur252" /></th>
+                <th className={"px-3 py-2 text-right font-medium " + thBtn} onClick={() => onSort("termSlope")}>Term<Arrow k="termSlope" /></th>
               </tr>
             </thead>
             <tbody>{rows.slice(0, 400).map((r) => <Row key={r.symbol} universe={universe} r={r} />)}</tbody>

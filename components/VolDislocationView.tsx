@@ -12,12 +12,39 @@ import VpLedgerPanel from "./VpLedgerPanel";
 import type { VpLedgerFile } from "@/lib/volPremiumLedger";
 
 type F = "rich" | "cheap" | "all";
+type DisRow = VolDisData["rows"][number];
+type SortKey = "symbol" | "sector" | "atmIV" | "rvol" | "ivPremium" | "vsSector" | "termCrush" | "skew" | "ivRank";
+const getDisVal = (r: DisRow, k: SortKey): number | string | null => {
+  switch (k) {
+    case "symbol": return r.symbol;
+    case "sector": return r.sector ?? "";
+    case "atmIV": return r.atmIV;
+    case "rvol": return r.rvol;
+    case "ivPremium": return r.ivPremium;
+    case "vsSector": return r.vsSector;
+    case "termCrush": return r.termCrush;
+    case "skew": return r.skew;
+    case "ivRank": return r.ivRank;
+  }
+};
 
 export default function VolDislocationView({ universe, data, ledger }: { universe: string; data: VolDisData; ledger?: VpLedgerFile | null }) {
   const [f, setF] = useState<F>("rich");
   const [hideEarn, setHideEarn] = useState(false);
   const [hideIlliquid, setHideIlliquid] = useState(true);
   const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("ivPremium");
+  const [dir, setDir] = useState<1 | -1>(-1); // richest variance premium first
+
+  // Click a column header to sort; click again to flip direction (the house CefScreenerView pattern).
+  const onSort = (k: SortKey) => {
+    if (sortKey === k) setDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setDir(k === "symbol" || k === "sector" ? 1 : -1); } // text asc, numbers desc by default
+  };
+  // The rich/cheap/all tabs also pick a sensible sort (cheap → cheapest-first); the user can override by clicking any header.
+  const setFilter = (nf: F) => { setF(nf); setSortKey("ivPremium"); setDir(nf === "cheap" ? 1 : -1); };
+  const thBtn = "cursor-pointer select-none hover:text-[var(--text)]";
+  const Arrow = ({ k }: { k: SortKey }) => (sortKey === k ? <span className="ml-0.5 text-[var(--accent)]">{dir === 1 ? "▲" : "▼"}</span> : null);
 
   const hasBroad = useMemo(() => data.rows.some((r) => r.broad), [data.rows]);
   const rows = useMemo(() => {
@@ -30,8 +57,15 @@ export default function VolDislocationView({ universe, data, ledger }: { univers
       if (ql && !r.symbol.toLowerCase().includes(ql) && !r.name.toLowerCase().includes(ql)) return false;
       return true;
     });
-    return f === "cheap" ? [...rs].sort((a, b) => a.ivPremium - b.ivPremium) : rs; // cheapest-first when on the cheap tab
-  }, [data.rows, f, hideEarn, hideIlliquid, q]);
+    return [...rs].sort((a, b) => {
+      const va = getDisVal(a, sortKey), vb = getDisVal(b, sortKey);
+      if (typeof va === "string" || typeof vb === "string") return String(va ?? "").localeCompare(String(vb ?? "")) * dir;
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;  // nulls always last, regardless of direction
+      if (vb == null) return -1;
+      return (va - vb) * dir;
+    });
+  }, [data.rows, f, hideEarn, hideIlliquid, q, sortKey, dir]);
 
   const richN = data.rows.filter((r) => r.ivPremium >= 1.4).length;
   const cheapN = data.rows.filter((r) => r.ivPremium <= 1.1).length;
@@ -53,9 +87,9 @@ export default function VolDislocationView({ universe, data, ledger }: { univers
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
-          <button onClick={() => setF("rich")} className={TB(f === "rich")} title="ATM IV ≥ 1.4× realized vol">Rich vol</button>
-          <button onClick={() => setF("cheap")} className={TB(f === "cheap")} title="ATM IV ≤ 1.1× realized vol">Cheap vol</button>
-          <button onClick={() => setF("all")} className={TB(f === "all")}>All</button>
+          <button onClick={() => setFilter("rich")} className={TB(f === "rich")} title="ATM IV ≥ 1.4× realized vol">Rich vol</button>
+          <button onClick={() => setFilter("cheap")} className={TB(f === "cheap")} title="ATM IV ≤ 1.1× realized vol">Cheap vol</button>
+          <button onClick={() => setFilter("all")} className={TB(f === "all")}>All</button>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]" title="Hide names reporting inside the front expiry — their rich vol is expected event premium, not a dislocation">
           <input type="checkbox" checked={hideEarn} onChange={(e) => setHideEarn(e.target.checked)} /> hide earnings
@@ -80,15 +114,15 @@ export default function VolDislocationView({ universe, data, ledger }: { univers
         <table className="w-full min-w-[900px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
             <tr>
-              <th className="px-3 py-2 font-medium">Ticker</th>
-              <th className="px-2 py-2 font-medium">Sector</th>
-              <th className="px-2 py-2 text-right font-medium">ATM<InfoDot term="ATM" /> IV<InfoDot term="Implied volatility" /></th>
-              <th className="px-2 py-2 text-right font-medium">Realized<InfoDot term="Realized volatility" /></th>
-              <th className="px-2 py-2 text-right font-medium" title="ATM IV ÷ realized vol — the variance premium">IV / RV<InfoDot term="IV / RV" /></th>
-              <th className="px-2 py-2 text-right font-medium" title="how much richer (+) or cheaper (−) this name's variance premium is than its SECTOR's median — peer-relative vol">vs sector<InfoDot text="How much richer (+) or cheaper (−) this name's variance premium is than its sector's median." /></th>
-              <th className="px-2 py-2 text-right font-medium" title="front-tenor IV ÷ back-tenor IV — >1 = backwardated (event-loaded)">Term<InfoDot term="Term crush" /></th>
-              <th className="px-2 py-2 text-right font-medium" title="front put IV − call IV, vol points — >0 = downside richer">Skew<InfoDot term="Skew" /></th>
-              <th className="px-2 py-2 text-right font-medium" title="IV percentile vs its own recent history (accrues over time)">IV-rk<InfoDot term="IV rank" /></th>
+              <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("symbol")}>Ticker<Arrow k="symbol" /></th>
+              <th className={"px-2 py-2 font-medium " + thBtn} onClick={() => onSort("sector")}>Sector<Arrow k="sector" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("atmIV")}>ATM<InfoDot term="ATM" /> IV<InfoDot term="Implied volatility" /><Arrow k="atmIV" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("rvol")}>Realized<InfoDot term="Realized volatility" /><Arrow k="rvol" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("ivPremium")} title="ATM IV ÷ realized vol — the variance premium">IV / RV<InfoDot term="IV / RV" /><Arrow k="ivPremium" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("vsSector")} title="how much richer (+) or cheaper (−) this name's variance premium is than its SECTOR's median — peer-relative vol">vs sector<InfoDot text="How much richer (+) or cheaper (−) this name's variance premium is than its sector's median." /><Arrow k="vsSector" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("termCrush")} title="front-tenor IV ÷ back-tenor IV — >1 = backwardated (event-loaded)">Term<InfoDot term="Term crush" /><Arrow k="termCrush" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("skew")} title="front put IV − call IV, vol points — >0 = downside richer">Skew<InfoDot term="Skew" /><Arrow k="skew" /></th>
+              <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("ivRank")} title="IV percentile vs its own recent history (accrues over time)">IV-rk<InfoDot term="IV rank" /><Arrow k="ivRank" /></th>
               <th className="px-2 py-2 font-medium"></th>
             </tr>
           </thead>
