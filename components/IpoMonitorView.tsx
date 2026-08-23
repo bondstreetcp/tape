@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import type { IpoData, IpoEvent, IpoKind } from "@/lib/ipoMonitor";
 import { perfColor, fmtSize } from "@/lib/ipoMonitor";
@@ -16,7 +16,22 @@ const slug = (e: IpoEvent) => e.ticker || e.id; // upcoming filings may not have
 
 export default function IpoMonitorView({ universe, data }: { universe: string; data: IpoData }) {
   const [tab, setTab] = useState<IpoKind>("upcoming");
-  const rows = useMemo(() => data.events.filter((e) => e.kind === tab), [data.events, tab]);
+  const { rows, splitIndex } = useMemo(() => {
+    const r = data.events.filter((e) => e.kind === tab);
+    if (tab !== "lockup") return { rows: r, splitIndex: -1 };
+    // Dedupe the lockup list (Rank One Computing / ROC showed up twice) — one row per ticker, keeping the
+    // soonest expiry — then split not-yet-expired (nearest first) from already-expired (most-recent first).
+    const byTicker = new Map<string, IpoEvent>();
+    for (const e of r) {
+      const k = (e.ticker || e.id).toUpperCase();
+      const prev = byTicker.get(k);
+      if (!prev || (e.daysToLockup ?? 1e9) < (prev.daysToLockup ?? 1e9)) byTicker.set(k, e);
+    }
+    const dedup = [...byTicker.values()];
+    const upcoming = dedup.filter((e) => (e.daysToLockup ?? 0) >= 0).sort((a, b) => (a.daysToLockup ?? 1e9) - (b.daysToLockup ?? 1e9));
+    const expired = dedup.filter((e) => (e.daysToLockup ?? 0) < 0).sort((a, b) => (b.daysToLockup ?? -1e9) - (a.daysToLockup ?? -1e9));
+    return { rows: [...upcoming, ...expired], splitIndex: upcoming.length };
+  }, [data.events, tab]);
   const counts = useMemo(() => ({
     upcoming: data.events.filter((e) => e.kind === "upcoming").length,
     ipo: data.events.filter((e) => e.kind === "ipo").length,
@@ -72,8 +87,12 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
               </tr>
             </thead>
             <tbody>
-              {rows.map((e) => (
-                <tr key={e.id} className="border-b border-[var(--border)] last:border-0 align-top hover:bg-[var(--surface-2)]">
+              {rows.map((e, i) => (
+                <Fragment key={e.id}>
+                  {tab === "lockup" && i === splitIndex && splitIndex > 0 && (
+                    <tr><td colSpan={9} className="border-y border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Already expired — lockup has passed</td></tr>
+                  )}
+                <tr className="border-b border-[var(--border)] last:border-0 align-top hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2">
                     <span className="inline-flex items-center gap-1.5">
                       <WatchStar symbol={slug(e)} compact />
@@ -100,6 +119,7 @@ export default function IpoMonitorView({ universe, data }: { universe: string; d
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap"><Link href={`/u/${universe}/ipos/${slug(e)}`} className="text-[11px] text-[var(--accent)] hover:underline">Details →</Link></td>
                 </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>
