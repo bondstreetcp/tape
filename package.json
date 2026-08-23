@@ -33,6 +33,7 @@
     "refresh-sss": "tsx scripts/refresh-sss.ts",
     "refresh-sss-intl": "tsx scripts/refresh-sss-intl.ts",
     "refresh-staples-scanner": "tsx scripts/refresh-staples-scanner.ts",
+    "backfill-staples": "tsx scripts/backfill-staples.ts",
     "refresh-guidance": "tsx scripts/refresh-guidance.ts",
     "refresh-guidance-board": "tsx scripts/refresh-guidance-board.ts",
     "refresh-iv-history": "tsx scripts/refresh-iv-history.ts",
