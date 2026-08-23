@@ -64,6 +64,34 @@ export default function GammaExposure({ symbol }: { symbol: string }) {
   const barW = Math.max(2, ((W - ML - MR) / Math.max(1, strikes.length)) * 0.66);
   const flipPct = d.flip != null && S > 0 ? ((d.flip - S) / S) * 100 : null;
 
+  // Support / resistance ladder from open interest: heavy CALL OI above spot caps rallies (resistance),
+  // heavy PUT OI below spot cushions dips (support) — the levels traders watch into a big expiry / print.
+  const oiFmt = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : `${Math.round(v)}`);
+  const distPct = (strike: number) => (S > 0 ? ((strike - S) / S) * 100 : 0);
+  const resistance = strikes.filter((s) => s.strike > S && s.callOI > 0).sort((a, b) => b.callOI - a.callOI).slice(0, 4);
+  const support = strikes.filter((s) => s.strike < S && s.putOI > 0).sort((a, b) => b.putOI - a.putOI).slice(0, 4);
+  const maxResOI = Math.max(1, ...resistance.map((s) => s.callOI));
+  const maxSupOI = Math.max(1, ...support.map((s) => s.putOI));
+  const Ladder = ({ rows, kind, wall, maxOI }: { rows: typeof strikes; kind: "res" | "sup"; wall: number | undefined; maxOI: number }) => {
+    const color = kind === "res" ? "#ef4444" : "#22c55e";
+    return (
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide" style={{ color }}>{kind === "res" ? "Resistance — call OI above" : "Support — put OI below"}</div>
+        {rows.length ? rows.map((s) => {
+          const oi = kind === "res" ? s.callOI : s.putOI;
+          return (
+            <div key={s.strike} className="flex items-center gap-2 text-[12px]">
+              <span className="w-16 shrink-0 font-mono tabular-nums text-[var(--text-2)]">${s.strike}{wall === s.strike && <span title="the OI wall — the largest strike on this side">★</span>}</span>
+              <span className="w-12 shrink-0 font-mono tabular-nums text-[var(--text-4)]">{distPct(s.strike) >= 0 ? "+" : ""}{distPct(s.strike).toFixed(1)}%</span>
+              <span className="relative h-3 flex-1 rounded bg-[var(--bg)]"><span className="absolute inset-y-0 left-0 rounded" style={{ width: `${(oi / maxOI) * 100}%`, background: `${color}80` }} /></span>
+              <span className="w-12 shrink-0 text-right font-mono tabular-nums text-[var(--text-4)]">{oiFmt(oi)}</span>
+            </div>
+          );
+        }) : <div className="text-[11px] text-[var(--text-4)]">— none {kind === "res" ? "above" : "below"} spot</div>}
+      </div>
+    );
+  };
+
   const vline = (px: number, color: string, dash: string, op: number) =>
     px >= xmin && px <= xmax ? <line x1={x(px)} x2={x(px)} y1={MT} y2={H - MB} stroke={color} strokeDasharray={dash} strokeOpacity={op} strokeWidth={1} /> : null;
 
@@ -121,6 +149,18 @@ export default function GammaExposure({ symbol }: { symbol: string }) {
           {d.flip != null && d.flip >= xmin && d.flip <= xmax && <text x={x(d.flip)} y={H - 6} fontSize={8.5} textAnchor="middle" fill="#f59e0b" className="tabular-nums">flip</text>}
         </svg>
       </div>
+
+      {(resistance.length > 0 || support.length > 0) && (
+        <div className="mt-3 border-t border-[var(--border)] pt-3">
+          <div className="mb-1.5 text-[11px] font-semibold text-[var(--text-2)]">
+            Support &amp; resistance from option OI<InfoDot text="Big open-interest strikes act as magnets into expiry: heavy CALL OI above spot caps rallies (resistance), heavy PUT OI below spot cushions dips (support). The pull is strongest near a large expiry — e.g. into an earnings print. Dealer-positioning context, not a signal." />
+          </div>
+          <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+            <Ladder rows={resistance} kind="res" wall={d.callWall?.strike} maxOI={maxResOI} />
+            <Ladder rows={support} kind="sup" wall={d.putWall?.strike} maxOI={maxSupOI} />
+          </div>
+        </div>
+      )}
 
       <p className="mt-1 text-[10px] text-[var(--text-4)]">
         <span className="font-semibold text-[#22c55e]">green</span> = dealer long gamma at that strike (a pin), <span className="font-semibold text-[#ef4444]">red</span> = short. Dashed = spot, amber = gamma flip. Naive model (dealers assumed long calls / short puts), end-of-day OI, next {d.expiries.length} expiries — a positioning read, not a signal.
