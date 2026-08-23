@@ -131,8 +131,14 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry, pastMoves }:
   const t0 = series[0][0], tMax = Math.max(expT, series[series.length - 1][0] + 86_400_000);
   const up2 = spot + 2 * (upperBE - spot), lo2 = spot - 2 * (spot - lowerBE);
   const prices = series.map((s) => s[1]);
-  let yMin = Math.min(...prices, lo2), yMax = Math.max(...prices, up2);
-  const pad = (yMax - yMin) * 0.06 || 1; yMin -= pad; yMax += pad;
+  // Past post-earnings outcomes, projected from today's spot — computed HERE so the y-axis can contain
+  // them. A print that gapped beyond the priced ±2σ would otherwise land past the frame and get clamped
+  // onto the top/bottom edge (what reads as the chart "cutting off"); folding them into the domain (plus a
+  // touch more headroom) lets the axis grow to fit, so every outcome dot sits under a gridline.
+  const outcomes = (pastMoves || []).filter((m) => m.move != null).slice(0, 8);
+  const outcomeY = outcomes.map((m) => spot * (1 + (m.move as number)));
+  let yMin = Math.min(...prices, lo2, ...outcomeY), yMax = Math.max(...prices, up2, ...outcomeY);
+  const pad = (yMax - yMin) * 0.08 || 1; yMin -= pad; yMax += pad;
   const x = (t: number) => ML + ((t - t0) / (tMax - t0)) * (W - ML - MR);
   const y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
   const path = series.map((s, i) => `${i ? "L" : "M"}${x(s[0]).toFixed(1)} ${y(s[1]).toFixed(1)}`).join("");
@@ -177,8 +183,9 @@ function ExpectedMoveCone({ series, lowerBE, upperBE, spot, expiry, pastMoves }:
       <text x={xE + 3} y={y(upperBE) + 3} fontSize={10} fill="#22c55e" className="tabular-nums">${upperBE.toFixed(0)}</text>
       <text x={xE + 3} y={y(spot) + 3} fontSize={10} fill="var(--text-4)" className="tabular-nums">${spot.toFixed(0)}</text>
       <text x={xE + 3} y={y(lowerBE) + 3} fontSize={10} fill="#ef4444" className="tabular-nums">${lowerBE.toFixed(0)}</text>
-      {/* past post-earnings outcomes at the expiry mouth — where the stock actually landed vs the priced cone (green=beat, red=miss) */}
-      {(pastMoves || []).filter((m) => m.move != null).slice(0, 8).map((m, i) => {
+      {/* past post-earnings outcomes at the expiry mouth — where the stock landed on each recent print,
+          projected from spot, vs the priced cone (green = EPS beat, red = miss, gray = surprise unknown) */}
+      {outcomes.map((m, i) => {
         const col = m.surprise != null && m.surprise > 0 ? "#22c55e" : m.surprise != null && m.surprise < 0 ? "#ef4444" : "var(--text-3)";
         const cy = Math.max(MT + 2, Math.min(H - MB - 2, y(spot * (1 + (m.move as number)))));
         return (
@@ -498,6 +505,13 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
                   <div title="Recent price + the ±straddle (expected-move) range projected to the earnings expiry — accent band = the priced move, lighter = ±2×.">
                     <ExpectedMoveCone series={windowByTf(d.priceSeries, coneTf)} lowerBE={d.straddle.lowerBE} upperBE={d.straddle.upperBE} spot={d.straddle.price} expiry={d.straddle.expiry} pastMoves={d.events} />
                   </div>
+                  {d.events?.some((e) => e.move != null) && (
+                    <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[10.5px] leading-tight text-[var(--text-4)]">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
+                      <span>dots at the mouth = the last 8 prints (green beat · red miss), placed where the stock lands if that move repeats from spot</span>
+                    </div>
+                  )}
                   {eventDist && (
                     <div title="The market-implied probability distribution of the stock AT the earnings expiry — the skew / P(up) asymmetry the symmetric cone above can't show.">
                       <ImpliedDistribution dist={[eventDist]} spot={d.straddle.price} />
