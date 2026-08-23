@@ -9,12 +9,22 @@ import { LoadingState } from "./Spinner";
 const STRATS: StrategyKey[] = ["momentum", "trend", "lowvol", "equal"];
 const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 
+// Trim the monthly matrix to its last `months` columns — powers the Window selector (3y/5y/10y/Max).
+// Only the date columns are sliced; the per-symbol cap/name rows are untouched.
+function sliceMatrix(mx: BacktestMatrix, months: number): BacktestMatrix {
+  const M = mx.dates.length;
+  if (months >= M) return mx;
+  const start = M - months;
+  return { ...mx, dates: mx.dates.slice(start), closes: mx.closes.map((row) => row.slice(start)) };
+}
+
 export default function Backtest({ universe, stocks = [] }: { universe: string; stocks?: StockRow[] }) {
   const [matrix, setMatrix] = useState<BacktestMatrix | "loading" | "err" | null>("loading");
   const [strategy, setStrategy] = useState<StrategyKey>("momentum");
   const [screens, setScreens] = useState<ScreenKey[]>([]);
   const [topN, setTopN] = useState(20);
   const [lookback, setLookback] = useState(6);
+  const [winY, setWinY] = useState(0); // backtest window in years; 0 = max (full stored history)
   const [pioMin, setPioMin] = useState(7);
   const screensOn = screens.length > 0;
   const toggleScreen = (k: ScreenKey) => setScreens((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
@@ -44,10 +54,14 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
 
   const result = useMemo<BacktestResult | null>(() => {
     if (!matrix || matrix === "loading" || matrix === "err") return null;
+    // Window selector: slice to the last winY years PLUS the strategy's warm-up months, so the visible
+    // equity curve spans ~winY years (runStrategy consumes the warm-up before it starts compounding).
+    const warm = Math.max(lookback, 10) + 1;
+    const mx = winY > 0 ? sliceMatrix(matrix, winY * 12 + warm + 1) : matrix;
     return screensOn
-      ? runStrategy(matrix, { strategy: "screen", holdings })
-      : runStrategy(matrix, { strategy, topN, lookback });
-  }, [matrix, strategy, screensOn, holdings, topN, lookback]);
+      ? runStrategy(mx, { strategy: "screen", holdings })
+      : runStrategy(mx, { strategy, topN, lookback });
+  }, [matrix, strategy, screensOn, holdings, topN, lookback, winY]);
 
   if (matrix === "loading") return <Box><LoadingState label="Loading price history…" className="py-0" /></Box>;
   if (matrix === "err" || !matrix) return <Box>Backtest data isn’t available for this universe yet.</Box>;
@@ -86,6 +100,7 @@ export default function Backtest({ universe, stocks = [] }: { universe: string; 
         {usesParams && <Select label="Lookback" value={lookback} onChange={setLookback} opts={[3, 6, 12]} suffix=" mo" />}
         {screensOn && (screens.length >= 2 || screens.some((s) => s !== "netnet" && s !== "piotroski")) && <Select label="Top" value={topN} onChange={setTopN} opts={[20, 30, 50, 75]} />}
         {screens.includes("piotroski") && <Select label="F ≥" value={pioMin} onChange={setPioMin} opts={[5, 6, 7, 8, 9]} />}
+        <Select label="Window" value={winY} onChange={setWinY} opts={[0, 3, 5, 10]} fmt={(v) => (v === 0 ? "Max" : `${v}y`)} />
       </div>
 
       {screensOn && (
@@ -183,7 +198,7 @@ function Metric({ label, value, color }: { label: string; value: string; color?:
     </div>
   );
 }
-function Select({ label, value, onChange, opts, suffix }: { label: string; value: number; onChange: (v: number) => void; opts: number[]; suffix?: string }) {
+function Select({ label, value, onChange, opts, suffix, fmt }: { label: string; value: number; onChange: (v: number) => void; opts: number[]; suffix?: string; fmt?: (v: number) => string }) {
   return (
     <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]">
       {label}
@@ -193,7 +208,7 @@ function Select({ label, value, onChange, opts, suffix }: { label: string; value
         className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--text)] outline-none focus:border-[var(--border-strong)]"
       >
         {opts.map((o) => (
-          <option key={o} value={o}>{o}{suffix}</option>
+          <option key={o} value={o}>{fmt ? fmt(o) : `${o}${suffix ?? ""}`}</option>
         ))}
       </select>
     </label>

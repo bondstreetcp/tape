@@ -224,14 +224,22 @@ export default function AppHeader({
             );
             if (hubs && hubs.length) {
               return hubs.map((h) => {
-                const href = `${base}${h.paths[0]}`;
-                const act = h.paths.some((p) => isActive(`${base}${p}`));
-                return (
-                  <Link key={h.label} href={href} role="menuitem" onClick={() => setOpen(null)}
-                    className={"block rounded-md px-2.5 py-1.5 transition-colors " + (act ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]")}>
-                    <div className={"text-sm font-medium " + (act ? "text-[var(--accent)]" : "text-[var(--text)]")}>{h.label}{h.paths.length > 1 && <span className="text-[10px] font-normal text-[var(--text-4)]"> · {h.paths.length} tools</span>}</div>
+                // A hub whose PRIMARY tool is an external site (e.g. Merger Arbitrage → the dedicated ARB
+                // desk) opens out in a new tab, honoring that feature's `external` URL — not an in-app route.
+                const ext = FEATURES.find((f) => f.path === h.paths[0])?.external;
+                const href = ext ?? `${base}${h.paths[0]}`;
+                const act = !ext && h.paths.some((p) => isActive(`${base}${p}`));
+                const cls = "block rounded-md px-2.5 py-1.5 transition-colors " + (act ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]");
+                const body = (
+                  <>
+                    <div className={"text-sm font-medium " + (act ? "text-[var(--accent)]" : "text-[var(--text)]")}>{h.label}{ext ? " ↗" : h.paths.length > 1 ? <span className="text-[10px] font-normal text-[var(--text-4)]"> · {h.paths.length} tools</span> : null}</div>
                     <div className="mt-0.5 text-xs leading-snug text-[var(--text-3)]">{h.blurb}</div>
-                  </Link>
+                  </>
+                );
+                return ext ? (
+                  <a key={h.label} href={ext} target="_blank" rel="noreferrer" role="menuitem" onClick={() => setOpen(null)} className={cls}>{body}</a>
+                ) : (
+                  <Link key={h.label} href={href} role="menuitem" onClick={() => setOpen(null)} className={cls}>{body}</Link>
                 );
               });
             }
