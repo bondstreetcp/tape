@@ -39,6 +39,10 @@ const FRESH_MIN = 150;
 // fact-finding) and ~20x cheaper on input than a Pro model, and its output is a 1-2 sentence reason, not
 // heavy reasoning. Bump via DESK_GROUNDED_MODEL (e.g. gemini-3.1-pro-preview) if the answers thin out.
 const GROUNDED_MODEL = process.env.DESK_GROUNDED_MODEL || "gemini-2.5-flash";
+// A 1-day move at least this big ALWAYS gets the grounded "why" — the day's headline movers must never be
+// hand-waved as a sector move or left on a stale/generic cached catalyst (the MRNA vaccine-day miss).
+// Bounded by DESK_GROUNDED_MAX, and grounding is free to ~5k searches/mo. Override with DESK_GROUNDED_BIG.
+const GROUNDED_BIG_MOVE_PCT = Number(process.env.DESK_GROUNDED_BIG) || 8;
 
 const readJson = async <T,>(f: string): Promise<T | null> =>
   fs.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
@@ -215,7 +219,14 @@ async function main() {
       const sectorExplains = secRet != null && Math.sign(secRet) === Math.sign(ret1d) && Math.abs(residual) < Math.abs(ret1d) * 0.5;
       // A crypto-linked name moving WITH a material crypto tape is crypto beta, not idiosyncratic — the
       // MOVE EVIDENCE crypto line already explains it, so don't burn a grounded search (the sector analogue).
-      const needsGrounding = !rep && !why && !sectorExplains && !cryptoExplains(s.symbol, crypto.btc1d, ret1d);
+      // BUT the day's BIGGEST movers (≥ GROUNDED_BIG_MOVE_PCT) always get the grounded catalyst check even
+      // when the sector "explains" the move or a (possibly stale/generic) cached catalyst exists — that is
+      // how MRNA's vaccine-day move read as a healthcare-sector wiggle. Only a confirmed earnings print (rep)
+      // or a crypto-beta move — which already carry real drivers — suppress it. Smaller moves keep the cheap
+      // gate: ground only the idiosyncratic, no-cached-catalyst ones. The grounded answer, when it lands,
+      // supersedes the cached catalyst (and on failure we fall back to it — degrade, don't error).
+      const bigMove = Math.abs(ret1d) >= GROUNDED_BIG_MOVE_PCT;
+      const needsGrounding = !rep && !cryptoExplains(s.symbol, crypto.btc1d, ret1d) && (bigMove || (!why && !sectorExplains));
       const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
       const prefix =
         `${s.symbol} ${pct(ret1d)} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
