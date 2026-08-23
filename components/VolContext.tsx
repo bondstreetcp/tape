@@ -20,7 +20,7 @@ function Stat({ label, value, color, tip }: { label: string; value: string; colo
 // scanned universe and its sector — the rich/cheap read the skew & term curves above don't give. Fed by
 // the single vol-dislocation row for the symbol (server-loaded on the stock page); the parent renders it
 // only when the name is in the scan, so there's no empty state here.
-export default function VolContext({ row }: { row: VolDisRow }) {
+export default function VolContext({ row, disp }: { row: VolDisRow; disp?: { indexIV: number } | null }) {
   const verdict = premVerdict(row.ivPremium);
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -38,6 +38,7 @@ export default function VolContext({ row }: { row: VolDisRow }) {
         <Stat label="IV / RV" value={`${row.ivPremium.toFixed(2)}×`} color={premColor(row.ivPremium)} tip="ATM implied vol ÷ realized vol — the variance premium. ≥1.4 rich, ≤1.1 cheap." />
         <Stat label="ATM IV" value={asPct(row.atmIV)} />
         <Stat label="Realized" value={asPct(row.rvol)} />
+        {disp && <Stat label="vs index" value={`${row.atmIV - disp.indexIV >= 0 ? "+" : ""}${((row.atmIV - disp.indexIV) * 100).toFixed(0)}`} color={row.atmIV - disp.indexIV >= 0.05 ? "#f59e0b" : row.atmIV - disp.indexIV <= -0.05 ? "#14b8a6" : "var(--text-3)"} tip="This name's ATM IV minus the index's (VIX), in vol points. Positive = it carries more vol than the index — a net contributor to dispersion (what a dispersion trade owns via the single names). Dispersion is inherently cross-sectional, so read this as a rough contribution, not an exact per-name P&L." />}
         <Stat label="Univ pctile" value={`${row.pctile.toFixed(0)}th`} color={pctileColor(row.pctile)} tip="Where this name's variance premium ranks across the scanned universe (100th = richest vol of all)." />
         <Stat label="vs sector" value={row.vsSector != null ? `${row.vsSector > 0 ? "+" : ""}${row.vsSector.toFixed(2)}` : "—"} color={row.vsSector != null ? (row.vsSector >= 0.25 ? "#f59e0b" : row.vsSector <= -0.25 ? "#14b8a6" : "var(--text-3)") : undefined} tip="Richer (+) or cheaper (−) than the median variance premium across its sector." />
         <Stat label="Skew" value={row.skew != null ? `${row.skew > 0 ? "+" : ""}${(row.skew * 100).toFixed(0)}` : "—"} color={skewColor(row.skew)} tip="Front put IV − call IV (vol pts). Positive = downside is bid (put demand / crash-hedged)." />

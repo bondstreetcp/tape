@@ -17,6 +17,7 @@ import type { SssData, SssTicker } from "@/lib/sameStoreSales";
 import type { GuidanceData, GuidanceTicker } from "@/lib/guidance";
 import type { IvHistoryData, IvSnapshot } from "@/lib/ivHistory";
 import type { VolDisData, VolDisRow } from "@/lib/volDislocation";
+import type { DispersionData } from "@/lib/dispersion";
 
 // Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
 // extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
@@ -59,6 +60,18 @@ function loadVolDis(sym: string): VolDisRow | null {
     const p = join(process.cwd(), "data", "vol-dislocation.json");
     if (!existsSync(p)) return null;
     return (JSON.parse(readFileSync(p, "utf8")) as VolDisData).rows?.find((r) => r.symbol === sym) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Dispersion aggregate — the index (VIX) IV, for the per-name "vs index" dispersion-contribution read.
+function loadDispersion(): { indexIV: number } | null {
+  try {
+    const p = join(process.cwd(), "data", "dispersion.json");
+    if (!existsSync(p)) return null;
+    const d = JSON.parse(readFileSync(p, "utf8")) as DispersionData;
+    return typeof d?.indexIV === "number" ? { indexIV: d.indexIV } : null;
   } catch {
     return null;
   }
@@ -172,6 +185,7 @@ export default async function StockPage({
       guidance={loadGuidance(SYM)}
       ivHistory={loadIvHistory(SYM)}
       volDis={loadVolDis(SYM)}
+      disp={loadDispersion()}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}

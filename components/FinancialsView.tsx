@@ -163,6 +163,7 @@ export default function FinancialsView({
   guidance,
   ivHistory,
   volDis,
+  disp,
   daily,
   intraday,
   generatedAt,
@@ -183,6 +184,7 @@ export default function FinancialsView({
   guidance?: GuidanceTicker | null;
   ivHistory?: IvSnapshot[] | null;
   volDis?: VolDisRow | null;
+  disp?: { indexIV: number } | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -413,7 +415,7 @@ export default function FinancialsView({
         </div>
       ) : view === "options" ? (
         <div className="space-y-4">
-          {volDis && <VolContext row={volDis} />}
+          {volDis && <VolContext row={volDis} disp={disp} />}
           <NamePositioning symbol={symbol} />
           <OptionsChain symbol={symbol} currency={currency} />
         </div>
