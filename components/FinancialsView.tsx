@@ -28,6 +28,7 @@ import SharesChart from "./SharesChart";
 import MarginsChart from "./MarginsChart";
 import OptionsChain from "./OptionsChain";
 import VolContext from "./VolContext";
+import NamePositioning from "./NamePositioning";
 import DcfPanel from "./DcfPanel";
 import ScenarioPanel from "./ScenarioPanel";
 import DividendPanel from "./DividendPanel";
@@ -413,6 +414,7 @@ export default function FinancialsView({
       ) : view === "options" ? (
         <div className="space-y-4">
           {volDis && <VolContext row={volDis} />}
+          <NamePositioning symbol={symbol} />
           <OptionsChain symbol={symbol} currency={currency} />
         </div>
       ) : view === "social" ? (
