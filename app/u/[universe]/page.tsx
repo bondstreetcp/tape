@@ -10,8 +10,9 @@ import HomeDashboard from "@/components/HomeDashboard";
 import MorningStrip from "@/components/MorningStrip";
 import SetupNotice from "@/components/SetupNotice";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: the home strip bakes Date.now() into idea "arrivals today / this week" counts,
+// which an ISR cache would freeze over a quiet weekend (the catalyst-calendar class). Matches morning-desk.
+export const dynamic = "force-dynamic";
 
 // Idea-inbox arrival counts for the morning strip — the same signal-log facts /ideas fuses, cheap
 // calendar-day counts here (seeds excluded; they're a board's launch backlog, not arrivals).

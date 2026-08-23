@@ -11,8 +11,9 @@ import { fmtDate } from "@/lib/format";
 import { daysUntil } from "@/lib/calendar";
 import type { TendersFile } from "@/lib/tenders";
 
-export const revalidate = 600;
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: the render uses Date.now() (via daysUntil) for the "expires today / Nd" countdown
+// and the d>=0 still-live gate — an ISR cache would keep an already-lapsed odd-lot offer showing as live.
+export const dynamic = "force-dynamic";
 
 const money = (v: number | null) => (v == null ? "—" : `$${v.toFixed(2)}`);
 

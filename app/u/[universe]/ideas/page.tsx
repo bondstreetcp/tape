@@ -8,8 +8,9 @@ import IdeaInboxView from "@/components/IdeaInboxView";
 import EmptyState from "@/components/EmptyState";
 import UsOnlyNotice from "@/components/UsOnlyNotice";
 
-export const revalidate = 600; // ISR: the signal log is nightly data — edge-cache the render
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: buildIdeaInbox uses Date.now() for the "today / Nd" arrival chips, the 14-day
+// window, and the freshness-decayed ranking — an ISR cache would freeze a Thursday "today" into Sunday.
+export const dynamic = "force-dynamic";
 
 // Idea Inbox — what ARRIVED across the idea boards, fused by name and weighted by each board's own
 // graded record. A pure view over data/signal-log.json (the /signal-record source of truth): no new

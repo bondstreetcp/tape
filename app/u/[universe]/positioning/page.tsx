@@ -8,8 +8,9 @@ import { buildPositioning } from "@/lib/positioning";
 import PositioningView from "@/components/PositioningView";
 import BoardTrackRecord from "@/components/BoardTrackRecord";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: buildPositioning uses Date.now() for the catalyst "in Nd / today" labels and the
+// forward-window "into a catalyst" set — an ISR cache would freeze those over a quiet weekend.
+export const dynamic = "force-dynamic";
 
 const read = (f: string): Promise<any> =>
   fsp.readFile(path.join(process.cwd(), "data", f), "utf8").then((s) => JSON.parse(s)).catch(() => null);

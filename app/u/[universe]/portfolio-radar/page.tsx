@@ -8,8 +8,10 @@ import { buildCatalystCalendar } from "@/lib/catalystCalendar";
 import type { SnapshotEarnings } from "@/lib/portfolioCatalysts";
 import PortfolioRadar from "@/components/PortfolioRadar";
 
-export const revalidate = 600; // ISR: nightly data is baked per deploy; edge-cache the render instead of running per visitor
-export { universeStaticParams as generateStaticParams } from "@/lib/universeParams";
+// Per-request, NOT ISR: buildCatalystCalendar bakes Date.now() into the catalyst daysTo + the
+// this-week/this-month buckets, which an ISR cache would freeze over a weekend (matches my-names, which
+// embeds this same radar and is already force-dynamic).
+export const dynamic = "force-dynamic";
 const DAY = 86_400_000;
 
 const read = (f: string): Promise<any> =>
