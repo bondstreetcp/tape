@@ -8,6 +8,7 @@ import type { StockRow } from "@/lib/types";
 import { compFinder, type SssTicker } from "@/lib/sameStoreSales";
 import type { GuidanceTicker } from "@/lib/guidance";
 import type { IvSnapshot } from "@/lib/ivHistory";
+import type { VolDisRow } from "@/lib/volDislocation";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
@@ -26,6 +27,7 @@ import TickerResearch from "./TickerResearch";
 import SharesChart from "./SharesChart";
 import MarginsChart from "./MarginsChart";
 import OptionsChain from "./OptionsChain";
+import VolContext from "./VolContext";
 import DcfPanel from "./DcfPanel";
 import ScenarioPanel from "./ScenarioPanel";
 import DividendPanel from "./DividendPanel";
@@ -159,6 +161,7 @@ export default function FinancialsView({
   sss,
   guidance,
   ivHistory,
+  volDis,
   daily,
   intraday,
   generatedAt,
@@ -178,6 +181,7 @@ export default function FinancialsView({
   sss?: SssTicker | null;
   guidance?: GuidanceTicker | null;
   ivHistory?: IvSnapshot[] | null;
+  volDis?: VolDisRow | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -407,7 +411,10 @@ export default function FinancialsView({
           {researchSub === "notes" ? <TickerResearch symbol={symbol} name={name} /> : <DocSearch ticker={symbol} name={name} />}
         </div>
       ) : view === "options" ? (
-        <OptionsChain symbol={symbol} currency={currency} />
+        <div className="space-y-4">
+          {volDis && <VolContext row={volDis} />}
+          <OptionsChain symbol={symbol} currency={currency} />
+        </div>
       ) : view === "social" ? (
         <div className="space-y-4">
           <StockTwitsPanel symbol={symbol} />

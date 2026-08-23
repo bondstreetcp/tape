@@ -16,6 +16,7 @@ import { join } from "node:path";
 import type { SssData, SssTicker } from "@/lib/sameStoreSales";
 import type { GuidanceData, GuidanceTicker } from "@/lib/guidance";
 import type { IvHistoryData, IvSnapshot } from "@/lib/ivHistory";
+import type { VolDisData, VolDisRow } from "@/lib/volDislocation";
 
 // Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
 // extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
@@ -46,6 +47,18 @@ function loadIvHistory(sym: string): IvSnapshot[] | null {
     const p = join(process.cwd(), "data", "iv-history.json");
     if (!existsSync(p)) return null;
     return (JSON.parse(readFileSync(p, "utf8")) as IvHistoryData).byTicker?.[sym] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// This name's row in the nightly vol-dislocation scan — variance premium, skew, term, and where it ranks
+// vs the universe/sector (scripts/refresh-vol-dislocation.ts). Present only for scanned (US large/mid) names.
+function loadVolDis(sym: string): VolDisRow | null {
+  try {
+    const p = join(process.cwd(), "data", "vol-dislocation.json");
+    if (!existsSync(p)) return null;
+    return (JSON.parse(readFileSync(p, "utf8")) as VolDisData).rows?.find((r) => r.symbol === sym) ?? null;
   } catch {
     return null;
   }
@@ -158,6 +171,7 @@ export default async function StockPage({
       sss={loadSss(SYM)}
       guidance={loadGuidance(SYM)}
       ivHistory={loadIvHistory(SYM)}
+      volDis={loadVolDis(SYM)}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}
