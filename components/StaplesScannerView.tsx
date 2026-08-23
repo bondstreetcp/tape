@@ -1,0 +1,163 @@
+"use client";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { fmtDateTime } from "@/lib/format";
+import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
+import HowToRead from "./HowToRead";
+import { inflectionColor, growthColor, fmtPct, type StaplesScannerData, type ScanRow, type ScanLevel, type Inflection } from "@/lib/staplesScanner";
+
+type FlatRow = ScanRow & { segment: string; source: string; periodEnd: string };
+type SortKey = "label" | "segment" | "category" | "l2w" | "l4w" | "l12w" | "l52w" | "volume" | "priceMix" | "shareDeltaBps" | "inflection";
+
+const infRank = (i: Inflection) => (i === "accelerating" ? 3 : i === "stable" ? 2 : i === "decelerating" ? 1 : 0);
+const getVal = (r: FlatRow, k: SortKey): number | string | null => {
+  switch (k) {
+    case "label": return r.label;
+    case "segment": return r.segment;
+    case "category": return r.category;
+    case "l2w": return r.dollar.l2w ?? null;
+    case "l4w": return r.dollar.l4w ?? null;
+    case "l12w": return r.dollar.l12w ?? null;
+    case "l52w": return r.dollar.l52w ?? null;
+    case "volume": return r.volume ?? null;
+    case "priceMix": return r.priceMix ?? null;
+    case "shareDeltaBps": return r.shareDeltaBps ?? null;
+    case "inflection": return infRank(r.inflection ?? null);
+  }
+};
+
+const LEVELS: { key: ScanLevel; label: string }[] = [
+  { key: "company", label: "Companies" },
+  { key: "category", label: "Categories" },
+  { key: "brand", label: "Brands" },
+];
+
+export default function StaplesScannerView({ universe, data }: { universe: string; data: StaplesScannerData }) {
+  const reports = data.reports ?? [];
+  // Flatten to the LATEST row per (level + name + category), tagged with its report's segment/source/period.
+  const flat = useMemo(() => {
+    const best = new Map<string, FlatRow>();
+    for (const rep of reports) {
+      for (const row of rep.rows ?? []) {
+        const key = `${row.level}|${(row.ticker || row.label).toUpperCase()}|${row.category.toLowerCase()}`;
+        const cur = best.get(key);
+        if (!cur || (rep.periodEnd || "") > cur.periodEnd) best.set(key, { ...row, segment: rep.segment, source: rep.source, periodEnd: rep.periodEnd });
+      }
+    }
+    return [...best.values()];
+  }, [reports]);
+
+  const segments = useMemo(() => ["All", ...Array.from(new Set(flat.map((r) => r.segment).filter(Boolean))).sort()], [flat]);
+  const [seg, setSeg] = useState("All");
+  const [level, setLevel] = useState<ScanLevel>("company");
+  const [sortKey, setSortKey] = useState<SortKey>("l4w");
+  const [dir, setDir] = useState<1 | -1>(-1);
+  const onSort = (k: SortKey) => {
+    if (sortKey === k) setDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setDir(k === "label" || k === "segment" || k === "category" ? 1 : -1); }
+  };
+  const thBtn = "cursor-pointer select-none hover:text-[var(--text)]";
+  const Arrow = ({ k }: { k: SortKey }) => (sortKey === k ? <span className="ml-0.5 text-[var(--accent)]">{dir === 1 ? "▲" : "▼"}</span> : null);
+
+  const rows = useMemo(() => {
+    const r = flat.filter((x) => x.level === level && (seg === "All" || x.segment === seg));
+    return [...r].sort((a, b) => {
+      const va = getVal(a, sortKey), vb = getVal(b, sortKey);
+      if (typeof va === "string" || typeof vb === "string") return String(va ?? "").localeCompare(String(vb ?? "")) * dir;
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;  // nulls last
+      if (vb == null) return -1;
+      return (va - vb) * dir;
+    });
+  }, [flat, level, seg, sortKey, dir]);
+
+  const latest = reports.map((r) => r.periodEnd).filter(Boolean).sort().at(-1);
+  const sources = Array.from(new Set(reports.map((r) => r.source).filter((s) => s && s !== "—")));
+  const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
+  const Trend = ({ i }: { i: Inflection }) => (i ? <span className="font-medium" style={{ color: inflectionColor(i) }}>{i === "accelerating" ? "▲ accel" : i === "decelerating" ? "▼ decel" : "≈ stable"}</span> : <span className="text-[var(--text-4)]">—</span>);
+
+  return (
+    <main className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
+          <h1 className="mt-1 text-2xl font-bold">Staples Scanner</h1>
+          <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
+            US retail <b>demand &amp; share</b> for consumer staples <InfoDot text="NielsenIQ point-of-sale $ sales growth, volume/price split, and dollar-share moves across L2wk/L4wk/L12wk/L52wk windows — a ~2-week-lagged leading read on each name's quarter. Extracted from the biweekly sell-side scan notes; derived figures only." /> — $ sales growth, volume/price, and share momentum over 2/4/12/52-week windows. A leading read on the quarter, ahead of the print. {latest ? `Data thru ${latest} · ` : ""}{reports.length} notes{sources.length ? ` · ${sources.join(", ")}` : ""} · {fmtDateTime(data.generatedAt)}
+          </p>
+        </div>
+        <UniverseSwitcher current={universe} />
+      </div>
+
+      <HowToRead>
+        <p><b>What this is:</b> the biweekly NielsenIQ retail-scanner reads that sell-side desks publish, distilled into one tracker. Each row is a category, a company (manufacturer), or a brand, with its US point-of-sale <b>$ sales growth</b> over the trailing 2 / 4 / 12 / 52 weeks.</p>
+        <p><b>The signal is the inflection, not the level.</b> A name accelerating (L4w &gt; L12w) into its print tends to beat and get rewarded; a decelerating one is the setup for a miss/guide-down. Pair it with <b>share Δ</b> (are they winning or losing the category) and the category rollup (which staples pockets are hot vs rolling over).</p>
+        <p><b>Volume vs price/mix:</b> volume-led growth is healthier than price-led (pricing eventually laps). Watch names holding sales up purely on price with volumes falling.</p>
+        <p className="text-[var(--text-4)]">Derived from licensed sell-side scans (NielsenIQ) — figures only, internal use. Nielsen covers tracked brick-and-mortar channels, not all e-commerce, so it understates some premium/online-skewed names. Research, not advice.</p>
+      </HowToRead>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="inline-flex flex-wrap rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+          {segments.map((s) => <button key={s} onClick={() => setSeg(s)} className={TB(seg === s)}>{s}</button>)}
+        </div>
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
+          {LEVELS.map((l) => <button key={l.key} onClick={() => setLevel(l.key)} className={TB(level === l.key)}>{l.label}</button>)}
+        </div>
+        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} rows</span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-12 text-center text-sm text-[var(--text-3)]">
+          {reports.length
+            ? "No rows for this segment / level."
+            : "No scans extracted yet — drop the biweekly Nielsen PDFs in the watched folder and run npm run refresh-staples-scanner."}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+          <table className="w-full min-w-[900px] text-left text-[13px]">
+            <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+              <tr>
+                <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("label")}>{level === "category" ? "Category" : "Name"}<Arrow k="label" /></th>
+                <th className={"hidden px-2 py-2 font-medium sm:table-cell " + thBtn} onClick={() => onSort("segment")}>Segment<Arrow k="segment" /></th>
+                {level !== "category" && <th className={"hidden px-2 py-2 font-medium md:table-cell " + thBtn} onClick={() => onSort("category")}>Category<Arrow k="category" /></th>}
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("l2w")}>$ 2w<Arrow k="l2w" /></th>
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("l4w")}>$ 4w<Arrow k="l4w" /></th>
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("l12w")}>$ 12w<Arrow k="l12w" /></th>
+                <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("l52w")}>$ 52w<Arrow k="l52w" /></th>
+                <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("volume")}>Vol<Arrow k="volume" /></th>
+                <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("priceMix")}>Px/mix<Arrow k="priceMix" /></th>
+                <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("shareDeltaBps")}>Share Δ<InfoDot text="y/y dollar-share change, basis points. + = gaining share." /><Arrow k="shareDeltaBps" /></th>
+                <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("inflection")}>Trend<InfoDot text="Accelerating / stable / decelerating — L4wk vs L12wk (or as the note states it). The tradeable signal into a print." /><Arrow k="inflection" /></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.level}-${r.ticker || r.label}-${r.category}-${i}`} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+                  <td className="px-3 py-2">
+                    {r.ticker
+                      ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-semibold text-[var(--accent)] hover:underline">{r.label}</Link>
+                      : <span className="font-medium text-[var(--text-2)]">{r.label}</span>}
+                    {r.ticker && <span className="ml-1 font-mono text-[10px] text-[var(--text-4)]">{r.ticker}</span>}
+                    {r.note && <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.note}>{r.note}</div>}
+                  </td>
+                  <td className="hidden px-2 py-2 text-[12px] text-[var(--text-4)] sm:table-cell">{r.segment}</td>
+                  {level !== "category" && <td className="hidden px-2 py-2 text-[12px] text-[var(--text-3)] md:table-cell">{r.category}</td>}
+                  <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: growthColor(r.dollar.l2w) }}>{fmtPct(r.dollar.l2w)}</td>
+                  <td className="px-2 py-2 text-right font-mono font-semibold tabular-nums" style={{ color: growthColor(r.dollar.l4w) }}>{fmtPct(r.dollar.l4w)}</td>
+                  <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: growthColor(r.dollar.l12w) }}>{fmtPct(r.dollar.l12w)}</td>
+                  <td className="hidden px-2 py-2 text-right font-mono tabular-nums lg:table-cell" style={{ color: growthColor(r.dollar.l52w) }}>{fmtPct(r.dollar.l52w)}</td>
+                  <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] lg:table-cell">{fmtPct(r.volume)}</td>
+                  <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] lg:table-cell">{fmtPct(r.priceMix)}</td>
+                  <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.shareDeltaBps == null ? "var(--text-4)" : r.shareDeltaBps >= 0 ? "#22c55e" : "#ef4444" }}>{r.shareDeltaBps == null ? "—" : `${r.shareDeltaBps >= 0 ? "+" : ""}${r.shareDeltaBps}bp`}</td>
+                  <td className="px-3 py-2 text-[12px]"><Trend i={r.inflection ?? null} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </main>
+  );
+}

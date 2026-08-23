@@ -1,0 +1,145 @@
+/**
+ * Staples Scanner extractor — turns the biweekly NielsenIQ sell-side scan notes into a structured
+ * per-company/category time series (data/staples-scanner.json) for the Staples Scanner board + the
+ * desk-note / earnings-prep tie-in. See lib/staplesScanner.ts for the data model + the licensing note.
+ *
+ * WATCHED FOLDER: drop the licensed scan PDFs (GS / Morgan Stanley / Wells Fargo NielsenIQ updates) into
+ * STAPLES_SCAN_DIR (default data/staples-scans/ — gitignored; the repo is public, so the raw PDFs must
+ * NEVER be committed). We pdf-parse the text layer, extract the numbers with the LLM, and persist ONLY
+ * the derived figures — never the copyrighted text. Already-extracted files are skipped (FORCE=1 re-runs).
+ *
+ *   npm run refresh-staples-scanner            # extract any new PDFs in the watched folder
+ *   FORCE=1 npm run refresh-staples-scanner    # re-extract everything
+ */
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { tickerFor, inflectionOf, type ScanLevel, type ScanRow, type ScanReport, type StaplesScannerData } from "../lib/staplesScanner";
+
+// Load .env.local into process.env for local tsx runs (CI injects the vars directly).
+try {
+  const env = readFileSync(join(process.cwd(), ".env.local"), "utf8");
+  for (const line of env.split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+} catch { /* CI provides env directly */ }
+
+const SCAN_DIR = process.env.STAPLES_SCAN_DIR || join(process.cwd(), "data", "staples-scans");
+const OUT = join(process.cwd(), "data", "staples-scanner.json");
+const FORCE = process.env.FORCE === "1";
+const TEXT_CAP = Number(process.env.STAPLES_SCAN_CAP) || 30000; // the summary + company/category tables are front-loaded
+const HISTORY_CAP = 200;
+
+const SYSTEM =
+  "You extract structured NielsenIQ retail-scanner data points from ONE sell-side research note on consumer staples. " +
+  "The note reports US point-of-sale DOLLAR sales growth over trailing windows — L2wk, L4wk, L12wk, L52wk — at the CATEGORY, COMPANY (manufacturer), and BRAND level, plus volume growth, price/mix, and DOLLAR-SHARE changes in basis points. " +
+  "Return one row per CATEGORY and per COMPANY you can find, plus notable BRANDS that have a share move or a called-out trend. " +
+  "RULES: Extract ONLY figures explicitly stated — NEVER invent, interpolate, or guess a number; omit any window you do not see. " +
+  "All growth figures are y/y percent as a SIGNED number (e.g. -4.7 for down 4.7%). Put the 2-week $ growth in dollar.l2w, 4-week in dollar.l4w, 12-week in dollar.l12w, 52-week in dollar.l52w. " +
+  "volume = the latest-window volume growth %; priceMix = the latest-window price/mix %. shareDeltaBps = the y/y dollar-share change in basis points, signed (+ = gaining share), else null. " +
+  "inflection = 'accelerating' | 'decelerating' | 'stable' ONLY when the note states or clearly implies it (e.g. an Inflection Tracker table), else null. " +
+  "note = ONE short PARAPHRASED takeaway (max ~20 words) — NEVER a verbatim quote from the note. level = 'category' | 'company' | 'brand'. " +
+  "category = the product category (Beer, Spirits, Wine, RTD, FMB, Hard Seltzer, CSD, Energy, Bottled Water, Snacks, Cigarettes, Smokeless, Vapor, Beauty, Skin Care, Oral Care, HPC, etc.). " +
+  "Also return: source (the bank — Goldman Sachs, Morgan Stanley, Wells Fargo, …), a short title, segment (Alcohol | Tobacco | Non-Alc Beverages | Beauty & HPC | Staples Retail), periodEnd (the data-thru date as YYYY-MM-DD), and publishedAt (the report date as YYYY-MM-DD). " +
+  "Return a SINGLE JSON OBJECT. " + NO_ADVICE;
+
+const SCHEMA =
+  'Return ONLY JSON: {"source":string,"title":string,"segment":string,"periodEnd":"YYYY-MM-DD","publishedAt":"YYYY-MM-DD","rows":[{"level":"category|company|brand","category":string,"label":string,"dollar":{"l2w":number|null,"l4w":number|null,"l12w":number|null,"l52w":number|null},"volume":number|null,"priceMix":number|null,"shareDeltaBps":number|null,"inflection":"accelerating|decelerating|stable"|null,"note":string|null}]}';
+
+const num = (v: unknown): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") { const n = parseFloat(v.replace(/[%+,]/g, "")); return Number.isFinite(n) ? n : null; }
+  return null;
+};
+const isoDate = (v: unknown): string => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "");
+
+function cleanRow(r: any): ScanRow | null {
+  const label = String(r?.label ?? "").trim().slice(0, 60);
+  if (!label) return null;
+  const level: ScanLevel = r?.level === "category" || r?.level === "brand" ? r.level : "company";
+  const dollar = { l2w: num(r?.dollar?.l2w), l4w: num(r?.dollar?.l4w), l12w: num(r?.dollar?.l12w), l52w: num(r?.dollar?.l52w) };
+  // Nothing extractable → drop the row rather than store an empty shell.
+  if (dollar.l2w == null && dollar.l4w == null && dollar.l12w == null && dollar.l52w == null && num(r?.shareDeltaBps) == null) return null;
+  const inflection = ["accelerating", "decelerating", "stable"].includes(r?.inflection) ? r.inflection : inflectionOf(dollar);
+  return {
+    level,
+    category: String(r?.category ?? "").trim().slice(0, 40) || "—",
+    label,
+    ticker: level === "company" ? tickerFor(label) : null,
+    dollar,
+    volume: num(r?.volume),
+    priceMix: num(r?.priceMix),
+    shareDeltaBps: num(r?.shareDeltaBps),
+    inflection,
+    note: r?.note ? String(r.note).trim().slice(0, 160) : null,
+  };
+}
+
+async function extractReport(file: string, text: string): Promise<ScanReport | null> {
+  const out = await chatJSON<any>(SYSTEM, `${SCHEMA}\n\nSELL-SIDE SCAN NOTE (file: ${file}):\n${text.slice(0, TEXT_CAP)}`, {
+    maxTokens: 8000,
+    reasoningEffort: "low",
+  });
+  if (!out || !Array.isArray(out.rows)) return null;
+  const rows = out.rows.map(cleanRow).filter((r: ScanRow | null): r is ScanRow => r !== null);
+  if (!rows.length) return null;
+  return {
+    source: String(out.source ?? "").trim().slice(0, 24) || "—",
+    title: String(out.title ?? file.replace(/\.pdf$/i, "")).trim().slice(0, 120),
+    segment: String(out.segment ?? "").trim().slice(0, 40) || "Staples",
+    periodEnd: isoDate(out.periodEnd),
+    publishedAt: isoDate(out.publishedAt),
+    sourceFile: file,
+    rows,
+  };
+}
+
+async function main() {
+  if (!(await llmConfigured())) {
+    console.warn("staples-scanner: no LLM configured (OPENROUTER_API_KEY) — skipping.");
+    return;
+  }
+  if (!existsSync(SCAN_DIR)) {
+    console.log(`staples-scanner: no scan dir at ${SCAN_DIR} — nothing to do (drop the biweekly Nielsen PDFs there).`);
+    return;
+  }
+  const pdfs = readdirSync(SCAN_DIR).filter((f) => /\.pdf$/i.test(f)).sort();
+  if (!pdfs.length) {
+    console.log(`staples-scanner: no PDFs in ${SCAN_DIR}.`);
+    return;
+  }
+
+  const existing: StaplesScannerData = existsSync(OUT)
+    ? JSON.parse(readFileSync(OUT, "utf8"))
+    : { generatedAt: "", reports: [] };
+  const bySrc = new Map<string, ScanReport>((existing.reports ?? []).map((r) => [r.sourceFile, r]));
+
+  let extracted = 0;
+  for (const f of pdfs) {
+    if (bySrc.has(f) && !FORCE) { console.log(`  ${f}: already extracted — skip (FORCE=1 to re-run)`); continue; }
+    let text = "";
+    try {
+      const data: any = await pdfParse(readFileSync(join(SCAN_DIR, f)));
+      text = String(data?.text ?? "");
+    } catch (e: any) {
+      console.warn(`  ${f}: pdf-parse failed (${String(e?.message || e).slice(0, 80)}) — skip`);
+      continue;
+    }
+    if (text.length < 400) { console.warn(`  ${f}: no extractable text (image-only PDF?) — skip`); continue; }
+    const rep = await extractReport(f, text).catch(() => null);
+    if (!rep) { console.warn(`  ${f}: extraction returned nothing — skip`); continue; }
+    bySrc.set(f, rep);
+    extracted++;
+    console.log(`  ${f}: ${rep.rows.length} rows · ${rep.source} · ${rep.segment} · thru ${rep.periodEnd || "?"}`);
+  }
+
+  const reports = [...bySrc.values()]
+    .sort((a, b) => (b.periodEnd || "").localeCompare(a.periodEnd || "") || (b.publishedAt || "").localeCompare(a.publishedAt || ""))
+    .slice(0, HISTORY_CAP);
+  writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), reports }));
+  console.log(`staples-scanner: wrote ${reports.length} reports (${extracted} newly extracted) → ${OUT}`);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
