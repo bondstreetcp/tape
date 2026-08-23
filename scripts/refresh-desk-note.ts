@@ -21,7 +21,8 @@ import { loadOvernightFilings } from "../lib/overnightFilings";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getNewsChecked, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
-import { buildMoveEvidence, type SocialBuzz } from "../lib/moveEvidence";
+import { buildMoveEvidence, cryptoExplains, type SocialBuzz } from "../lib/moveEvidence";
+import { getCryptoTape } from "../lib/market";
 import { askConfigured, gatherContext, askGemini } from "../lib/ask";
 import type { ApeWisdomData } from "../lib/apewisdom";
 import { detectRecentReport } from "../lib/preannounce";
@@ -45,8 +46,8 @@ const readJson = async <T,>(f: string): Promise<T | null> =>
 const SYSTEM =
   "You are a senior markets-desk strategist writing the morning brief for a sharp portfolio manager. You are given PRE-SELECTED overnight data WITH CONTEXT (trend, 52-week position, valuation, next-earnings, options skew, implied upside). " +
   "Do NOT just relist the data — for every development write the SECOND LAYER: WHY it matters, the mechanism / read-through, whether it looks like real signal or just noise, and what it sets up or what to watch next. Tie each section together with a one-line thematic 'synthesis' (the so-what for the group). Surface CONNECTIONS the raw feeds don't show on their own — e.g. a stock that is weak AND has heavy near-dated put premium AND just got downgraded is positioning into a catalyst; an unexplained move with no catalyst on file is itself notable. Give the bull AND the bear when it's a genuine debate. " +
-  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR a `grounded (web search):` explanation — a live web-search-sourced reason for the move WITH dated citations, from the SAME engine as the stock pages' 'why is it moving' feature; treat it as a reliable, fact-checked driver, lead the bullet with it, and NEVER override it with 'no catalyst' — OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. ATTRIBUTION RULE — EARNINGS OUTRANK EVERYTHING: when a mover is marked 'REPORTED EARNINGS …' (a results 8-K is on record), that print IS the driver of its same-day and next-session move — lead with the report (use headlines for the beat/miss/guide color), and treat any analyst upgrade/downgrade dated at or after the print as REACTION to it, never the cause. A move 2-7 days after a marked report with no fresh catalyst is a CONTINUED post-earnings move — say so and tag it Earnings, never 'no specific catalyst'. MECHANISM RULE — NEVER headline a mover 'no specific catalyst' or 'no catalyst found': every mover carries MOVE EVIDENCE computed from the data (its sector's own 1-day move and the RESIDUAL the sector does not explain; the largest and hottest same-industry peers' moves; elevated short volume when present; and SOCIAL attention — a Reddit mention surge — when the crowd is loud enough to register). When no fresh headline exists, USE IT to state the best-evidenced mechanism as the fact line and the read: a small residual = a sector/theme move (name the sector's move, and when one peer clearly led with news, name the leader — 'sector sympathy: semis ripped, SNDK +18% led'); a large residual with elevated short volume on an up-move = squeeze-flavored positioning; a large residual with no news = idiosyncratic positioning/de-grossing — say which and cite the numbers supplied. When a 'social:' line is present, read it as RETAIL ATTENTION — a Reddit mention surge corroborates that the crowd is crowding the move (squeeze-flavored on an up-move, especially alongside elevated short volume) — cite it as corroboration, NEVER as the cause of the move (buzz reacts to moves as often as it drives them), and NEVER let 'retail is loud' stand in for a real catalyst. NEVER invent a mechanism the evidence doesn't support — the evidence numbers are the ONLY figures you may cite for it (the social figures included: cite only what is supplied). Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found AND no recent report is marked AND the move evidence itself is flat/absent — and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Earnings | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
-  "DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: combine ONE name's threads (its move + filing + options + upgrade) into its single bullet. FORMAT (CRITICAL): each bullet's 'fact' describes exactly ONE ticker's move/event — at most one ticker's price change per fact, kept to a short scannable line. NEVER list two or more tickers' moves in a single fact, even when they share a theme: a four-name sector move is FOUR separate bullets under one section heading, tied together by that section's 'synthesis' line — not one run-on bullet. (You may reference a related ticker inside the 'read', but the 'fact' stays single-ticker.) COVERAGE: every stock that moved ±8% or more in the data MUST appear somewhere in the brief — fold it into the right section; never silently drop a double-digit move (those are exactly what the reader scans for). " +
+  "Ground every claim in the supplied data — never invent a number, a price, or a reason, and never write a placeholder like '$XXB' (use only the figures supplied, or describe qualitatively). Each mover comes with EITHER a stated catalyst, OR a `grounded (web search):` explanation — a live web-search-sourced reason for the move WITH dated citations, from the SAME engine as the stock pages' 'why is it moving' feature; treat it as a reliable, fact-checked driver, lead the bullet with it, and NEVER override it with 'no catalyst' — OR recent news headlines, OR a note that none were found: when headlines are present, infer and STATE the most likely driver of the move (an FDA panel win, an earnings beat or guide, an upgrade, a deal, a product/pipeline event). EVERY headline is stamped with its DATE — use it. A one-day move can only be caused by something from the last day or two: a product announcement or partnership from weeks ago did NOT cause today's gap, however much it looks like a story. If the only headlines supplied are stale, or none plausibly explains a move that size, SAY the move is unexplained or the link is uncertain — do not reach for the nearest available headline and build a mechanism around it. A dated deal/takeover item always outranks a product or marketing item on the same name. ATTRIBUTION RULE — EARNINGS OUTRANK EVERYTHING: when a mover is marked 'REPORTED EARNINGS …' (a results 8-K is on record), that print IS the driver of its same-day and next-session move — lead with the report (use headlines for the beat/miss/guide color), and treat any analyst upgrade/downgrade dated at or after the print as REACTION to it, never the cause. A move 2-7 days after a marked report with no fresh catalyst is a CONTINUED post-earnings move — say so and tag it Earnings, never 'no specific catalyst'. MECHANISM RULE — NEVER headline a mover 'no specific catalyst' or 'no catalyst found': every mover carries MOVE EVIDENCE computed from the data (its sector's own 1-day move and the RESIDUAL the sector does not explain; the largest and hottest same-industry peers' moves; elevated short volume when present; and SOCIAL attention — a Reddit mention surge — when the crowd is loud enough to register). When no fresh headline exists, USE IT to state the best-evidenced mechanism as the fact line and the read: a small residual = a sector/theme move (name the sector's move, and when one peer clearly led with news, name the leader — 'sector sympathy: semis ripped, SNDK +18% led'); CRYPTO BETA — a crypto-linked name (COIN, HOOD, MSTR, or a bitcoin miner) carries a 'crypto tape:' evidence line: when BTC/ETH moved and the name moved the SAME way, the crypto move IS the driver — say 'crypto beta: BTC +x% today' and cite the figure, NEVER 'no catalyst', and NEVER pin a whole-complex crypto move on a single-name story (a crypto-linked name moving AGAINST a flat/opposite crypto tape is the name-specific case — then look for its own news); a large residual with elevated short volume on an up-move = squeeze-flavored positioning; a large residual with no news = idiosyncratic positioning/de-grossing — say which and cite the numbers supplied. When a 'social:' line is present, read it as RETAIL ATTENTION — a Reddit mention surge corroborates that the crowd is crowding the move (squeeze-flavored on an up-move, especially alongside elevated short volume) — cite it as corroboration, NEVER as the cause of the move (buzz reacts to moves as often as it drives them), and NEVER let 'retail is loud' stand in for a real catalyst. NEVER invent a mechanism the evidence doesn't support — the evidence numbers are the ONLY figures you may cite for it (the social figures included: cite only what is supplied). Reserve the 'Unexplained' tag ONLY for moves where genuinely NO catalyst AND NO news were found AND no recent report is marked AND the move evidence itself is flat/absent — and only then treat the absence as itself information. Each bullet gets a short 'tag' classifying the development: Deal | Earnings | Catalyst | Positioning | Unexplained | Trend | Analyst | Earnings ahead | Watch. End with 'watchToday' — concrete upcoming catalysts implied by the data (earnings tonight, a deal vote, an FDA date, a deal close). " +
+  "ANALYST CLUSTERS — when SEVERAL firms reaffirm/maintain/upgrade the SAME name on one day and that name's analyst line shows it just fell hard (a big negative 1w return, and/or 'reported earnings Nd ago'), read it as the sell-side DEFENDING a post-earnings selloff — consensus circling the wagons around the drop — NOT a 'roadshow' or 'analyst day' (never assert a company event the data does not state); the so-what is whether price follows the reaffirmed targets or this is peak sentiment. DECISION-SUPPORT ONLY: characterize significance, signal-vs-noise, and what would confirm or refute a read — but NEVER issue a buy/sell/hold recommendation, a price target as advice, or position sizing. Dedupe across feeds: combine ONE name's threads (its move + filing + options + upgrade) into its single bullet. FORMAT (CRITICAL): each bullet's 'fact' describes exactly ONE ticker's move/event — at most one ticker's price change per fact, kept to a short scannable line. NEVER list two or more tickers' moves in a single fact, even when they share a theme: a four-name sector move is FOUR separate bullets under one section heading, tied together by that section's 'synthesis' line — not one run-on bullet. (You may reference a related ticker inside the 'read', but the 'fact' stays single-ticker.) COVERAGE: every stock that moved ±8% or more in the data MUST appear somewhere in the brief — fold it into the right section; never silently drop a double-digit move (those are exactly what the reader scans for). " +
   "SECTIONS (FIXED): use EXACTLY these headings, in this order, and omit a section only when it has no bullets — 1) the movers section (heading given in the run context), 2) 'Filings that matter', 3) 'Analyst actions', 4) 'Options desk'. Do NOT invent other section headings; the structure carries the meaning, the synthesis line carries the theme. " +
   NO_ADVICE;
 
@@ -113,6 +114,10 @@ async function main() {
   const peerRows = (snap?.stocks ?? []).map((s) => ({
     symbol: s.symbol, industry: (s as any).industry, sector: s.sector, marketCap: s.marketCap, ret1d: s.returns["1d"],
   }));
+  // Crypto tape (BTC/ETH 1d) — the missing factor for crypto-linked movers (COIN/HOOD/MSTR/miners),
+  // whose move tracks bitcoin, not their GICS sector. Fetched live; degrades to nulls, never throws.
+  const crypto = await getCryptoTape().catch(() => ({ btc1d: null, eth1d: null, sol1d: null, asOf: "" }));
+  if (crypto.btc1d != null) console.log(`desk-note: crypto tape BTC ${pct(crypto.btc1d)}${crypto.eth1d != null ? `, ETH ${pct(crypto.eth1d)}` : ""}`);
 
   const now = Date.now();
   // Calendar-day countdown, not an elapsed-ms round — otherwise the window flips with the clock (the
@@ -195,7 +200,7 @@ async function main() {
       const ret1d = s.returns["1d"] as number;
       const evidence = buildMoveEvidence(
         { symbol: s.symbol, sector: s.sector, industry: (s as any).industry, etf: (s as any).etf, ret1d },
-        { sectorRet1d, rows: peerRows, shortVol, social },
+        { sectorRet1d, rows: peerRows, shortVol, social, crypto },
       );
       // Does this mover need the grounded web-search "why"? Fire it for a big IDIOSYNCRATIC move (the
       // sector does NOT explain it) with no CONFIRMED catalyst (no fresh 8-K report, no fresh cached
@@ -208,7 +213,9 @@ async function main() {
       const secRet = (s as any).etf != null ? sectorRet1d.get((s as any).etf) : undefined;
       const residual = secRet != null ? ret1d - secRet : ret1d;
       const sectorExplains = secRet != null && Math.sign(secRet) === Math.sign(ret1d) && Math.abs(residual) < Math.abs(ret1d) * 0.5;
-      const needsGrounding = !rep && !why && !sectorExplains;
+      // A crypto-linked name moving WITH a material crypto tape is crypto beta, not idiosyncratic — the
+      // MOVE EVIDENCE crypto line already explains it, so don't burn a grounded search (the sector analogue).
+      const needsGrounding = !rep && !why && !sectorExplains && !cryptoExplains(s.symbol, crypto.btc1d, ret1d);
       const val = s.forwardPE != null ? `fwdP/E ${s.forwardPE.toFixed(0)}` : s.trailingPE != null ? `P/E ${s.trailingPE.toFixed(0)}` : "";
       const prefix =
         `${s.symbol} ${pct(ret1d)} (1w ${pct(s.returns["1w"])}, YTD ${pct(s.returns["ytd"])}) · ${s.sector || "?"} · ${money(s.marketCap)} (${sizeLabel(s.marketCap)}-cap)` +
@@ -295,13 +302,38 @@ async function main() {
   // daysUntil, not an ms subtraction: `a.date` is a bare YYYY-MM-DD calendar square, and elapsed-ms
   // rounding makes the window flip with the clock. Past dates come back negative.
   const ageDays = (iso: string) => { const d = daysUntil(iso, now); return d == null ? 9999 : -d; };
-  const actions = selectDeskActions(analyst ?? [], ageDays, { windowDays: ANALYST_WINDOW_DAYS, max: 12 })
-    .map((a) => {
+  const picked = selectDeskActions(analyst ?? [], ageDays, { windowDays: ANALYST_WINDOW_DAYS, max: 12 });
+  // ── Analyst-line CONTEXT: a rating note means little without the stock's recent tape. A CLUSTER of
+  // same-day reaffirmations on a name that just fell hard on earnings is sell-side DEFENSE — but the
+  // model can only read that if the line carries the drop. Attach each name's 1d/1w return, and for the
+  // few names that actually moved hard, a BOUNDED "reported earnings Nd ago" check (the WMT miss: six
+  // Buy reaffirmations read as a 'roadshow' because the −9% earnings drop was invisible to the model).
+  const stockBySym = new Map(stocks.map((s) => [s.symbol, s] as const));
+  const bigMove = (sym: string) => {
+    const st = stockBySym.get(sym); const r1w = st?.returns?.["1w"]; const r1d = st?.returns?.["1d"];
+    return (r1w != null && Math.abs(r1w) >= 5) || (r1d != null && Math.abs(r1d) >= 5);
+  };
+  const reportChkSyms = [...new Set(picked.map((a) => a.symbol))].filter(bigMove); // usually 0–2 names
+  const repBySym = new Map<string, Awaited<ReturnType<typeof detectRecentReport>>>();
+  await mapPool(reportChkSyms, 3, async (sym) => { repBySym.set(sym, await detectRecentReport(sym, now).catch(() => null)); });
+  const actions = picked.map((a) => {
       const px = priceOf.get(a.symbol);
       const up = a.targetTo && px ? ` · PT ${a.targetTo} (${pct((a.targetTo / px - 1) * 100, 0)} vs px)` : a.targetTo ? ` · PT ${a.targetTo}` : "";
+      const st = stockBySym.get(a.symbol);
+      const rep = repBySym.get(a.symbol);
+      const r1d = st?.returns?.["1d"], r1w = st?.returns?.["1w"];
+      let sctx = "";
+      if (bigMove(a.symbol) || rep) {
+        const seg = [
+          r1d != null ? `${pct(r1d)} 1d` : "",
+          r1w != null ? `${pct(r1w)} 1w` : "",
+          rep ? `reported earnings ${rep.daysAgo === 0 ? "today" : `${rep.daysAgo}d ago`}` : "",
+        ].filter(Boolean).join(", ");
+        sctx = seg ? ` · stock ${seg}` : "";
+      }
       // The date is IN the string on purpose: without it the model has no way to know an item is two
       // sessions old and will happily narrate it as today's news — which is how this shipped wrong.
-      return `${a.date} ${a.symbol} ${actionVerb(a)} (${a.firm})${up}`;
+      return `${a.date} ${a.symbol} ${actionVerb(a)} (${a.firm})${up}${sctx}`;
     });
 
   // ── CODE-BUILT tape strip + forward calendar (no LLM — always-accurate context) ─────────────────

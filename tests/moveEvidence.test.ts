@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMoveEvidence, buildSocialEvidence, pickPeers, SHORT_VOL_ELEVATED, type PeerRow, type SocialBuzz } from "../lib/moveEvidence";
+import { buildMoveEvidence, buildSocialEvidence, cryptoExplains, pickPeers, SHORT_VOL_ELEVATED, type PeerRow, type SocialBuzz } from "../lib/moveEvidence";
 
 const R = (symbol: string, ret1d: number | null, industry = "Semiconductors", marketCap = 1e11): PeerRow => ({
   symbol, ret1d, industry, sector: "Information Technology", marketCap,
@@ -91,4 +91,39 @@ test("social: a surge off a tiny base is floored out (3→9 mentions is +200% bu
 
 test("social: a big rank climb alone qualifies, even with no mention-change base", () => {
   assert.equal(buildSocialEvidence({ redditMentions: 60, redditMentionChangePct: null, redditRank: 22, redditRankChange: 40 }), "social: Reddit rank #22, climbed 40");
+});
+
+test("crypto beta: a crypto-linked name on a green crypto tape reads 'crypto beta', not name-specific", () => {
+  // COIN +9% while XLF was flat: the sector residual is huge, but BTC +6.2% is the real driver.
+  const ev = buildMoveEvidence(
+    { symbol: "COIN", etf: "XLF", ret1d: 9.0 },
+    { ...CTX([], [["XLF", 0.2]]), crypto: { btc1d: 6.2, eth1d: 7.1 } },
+  );
+  assert.match(ev, /crypto tape: BTC 1d \+6\.2%, ETH \+7\.1%/);
+  assert.match(ev, /tracks the crypto tape \(crypto beta, NOT name-specific\)/);
+});
+
+test("crypto beta: a crypto-linked name moving AGAINST the crypto tape stays name-specific", () => {
+  // MSTR down 4% while BTC was UP — that's its own story, not the tape.
+  const ev = buildMoveEvidence(
+    { symbol: "MSTR", etf: "XLK", ret1d: -4.0 },
+    { ...CTX([], [["XLK", 0.1]]), crypto: { btc1d: 3.0, eth1d: null } },
+  );
+  assert.match(ev, /runs against a flat\/opposite crypto tape \(name-specific/);
+});
+
+test("crypto beta: a NON-crypto name never gets a crypto line, even on a big BTC move", () => {
+  const ev = buildMoveEvidence(
+    { symbol: "AAPL", etf: "XLK", ret1d: 3.0 },
+    { ...CTX([], [["XLK", 0.5]]), crypto: { btc1d: 6.0, eth1d: 6.0 } },
+  );
+  assert.doesNotMatch(ev, /crypto tape/);
+});
+
+test("cryptoExplains: crypto-linked + material same-direction BTC ⇒ true; flat / opposite / non-crypto ⇒ false", () => {
+  assert.equal(cryptoExplains("HOOD", 4.0, 8.0), true);   // up with a green tape
+  assert.equal(cryptoExplains("HOOD", -4.0, -6.0), true); // down with a red tape
+  assert.equal(cryptoExplains("HOOD", 0.5, 8.0), false);  // BTC basically flat → not the driver
+  assert.equal(cryptoExplains("HOOD", 4.0, -8.0), false); // moved opposite the tape → its own story
+  assert.equal(cryptoExplains("AAPL", 6.0, 8.0), false);  // not a crypto-linked name
 });

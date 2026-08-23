@@ -44,6 +44,9 @@ export interface EvidenceCtx {
   shortVol?: Map<string, { pct: number; trendPp?: number | null }>;
   /** Symbol → computed social attention/positioning (Reddit buzz + StockTwits tilt). */
   social?: Map<string, SocialBuzz>;
+  /** The crypto tape (BTC/ETH 1-day %). For crypto-LINKED equities (see CRYPTO_LINKED) whose move
+   *  tracks bitcoin, not their GICS sector — the missing factor behind the HOOD/COIN mis-attribution. */
+  crypto?: { btc1d?: number | null; eth1d?: number | null };
 }
 
 /**
@@ -80,6 +83,28 @@ export const REDDIT_SURGE_PCT = 50;
 export const REDDIT_RANK_JUMP = 15;
 /** But ignore a surge off a tiny base (3→9 mentions is +200% and means nothing) — require this floor. */
 export const REDDIT_MIN_MENTIONS = 10;
+
+// ── Crypto-linked equities ────────────────────────────────────────────────────────────────────────
+// Exchanges/brokers, BTC-treasury names, and miners whose 1-day move tracks the CRYPTO tape (BTC/ETH)
+// far more than their GICS sector. Without this, the desk brief sees a big residual vs XLF/XLK on a
+// crypto-rally day and calls a COIN/HOOD/MSTR move "name-specific" — the HOOD/COIN mis-attribution.
+// Kept as an explicit set (not correlation-derived) so attribution stays deterministic; extend as names list.
+export const CRYPTO_LINKED = new Set<string>([
+  "COIN", "HOOD", "MSTR", "MARA", "RIOT", "CLSK", "HUT", "BITF", "WULF", "IREN",
+  "CIFR", "BTDR", "CORZ", "GLXY", "BKKT", "SMLR", "BTBT", "CANG", "COIN",
+]);
+
+/** ≥ this |BTC 1d %| counts as a real crypto move (below it, crypto is flat and a crypto-linked name's
+ *  move is its own story). */
+export const CRYPTO_MATERIAL_PCT = 1.5;
+
+/** Crypto-linked name + a material, SAME-direction BTC move ⇒ the crypto tape explains the equity move
+ *  (the analogue of sectorExplains, for names whose real "sector" is bitcoin). The desk note gates the
+ *  grounded web-search ask on this, so a crypto-beta mover attributes to the crypto tape instead of
+ *  burning a search — and never reads as "no catalyst". */
+export function cryptoExplains(symbol: string, btc1d: number | null | undefined, ret1d: number): boolean {
+  return CRYPTO_LINKED.has(symbol.toUpperCase()) && btc1d != null && Math.abs(btc1d) >= CRYPTO_MATERIAL_PCT && Math.sign(btc1d) === Math.sign(ret1d);
+}
 
 const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
@@ -130,6 +155,18 @@ export function buildSocialEvidence(b: SocialBuzz | undefined): string {
  */
 export function buildMoveEvidence(m: MoverLite, ctx: EvidenceCtx): string {
   const parts: string[] = [];
+
+  // Crypto tape FIRST — for a crypto-linked name (COIN/HOOD/MSTR/miners), BTC/ETH is the real "sector".
+  // A move on a green crypto tape is crypto beta, not idiosyncratic, however large the XLF/XLK residual —
+  // so lead with it and let the model attribute correctly instead of chasing a single-name story.
+  const btc = ctx.crypto?.btc1d;
+  if (CRYPTO_LINKED.has(m.symbol.toUpperCase()) && btc != null && Number.isFinite(btc)) {
+    const eth = ctx.crypto?.eth1d;
+    const tracks = Math.sign(btc) === Math.sign(m.ret1d) && Math.abs(btc) >= CRYPTO_MATERIAL_PCT;
+    parts.push(
+      `crypto tape: BTC 1d ${pct(btc)}${eth != null && Number.isFinite(eth) ? `, ETH ${pct(eth)}` : ""} — ${m.symbol} is crypto-linked, so this move ${tracks ? "tracks the crypto tape (crypto beta, NOT name-specific)" : "runs against a flat/opposite crypto tape (name-specific — look for its own news)"}`,
+    );
+  }
 
   // Sector residual — the share of the move the sector does NOT explain. The single most useful
   // discriminator: a small residual = a sector/theme day; a large one = name-specific.

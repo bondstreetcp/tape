@@ -125,3 +125,26 @@ export async function getMarketMonitor(): Promise<{ groups: MarketGroup[]; asOf:
   }));
   return { groups, asOf: new Date().toISOString() };
 }
+
+/**
+ * The crypto tape — BTC/ETH/SOL 1-day % moves — for attributing crypto-LINKED equity moves in the desk
+ * brief (COIN, HOOD, MSTR, the bitcoin miners; see CRYPTO_LINKED in lib/moveEvidence). Those names track
+ * bitcoin far more than their GICS sector, so without the crypto number the brief sees a big XLF/XLK
+ * residual and mislabels a crypto-rally move "name-specific" (the HOOD/COIN miss). Degrades to nulls on
+ * any fetch failure — never throws; the desk note then simply omits the crypto evidence.
+ */
+export async function getCryptoTape(): Promise<{ btc1d: number | null; eth1d: number | null; sol1d: number | null; asOf: string }> {
+  const out = { btc1d: null as number | null, eth1d: null as number | null, sol1d: null as number | null, asOf: new Date().toISOString() };
+  try {
+    const qs = (await yahoo.quote(["BTC-USD", "ETH-USD", "SOL-USD"], {}, { validateResult: false })) as any[];
+    for (const q of qs || []) {
+      const p = num(q?.regularMarketChangePercent);
+      if (q?.symbol === "BTC-USD") out.btc1d = p;
+      else if (q?.symbol === "ETH-USD") out.eth1d = p;
+      else if (q?.symbol === "SOL-USD") out.sol1d = p;
+    }
+  } catch {
+    /* leave nulls — the desk note degrades to no-crypto-evidence, never a fabricated one */
+  }
+  return out;
+}
