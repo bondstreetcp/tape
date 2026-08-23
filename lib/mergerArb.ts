@@ -109,3 +109,39 @@ export function priceInText(text: string, price: number): boolean {
   const b = String(price).replace(".", "\\.");
   return new RegExp(`\\$\\s?(${a}|${b})\\b|(${a}|${b})\\s+(?:per\\s+share|in\\s+cash)`, "i").test(text);
 }
+
+// ── Deal annotation for OTHER boards (vol cone / dislocation) ────────────────────────────────────────
+// A DEFM14A target's stock is pinned to its deal price, which crushes both realized and implied vol — so
+// on a vol board a deal-pinned name reads as "quiet / coiled / cheap vol" when it is really just resolved.
+// dealTags() turns a merger-arb file into a ticker→tag map (all targets, cash rows overlaid for the rich
+// terms); dealBlurb() is the shared tooltip. Pure — the caller reads the JSON.
+export interface DealTag {
+  acquirer: string | null;
+  consideration: "cash" | "stock" | "mixed" | null;
+  cashPerShare: number | null;
+  spreadPct: number | null;
+  expectedClose: string | null;
+  filedAt: string;
+}
+
+export function dealTags(file: MergerArbFile | null): Record<string, DealTag> {
+  const out: Record<string, DealTag> = {};
+  // Start with EVERY DEFM14A target (any consideration) — the broadest "is under a signed deal" set …
+  for (const t of file?.targets ?? []) {
+    out[t.ticker.toUpperCase()] = { acquirer: null, consideration: null, cashPerShare: null, spreadPct: null, expectedClose: null, filedAt: t.filedAt };
+  }
+  // … then overlay the richer cash-deal rows where we have them (acquirer, price, spread, close).
+  for (const r of file?.rows ?? []) {
+    out[r.ticker.toUpperCase()] = { acquirer: r.acquirer || null, consideration: r.consideration, cashPerShare: r.cashPerShare, spreadPct: r.spreadPct, expectedClose: r.expectedClose, filedAt: r.filedAt };
+  }
+  return out;
+}
+
+export function dealBlurb(t: DealTag): string {
+  const head = t.acquirer ? `${t.acquirer} deal${t.consideration ? ` (${t.consideration})` : ""}` : "Acquisition target";
+  const bits = [head];
+  if (t.cashPerShare != null) bits.push(`$${t.cashPerShare}/sh`);
+  if (t.spreadPct != null) bits.push(`${t.spreadPct >= 0 ? "+" : ""}${t.spreadPct}% spread`);
+  if (t.expectedClose) bits.push(`close ${t.expectedClose}`);
+  return `${bits.join(" · ")} — DEFM14A filed ${t.filedAt}. The stock is pinned to the deal, which crushes realized & implied vol: a low-vol reading here is the merger, not a coiled spring or a free dislocation.`;
+}

@@ -7,6 +7,7 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import { dealBlurb, type DealTag } from "@/lib/mergerArb";
 
 const vpct = (v: number | null | undefined) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
 const COIL = "#22c55e"; // quiet / coiled (RV low in own history)
@@ -59,11 +60,12 @@ function TermBadge({ s }: { s: number | null }) {
   return <span className="font-mono text-[11px] text-[var(--text-4)]" title="Short ≈ long horizon RV">≈ {pct}%</span>;
 }
 
-function Row({ universe, r }: { universe: string; r: VolConeFeedRow }) {
+function Row({ universe, r, deal }: { universe: string; r: VolConeFeedRow; deal?: DealTag }) {
   return (
     <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
       <td className="px-3 py-2">
         <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+        {deal && <span className="ml-1 cursor-help rounded bg-[#f59e0b]/15 px-1 py-px align-middle text-[9px] font-bold uppercase tracking-wide text-[#f59e0b]" title={dealBlurb(deal)}>⚑ deal</span>}
         <div className="max-w-[150px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
       </td>
       <td className="hidden px-2 py-2 text-[12px] text-[var(--text-3)] sm:table-cell">{r.sector}</td>
@@ -77,7 +79,7 @@ function Row({ universe, r }: { universe: string; r: VolConeFeedRow }) {
   );
 }
 
-export default function VolConeView({ universe, data }: { universe: string; data: VolConeData }) {
+export default function VolConeView({ universe, data, deals }: { universe: string; data: VolConeData; deals?: Record<string, DealTag> }) {
   const [sortKey, setSortKey] = useState<SortKey>("pct20");
   const [dir, setDir] = useState<1 | -1>(1); // pct ascending = coiled-first (the old default)
   const all = data.rows ?? [];
@@ -120,6 +122,7 @@ export default function VolConeView({ universe, data }: { universe: string; data
         <p><b>The percentile</b> is where today&apos;s 21-day realized vol sits in that history: <b style={{ color: COIL }}>0–25th</b> = about as quiet as this name ever gets (coiled — options tend to be cheap right before regime changes); <b style={{ color: BLOWN }}>75–100th</b> = blown out (vol tends to mean-revert — premium selling territory).</p>
         <p><b>Default sort is &quot;coiled first&quot;</b> — lowest percentile at the top. Use the quick-screen buttons, or <b>click any column header</b> to sort by it (click again to flip direction).</p>
         <p><b>The mini-cone graphic:</b> the dot is today, the tick is the median, the band is the historical min→max. A dot hugging the bottom of its band with a rising term slope is the classic pre-breakout compression.</p>
+        <p>A <b style={{ color: "#f59e0b" }}>⚑ deal</b> tag flags a name pinned by a live merger (a DEFM14A target) — its low realized vol is the pending deal, not a coiled spring. Hover it for the terms.</p>
       </HowToRead>
 
       <div className="mb-2 flex flex-wrap gap-1 text-[12px]">
@@ -148,7 +151,7 @@ export default function VolConeView({ universe, data }: { universe: string; data
                 <th className={"px-3 py-2 text-right font-medium " + thBtn} onClick={() => onSort("termSlope")}>Term<Arrow k="termSlope" /></th>
               </tr>
             </thead>
-            <tbody>{rows.slice(0, 400).map((r) => <Row key={r.symbol} universe={universe} r={r} />)}</tbody>
+            <tbody>{rows.slice(0, 400).map((r) => <Row key={r.symbol} universe={universe} r={r} deal={deals?.[r.symbol.toUpperCase()]} />)}</tbody>
           </table>
         </div>
       )}

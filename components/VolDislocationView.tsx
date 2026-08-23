@@ -10,6 +10,7 @@ import InfoDot from "./InfoDot";
 import WatchStar from "./WatchStar";
 import VpLedgerPanel from "./VpLedgerPanel";
 import type { VpLedgerFile } from "@/lib/volPremiumLedger";
+import { dealBlurb, type DealTag } from "@/lib/mergerArb";
 
 type F = "rich" | "cheap" | "all";
 type DisRow = VolDisData["rows"][number];
@@ -28,7 +29,7 @@ const getDisVal = (r: DisRow, k: SortKey): number | string | null => {
   }
 };
 
-export default function VolDislocationView({ universe, data, ledger }: { universe: string; data: VolDisData; ledger?: VpLedgerFile | null }) {
+export default function VolDislocationView({ universe, data, ledger, deals }: { universe: string; data: VolDisData; ledger?: VpLedgerFile | null; deals?: Record<string, DealTag> }) {
   const [f, setF] = useState<F>("rich");
   const [hideEarn, setHideEarn] = useState(false);
   const [hideIlliquid, setHideIlliquid] = useState(true);
@@ -127,10 +128,13 @@ export default function VolDislocationView({ universe, data, ledger }: { univers
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r) => {
+              const dt = deals?.[r.symbol.toUpperCase()];
+              return (
               <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2">
                   <WatchStar symbol={r.symbol} compact /> <Link href={`/u/${universe}/stock/${r.symbol}`} className="font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                  {dt && <span className="ml-1 cursor-help rounded bg-[#f59e0b]/15 px-1 py-px align-middle text-[9px] font-bold uppercase tracking-wide text-[#f59e0b]" title={dealBlurb(dt)}>⚑ deal</span>}
                   <div className="max-w-[160px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                   {r.catalyst && (
                     <div className="mt-0.5 max-w-[180px] truncate text-[11px]" style={{ color: r.catalyst.kind === "event" ? "#f59e0b" : "var(--text-4)" }} title={`AI read of recent headlines (${Math.round(r.catalyst.confidence * 100)}% conf) — the rich vol may be pricing this, not a free dislocation`}>
@@ -151,7 +155,8 @@ export default function VolDislocationView({ universe, data, ledger }: { univers
                   {r.illiquid && <span className="ml-1 rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[var(--text-4)]" title="Thin options (low open interest / few strikes) from the broad probe — treat this IV read with extra caution">thin</span>}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
