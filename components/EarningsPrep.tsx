@@ -585,7 +585,10 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         <IvCrushScenario scenario={d.ivScenario} impliedMovePct={d.impliedMove} earningsDate={earningsDate} />
       )}
 
-      <div className="sm:columns-2 sm:gap-3">
+      {/* Grid, NOT CSS multi-column: an expandable card (the Past-reactions quarter detail) taller than
+          its column overflowed and bled over the next column's cards (the Analyst-moves / Peers overlap).
+          A grid confines each card to its own cell, so expanding grows the row instead of overlapping. */}
+      <div className="grid items-start gap-3 sm:grid-cols-2">
       <Bento title="Consensus · this quarter">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
           <Big value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} label={`EPS${q0?.epsAnalysts ? ` · ${q0.epsAnalysts} est` : ""}`} />
