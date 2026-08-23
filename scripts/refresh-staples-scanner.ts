@@ -4,9 +4,12 @@
  * desk-note / earnings-prep tie-in. See lib/staplesScanner.ts for the data model + the licensing note.
  *
  * WATCHED FOLDER: drop the licensed scan PDFs (GS / Morgan Stanley / Wells Fargo NielsenIQ updates) into
- * STAPLES_SCAN_DIR (default data/staples-scans/ — gitignored; the repo is public, so the raw PDFs must
- * NEVER be committed). We pdf-parse the text layer, extract the numbers with the LLM, and persist ONLY
- * the derived figures — never the copyrighted text. Already-extracted files are skipped (FORCE=1 re-runs).
+ * STAPLES_SCAN_DIR (default: the top-level staples-scans/ — kept OUTSIDE data/ on purpose, so the raw
+ * licensed PDFs never ride the R2 tarball (data-to-r2 ships only data/) and are never committed (the repo
+ * is public; staples-scans/ is gitignored). We pdf-parse the text layer, extract the numbers with the LLM,
+ * and persist ONLY the derived figures to data/staples-scanner.json — never the copyrighted text.
+ * Already-extracted files are skipped (FORCE=1 re-runs). On the NAS the folder persists across ticks —
+ * git pull --ff-only and the data/-only R2 hydrate never touch it.
  *
  *   npm run refresh-staples-scanner            # extract any new PDFs in the watched folder
  *   FORCE=1 npm run refresh-staples-scanner    # re-extract everything
@@ -26,7 +29,7 @@ try {
   }
 } catch { /* CI provides env directly */ }
 
-const SCAN_DIR = process.env.STAPLES_SCAN_DIR || join(process.cwd(), "data", "staples-scans");
+const SCAN_DIR = process.env.STAPLES_SCAN_DIR || join(process.cwd(), "staples-scans");
 const OUT = join(process.cwd(), "data", "staples-scanner.json");
 const FORCE = process.env.FORCE === "1";
 const TEXT_CAP = Number(process.env.STAPLES_SCAN_CAP) || 30000; // the summary + company/category tables are front-loaded

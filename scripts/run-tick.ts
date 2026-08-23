@@ -110,6 +110,9 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh key debates (evidence ledger)", cmd: "npm run refresh-debates", when: "full" },
   { name: "Refresh same-store sales (comps)", cmd: "npm run refresh-sss", when: "full" },
   { name: "Refresh intl same-store sales (UK/EU comps)", cmd: "npm run refresh-sss-intl", when: "full" },
+  // Staples Scanner: extract the biweekly NielsenIQ scan PDFs (dropped in the top-level staples-scans/
+  // watched folder) → data/staples-scanner.json. No-ops when the folder is empty / no new PDFs.
+  { name: "Refresh Staples Scanner (NielsenIQ scans)", cmd: "npm run refresh-staples-scanner", when: "full" },
   { name: "Refresh guidance (forward outlook)", cmd: "npm run refresh-guidance", when: "full", env: { LIMIT: "150" } },
   { name: "Refresh guidance board", cmd: "npm run refresh-guidance-board", when: "full", narr: true },
   { name: "Refresh IV history", cmd: "npm run refresh-iv-history", when: "full" },

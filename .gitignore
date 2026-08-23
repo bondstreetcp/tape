@@ -37,3 +37,7 @@ sql/views_local.sql
 # reads them in place). NEVER committed — the corpus is licensed and this repo is PUBLIC.
 /*.pdf
 /*.PDF
+
+# Staples Scanner watched folder — the biweekly NielsenIQ scan PDFs (licensed) live here, OUTSIDE data/
+# so they never ride the R2 tarball. scripts/refresh-staples-scanner.ts reads them in place. NEVER committed.
+/staples-scans/
