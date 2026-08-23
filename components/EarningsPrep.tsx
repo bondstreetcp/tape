@@ -7,6 +7,7 @@ import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type Guidanc
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
 import ImpliedDistribution, { type DistExp } from "./ImpliedDistribution";
+import { growthColor, fmtPct as scanPct, inflectionColor, type ScannerRead } from "@/lib/staplesScanner";
 import InfoDot from "./InfoDot";
 
 interface DataPart {
@@ -242,7 +243,7 @@ function Big({ value, label, color, info }: { value: string; label: string; colo
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory, scanner }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null; scanner?: ScannerRead | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   // "Before the print": idle → loading → { preprint (null when no research ingested), hasResearch } | null (error)
@@ -589,6 +590,26 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           its column overflowed and bled over the next column's cards (the Analyst-moves / Peers overlap).
           A grid confines each card to its own cell, so expanding grows the row instead of overlapping. */}
       <div className="grid items-start gap-3 sm:grid-cols-2">
+        {scanner && (
+          <Bento title="Nielsen scanner (US retail)" hint="Biweekly NielsenIQ point-of-sale demand & share — a ~2-week-lagged leading read on this print.">
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              <Big value={scanPct(scanner.row.dollar.l4w ?? scanner.row.dollar.l2w)} label={`US $ sales${scanner.row.category ? ` · ${scanner.row.category}` : ""}`} color={growthColor(scanner.row.dollar.l4w ?? scanner.row.dollar.l2w)} />
+              {scanner.row.inflection && (
+                <div className="text-[13px] font-medium" style={{ color: inflectionColor(scanner.row.inflection) }}>
+                  {scanner.row.inflection === "accelerating" ? "▲ accelerating" : scanner.row.inflection === "decelerating" ? "▼ decelerating" : "≈ stable"}
+                  {scanner.row.dollar.l12w != null && <div className="text-[11px] font-normal text-[var(--text-4)]">vs {scanPct(scanner.row.dollar.l12w)} · 12wk</div>}
+                </div>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-3)]">
+              {scanner.row.volume != null && <span><b className="text-[var(--text-2)]">Volume</b> <span style={{ color: growthColor(scanner.row.volume) }}>{scanPct(scanner.row.volume)}</span></span>}
+              {scanner.row.priceMix != null && <span><b className="text-[var(--text-2)]">Price/mix</b> {scanPct(scanner.row.priceMix)}</span>}
+              {scanner.row.shareDeltaBps != null && <span><b className="text-[var(--text-2)]">Share</b> <span style={{ color: scanner.row.shareDeltaBps >= 0 ? "#22c55e" : "#ef4444" }}>{scanner.row.shareDeltaBps >= 0 ? "+" : ""}{scanner.row.shareDeltaBps}bp</span></span>}
+            </div>
+            {scanner.row.note && <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-3)]">{scanner.row.note}</div>}
+            <div className="mt-1.5 text-[10px] text-[var(--text-4)]">{scanner.source} · NielsenIQ thru {scanner.periodEnd || "?"}</div>
+          </Bento>
+        )}
       <Bento title="Consensus · this quarter">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
           <Big value={q0?.epsAvg != null ? `$${q0.epsAvg.toFixed(2)}` : "—"} label={`EPS${q0?.epsAnalysts ? ` · ${q0.epsAnalysts} est` : ""}`} />

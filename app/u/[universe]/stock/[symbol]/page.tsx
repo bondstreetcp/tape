@@ -18,6 +18,7 @@ import type { GuidanceData, GuidanceTicker } from "@/lib/guidance";
 import type { IvHistoryData, IvSnapshot } from "@/lib/ivHistory";
 import type { VolDisData, VolDisRow } from "@/lib/volDislocation";
 import type { DispersionData } from "@/lib/dispersion";
+import { latestScannerFor, type StaplesScannerData, type ScannerRead } from "@/lib/staplesScanner";
 
 // Comparable / same-store sales (restaurants + retail) — a per-ticker quarterly comp series we
 // extract from earnings releases (scripts/refresh-sss.ts). Present only for eligible names.
@@ -72,6 +73,18 @@ function loadDispersion(): { indexIV: number } | null {
     if (!existsSync(p)) return null;
     const d = JSON.parse(readFileSync(p, "utf8")) as DispersionData;
     return typeof d?.indexIV === "number" ? { indexIV: d.indexIV } : null;
+  } catch {
+    return null;
+  }
+}
+
+// This name's latest NielsenIQ scanner read (staples demand & share) for the earnings-prep tie-in —
+// null for names the biweekly scans don't cover.
+function loadScanner(sym: string): ScannerRead | null {
+  try {
+    const p = join(process.cwd(), "data", "staples-scanner.json");
+    if (!existsSync(p)) return null;
+    return latestScannerFor(JSON.parse(readFileSync(p, "utf8")) as StaplesScannerData, sym);
   } catch {
     return null;
   }
@@ -186,6 +199,7 @@ export default async function StockPage({
       ivHistory={loadIvHistory(SYM)}
       volDis={loadVolDis(SYM)}
       disp={loadDispersion()}
+      scanner={loadScanner(SYM)}
       daily={xy ? xyToPoints(xy.daily) : []}
       intraday={xy ? xyToPoints(xy.intraday) : []}
       generatedAt={snapshot.generatedAt}

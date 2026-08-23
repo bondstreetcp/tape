@@ -97,3 +97,27 @@ export const growthColor = (v: number | null | undefined): string =>
   v == null ? "var(--text-4)" : v >= 1 ? "#22c55e" : v <= -1 ? "#ef4444" : "var(--text-3)";
 
 export const fmtPct = (v: number | null | undefined): string => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+
+/** A single name's latest scanner read (its company-level row + the report it came from) — for the
+ *  earnings-prep / desk-note tie-in: the ~2-week-lagged demand read on a staples name into its print. */
+export interface ScannerRead {
+  periodEnd: string;
+  source: string;
+  segment: string;
+  row: ScanRow;
+}
+
+/** Find a ticker's most-recent COMPANY-level scanner row across all reports. Null for non-covered names. */
+export function latestScannerFor(data: StaplesScannerData | null, ticker: string | null | undefined): ScannerRead | null {
+  const T = (ticker ?? "").toUpperCase();
+  if (!data || !T) return null;
+  let best: ScannerRead | null = null;
+  for (const rep of data.reports ?? []) {
+    for (const row of rep.rows ?? []) {
+      if (row.level === "company" && row.ticker === T && (!best || (rep.periodEnd || "") > best.periodEnd)) {
+        best = { periodEnd: rep.periodEnd, source: rep.source, segment: rep.segment, row };
+      }
+    }
+  }
+  return best;
+}

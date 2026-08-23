@@ -9,6 +9,7 @@ import { compFinder, type SssTicker } from "@/lib/sameStoreSales";
 import type { GuidanceTicker } from "@/lib/guidance";
 import type { IvSnapshot } from "@/lib/ivHistory";
 import type { VolDisRow } from "@/lib/volDislocation";
+import type { ScannerRead } from "@/lib/staplesScanner";
 import { UNIVERSE_BY_ID, currencyOf } from "@/lib/universes";
 import CompanyStats from "./CompanyStats";
 import EarningsPrep from "./EarningsPrep";
@@ -164,6 +165,7 @@ export default function FinancialsView({
   ivHistory,
   volDis,
   disp,
+  scanner,
   daily,
   intraday,
   generatedAt,
@@ -185,6 +187,7 @@ export default function FinancialsView({
   ivHistory?: IvSnapshot[] | null;
   volDis?: VolDisRow | null;
   disp?: { indexIV: number } | null;
+  scanner?: ScannerRead | null;
   daily: SeriesPoint[];
   intraday: SeriesPoint[];
   generatedAt: string;
@@ -379,7 +382,7 @@ export default function FinancialsView({
         )
       ) : view === "earnings" ? (
         <div className="space-y-4">
-          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} earningsEstimate={row?.earningsEstimate} row={row} peers={peers} sss={sss} guidance={guidance} ivHistory={ivHistory} />
+          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} earningsEstimate={row?.earningsEstimate} row={row} peers={peers} sss={sss} guidance={guidance} ivHistory={ivHistory} scanner={scanner} />
           <CompanyStats stats={stats} currency={currency} show="earnings" />
           <EarningsMultipleChart symbol={symbol} currency={currency} />
         </div>
