@@ -509,6 +509,7 @@ jobs:
         run: npm run refresh-sss-intl
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
 
       # Staples Scanner — extract the biweekly NielsenIQ sell-side scan PDFs (dropped in the top-level
       # staples-scans/ watched folder, OUTSIDE data/ so the licensed PDFs never ride the R2 tarball) into
@@ -517,7 +518,6 @@ jobs:
       - name: Refresh Staples Scanner (NielsenIQ scans)
         if: ${{ env.FULL == 'true' }}
         run: npm run refresh-staples-scanner
-        continue-on-error: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
