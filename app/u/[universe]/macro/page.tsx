@@ -4,18 +4,20 @@ import { getVolOilCurves } from "@/lib/curves";
 import { getEconEstimates, matchEstimate } from "@/lib/econEstimates";
 import { LABEL_TO_RELEASE } from "@/lib/releases";
 import { getMacroReleases } from "@/lib/macroReleases";
+import { getMarketHeadlines } from "@/lib/marketHeadlines";
 import MacroDashboard from "@/components/MacroDashboard";
 
 // FRED data updates daily/monthly — cache for an hour.
 export const revalidate = 3600;
 
 export default async function MacroPage() {
-  const [macro, calendar, volOil, ff, recentReleases] = await Promise.all([
+  const [macro, calendar, volOil, ff, recentReleases, headlines] = await Promise.all([
     getMacroCached(),
     getEconCalendar(),
     getVolOilCurves().catch(() => ({ vix: [], oil: [], asOf: "" })),
     getEconEstimates().catch(() => []),
     getMacroReleases().catch(() => []),
+    getMarketHeadlines().catch(() => []),
   ]);
   // Attach the consensus estimate to each upcoming release where we have one.
   const calendarWithEst = calendar.map((e) => ({
@@ -33,6 +35,7 @@ export default async function MacroPage() {
       releases={macro.releases}
       creditSeries={macro.creditSeries}
       recentReleases={recentReleases}
+      headlines={headlines}
     />
   );
 }

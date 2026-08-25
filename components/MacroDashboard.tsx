@@ -7,6 +7,7 @@ import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
 import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
 import { CATEGORY_COLOR, type MacroRelease } from "@/lib/macroReleases";
+import { TOPIC_COLOR, type MarketHeadline } from "@/lib/marketHeadlines";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
@@ -273,6 +274,7 @@ export default function MacroDashboard({
   releases,
   creditSeries,
   recentReleases,
+  headlines,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -283,6 +285,7 @@ export default function MacroDashboard({
   releases?: Record<string, ReleaseData>;
   creditSeries?: CreditSeries;
   recentReleases?: MacroRelease[];
+  headlines?: MarketHeadline[];
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -297,12 +300,21 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
-  const [section, setSection] = useState<"rates" | "indicators" | "credit" | "calendar">("rates");
+  const [section, setSection] = useState<"rates" | "indicators" | "credit" | "calendar" | "headlines">("rates");
+  const [mounted, setMounted] = useState(false); // for hydration-safe relative timestamps on the wire
+  useEffect(() => setMounted(true), []);
+  const ago = (iso: string | null) => {
+    if (!mounted || !iso) return ""; // empty on server + first client render → no hydration mismatch
+    const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (!Number.isFinite(m) || m < 0) return "";
+    return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
+  };
   const SECTIONS = [
     { key: "rates", label: "Rates & Curves" },
     { key: "indicators", label: "Indicators" },
     { key: "credit", label: "Credit" },
     { key: "calendar", label: "Calendar" },
+    { key: "headlines", label: "Headlines" },
   ] as const;
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -448,6 +460,31 @@ export default function MacroDashboard({
             )}
           </>
         )}
+      </section>
+      )}
+
+      {section === "headlines" && (
+      <section className="mb-5">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-2)]">Market headlines <span className="font-normal text-[var(--text-4)]">— macro, Fed, trade, energy &amp; geopolitics</span></h2>
+          <span className="text-[11px] text-[var(--text-4)]">free wire · ~10-min lag · not curated</span>
+        </div>
+        {!headlines || headlines.length === 0 ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No market headlines yet — the wire populates on the next full data refresh.</div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {headlines.map((h, i) => (
+              <a key={i} href={h.url} target="_blank" rel="noopener noreferrer" className="flex items-start justify-between gap-3 border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0 hover:bg-[var(--surface-hover)]">
+                <span className="flex min-w-0 items-start gap-2">
+                  <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${TOPIC_COLOR[h.topic]}22`, color: TOPIC_COLOR[h.topic] }}>{h.topic}</span>
+                  <span className="min-w-0 text-[var(--text)]">{h.title} <span className="text-[var(--text-4)]">· {h.publisher}</span></span>
+                </span>
+                {ago(h.time) && <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-4)]">{ago(h.time)}</span>}
+              </a>
+            ))}
+          </div>
+        )}
+        <p className="mt-1.5 text-[11px] text-[var(--text-4)]">Aggregated from public news (Google News) — the macro / geopolitical flashes the company tape &amp; econ-release feed don&apos;t carry. Not sub-second and not curated; research, not advice.</p>
       </section>
       )}
 

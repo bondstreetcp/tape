@@ -914,6 +914,12 @@ jobs:
         run: npm run refresh-macro-releases
         continue-on-error: true
 
+      # Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
+      - name: Refresh market headlines (Google News wire)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-market-headlines
+        continue-on-error: true
+
       # Evaluate user alert rules against the freshly-refreshed data and write matches to Postgres
       # (the in-app bell). Runs on EVERY tick — intraday (after the quotes refresh, so price alerts
       # fire during the session) and FULL (after the full rebuild). Writes to the DB, not data/, so
