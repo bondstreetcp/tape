@@ -59,6 +59,16 @@ interface PosReadPart {
   caveat: string;
 }
 
+// The plain-English technical-setup read — mirrors the part=techread JSON (lib/earningsTechnical.ts).
+interface TechReadPart {
+  tldr: string;
+  trend: "uptrend" | "downtrend" | "range";
+  points: string[];
+  support: number | null;
+  resistance: number | null;
+  caveat: string;
+}
+
 // The "Before the print" research × quant read — mirrors the part=preprint JSON (declared locally like
 // DataPart: importing lib/research/preprint would drag server-only deps into the client bundle).
 interface PreprintPart {
@@ -262,6 +272,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [posRead, setPosRead] = useState<PosReadPart | null | "idle" | "loading">("idle"); // options-positioning AI read
+  const [techRead, setTechRead] = useState<TechReadPart | null | "idle" | "loading">("idle"); // technical-setup AI read
   // "Before the print": idle → loading → { preprint (null when no research ingested), hasResearch } | null (error)
   const [pre, setPre] = useState<{ preprint: PreprintPart | null; hasResearch: boolean } | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
@@ -293,6 +304,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     setData("loading");
     setAi("idle");
     setPosRead("idle");
+    setTechRead("idle");
     setPre("idle");
     setOpenQ(null);
     setWhy({});
@@ -346,6 +358,19 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       .then((r) => r.json())
       .then((d) => setPosRead(d.posread || null))
       .catch(() => setPosRead(null))
+      .finally(() => clearTimeout(timer));
+  };
+
+  // Plain-English "what's the technical setup into the print?" — same server-recompute + 75s abort as runAi.
+  const runTechRead = () => {
+    setTechRead("loading");
+    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate)}` : "";
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75_000);
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=techread${eParam}`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((d) => setTechRead(d.techread || null))
+      .catch(() => setTechRead(null))
       .finally(() => clearTimeout(timer));
   };
 
@@ -555,6 +580,39 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
               )}
             </div>
           )}
+
+          {/* AI technical-setup read — the chart into the print (button-triggered) */}
+          <div className="mt-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Technical setup <span className="font-normal normal-case">· the chart into the print</span></div>
+            {techRead === "idle" ? (
+              <div>
+                <button onClick={() => runTechRead()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Read the technical setup →</button>
+                <p className="mt-1.5 text-[12px] text-[var(--text-4)]">Plain-English read of the trend, 52-week range position, momentum &amp; the key support/resistance going into the print.</p>
+              </div>
+            ) : techRead === "loading" ? (
+              <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> reading the chart…</div>
+            ) : techRead && techRead.tldr ? (() => {
+              const tc = techRead.trend === "uptrend" ? "#22c55e" : techRead.trend === "downtrend" ? "#ef4444" : "var(--text-3)";
+              return (
+                <div className="space-y-2 text-[12px] leading-snug">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${tc}22`, color: tc }} title="The prevailing trend from the moving averages">{techRead.trend}</span>
+                    <p className="text-[var(--text)]"><span className="font-semibold">Setup: </span>{techRead.tldr}</p>
+                  </div>
+                  {techRead.points.length > 0 && <ul className="space-y-1">{techRead.points.map((p, i) => <li key={i} className="text-[var(--text-2)]"><span className="text-[var(--accent)]">▸</span> {p}</li>)}</ul>}
+                  {(techRead.support != null || techRead.resistance != null) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--divider)] pt-2 text-[11px]">
+                      {techRead.support != null && <span><b className="text-[#22c55e]">Support</b> <span className="tabular-nums text-[var(--text-2)]">${techRead.support.toFixed(2)}</span></span>}
+                      {techRead.resistance != null && <span><b className="text-[#ef4444]">Resistance</b> <span className="tabular-nums text-[var(--text-2)]">${techRead.resistance.toFixed(2)}</span></span>}
+                    </div>
+                  )}
+                  {techRead.caveat && <p className="text-[11px] italic text-[var(--text-4)]">{techRead.caveat}</p>}
+                </div>
+              );
+            })() : (
+              <div className="text-[12px] text-[var(--text-4)]">Couldn&apos;t read the setup just now. <button onClick={() => runTechRead()} className="text-[var(--accent)] underline hover:no-underline">Try again</button></div>
+            )}
+          </div>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border)] pt-2.5 text-[13px] text-[var(--text-3)]">
             {d?.straddleWinRate && d.straddleWinRate.total >= 4 && <span title="Of the last N prints, how often the realized move EXCEEDED the current implied move — low = the straddle's been a sell"><b className="text-[var(--text-2)]">Realized &gt; implied</b><InfoDot text="How often the actual post-earnings move exceeded the priced-in implied move. Low = the straddle has been a sell." /> {d.straddleWinRate.exceeded}/{d.straddleWinRate.total} ({Math.round((d.straddleWinRate.exceeded / d.straddleWinRate.total) * 100)}%)</span>}

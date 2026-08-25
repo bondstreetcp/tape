@@ -5,6 +5,7 @@ import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
 import { computeQuant, peerReadThrough, buildSig, loadGuidance, loadSss } from "@/lib/earningsQuant";
 import { assemblePreviewContext, buildAiPreview, earningsReleaseText, raceTimeout } from "@/lib/earningsPreview";
 import { buildPositioningRead, type PositioningFacts } from "@/lib/earningsPositioning";
+import { computeTechnicalFacts, buildTechnicalRead } from "@/lib/earningsTechnical";
 import { computePreprint, narratePreprint, type PublicInputs } from "@/lib/research/preprint";
 import { listDocs, normTicker } from "@/lib/research/store";
 import { beatGuide } from "@/lib/guidance";
@@ -89,6 +90,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         { cacheIf: (v) => v != null },
       );
       return NextResponse.json({ posread }, { headers: { "Cache-Control": posread ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
+    }
+
+    // ── Technical-setup read: plain-English "what's the chart setup into the print?" (button-triggered) ──
+    // Reuses the same quant the tab already computes (its close series) — no new data, just an LLM read.
+    if (part === "techread") {
+      if (!(await llmConfigured())) return NextResponse.json({ techread: null });
+      const techread = await memo(
+        `ep:tech:${sym}:${earningsISO ?? ""}`,
+        10_800_000,
+        async () => {
+          const q = await computeQuant(sym, earningsISO).catch(() => null);
+          if (!q) return null;
+          const facts = computeTechnicalFacts(sym, q.closes, q.volRegime?.hv20 != null ? q.volRegime.hv20 * 100 : null);
+          if (!facts) return null;
+          return raceTimeout(buildTechnicalRead(facts), 40_000, null);
+        },
+        { cacheIf: (v) => v != null },
+      );
+      return NextResponse.json({ techread }, { headers: { "Cache-Control": techread ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
     }
 
     // ── "Before the print": the ingested-research × quant read (button-triggered) ──
