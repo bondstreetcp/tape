@@ -6,10 +6,10 @@
  * This is the closest free stand-in for the NON-company slice of a paid headline wire (what @DeltaOne
  * relays beyond the gov data). It is NOT sub-second and carries no human curation — it's a ~10-min-lagged
  * aggregate. Populated by scripts/refresh-market-headlines.ts → data/market-headlines.json.
+ *
+ * CLIENT-SAFE: imported by MacroDashboard / MarketHeadlinesWire (client) for the types + TOPIC_COLOR, so
+ * no node builtins here. The fs reader + the live fetch live in lib/marketHeadlinesFetch.ts (server-only).
  */
-import { promises as fsp } from "fs";
-import path from "path";
-
 export type HeadlineTopic = "Markets" | "Fed" | "Rates" | "Trade" | "Energy" | "Global";
 
 export interface MarketHeadline {
@@ -33,17 +33,3 @@ export const TOPIC_COLOR: Record<HeadlineTopic, string> = {
   Energy: "#22c55e",
   Global: "#8b93a7",
 };
-
-/** Read the committed wire for the UI. Empty (never throws) until the feed has run. */
-export async function getMarketHeadlines(limit = 30): Promise<MarketHeadline[]> {
-  try {
-    const raw = await fsp.readFile(path.join(process.cwd(), "data", "market-headlines.json"), "utf8");
-    const d = JSON.parse(raw) as MarketHeadlinesData;
-    return (d.headlines ?? [])
-      .filter((h) => h && h.title && h.url)
-      .sort((a, b) => (Date.parse(b.time || "") || 0) - (Date.parse(a.time || "") || 0))
-      .slice(0, limit);
-  } catch {
-    return [];
-  }
-}

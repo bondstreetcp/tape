@@ -3,8 +3,10 @@
  * lib/marketHeadlines.ts so the client bundle never pulls cheerio in. Used by BOTH the API route
  * (/api/market-headlines, live + 5-min cache) and the nightly extractor (scripts/refresh-market-headlines).
  */
+import { promises as fsp } from "fs";
+import path from "path";
 import * as cheerio from "cheerio";
-import type { HeadlineTopic, MarketHeadline } from "./marketHeadlines";
+import type { HeadlineTopic, MarketHeadline, MarketHeadlinesData } from "./marketHeadlines";
 
 const UA = "Mozilla/5.0 (tape market-headlines research; jameslyeh@gmail.com)";
 
@@ -70,4 +72,18 @@ export async function fetchLiveMarketHeadlines(limit = 60): Promise<MarketHeadli
     .sort((a, b) => (Date.parse(b.time || "") || 0) - (Date.parse(a.time || "") || 0))
     .filter((h) => { const k = norm(h.title); if (!k || seen.has(k)) return false; seen.add(k); return true; })
     .slice(0, limit);
+}
+
+/** Read the committed wire (the baked SSR seed / offline fallback). Empty (never throws) until it runs. */
+export async function getMarketHeadlines(limit = 30): Promise<MarketHeadline[]> {
+  try {
+    const raw = await fsp.readFile(path.join(process.cwd(), "data", "market-headlines.json"), "utf8");
+    const d = JSON.parse(raw) as MarketHeadlinesData;
+    return (d.headlines ?? [])
+      .filter((h) => h && h.title && h.url)
+      .sort((a, b) => (Date.parse(b.time || "") || 0) - (Date.parse(a.time || "") || 0))
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
 }

@@ -7,10 +7,10 @@
  * Complements — does NOT duplicate — the existing pieces: lib/econCalendar.ts is UPCOMING release
  * DATES (FRED, needs a key); lib/fred.ts / releases are the NUMBER HISTORY; refresh-fed.ts is FOMC
  * comms. This is the "it just printed" headline. Populated by scripts/refresh-macro-releases.ts.
+ *
+ * CLIENT-SAFE: this module is imported by MacroDashboard (a client component) for the types + colors, so
+ * it must NOT import node builtins (fs/path). The fs reader lives in lib/macroReleasesServer.ts.
  */
-import { promises as fsp } from "fs";
-import path from "path";
-
 export type MacroSource = "BEA" | "BLS";
 export type MacroCategory = "Growth" | "Inflation" | "Labor" | "Trade" | "Income" | "Other";
 
@@ -48,16 +48,3 @@ export const CATEGORY_COLOR: Record<MacroCategory, string> = {
   Other: "#8b93a7",
 };
 
-/** Read the committed feed for the Macro page. Empty (never throws) when the feed hasn't run yet. */
-export async function getMacroReleases(limit = 16): Promise<MacroRelease[]> {
-  try {
-    const raw = await fsp.readFile(path.join(process.cwd(), "data", "macro-releases.json"), "utf8");
-    const d = JSON.parse(raw) as MacroReleasesData;
-    return (d.releases ?? [])
-      .filter((r) => r && r.title && r.date)
-      .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
-      .slice(0, limit);
-  } catch {
-    return [];
-  }
-}

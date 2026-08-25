@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchLiveMarketHeadlines } from "@/lib/marketHeadlinesFetch";
-import { getMarketHeadlines } from "@/lib/marketHeadlines";
+import { fetchLiveMarketHeadlines, getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import { memo } from "@/lib/memoCache";
 
 export const dynamic = "force-dynamic";

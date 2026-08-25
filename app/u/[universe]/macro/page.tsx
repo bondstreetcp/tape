@@ -3,8 +3,8 @@ import { getEconCalendar, econKeyConfigured } from "@/lib/econCalendar";
 import { getVolOilCurves } from "@/lib/curves";
 import { getEconEstimates, matchEstimate } from "@/lib/econEstimates";
 import { LABEL_TO_RELEASE } from "@/lib/releases";
-import { getMacroReleases } from "@/lib/macroReleases";
-import { getMarketHeadlines } from "@/lib/marketHeadlines";
+import { getMacroReleases } from "@/lib/macroReleasesServer";
+import { getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import MacroDashboard from "@/components/MacroDashboard";
 
 // FRED data updates daily/monthly — cache for an hour.

@@ -12,7 +12,7 @@ import Briefing from "@/components/Briefing";
 import DailyDeskTabs from "@/components/DailyDeskTabs";
 import OvernightFilingsView from "@/components/OvernightFilingsView";
 import WatchlistWire from "@/components/WatchlistWire";
-import { getMarketHeadlines } from "@/lib/marketHeadlines";
+import { getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import MarketHeadlinesWire from "@/components/MarketHeadlinesWire";
 
 export const dynamic = "force-dynamic";
