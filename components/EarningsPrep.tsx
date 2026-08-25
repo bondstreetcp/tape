@@ -91,6 +91,17 @@ const pp = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${v >=
 const fmtRev = (v: number | null | undefined) => (v == null ? "—" : v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v}`);
 const col = (v: number | null) => (v == null ? "var(--text-2)" : v >= 0 ? "#22c55e" : "#ef4444");
 
+// A labeled divider that segments the long earnings tab into scannable zones (the setup / how it
+// trades / AI reads). Small uppercase label on the left, a hairline rule filling the rest.
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 mt-5 flex items-center gap-2.5">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{children}</span>
+      <span className="h-px flex-1 bg-[var(--border)]" />
+    </div>
+  );
+}
+
 // A bordered "bento" card with an uppercase header — the building block of the redesigned grid.
 function Bento({ title, hint, children, className = "" }: { title: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
@@ -681,9 +692,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         <IvCrushScenario scenario={d.ivScenario} impliedMovePct={d.impliedMove} earningsDate={earningsDate} />
       )}
 
-      {/* Grid, NOT CSS multi-column: an expandable card (the Past-reactions quarter detail) taller than
-          its column overflowed and bled over the next column's cards (the Analyst-moves / Peers overlap).
-          A grid confines each card to its own cell, so expanding grows the row instead of overlapping. */}
+      {/* ── The setup: what they're expected to report + the leading demand read ── */}
+      <SectionLabel>The setup into the print</SectionLabel>
       <div className="grid items-start gap-3 sm:grid-cols-2">
         {scanner && (
           <Bento title="Nielsen scanner (US retail)" hint="Biweekly NielsenIQ point-of-sale demand & share — a ~2-week-lagged leading read on this print.">
@@ -752,6 +762,13 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
           })()}
         </Bento>
       )}
+      </div>
+
+      {/* ── How it trades the print: historical reaction + live positioning ── */}
+      <SectionLabel>How it trades the print</SectionLabel>
+      {/* Grid, NOT CSS multi-column: the expandable Past-reactions quarter detail is taller than its
+          column; a grid confines each card to its own cell so expanding grows the row, not overlaps. */}
+      <div className="grid items-start gap-3 sm:grid-cols-2">
 
         {/* Past reactions */}
         {ev.length > 0 && (
@@ -953,6 +970,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         )}
       </div>
 
+      {/* ── AI desk reads: the two synthesis reads (research × quant, then the full preview) ── */}
+      <SectionLabel>AI desk reads</SectionLabel>
       {/* "Before the print" — the ingested-research × quant read (button-triggered). Lights up per
           ticker exactly when research PDFs have been ingested for it — the test-one-company workflow. */}
       <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
