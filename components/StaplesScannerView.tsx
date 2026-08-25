@@ -55,6 +55,31 @@ function MiniLine({ pts, labels, width = 230, height = 46 }: { pts: (number | nu
   );
 }
 
+// Inline momentum sparkline for the table — the 52w→2w window trajectory, colored by direction
+// (accelerating = green, decelerating = red), so the inflection reads at a glance without expanding.
+function Spark({ pts }: { pts: (number | null | undefined)[] }) {
+  const drawn = pts.map((v, i) => ({ i, v })).filter((p): p is { i: number; v: number } => p.v != null);
+  if (drawn.length < 2) return <span className="text-[11px] text-[var(--text-4)]">—</span>;
+  const vals = drawn.map((p) => p.v);
+  const w = 72, h = 22, ML = 3, MR = 4, MT = 4, MB = 4;
+  const pad = (Math.max(...vals, 0) - Math.min(...vals, 0)) * 0.15 || 1;
+  const lo = Math.min(...vals, 0) - pad, hi = Math.max(...vals, 0) + pad;
+  const n = pts.length;
+  const x = (i: number) => ML + (i / (n - 1)) * (w - ML - MR);
+  const y = (v: number) => MT + (1 - (v - lo) / (hi - lo || 1)) * (h - MT - MB);
+  const path = drawn.map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)} ${y(p.v).toFixed(1)}`).join("");
+  const last = drawn[drawn.length - 1];
+  const slope = last.v - drawn[0].v; // recent window vs long-run → the acceleration direction
+  const col = slope > 0.2 ? "#22c55e" : slope < -0.2 ? "#ef4444" : "var(--text-3)";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="inline-block align-middle" role="img" aria-label="momentum">
+      <line x1={ML} x2={w - MR} y1={y(0)} y2={y(0)} stroke="var(--text-4)" strokeOpacity={0.25} />
+      <path d={path} fill="none" stroke={col} strokeWidth={1.4} />
+      <circle cx={x(last.i)} cy={y(last.v)} r={2} fill={col} />
+    </svg>
+  );
+}
+
 // Per-entity trend panel: momentum WITHIN the latest read (52w→2w) + the cross-report series (accrues).
 function ScanTrend({ history, row }: { history: ScanPoint[]; row: FlatRow }) {
   const latest = history.length ? history[history.length - 1] : null;
@@ -196,6 +221,7 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
                 <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("volume")}>Vol<Arrow k="volume" /></th>
                 <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("priceMix")}>Px/mix<Arrow k="priceMix" /></th>
                 <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("shareDeltaBps")}>Share Δ<InfoDot text="y/y dollar-share change, basis points. + = gaining share." /><Arrow k="shareDeltaBps" /></th>
+                <th className="hidden px-2 py-2 text-center font-medium md:table-cell">Momentum<InfoDot text="The 52w→12w→4w→2w $-growth trajectory. Sloping up left→right = accelerating demand into the print; down = decelerating." /></th>
                 <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("inflection")}>Trend<InfoDot text="Accelerating / stable / decelerating — L4wk vs L12wk (or as the note states it). The tradeable signal into a print." /><Arrow k="inflection" /></th>
               </tr>
             </thead>
@@ -225,11 +251,12 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
                   <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] lg:table-cell">{fmtPct(r.volume)}</td>
                   <td className="hidden px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)] lg:table-cell">{fmtPct(r.priceMix)}</td>
                   <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.shareDeltaBps == null ? "var(--text-4)" : r.shareDeltaBps >= 0 ? "#22c55e" : "#ef4444" }}>{r.shareDeltaBps == null ? "—" : `${r.shareDeltaBps >= 0 ? "+" : ""}${r.shareDeltaBps}bp`}</td>
+                  <td className="hidden px-2 py-2 text-center md:table-cell"><Spark pts={[r.dollar.l52w, r.dollar.l12w, r.dollar.l4w, r.dollar.l2w]} /></td>
                   <td className="px-3 py-2 text-[12px]"><Trend i={r.inflection ?? null} /></td>
                 </tr>
                 {open && (
                   <tr className="bg-[var(--surface-2)]">
-                    <td colSpan={11} className="px-3 pb-4 pt-1">
+                    <td colSpan={12} className="px-3 pb-4 pt-1">
                       <ScanTrend history={scanHistoryFor(data, r.level, r.ticker || r.label, r.category)} row={r} />
                     </td>
                   </tr>
