@@ -102,6 +102,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// A card whose body folds away behind a clickable header — used for the opt-in AI desk reads at the
+// bottom of the tab so they don't add height until wanted. Collapsed by default; the parent-owned
+// run state (pre/ai) lives above this, so folding/unfolding never discards a generated read. A small
+// accent dot on the collapsed header flags that a read has already been run inside.
+function Collapsible({ title, subtitle, defaultOpen = false, active = false, children }: { title: string; subtitle?: string; defaultOpen?: boolean; active?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="mb-3 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--surface-2)]">
+        <span className={"text-[10px] leading-none text-[var(--text-4)] transition-transform duration-150 " + (open ? "rotate-90" : "")}>▶</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{title}{subtitle && <span className="font-normal normal-case"> · {subtitle}</span>}</span>
+        {active && !open && <span className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" title="You've run this read — expand to see it" />}
+      </button>
+      {open && <div className="border-t border-[var(--divider)] px-3.5 pb-3.5 pt-3">{children}</div>}
+    </section>
+  );
+}
+
 // A bordered "bento" card with an uppercase header — the building block of the redesigned grid.
 function Bento({ title, hint, children, className = "" }: { title: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
@@ -974,8 +992,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       <SectionLabel>AI desk reads</SectionLabel>
       {/* "Before the print" — the ingested-research × quant read (button-triggered). Lights up per
           ticker exactly when research PDFs have been ingested for it — the test-one-company workflow. */}
-      <div className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Before the print <span className="font-normal normal-case">· ingested research × this terminal&apos;s quant read</span></div>
+      <Collapsible title="Before the print" subtitle="ingested research × this terminal's quant read" active={pre !== "idle"}>
         {pre === "idle" ? (
           <div>
             <button onClick={() => runPreprint()} className="rounded-lg border border-[var(--border-strong)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition-colors hover:border-[var(--accent)]">Run the pre-print read →</button>
@@ -1026,11 +1043,10 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
             <button onClick={() => runPreprint()} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* AI StreetAccount-style preview (button-triggered) */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">AI preview <span className="font-normal normal-case">· StreetAccount-style, grounded in the signals above</span></div>
+      <Collapsible title="AI preview" subtitle="StreetAccount-style, grounded in the signals above" active={ai !== "idle"}>
         {ai === "idle" ? (
           <div>
             <button onClick={() => runAi()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">Build the earnings preview →</button>
@@ -1071,7 +1087,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
             <button onClick={() => runAi()} className="text-[var(--accent)] underline hover:no-underline">Try again</button>
           </div>
         )}
-      </div>
+      </Collapsible>
 
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Consensus, revisions, ratings &amp; short interest via Yahoo; reaction = close-to-close moves on past prints; implied move + skew/max-pain from the options chain. AI context — decision-support, not investment advice.</p>
     </div>
