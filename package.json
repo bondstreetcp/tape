@@ -10,6 +10,7 @@
     "refresh-quotes": "tsx scripts/refresh-quotes.ts",
     "check-freshness": "tsx scripts/check-freshness.ts",
     "check-site-health": "tsx scripts/check-site-health.ts",
+  "check-deploy-data": "tsx scripts/check-deploy-data.ts",
     "refresh-pairs": "tsx scripts/refresh-pairs.ts",
     "refresh-betas": "tsx scripts/refresh-betas.ts",
     "refresh-hedge-etfs": "tsx scripts/refresh-hedge-etfs.ts",

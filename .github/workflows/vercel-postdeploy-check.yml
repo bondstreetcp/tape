@@ -1,0 +1,64 @@
+# Vercel post-deploy data check — catches the tracing-excludes failure mode.
+#
+# On Vercel, per-route outputFileTracingExcludes (lib/tracingExcludes.mjs) strips data/series/** and
+# data/company/** out of the functions that shouldn't need them, to stay under the 250MB limit. If a
+# route is ever misclassified, it renders EMPTY on Vercel (loadSymbolSeries → null on a missing file)
+# while the NAS stays fine — and NOTHING else notices. scripts/check-deploy-data.ts probes a set of
+# data-backed routes on the deployment and asserts the DATA is actually there, then pages
+# ALERT_WEBHOOK_URL on any confirmed miss.
+#
+# Fires automatically after each successful Vercel PRODUCTION deploy (deployment_status), and also on a
+# daily safety-net schedule + manual dispatch. The scheduled/manual runs need the deployment URL:
+#   • set a repo VARIABLE  VERCEL_PROD_URL  = your Vercel production origin (e.g. https://tape.vercel.app)
+#   • (deployment_status runs get the URL straight from the event — nothing to set)
+# The deployment_status trigger requires Vercel's GitHub integration to post deployment statuses (it
+# does by default for git-connected projects). Alerts use the same ALERT_WEBHOOK_URL secret as the
+# other monitors; if unset, a failure still shows red via GitHub's run-failed email.
+name: Vercel post-deploy data check
+
+on:
+  deployment_status: {}
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to probe (defaults to the VERCEL_PROD_URL repo variable)"
+        required: false
+  schedule:
+    - cron: "41 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-postdeploy-check-${{ github.event.deployment_status.environment_url || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # deployment_status fires for EVERY deployment (preview + prod, success + failure) — only act on a
+    # successful Production deploy. Manual + scheduled runs always proceed.
+    if: >
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       startsWith(github.event.deployment_status.environment, 'Production'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      # No embedder needed here — skip onnxruntime's heavy install on npm ci.
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Probe the deployment's served data
+        env:
+          DEPLOY_CHECK_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url || inputs.url || vars.VERCEL_PROD_URL }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: npm run check-deploy-data
