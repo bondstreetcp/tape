@@ -1,7 +1,7 @@
 {
-  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main hourly). Fires ONCE inside [notBeforeUtc, expiresUtc); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` (any new unique string) + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-15: an instrumented FULL to capture the per-step failure report (tick-report.json in the R2 tar) for the 4-night NAS outage; window starts after the GH heal runs land so a failing NAS full re-uploads the ALREADY-FRESH hydrated tree (no data loss either way).",
+  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main hourly). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-25: recover the lobbying feed off-schedule after the keyless-fallback fix (2736a666) — the forced FULL runs refresh-lobbying, which now pulls the LDA filings list anonymously when the NAS key is absent, so lobbying.json refreshes without waiting for the 23:00 UTC scheduled FULL. (It also re-runs the whole FULL; company-cache still needs the good-IP PC box and will fire the new dark-pipe alert.)",
   "mode": "full",
-  "notBeforeUtc": "2026-08-15T19:20:00Z",
-  "expiresUtc": "2026-08-15T23:30:00Z",
-  "key": "2026-08-15-outage-diag"
+  "notBeforeUtc": "2026-08-25T21:20:00Z",
+  "expiresUtc": "2026-08-26T12:00:00Z",
+  "key": "2026-08-25-recover-lobbying"
 }
