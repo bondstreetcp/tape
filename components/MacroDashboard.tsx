@@ -460,10 +460,10 @@ export default function MacroDashboard({
       <section className="mb-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold text-[var(--text-2)]">Market headlines <span className="font-normal text-[var(--text-4)]">— macro, Fed, trade, energy &amp; geopolitics</span></h2>
-          <span className="text-[11px] text-[var(--text-4)]">free wire · ~5-min live · not curated</span>
+          <span className="text-[11px] text-[var(--text-4)]">⚡ Walter Bloomberg flashes + reputable wire · ~5-min live</span>
         </div>
         <MarketHeadlinesWire initial={headlines} />
-        <p className="mt-1.5 text-[11px] text-[var(--text-4)]">Aggregated from public news (Google News) — the macro / geopolitical flashes the company tape &amp; econ-release feed don&apos;t carry. Refreshes ~every 5 min; not sub-second and not curated. Research, not advice.</p>
+        <p className="mt-1.5 text-[11px] text-[var(--text-4)]"><span className="text-[var(--accent)]">⚡</span> = Walter Bloomberg&apos;s hand-curated flashes (his public Telegram, read as public content — no login/API); the rest is a reputable-source aggregate (Reuters, Bloomberg, CNBC, WSJ…) for anything he didn&apos;t flag. Refreshes ~every 5 min. Research, not advice.</p>
       </section>
       )}
 

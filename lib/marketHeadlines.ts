@@ -18,6 +18,7 @@ export interface MarketHeadline {
   url: string;
   time: string | null; // ISO
   topic: HeadlineTopic;
+  curated?: boolean; // true = a hand-curated flash (Walter Bloomberg's public Telegram), not an aggregator hit
 }
 
 export interface MarketHeadlinesData {

@@ -37,11 +37,15 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
           href={h.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-start justify-between gap-3 border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0 hover:bg-[var(--surface-hover)]"
+          className={"flex items-start justify-between gap-3 border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0 hover:bg-[var(--surface-hover)] " + (h.curated ? "bg-[var(--accent-soft)]/40" : "")}
         >
           <span className="flex min-w-0 items-start gap-2">
-            <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${TOPIC_COLOR[h.topic]}22`, color: TOPIC_COLOR[h.topic] }}>{h.topic}</span>
-            <span className="min-w-0 text-[var(--text)]">{h.title} <span className="text-[var(--text-4)]">· {h.publisher}</span></span>
+            {h.curated ? (
+              <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)]" style={{ background: "var(--accent-soft)" }} title={`${h.publisher} — curated flash`}>⚡ {h.publisher}</span>
+            ) : (
+              <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${TOPIC_COLOR[h.topic]}22`, color: TOPIC_COLOR[h.topic] }}>{h.topic}</span>
+            )}
+            <span className="min-w-0 text-[var(--text)]">{h.title}{h.curated ? "" : <span className="text-[var(--text-4)]"> · {h.publisher}</span>}</span>
           </span>
           {ago(h.time) && <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-4)]">{ago(h.time)}</span>}
         </a>

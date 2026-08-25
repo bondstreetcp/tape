@@ -75,15 +75,75 @@ async function fetchTopic(topic: HeadlineTopic, q: string): Promise<MarketHeadli
   }
 }
 
-/** Fetch all topics in parallel, dedupe by title, newest first. Returns [] if every topic failed. */
+// Bucket a curated flash into a topic from its keywords (Google-News items carry their own topic).
+function classifyTopic(t: string): HeadlineTopic {
+  const s = t.toLowerCase();
+  if (/\b(fed|fomc|powell|collins|bostic|waller|williams|kashkari|beige book|rate hike|rate cut|interest rate|central bank|\becb\b|\bboj\b|bank of england)\b/.test(s)) return "Fed";
+  if (/\b(treasury|yield|bond|10-year|2-year|30-year|debt|refunding|auction|financial repression)\b/.test(s)) return "Rates";
+  if (/\b(tariff|trade war|trade deal|trade talks|import|export|\bwto\b|trade tension)\b/.test(s)) return "Trade";
+  if (/\b(oil|opec|crude|brent|\bwti\b|natural gas|energy|barrel|refiner)\b/.test(s)) return "Energy";
+  if (/\b(china|russia|iran|ukraine|israel|geopolit|sanction|\bwar\b|election|midterm|hormuz|nato|tariffs? on)\b/.test(s)) return "Global";
+  return "Markets";
+}
+
+// Walter Bloomberg's PUBLIC Telegram channel, read via the account-free web preview (t.me/s/<channel>) —
+// his hand-curated market flashes, the same feed as his X/Discord. Reading a public web page (no login,
+// no API key) — this is fair use of public content, unlike self-botting a login-gated platform.
+async function fetchTelegramChannel(channel: string, brand: string): Promise<MarketHeadline[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(`https://t.me/s/${channel}`, { headers: { "User-Agent": UA }, signal: ctrl.signal });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out: MarketHeadline[] = [];
+    // Each post is a .tgme_widget_message block carrying data-post (permalink id), a <time datetime>, and
+    // a _message_text div. Split on the block so id/time/text stay associated.
+    for (const b of html.split('<div class="tgme_widget_message ').slice(1)) {
+      const id = (b.match(/data-post="([^"]+)"/) || [])[1] || "";
+      const dt = (b.match(/<time[^>]+datetime="([^"]+)"/) || [])[1] || "";
+      const rawText = (b.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || "";
+      if (!rawText) continue;
+      // He posts HEADLINE then detail — take the first line as the headline; strip his self-tag + entities.
+      const text = rawText.split(/<br\s*\/?>/i)[0]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&amp;/g, "&").replace(/&#0?39;/g, "'").replace(/&quot;/g, '"').replace(/&#0?36;/g, "$").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&nbsp;/g, " ")
+        .replace(/\(\s*@?\s*walter\s*bloomberg\s*\)/i, "").replace(/^[*🇺🇸\s]+/, "")
+        .replace(/\s+/g, " ").trim();
+      if (text.length < 6) continue;
+      out.push({
+        title: text.slice(0, 240),
+        publisher: brand,
+        url: id ? `https://t.me/${id}` : `https://t.me/s/${channel}`,
+        time: dt && !Number.isNaN(Date.parse(dt)) ? new Date(dt).toISOString() : null,
+        topic: classifyTopic(text),
+        curated: true,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The wire: Walter Bloomberg's curated Telegram flashes LEAD (newest first), then the reputable-source
+ * Google-News aggregate behind them (deduped against his). His feed is the whole point; the aggregate is
+ * the backfill for anything he didn't flag. Returns [] only if everything failed.
+ */
 export async function fetchLiveMarketHeadlines(limit = 60): Promise<MarketHeadline[]> {
-  const batches = await Promise.all(TOPICS.map(({ topic, q }) => fetchTopic(topic, q)));
-  const all = batches.flat();
+  const [wb, ...batches] = await Promise.all([
+    fetchTelegramChannel("WalterBloomberg", "Walter Bloomberg"),
+    ...TOPICS.map(({ topic, q }) => fetchTopic(topic, q)),
+  ]);
+  const byTime = (a: MarketHeadline, b: MarketHeadline) => (Date.parse(b.time || "") || 0) - (Date.parse(a.time || "") || 0);
   const seen = new Set<string>();
-  return all
-    .sort((a, b) => (Date.parse(b.time || "") || 0) - (Date.parse(a.time || "") || 0))
-    .filter((h) => { const k = norm(h.title); if (!k || seen.has(k)) return false; seen.add(k); return true; })
-    .slice(0, limit);
+  const dedupe = (arr: MarketHeadline[]) => arr.filter((h) => { const k = norm(h.title); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  const curated = dedupe([...wb].sort(byTime)); // his flashes first — seeds `seen` so the aggregate can't echo them
+  const rest = dedupe(batches.flat().sort(byTime));
+  return [...curated, ...rest].slice(0, limit);
 }
 
 /** Read the committed wire (the baked SSR seed / offline fallback). Empty (never throws) until it runs. */

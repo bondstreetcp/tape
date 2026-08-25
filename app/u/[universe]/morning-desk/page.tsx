@@ -94,10 +94,10 @@ export default async function DailyDeskPage({
           <section>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--divider)] pb-1.5">
               <h2 className="text-lg font-bold text-[var(--text)]">Market headlines</h2>
-              <span className="text-[11px] text-[var(--text-4)]">macro · Fed · trade · energy · geopolitics — free wire, ~5-min live</span>
+              <span className="text-[11px] text-[var(--text-4)]">⚡ Walter Bloomberg flashes + reputable wire · ~5-min live</span>
             </div>
             <MarketHeadlinesWire initial={headlines} />
-            <p className="mt-2 text-[11px] text-[var(--text-4)]">The macro/geopolitical flashes the company news wire doesn&apos;t carry — aggregated from public news (Google News). Not sub-second, not curated; research, not advice.</p>
+            <p className="mt-2 text-[11px] text-[var(--text-4)]"><span className="text-[var(--accent)]">⚡</span> = Walter Bloomberg&apos;s hand-curated flashes (his public Telegram — read as public content, no login/API/scraping); the rest is a reputable-source aggregate (Reuters, Bloomberg, CNBC, WSJ…) for what he didn&apos;t flag. Research, not advice.</p>
           </section>
         }
         filings={
