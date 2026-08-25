@@ -24,6 +24,10 @@ export interface TechnicalFacts {
   resistance: number | null; // nearest recent swing high
   nearHigh: boolean;
   nearLow: boolean;
+  sector: string | null; // GICS sector, for the RS line
+  rsSector1mPct: number | null; // stock 1mo return − sector-ETF 1mo return (relative strength)
+  rsSector3mPct: number | null; // stock 3mo return − sector-ETF 3mo return
+  rsTrend: "leading" | "lagging" | "inline" | null;
 }
 
 export interface TechnicalRead {
@@ -35,8 +39,15 @@ export interface TechnicalRead {
   caveat: string;
 }
 
-/** Compute the technical facts from a chronological daily close series. Null if too little history. */
-export function computeTechnicalFacts(company: string, closes: { t: number; c: number }[], hv20Pct: number | null): TechnicalFacts | null {
+/** Compute the technical facts from a chronological daily close series (+ the sector ETF's closes for the
+ *  relative-strength line). Null if too little history. */
+export function computeTechnicalFacts(
+  company: string,
+  closes: { t: number; c: number }[],
+  hv20Pct: number | null,
+  sector: string | null = null,
+  sectorCloses: number[] | null = null,
+): TechnicalFacts | null {
   const c = (closes || []).filter((x) => x && Number.isFinite(x.c) && x.c > 0).map((x) => x.c);
   if (c.length < 60) return null;
   const price = c[c.length - 1];
@@ -47,6 +58,14 @@ export function computeTechnicalFacts(company: string, closes: { t: number; c: n
   const w52 = tail(252);
   const hi = Math.max(...w52), lo = Math.min(...w52);
   const retN = (n: number) => (c.length > n ? (price / c[c.length - 1 - n] - 1) * 100 : null);
+  const r1w = retN(5), r1m = retN(21), r3m = retN(63);
+  // Relative strength vs the sector ETF — stock return minus the ETF's return over the same window.
+  const etf = (sectorCloses || []).filter((v) => Number.isFinite(v) && v > 0);
+  const etfRet = (n: number) => (etf.length > n ? (etf[etf.length - 1] / etf[etf.length - 1 - n] - 1) * 100 : null);
+  const e1m = etfRet(21), e3m = etfRet(63);
+  const rsSector1mPct = r1m != null && e1m != null ? r1m - e1m : null;
+  const rsSector3mPct = r3m != null && e3m != null ? r3m - e3m : null;
+  const rsTrend: TechnicalFacts["rsTrend"] = rsSector3mPct == null ? null : rsSector3mPct > 2 ? "leading" : rsSector3mPct < -2 ? "lagging" : "inline";
   // RSI(14), simple-average variant — enough for a plain-English read.
   const rsi = (() => {
     const p = tail(15);
@@ -66,15 +85,19 @@ export function computeTechnicalFacts(company: string, closes: { t: number; c: n
     pxVsMa50Pct: ma50 ? (price / ma50 - 1) * 100 : null,
     pxVsMa200Pct: ma200 ? (price / ma200 - 1) * 100 : null,
     goldenCross: ma50 != null && ma200 != null ? ma50 > ma200 : null,
-    ret1w: retN(5),
-    ret1m: retN(21),
-    ret3m: retN(63),
+    ret1w: r1w,
+    ret1m: r1m,
+    ret3m: r3m,
     rsi14: rsi,
     hv20Pct,
     support: Math.min(...recent),
     resistance: Math.max(...recent),
     nearHigh: hi > 0 && price / hi >= 0.97,
     nearLow: lo > 0 && price / lo <= 1.03,
+    sector,
+    rsSector1mPct,
+    rsSector3mPct,
+    rsTrend,
   };
 }
 
@@ -88,12 +111,13 @@ export async function buildTechnicalRead(f: TechnicalFacts): Promise<TechnicalRe
     f.pxVsMa50Pct != null && `Vs moving averages: ${sp(f.pxVsMa50Pct)} vs the 50-day${f.pxVsMa200Pct != null ? `, ${sp(f.pxVsMa200Pct)} vs the 200-day` : ""}${f.goldenCross != null ? `; 50-day is ${f.goldenCross ? "ABOVE" : "BELOW"} the 200-day (${f.goldenCross ? "golden-cross / uptrend" : "death-cross / downtrend"} regime)` : ""}.`,
     `Momentum: ${sp(f.ret1w)} 1wk, ${sp(f.ret1m)} 1mo, ${sp(f.ret3m)} 3mo${f.rsi14 != null ? `; RSI(14) ${f.rsi14.toFixed(0)}${f.rsi14 >= 70 ? " (overbought)" : f.rsi14 <= 30 ? " (oversold)" : ""}` : ""}.`,
     f.support != null && f.resistance != null && `Recent (~3mo) range: support ~$${f1(f.support)}, resistance ~$${f1(f.resistance)}.`,
+    f.rsSector3mPct != null && `Relative strength vs its sector${f.sector ? ` (${f.sector})` : ""}: ${sp(f.rsSector3mPct)} over 3mo${f.rsSector1mPct != null ? `, ${sp(f.rsSector1mPct)} over 1mo` : ""} — ${f.rsTrend === "leading" ? "LEADING the sector" : f.rsTrend === "lagging" ? "LAGGING the sector" : "roughly in line with the sector"}.`,
     f.hv20Pct != null && `Realized vol (HV20): ${f.hv20Pct.toFixed(0)}% annualized.`,
   ].filter(Boolean).join("\n");
 
   const SYSTEM =
     "You are a technical analyst explaining a stock's chart setup going INTO its earnings print, in PLAIN ENGLISH, to a smart generalist. " +
-    "Using ONLY the technical facts provided — never invent a level or a number — describe: the trend (vs the 50/200-day averages), where price sits in its 52-week range, momentum (recent returns + RSI), the nearby support/resistance, and what the setup implies for the print (e.g., pinned near the highs = priced for good news, vulnerable to a sell-the-news; washed out near the lows / oversold = room to squeeze on anything not-terrible; coiled mid-range = a breakout either way). " +
+    "Using ONLY the technical facts provided — never invent a level or a number — describe: the trend (vs the 50/200-day averages), where price sits in its 52-week range, momentum (recent returns + RSI), its relative strength vs its sector (leading = a tailwind into the print, lagging = a headwind), the nearby support/resistance, and what the setup implies for the print (e.g., pinned near the highs = priced for good news, vulnerable to a sell-the-news; washed out near the lows / oversold = room to squeeze on anything not-terrible; coiled mid-range = a breakout either way). " +
     "Be concrete and balanced; if signals conflict, say so. Technicals describe positioning, NOT a forecast — and never tell the reader what to trade. " +
     NO_ADVICE;
   const SCHEMA =

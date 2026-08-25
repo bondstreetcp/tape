@@ -9,7 +9,9 @@ import { computeTechnicalFacts, buildTechnicalRead } from "@/lib/earningsTechnic
 import { computePreprint, narratePreprint, type PublicInputs } from "@/lib/research/preprint";
 import { listDocs, normTicker } from "@/lib/research/store";
 import { beatGuide } from "@/lib/guidance";
-import { cachedStats } from "@/lib/companyCache";
+import { cachedStats, cachedProfile } from "@/lib/companyCache";
+import { GICS_TO_ETF } from "@/lib/sectors";
+import { loadSymbolSeries } from "@/lib/data";
 import { memo } from "@/lib/memoCache";
 
 export const dynamic = "force-dynamic";
@@ -102,7 +104,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
         async () => {
           const q = await computeQuant(sym, earningsISO).catch(() => null);
           if (!q) return null;
-          const facts = computeTechnicalFacts(sym, q.closes, q.volRegime?.hv20 != null ? q.volRegime.hv20 * 100 : null);
+          // Relative strength vs sector: profile → GICS sector → sector ETF → its close series.
+          const profile = await cachedProfile(sym).catch(() => null);
+          const sector = profile?.sector ?? null;
+          const etf = sector ? GICS_TO_ETF[sector] : null;
+          const etfSeries = etf ? await loadSymbolSeries(etf).catch(() => null) : null;
+          const sectorCloses = etfSeries?.daily?.map((p) => p[1]) ?? null;
+          const facts = computeTechnicalFacts(sym, q.closes, q.volRegime?.hv20 != null ? q.volRegime.hv20 * 100 : null, sector, sectorCloses);
           if (!facts) return null;
           return raceTimeout(buildTechnicalRead(facts), 40_000, null);
         },
