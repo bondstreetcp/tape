@@ -20,11 +20,22 @@ const TOPICS: { topic: HeadlineTopic; q: string }[] = [
   { topic: "Global", q: "China economy OR ECB OR global markets geopolitics" },
 ];
 
-// Low-signal SEO/content-farm sources + clickbait patterns to drop (same spirit as lib/news.ts).
-const BLOCK = ["motley fool", "zacks", "investorplace", "insider monkey", "simply wall", "gurufocus", "marketbeat", "tipranks", "24/7 wall", "barchart"];
+// Reputable-source ALLOWLIST. Google News's long tail is mostly SEO / aggregator / local-paper junk
+// (Motley Fool, Investopedia, AOL, Seeking Alpha, local TV…), so we keep ONLY these (substring, case-
+// insensitive) — quality over quantity. Loosen if the wire ever gets too thin.
+const ALLOW = [
+  "reuters", "bloomberg", "associated press", "ap news", "wall street journal", "wsj",
+  "cnbc", "marketwatch", "barron", "financial times", "ft.com", "the economist", "semafor",
+  "yahoo finance", "business insider", "fortune", "forbes", "investor's business daily",
+  "washington post", "new york times", "nytimes", "the hill", "politico", "axios", "npr",
+  "cbs news", "abc news", "cnn", "usa today", "the guardian", "bbc", "morningstar",
+  "nikkei", "south china morning post", "quartz",
+];
+// Clickbait / SEO title patterns to drop even from an allowed source.
 const CLICKBAIT = [
-  /\b\d+ (stocks|things|reasons|ways)\b/i, /should you buy/i, /here'?s why/i, /could make you/i, /\bbest stocks\b/i, /motley/i,
+  /\b\d+ (stocks|things|reasons|ways|charts)\b/i, /should you buy/i, /here'?s (why|what)/i, /could make you/i, /\bbest stocks\b/i, /motley/i,
   /bullish or bearish/i, /climb or sink/i, /predicting .+ stock/i, /\bstock (a )?(buy|sell|hold)\b/i, /\b(buy|sell|hold) rating\b/i,
+  /could mean for/i, /what it means for/i, /what to know/i, /things to know/i, /\btalks impact\b/i, /is it time to/i, /reasons to (buy|watch)/i,
 ];
 const lc = (s: string) => s.toLowerCase();
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 70);
@@ -46,7 +57,8 @@ async function fetchTopic(topic: HeadlineTopic, q: string): Promise<MarketHeadli
       const link = $el.find("link").first().text().trim();
       const pub = $el.find("pubDate").first().text().trim();
       if (!title || !link) return;
-      if (BLOCK.some((b) => lc(source).includes(b)) || CLICKBAIT.some((re) => re.test(title))) return;
+      if (!ALLOW.some((a) => lc(source).includes(a))) return; // reputable sources only
+      if (CLICKBAIT.some((re) => re.test(title))) return;
       out.push({
         title: title.slice(0, 200),
         publisher: source || "News",
