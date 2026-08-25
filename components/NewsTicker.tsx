@@ -24,10 +24,10 @@ export default function NewsTicker() {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  // Reserve space so the fixed bar never covers page content.
+  // Reserve space so the fixed bar never covers page content (+ the iOS home-indicator safe area).
   useEffect(() => {
     const show = !hidden && items.length > 0;
-    document.body.style.paddingBottom = show ? "32px" : "";
+    document.body.style.paddingBottom = show ? "calc(2rem + env(safe-area-inset-bottom))" : "";
     return () => { document.body.style.paddingBottom = ""; };
   }, [hidden, items.length]);
 
@@ -45,23 +45,30 @@ export default function NewsTicker() {
   );
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex h-8 items-stretch border-t border-[var(--border)] bg-[var(--surface)]/95 text-[12px] backdrop-blur">
-      <div className="flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
-        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" /> Wire
-      </div>
-      <div className="ticker-mask relative flex-1 overflow-hidden">
-        <div className="tape-ticker-track flex h-full items-center whitespace-nowrap">
-          <div className="flex items-center">{items.map(row)}</div>
-          <div className="flex items-center" aria-hidden>{items.map(row)}</div>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--surface)] backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="flex h-8 items-stretch text-[12px]">
+        <div className="flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" /> Wire
         </div>
+        <div className="ticker-mask relative flex-1 overflow-hidden">
+          <div className="tape-ticker-track flex h-full items-center whitespace-nowrap">
+            <div className="flex items-center">{items.map(row)}</div>
+            <div className="ticker-dup flex items-center" aria-hidden>{items.map(row)}</div>
+          </div>
+        </div>
+        <button onClick={dismiss} className="shrink-0 border-l border-[var(--border)] px-2.5 text-[var(--text-4)] hover:text-[var(--text)]" title="Hide the news bar">✕</button>
       </div>
-      <button onClick={dismiss} className="shrink-0 border-l border-[var(--border)] px-2.5 text-[var(--text-4)] hover:text-[var(--text)]" title="Hide the news bar">✕</button>
       <style>{`
         .tape-ticker-track { animation: tape-ticker-scroll 140s linear infinite; will-change: transform; }
         .ticker-mask:hover .tape-ticker-track { animation-play-state: paused; }
         @keyframes tape-ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .ticker-mask { -webkit-mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); mask-image: linear-gradient(to right, transparent, #000 2%, #000 98%, transparent); }
-        @media (prefers-reduced-motion: reduce) { .tape-ticker-track { animation: none; } }
+        /* Reduce Motion / iOS Low Power Mode: don't freeze the bar — make it swipeable instead. */
+        @media (prefers-reduced-motion: reduce) {
+          .ticker-mask { overflow-x: auto; -webkit-overflow-scrolling: touch; -webkit-mask-image: none; mask-image: none; }
+          .tape-ticker-track { animation: none; }
+          .ticker-dup { display: none; }
+        }
       `}</style>
     </div>
   );
