@@ -118,6 +118,35 @@ export interface ScannerRead {
   deskRead: string | null; // the board-wide AI desk-read headline, so the aggregate takeaway travels with the name
 }
 
+// One entity's read at one report period — the unit of the cross-report time series.
+export interface ScanPoint {
+  periodEnd: string;
+  source: string;
+  dollar: ScanWindows;
+  volume: number | null;
+  priceMix: number | null;
+  shareDeltaBps: number | null;
+  inflection: Inflection | null;
+}
+
+/** Every report's read for ONE entity (level + name + category), one point per period (deduped across
+ *  banks by richest row), oldest→newest — the trend-over-time series as the biweekly scans accrue. */
+export function scanHistoryFor(data: StaplesScannerData | null, level: ScanLevel, key: string, category: string): ScanPoint[] {
+  if (!data) return [];
+  const K = key.toUpperCase(), C = category.toLowerCase();
+  const filled = (p: ScanPoint) => [p.dollar.l2w, p.dollar.l4w, p.dollar.l12w, p.dollar.l52w, p.volume, p.priceMix, p.shareDeltaBps].filter((v) => v != null).length;
+  const byPeriod = new Map<string, ScanPoint>();
+  for (const rep of data.reports ?? []) {
+    for (const row of rep.rows ?? []) {
+      if (row.level !== level || (row.ticker || row.label).toUpperCase() !== K || row.category.toLowerCase() !== C) continue;
+      const p: ScanPoint = { periodEnd: rep.periodEnd, source: rep.source, dollar: row.dollar, volume: row.volume ?? null, priceMix: row.priceMix ?? null, shareDeltaBps: row.shareDeltaBps ?? null, inflection: row.inflection ?? null };
+      const ex = byPeriod.get(rep.periodEnd);
+      if (!ex || filled(p) > filled(ex)) byPeriod.set(rep.periodEnd, p);
+    }
+  }
+  return [...byPeriod.values()].sort((a, b) => (a.periodEnd || "").localeCompare(b.periodEnd || ""));
+}
+
 /** Find a ticker's most-recent COMPANY-level scanner row across all reports. Null for non-covered names. */
 export function latestScannerFor(data: StaplesScannerData | null, ticker: string | null | undefined): ScannerRead | null {
   const T = (ticker ?? "").toUpperCase();

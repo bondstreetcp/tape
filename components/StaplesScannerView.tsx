@@ -1,12 +1,12 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
-import { inflectionColor, growthColor, fmtPct, type StaplesScannerData, type ScanRow, type ScanLevel, type Inflection } from "@/lib/staplesScanner";
+import { inflectionColor, growthColor, fmtPct, scanHistoryFor, type StaplesScannerData, type ScanRow, type ScanLevel, type Inflection, type ScanPoint } from "@/lib/staplesScanner";
 
 type FlatRow = ScanRow & { segment: string; source: string; periodEnd: string };
 type SortKey = "label" | "segment" | "category" | "l2w" | "l4w" | "l12w" | "l52w" | "volume" | "priceMix" | "shareDeltaBps" | "inflection";
@@ -34,6 +34,56 @@ const LEVELS: { key: ScanLevel; label: string }[] = [
   { key: "brand", label: "Brands" },
 ];
 
+// Tiny line chart for the trend panels — a zero baseline, an accent line, and green/red dots per point.
+function MiniLine({ pts, labels, width = 230, height = 46 }: { pts: (number | null | undefined)[]; labels: string[]; width?: number; height?: number }) {
+  const vals = pts.filter((v): v is number => v != null);
+  if (!vals.length) return <div className="py-3 text-[11px] text-[var(--text-4)]">no data</div>;
+  const pad = (Math.max(...vals, 0) - Math.min(...vals, 0)) * 0.15 || 1;
+  const lo = Math.min(...vals, 0) - pad, hi = Math.max(...vals, 0) + pad;
+  const n = pts.length, ML = 6, MR = 6, MT = 6, MB = 13;
+  const x = (i: number) => (n <= 1 ? width / 2 : ML + (i / (n - 1)) * (width - ML - MR));
+  const y = (v: number) => MT + (1 - (v - lo) / (hi - lo || 1)) * (height - MT - MB);
+  const drawn = pts.map((v, i) => ({ i, v })).filter((p): p is { i: number; v: number } => p.v != null);
+  const path = drawn.map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)} ${y(p.v).toFixed(1)}`).join("");
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ maxWidth: width }} className="tabular-nums">
+      <line x1={ML} x2={width - MR} y1={y(0)} y2={y(0)} stroke="var(--text-4)" strokeOpacity={0.3} strokeDasharray="2 2" />
+      {drawn.length > 1 && <path d={path} fill="none" stroke="var(--accent)" strokeWidth={1.5} />}
+      {drawn.map((p) => <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={2.4} fill={p.v >= 0 ? "#22c55e" : "#ef4444"} />)}
+      {labels.map((l, i) => <text key={i} x={x(i)} y={height - 3} fontSize={8} fill="var(--text-4)" textAnchor="middle">{l}</text>)}
+    </svg>
+  );
+}
+
+// Per-entity trend panel: momentum WITHIN the latest read (52w→2w) + the cross-report series (accrues).
+function ScanTrend({ history, row }: { history: ScanPoint[]; row: FlatRow }) {
+  const latest = history.length ? history[history.length - 1] : null;
+  const d = latest?.dollar ?? row.dollar;
+  const series = history.filter((h) => h.dollar.l4w != null);
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Momentum — this read (long → recent window)</div>
+        <MiniLine pts={[d.l52w, d.l12w, d.l4w, d.l2w]} labels={["52w", "12w", "4w", "2w"]} />
+        <div className="mt-1 text-[11px] text-[var(--text-4)]">L4w <b style={{ color: growthColor(d.l4w) }}>{fmtPct(d.l4w)}</b> vs L12w <b style={{ color: growthColor(d.l12w) }}>{fmtPct(d.l12w)}</b> — {row.inflection ?? "trend n/a"}. Sloping up left→right = accelerating demand.</div>
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Over time — L4wk $ growth by report</div>
+        {series.length >= 2 ? (
+          <>
+            <MiniLine pts={series.map((h) => h.dollar.l4w)} labels={series.map((h) => (h.periodEnd || "").slice(5))} />
+            <div className="mt-1 text-[11px] text-[var(--text-4)]">{series.length} biweekly reads · thru {series.at(-1)?.periodEnd}</div>
+          </>
+        ) : (
+          <div className="rounded-lg border border-dashed border-[var(--border)] px-3 py-4 text-[11px] leading-relaxed text-[var(--text-4)]">
+            One read so far ({latest?.periodEnd ?? row.periodEnd}). The trend line fills in as each biweekly NielsenIQ scan is added — the history accrues automatically.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function StaplesScannerView({ universe, data }: { universe: string; data: StaplesScannerData }) {
   const reports = data.reports ?? [];
   // Flatten to the LATEST row per (level + name + category), tagged with its report's segment/source/period.
@@ -51,6 +101,7 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
 
   const segments = useMemo(() => ["All", ...Array.from(new Set(flat.map((r) => r.segment).filter(Boolean))).sort()], [flat]);
   const [seg, setSeg] = useState("All");
+  const [openKey, setOpenKey] = useState<string | null>(null); // expanded row → trend-over-time panel
   const [level, setLevel] = useState<ScanLevel>("company");
   const [sortKey, setSortKey] = useState<SortKey>("l4w");
   const [dir, setDir] = useState<1 | -1>(-1);
@@ -149,13 +200,20 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <tr key={`${r.level}-${r.ticker || r.label}-${r.category}-${i}`} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+              {rows.map((r, i) => {
+                const rowKey = `${r.level}|${r.ticker || r.label}|${r.category}`;
+                const open = openKey === rowKey;
+                return (
+                <Fragment key={`${rowKey}-${i}`}>
+                <tr className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                   <td className="px-3 py-2">
-                    {r.ticker
-                      ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-semibold text-[var(--accent)] hover:underline">{r.label}</Link>
-                      : <span className="font-medium text-[var(--text-2)]">{r.label}</span>}
-                    {r.ticker && <span className="ml-1 font-mono text-[10px] text-[var(--text-4)]">{r.ticker}</span>}
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => setOpenKey(open ? null : rowKey)} className="shrink-0 text-[10px] text-[var(--text-4)] hover:text-[var(--text)]" title="Trend over time" aria-label="Toggle trend">{open ? "▾" : "▸"}</button>
+                      {r.ticker
+                        ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-semibold text-[var(--accent)] hover:underline">{r.label}</Link>
+                        : <span className="font-medium text-[var(--text-2)]">{r.label}</span>}
+                      {r.ticker && <span className="font-mono text-[10px] text-[var(--text-4)]">{r.ticker}</span>}
+                    </div>
                     {r.note && <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.note}>{r.note}</div>}
                   </td>
                   <td className="hidden px-2 py-2 text-[12px] text-[var(--text-4)] sm:table-cell">{r.segment}</td>
@@ -169,7 +227,16 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
                   <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.shareDeltaBps == null ? "var(--text-4)" : r.shareDeltaBps >= 0 ? "#22c55e" : "#ef4444" }}>{r.shareDeltaBps == null ? "—" : `${r.shareDeltaBps >= 0 ? "+" : ""}${r.shareDeltaBps}bp`}</td>
                   <td className="px-3 py-2 text-[12px]"><Trend i={r.inflection ?? null} /></td>
                 </tr>
-              ))}
+                {open && (
+                  <tr className="bg-[var(--surface-2)]">
+                    <td colSpan={11} className="px-3 pb-4 pt-1">
+                      <ScanTrend history={scanHistoryFor(data, r.level, r.ticker || r.label, r.category)} row={r} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
