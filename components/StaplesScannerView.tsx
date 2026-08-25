@@ -9,9 +9,15 @@ import HowToRead from "./HowToRead";
 import { inflectionColor, growthColor, fmtPct, scanHistoryFor, type StaplesScannerData, type ScanRow, type ScanLevel, type Inflection, type ScanPoint } from "@/lib/staplesScanner";
 
 type FlatRow = ScanRow & { segment: string; source: string; periodEnd: string };
-type SortKey = "label" | "segment" | "category" | "l2w" | "l4w" | "l12w" | "l52w" | "volume" | "priceMix" | "shareDeltaBps" | "inflection";
+type SortKey = "label" | "segment" | "category" | "l2w" | "l4w" | "l12w" | "l52w" | "volume" | "priceMix" | "shareDeltaBps" | "inflection" | "momentum";
 
 const infRank = (i: Inflection) => (i === "accelerating" ? 3 : i === "stable" ? 2 : i === "decelerating" ? 1 : 0);
+// Momentum score = recent-minus-long window slope (52w→2w), the same thing the sparkline draws.
+// Positive = accelerating; sort desc for steepest accelerators, asc for steepest decelerators.
+const momentumOf = (r: FlatRow): number | null => {
+  const seq = [r.dollar.l52w, r.dollar.l12w, r.dollar.l4w, r.dollar.l2w].filter((v): v is number => v != null);
+  return seq.length >= 2 ? seq[seq.length - 1] - seq[0] : null;
+};
 const getVal = (r: FlatRow, k: SortKey): number | string | null => {
   switch (k) {
     case "label": return r.label;
@@ -25,6 +31,7 @@ const getVal = (r: FlatRow, k: SortKey): number | string | null => {
     case "priceMix": return r.priceMix ?? null;
     case "shareDeltaBps": return r.shareDeltaBps ?? null;
     case "inflection": return infRank(r.inflection ?? null);
+    case "momentum": return momentumOf(r);
   }
 };
 
@@ -221,7 +228,7 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
                 <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("volume")}>Vol<Arrow k="volume" /></th>
                 <th className={"hidden px-2 py-2 text-right font-medium lg:table-cell " + thBtn} onClick={() => onSort("priceMix")}>Px/mix<Arrow k="priceMix" /></th>
                 <th className={"px-2 py-2 text-right font-medium " + thBtn} onClick={() => onSort("shareDeltaBps")}>Share Δ<InfoDot text="y/y dollar-share change, basis points. + = gaining share." /><Arrow k="shareDeltaBps" /></th>
-                <th className="hidden px-2 py-2 text-center font-medium md:table-cell">Momentum<InfoDot text="The 52w→12w→4w→2w $-growth trajectory. Sloping up left→right = accelerating demand into the print; down = decelerating." /></th>
+                <th className={"hidden px-2 py-2 text-center font-medium md:table-cell " + thBtn} onClick={() => onSort("momentum")}>Momentum<InfoDot text="The 52w→12w→4w→2w $-growth trajectory. Sloping up left→right = accelerating demand into the print; down = decelerating. Sort to rank by steepest acceleration (desc) / deceleration (asc)." /><Arrow k="momentum" /></th>
                 <th className={"px-3 py-2 font-medium " + thBtn} onClick={() => onSort("inflection")}>Trend<InfoDot text="Accelerating / stable / decelerating — L4wk vs L12wk (or as the note states it). The tradeable signal into a print." /><Arrow k="inflection" /></th>
               </tr>
             </thead>
