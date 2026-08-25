@@ -26,7 +26,7 @@
     "q": "tsx scripts/q.ts",
     "data-to-r2": "tsx scripts/data-to-r2.ts",
     "data-from-r2": "tsx scripts/data-from-r2.ts",
-    "vercel-build": "tsx scripts/data-from-r2.ts && next build",
+    "vercel-build": "tsx scripts/data-from-r2.ts && node scripts/gen-tracing-excludes.mjs --write && next build",
     "test": "node --import tsx --test tests/*.test.ts",
     "eval-alerts": "tsx scripts/eval-alerts.ts",
     "refresh-spinoffs": "tsx scripts/refresh-spinoffs.ts",

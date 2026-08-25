@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { tracingExcludes } from "./lib/tracingExcludes.mjs";
 
 // Bake a build stamp into the bundle so the running site can show WHICH deploy is live (see
 // components/VersionBadge.tsx). On Vercel, VERCEL_GIT_COMMIT_SHA is provided; locally we read git
@@ -39,11 +40,18 @@ const nextConfig = {
   // keep it external so the bundler doesn't trip over its optional deps.
   serverExternalPackages: ["pdf-parse"],
   // Bundle the local market-data JSON into the serverless functions that read it
-  // (Vercel's runtime filesystem only contains traced files).
+  // (Vercel's runtime filesystem only contains traced files). This is a safe, blanket include;
+  // outputFileTracingExcludes below then trims the two BIG dynamic dirs (data/series/**, ~200 MB, and
+  // data/company/**) back out of the functions that don't read them, keeping each Vercel function well
+  // under the 250 MB limit. Excludes are applied AFTER includes and only REMOVE files, so this can
+  // never leave a route without data it needs (see lib/tracingExcludes.mjs for how it's proven safe).
+  // Note: only relevant to serverless packaging (Vercel) — the NAS runs `next start` and reads data/
+  // off disk directly, so these traces don't affect it.
   outputFileTracingIncludes: {
     "/u/**": ["./data/**"],
     "/api/**": ["./data/**"],
   },
+  outputFileTracingExcludes: tracingExcludes,
 };
 
 export default nextConfig;
