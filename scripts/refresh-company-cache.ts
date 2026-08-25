@@ -33,9 +33,12 @@ const ageDays = (iso: string) => (Date.now() - Date.parse(iso)) / 86_400_000;
 // Early-warning when the good-IP bake pipe (the "pc" writer) goes dark. Once its R2 stamp is stale
 // past this, THIS box's fallback bake can't refresh the cache (its egress gets degraded Yahoo
 // payloads), so the per-stock cache silently drifts STALE — that's how it went ~10 days unnoticed in
-// 2026-08. Page once/day so a dark box is caught in hours. Stamp lives in lake/.tmp (gitignored, not
-// in the data tarball). Best-effort: never throws, never blocks the bake.
-const PC_DARK_WARN_H = Number(process.env.COMPANY_CACHE_PC_DARK_WARN_H || 48);
+// 2026-08. Default 26h = the 24h stand-down line (shouldStandDown) + a 2h grace: the PC bakes daily,
+// so a healthy stamp is <24h at the NAS's once-daily FULL check (~20h in practice), and a stamp past
+// 26h means it already MISSED a nightly bake — i.e. a genuinely dark/failing box, caught within a day.
+// Page once/day (DARK_STAMP dedupe). Stamp lives in lake/.tmp (gitignored, not in the data tarball).
+// Best-effort: never throws, never blocks the bake.
+const PC_DARK_WARN_H = Number(process.env.COMPANY_CACHE_PC_DARK_WARN_H || 26);
 const DARK_STAMP = path.join("lake", ".tmp", "company-cache-dark-alert.json");
 async function warnIfPrimaryPipeDark(manifest: CompanyManifest | null, self: string): Promise<void> {
   try {
