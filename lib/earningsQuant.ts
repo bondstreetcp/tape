@@ -15,6 +15,7 @@ import { resolvePeers } from "./industryPeers";
 import { yahoo } from "./yahooClient";
 import { beatGuide, type GuidanceData, type GuidanceTicker } from "./guidance";
 import type { SssData, SssTicker } from "./sameStoreSales";
+import { latestScannerFor, type StaplesScannerData, type ScannerRead } from "./staplesScanner";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -165,6 +166,15 @@ export function loadSss(sym: string): SssTicker | null {
     const p = join(process.cwd(), "data", "same-store-sales.json");
     if (!existsSync(p)) return null;
     return (JSON.parse(readFileSync(p, "utf8")) as SssData).byTicker?.[sym] ?? null;
+  } catch { return null; }
+}
+// This name's latest NielsenIQ scanner read (staples only; null for everyone else) — so the AI earnings
+// preview KNOWS the ~2-week-lagged demand/share trend exists and can ground its read in it.
+export function loadScannerRead(sym: string): ScannerRead | null {
+  try {
+    const p = join(process.cwd(), "data", "staples-scanner.json");
+    if (!existsSync(p)) return null;
+    return latestScannerFor(JSON.parse(readFileSync(p, "utf8")) as StaplesScannerData, sym);
   } catch { return null; }
 }
 

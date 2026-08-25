@@ -22,7 +22,7 @@ import { getLatestTranscript } from "./transcripts";
 import { getEarningsReactions } from "./earningsReaction";
 import { getFilings, getFilingText } from "./edgar";
 import { chatJSON, NO_ADVICE, PRO_MODEL, FLASH_MODEL } from "./llm";
-import { computeQuant, buildSig, loadGuidance, loadSss, type QuantResult } from "./earningsQuant";
+import { computeQuant, buildSig, loadGuidance, loadSss, loadScannerRead, type QuantResult } from "./earningsQuant";
 import type { CompanyStats } from "./companyStats";
 
 /** Race a live sub-fetch against a timeout so one slow source (the NAS home uplink) can't stall the
@@ -101,7 +101,16 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
   ]);
   const guid = loadGuidance(sym);
   const sss = loadSss(sym);
+  const scan = loadScannerRead(sym); // NielsenIQ read — staples names only, else null
   const gQuoted = (guid?.guides || []).find((g) => g.action !== "none" && g.quote);
+  const pct = (v: number | null | undefined) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+  const scannerCtx = scan
+    ? `\n\nNIELSEN SCANNER (this terminal's licensed NielsenIQ US retail read for ${sym}, thru ${scan.periodEnd || "?"} — a ~2-week-lagged LEADING indicator of this STAPLES name's quarter, ahead of the print): ` +
+      `US $ sales L4wk ${pct(scan.row.dollar.l4w)} vs L12wk ${pct(scan.row.dollar.l12w)} (${scan.row.inflection ?? "trend n/a"})` +
+      `${scan.row.volume != null ? `, volume ${pct(scan.row.volume)}` : ""}${scan.row.priceMix != null ? `, price/mix ${pct(scan.row.priceMix)}` : ""}` +
+      `${scan.row.shareDeltaBps != null ? `, dollar share ${scan.row.shareDeltaBps >= 0 ? "+" : ""}${scan.row.shareDeltaBps}bps` : ""}${scan.row.category ? ` [${scan.row.category}]` : ""}${scan.row.note ? ` — ${scan.row.note}` : ""}. ` +
+      `GROUND the demand / quarter read in this: accelerating scanner (L4wk > L12wk) + share gains into the print is a strong-quarter setup, decelerating + share loss is a soft-quarter / guide-down setup. Cite ONLY these scanner figures — never invent a number.`
+    : "";
 
   // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —
   // a client-supplied string was spoofable and the poisoned preview would be CDN-cached).
@@ -120,6 +129,7 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     `Peers (CODE-SELECTED from ${peerSet ? `"${peerSet.label}"` : "classification data"}): ${peerSet?.peers.length ? peerSet.peers.map((p) => `${p.symbol}${p.name ? ` (${p.name})` : ""}`).join(", ") : "none identified"}.` +
     (gQuoted ? `\n\nSTANDING GUIDANCE, in the company's OWN WORDS (${gQuoted.period}, ${gQuoted.action}): "${String(gQuoted.quote).slice(0, 500)}"` : "") +
     (sig ? `\n\nQUANT SIGNALS — this terminal's own options + reaction-history analysis (GROUND the preview in the notable ones; synthesize, don't just restate): ${sig.slice(0, 1400)}` : "") +
+    scannerCtx +
     (priorRelease?.text ? `\n\nPRIOR EARNINGS PRESS RELEASE (8-K filed ${priorRelease.date} — the company's own results + outlook language from LAST quarter):\n${priorRelease.text.slice(0, 6000)}` : "") +
     (transcript?.text && transcript.text.length > 1000 ? `\n\nMOST RECENT EARNINGS CALL (${transcript.date || "prior quarter"} — ${transcript.title}):\n${transcript.text.slice(0, 9000)}` : "");
   return { sym, stats, quant, sig, consEps: q0?.epsAvg ?? null, consRevB: q0?.revAvg != null ? q0.revAvg / 1e9 : null, ctx };
@@ -152,6 +162,7 @@ export async function buildAiPreview(c: PreviewContext, opts: { bounded?: boolea
     "'peerReads' = 2-3 recent reads STRICTLY about the companies in the supplied 'Peers (CODE-SELECTED)' list — or a supplier/customer you can tie MECHANICALLY to this company's P&L — that already reported or pre-announced, with the implied read-through for this name. NEVER treat a name-similar company as a peer: ticker/name searches return unrelated companies with similar names (search noise), so any company that is neither this one nor a listed peer must be IGNORED everywhere in the preview, not just here. If there is no genuine peer signal, return []. " +
     "'bull' = the bull case into the print; 'bear' = the bear case / what's priced in. " +
     "If QUANT SIGNALS are supplied below, GROUND moneyLine/overview/bull/bear in the notable ones — e.g. options pricing a rich vs cheap move, a sell-the-news reaction pattern, post-earnings drift, a sandbagging guidance history, vol-crush — woven naturally into the narrative, NOT as a bullet dump. " +
+    "If a NIELSEN SCANNER read is supplied (staples names only), it is the ~2-week-lagged LEADING read on THIS quarter's demand & share — weave whether US scanner sales are ACCELERATING or DECELERATING vs the 12-week and any dollar-share gain/loss into the thesis/debate/bull/bear (decelerating + share loss = a soft-quarter / guide-down setup; accelerating + share gains = the opposite). Cite only the supplied scanner figures. " +
     "'fromLastCall' = if a MOST RECENT EARNINGS CALL transcript is supplied below, 1-2 sentences on what management SAID or COMMITTED to last call (guidance given, targets, tone, promises) + the ONE thing to check for follow-through THIS print; if no transcript is supplied, return ''. " +
     "Use specific NUMBERS only from the supplied data; name segment/guidance items without fabricating precise figures. " +
     NO_ADVICE;
