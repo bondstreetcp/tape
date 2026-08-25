@@ -11,7 +11,7 @@ export const maxDuration = 30;
 export async function GET() {
   const headlines = await memo(
     "market-headlines:live",
-    300_000, // 5 minutes
+    120_000, // 2 minutes — his Telegram runs ~1 min behind X, so a tighter cadence keeps the wire near-live
     async () => {
       const live = await fetchLiveMarketHeadlines(60).catch(() => []);
       return live.length ? live : await getMarketHeadlines(60).catch(() => []);
@@ -20,6 +20,6 @@ export async function GET() {
   );
   return NextResponse.json(
     { headlines },
-    { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900" } },
+    { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } },
   );
 }

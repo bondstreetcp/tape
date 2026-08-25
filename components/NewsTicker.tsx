@@ -20,7 +20,7 @@ export default function NewsTicker() {
         .then((j) => { if (alive && Array.isArray(j.headlines) && j.headlines.length) { setItems(j.headlines.slice(0, 30)); setHidden(false); } })
         .catch(() => { /* leave hidden */ });
     load();
-    const t = setInterval(load, 300_000);
+    const t = setInterval(load, 120_000); // ~2-min live
     return () => { alive = false; clearInterval(t); };
   }, []);
 

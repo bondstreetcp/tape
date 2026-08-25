@@ -14,11 +14,14 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
   useEffect(() => {
     setMounted(true);
     let alive = true;
-    fetch("/api/market-headlines")
-      .then((r) => r.json())
-      .then((j) => { if (alive && Array.isArray(j.headlines) && j.headlines.length) setHeadlines(j.headlines); })
-      .catch(() => { /* keep the SSR seed */ });
-    return () => { alive = false; };
+    const load = () =>
+      fetch("/api/market-headlines")
+        .then((r) => r.json())
+        .then((j) => { if (alive && Array.isArray(j.headlines) && j.headlines.length) setHeadlines(j.headlines); })
+        .catch(() => { /* keep the SSR seed */ });
+    load();
+    const t = setInterval(load, 120_000); // ~2-min live
+    return () => { alive = false; clearInterval(t); };
   }, []);
 
   const ago = (iso: string | null) => {
@@ -27,6 +30,7 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
     if (!Number.isFinite(m) || m < 0) return "";
     return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
   };
+  const isFresh = (iso: string | null) => mounted && !!iso && Date.now() - Date.parse(iso) < 4 * 60_000;
 
   if (!headlines.length) {
     return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No market headlines just now — the wire refreshes every few minutes.</div>;
@@ -50,7 +54,11 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
               {h.ticker && <a href={`/u/${universe}/stock/${h.ticker}`} className="ml-1.5 inline-block rounded px-1 py-0.5 align-middle text-[10px] font-semibold text-[var(--accent)] hover:brightness-125" style={{ background: "var(--accent-soft)" }} title={`Open ${h.ticker}`}>{h.ticker}</a>}
             </span>
           </span>
-          {ago(h.time) && <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-4)]">{ago(h.time)}</span>}
+          {isFresh(h.time) ? (
+            <span className="shrink-0 animate-pulse text-[10px] font-bold tracking-wide text-[var(--accent)]">NEW</span>
+          ) : ago(h.time) ? (
+            <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-4)]">{ago(h.time)}</span>
+          ) : null}
         </div>
       ))}
     </div>

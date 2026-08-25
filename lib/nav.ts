@@ -30,6 +30,7 @@ export const FEATURES: NavItem[] = [
   // ── Markets
   { label: "Heatmap", path: "/heatmap", desc: "Treemap of the market — tile size = market cap, color = return", group: "Markets", job: "Track the market", kw: "treemap map sectors" },
   { label: "Cross-Asset Monitor", path: "/market", desc: "Stocks, rates, FX, commodities, and crypto on one screen", group: "Markets", job: "Track the market", kw: "macro assets bonds fx commodities" },
+  { label: "Market Wire", path: "/wire", desc: "Live macro/market/geopolitical headlines — Walter Bloomberg's curated flashes + Reuters/Bloomberg/CNBC, refreshed ~every 2 min", group: "Markets", job: "Track the market", kw: "news wire headlines walter bloomberg deltaone reuters bloomberg cnbc wsj macro fed trade tariffs opec geopolitics breaking flash live ticker crossing" },
   { label: "Sector Rotation", path: "/rotation", desc: "Which sectors are leading and which are lagging", group: "Markets", job: "Track the market", kw: "sectors leaders laggards" },
   { label: "Leaders Board", path: "/leaders", desc: "Every name ranked by relative strength, with momentum quadrants and breakouts", group: "Markets", job: "Find ideas", kw: "relative strength rs leaders laggards momentum breakout rrg ibd trend" },
   { label: "Options Flow", path: "/flow", desc: "Unusually large options trades across the S&P 500", group: "Markets", job: "Find ideas", kw: "options unusual calls puts premium" },
