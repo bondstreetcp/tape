@@ -115,6 +115,7 @@ export interface ScannerRead {
   source: string;
   segment: string;
   row: ScanRow;
+  deskRead: string | null; // the board-wide AI desk-read headline, so the aggregate takeaway travels with the name
 }
 
 /** Find a ticker's most-recent COMPANY-level scanner row across all reports. Null for non-covered names. */
@@ -125,7 +126,7 @@ export function latestScannerFor(data: StaplesScannerData | null, ticker: string
   for (const rep of data.reports ?? []) {
     for (const row of rep.rows ?? []) {
       if (row.level === "company" && row.ticker === T && (!best || (rep.periodEnd || "") > best.periodEnd)) {
-        best = { periodEnd: rep.periodEnd, source: rep.source, segment: rep.segment, row };
+        best = { periodEnd: rep.periodEnd, source: rep.source, segment: rep.segment, row, deskRead: data.summary?.headline ?? null };
       }
     }
   }

@@ -644,6 +644,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
               {scanner.row.shareDeltaBps != null && <span><b className="text-[var(--text-2)]">Share</b> <span style={{ color: scanner.row.shareDeltaBps >= 0 ? "#22c55e" : "#ef4444" }}>{scanner.row.shareDeltaBps >= 0 ? "+" : ""}{scanner.row.shareDeltaBps}bp</span></span>}
             </div>
             {scanner.row.note && <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-3)]">{scanner.row.note}</div>}
+            {scanner.deskRead && <div className="mt-1.5 border-t border-[var(--divider)] pt-1.5 text-[11px] leading-snug text-[var(--text-4)]"><b className="text-[var(--text-3)]">Scanner desk read:</b> {scanner.deskRead}</div>}
             <div className="mt-1.5 text-[10px] text-[var(--text-4)]">{scanner.source} · NielsenIQ thru {scanner.periodEnd || "?"}</div>
           </Bento>
         )}

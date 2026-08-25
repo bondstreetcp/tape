@@ -444,8 +444,10 @@ async function main() {
       actions,
     ) +
     block(
-      "STAPLES SCANNER — NielsenIQ US demand & share for staples names reporting today/tomorrow (a ~2-week-lagged leading read on the print; lead the watch note for these names with whether scanner sales are accelerating or decelerating vs the 12-week and any share gains/losses)",
-      scannerLines,
+      "STAPLES SCANNER — NielsenIQ US demand & share for staples names reporting today/tomorrow (a ~2-week-lagged leading read on the print; lead the watch note for these names with whether scanner sales are accelerating or decelerating vs the 12-week and any share gains/losses). A leading DESK READ line, when present, is the AI's whole-scanner takeaway — use it for thematic staples context, but keep each name's watch note grounded in ITS OWN scanner figures",
+      scannerLines.length && scannerData?.summary?.headline
+        ? [`DESK READ (whole scanner, thru ${scannerData.summary.periodEnd || "?"}): ${scannerData.summary.headline}`, ...scannerLines]
+        : scannerLines,
     );
 
   const counts = { movers: movers.length, filings: filings.length, flow: flows.length, analyst: actions.length };
