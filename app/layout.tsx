@@ -4,6 +4,7 @@ import ThemeManager from "@/components/ThemeManager";
 import VersionBadge from "@/components/VersionBadge";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import NewsTicker from "@/components/NewsTicker";
+import WhatsNew from "@/components/WhatsNew";
 
 export const metadata: Metadata = {
   title: "Tape — Equity Research",
@@ -52,6 +53,7 @@ export default function RootLayout({
         <ThemeManager />
         {children}
         <NewsTicker />
+        <WhatsNew />
         <FeedbackWidget />
         <VersionBadge />
       </body>
