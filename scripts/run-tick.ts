@@ -174,6 +174,8 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh 13F quarter story", cmd: "npm run refresh-13f-story", when: "full", narr: true },
   { name: "Refresh Congress summary", cmd: "npm run refresh-congress-summary", when: "full", narr: true },
   { name: "Refresh macro (FRED)", cmd: "npm run refresh-macro", when: "full" },
+  // "Recent releases" — the actual BEA/BLS prints (GDP, PCE, CPI, jobs…). Keyless, no LLM.
+  { name: "Refresh macro releases (BEA/BLS actuals)", cmd: "npm run refresh-macro-releases", when: "full" },
   { name: "Evaluate alerts", cmd: "npm run eval-alerts", when: "always" },
   { name: "Export research lake (Parquet → R2)", cmd: "npm run build-lake && npm run backfill-prices", when: "full" },
 ];

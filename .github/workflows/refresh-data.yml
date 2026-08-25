@@ -908,6 +908,12 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         continue-on-error: true
 
+      # "Recent releases" — the actual BEA/BLS macro prints (GDP, PCE, CPI, jobs…). Keyless, no LLM.
+      - name: Refresh macro releases (BEA/BLS actuals)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-macro-releases
+        continue-on-error: true
+
       # Evaluate user alert rules against the freshly-refreshed data and write matches to Postgres
       # (the in-app bell). Runs on EVERY tick — intraday (after the quotes refresh, so price alerts
       # fire during the session) and FULL (after the full rebuild). Writes to the DB, not data/, so

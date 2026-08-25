@@ -6,6 +6,7 @@ import type { CurvePoint, MacroInd } from "@/lib/fred";
 import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
 import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
+import { CATEGORY_COLOR, type MacroRelease } from "@/lib/macroReleases";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
@@ -271,6 +272,7 @@ export default function MacroDashboard({
   volOil,
   releases,
   creditSeries,
+  recentReleases,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -280,6 +282,7 @@ export default function MacroDashboard({
   volOil?: VolOil;
   releases?: Record<string, ReleaseData>;
   creditSeries?: CreditSeries;
+  recentReleases?: MacroRelease[];
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -372,6 +375,30 @@ export default function MacroDashboard({
 
       {section === "calendar" && (
       <section className="mb-5">
+        {recentReleases && recentReleases.length > 0 && (
+          <div className="mb-5">
+            <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Recent releases <span className="font-normal text-[var(--text-4)]">— just printed, primary-source (BEA &amp; BLS)</span></h2>
+            <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+              {recentReleases.map((r, i) => (
+                <a
+                  key={i}
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-2 border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0 hover:bg-[var(--surface-hover)]"
+                  title={`${r.source} · ${r.category} · ${new Date(r.date).toLocaleDateString()}`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${CATEGORY_COLOR[r.category]}22`, color: CATEGORY_COLOR[r.category] }}>{r.source}</span>
+                    <span className="truncate text-[var(--text)]">{r.title}{r.source === "BEA" && r.value ? <span className="text-[var(--text-3)]"> · {r.value}</span> : ""}</span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-3)]">{new Date(r.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                </a>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-[var(--text-4)]">The actual print the moment it publishes — free &amp; keyless from BEA/BLS (no wire subscription). Click through to the release.</p>
+          </div>
+        )}
         <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Upcoming US economic releases</h2>
         {calendar.length === 0 ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-xs text-[var(--text-3)]">No upcoming releases found.</div>
