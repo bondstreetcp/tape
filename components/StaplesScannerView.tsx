@@ -247,7 +247,7 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
                         : <span className="font-medium text-[var(--text-2)]">{r.label}</span>}
                       {r.ticker && <span className="font-mono text-[10px] text-[var(--text-4)]">{r.ticker}</span>}
                     </div>
-                    {r.note && <div className="max-w-[280px] truncate text-[11px] text-[var(--text-4)]" title={r.note}>{r.note}</div>}
+                    {r.note && <div className="max-w-[340px] text-[11px] leading-snug text-[var(--text-4)]" title={r.note}>{r.note}</div>}
                   </td>
                   <td className="hidden px-2 py-2 text-[12px] text-[var(--text-4)] sm:table-cell">{r.segment}</td>
                   {level !== "category" && <td className="hidden px-2 py-2 text-[12px] text-[var(--text-3)] md:table-cell">{r.category}</td>}
