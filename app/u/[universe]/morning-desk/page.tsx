@@ -12,6 +12,8 @@ import Briefing from "@/components/Briefing";
 import DailyDeskTabs from "@/components/DailyDeskTabs";
 import OvernightFilingsView from "@/components/OvernightFilingsView";
 import WatchlistWire from "@/components/WatchlistWire";
+import { getMarketHeadlines } from "@/lib/marketHeadlines";
+import MarketHeadlinesWire from "@/components/MarketHeadlinesWire";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +44,12 @@ export default async function DailyDeskPage({
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   const { tab } = await searchParams;
-  const [note, overnight, snapshot, related] = await Promise.all([
+  const [note, overnight, snapshot, related, headlines] = await Promise.all([
     loadDeskNote(),
     loadOvernightFilings().catch(() => null),
     loadSnapshot(universe).catch(() => null),
     loadRelated(),
+    getMarketHeadlines().catch(() => []),
   ]);
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   const sectors: Record<string, string> = {};
@@ -86,6 +89,16 @@ export default async function DailyDeskPage({
               <Briefing />
             </section>
           </>
+        }
+        headlines={
+          <section>
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--divider)] pb-1.5">
+              <h2 className="text-lg font-bold text-[var(--text)]">Market headlines</h2>
+              <span className="text-[11px] text-[var(--text-4)]">macro · Fed · trade · energy · geopolitics — free wire, ~5-min live</span>
+            </div>
+            <MarketHeadlinesWire initial={headlines} />
+            <p className="mt-2 text-[11px] text-[var(--text-4)]">The macro/geopolitical flashes the company news wire doesn&apos;t carry — aggregated from public news (Google News). Not sub-second, not curated; research, not advice.</p>
+          </section>
         }
         filings={
           overnight ? (

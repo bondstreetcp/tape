@@ -1,7 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 
-type Tab = "brief" | "wire" | "filings";
+type Tab = "brief" | "wire" | "headlines" | "filings";
 
 // Sub-tabs for the Daily Desk — the morning workflow in one place, in reading order: the AI desk
 // brief, the Reuters news wire, then Overnight Filings (2026-08, Sam: "wake up in the morning —
@@ -10,8 +10,10 @@ type Tab = "brief" | "wire" | "filings";
 // self-fetching Briefing keeps its loaded state) and toggle with CSS, so switching is instant and
 // never refetches. The tab mirrors to ?tab= so wire/filings views are deep-linkable (old /briefing
 // bookmarks land on wire).
-export default function DailyDeskTabs({ initial, brief, wire, filings }: { initial?: string; brief: ReactNode; wire: ReactNode; filings?: ReactNode }) {
-  const [tab, setTab] = useState<Tab>(initial === "wire" ? "wire" : initial === "filings" && filings ? "filings" : "brief");
+export default function DailyDeskTabs({ initial, brief, wire, headlines, filings }: { initial?: string; brief: ReactNode; wire: ReactNode; headlines?: ReactNode; filings?: ReactNode }) {
+  const [tab, setTab] = useState<Tab>(
+    initial === "wire" ? "wire" : initial === "headlines" && headlines ? "headlines" : initial === "filings" && filings ? "filings" : "brief",
+  );
   const pick = (t: Tab) => {
     setTab(t);
     try {
@@ -30,10 +32,12 @@ export default function DailyDeskTabs({ initial, brief, wire, filings }: { initi
       <div className="mb-4 inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
         <button onClick={() => pick("brief")} className={TB(tab === "brief")} title="The AI desk brief — movers, filings, options flow, analyst actions">Desk Brief</button>
         <button onClick={() => pick("wire")} className={TB(tab === "wire")} title="Reuters Morning News Call · The Day Ahead">News Wire</button>
+        {headlines && <button onClick={() => pick("headlines")} className={TB(tab === "headlines")} title="Market headlines — macro, Fed, trade, energy & geopolitics (free wire, ~5-min live)">Market Headlines</button>}
         {filings && <button onClick={() => pick("filings")} className={TB(tab === "filings")} title="Overnight Filings — AI desk notes on new material SEC filings vs the prior comparable">Overnight Filings</button>}
       </div>
       <div className={tab === "brief" ? "" : "hidden"}>{brief}</div>
       <div className={tab === "wire" ? "" : "hidden"}>{wire}</div>
+      {headlines && <div className={tab === "headlines" ? "" : "hidden"}>{headlines}</div>}
       {filings && <div className={tab === "filings" ? "" : "hidden"}>{filings}</div>}
     </div>
   );
