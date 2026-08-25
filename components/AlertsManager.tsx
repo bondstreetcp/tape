@@ -19,6 +19,7 @@ const SIGNALS = [
   { key: "cheap10y", label: "Cheap vs its 10yr history" },
   { key: "rs_breakout", label: "Relative-strength breakout" },
   { key: "short_squeeze", label: "Short-squeeze risk" },
+  { key: "staples_inflection", label: "Staples scanner inflection (accel + share, into the print)" },
 ];
 
 function describeRule(r: AlertRule): string {

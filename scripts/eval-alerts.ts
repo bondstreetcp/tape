@@ -12,6 +12,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import postgres from "postgres";
+import { latestScannerFor } from "../lib/staplesScanner";
 
 // Load .env.local for local runs (CI injects env directly).
 try {
@@ -98,6 +99,7 @@ async function main() {
     const insiders = loadJSON("insiders.json")?.names ?? {};
     const valuation = loadJSON("valuation-history.json")?.names ?? {};
     const estimates = loadJSON("estimates.json")?.names ?? {};
+    const scannerData = loadJSON("staples-scanner.json"); // NielsenIQ scanner reads (staples names only)
 
     const events: Ev[] = [];
     const push = (r: Rule, symbol: string | null, dedup: string, title: string, body: string | null, href: string | null) =>
@@ -160,6 +162,17 @@ async function main() {
             const q = quotes.get(sym);
             if (q && q.pctFromHigh != null && q.pctFromHigh >= -2 && (q.ret3m ?? 0) >= 10)
               push(r, sym, `sig:rsb:${today}`, `${sym} breaking out`, `Within ${Math.abs(q.pctFromHigh).toFixed(1)}% of its 52-wk high, +${q.ret3m!.toFixed(0)}% in 3mo.`, stockHref(sym));
+          } else if (p.signal === "staples_inflection") {
+            // Covered staples names only (null for everyone else). Fires once per scan cycle (dedup on periodEnd).
+            const rd = latestScannerFor(scannerData, sym);
+            const f = (v: number | null | undefined) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+            if (rd) {
+              const inf = rd.row.inflection, share = rd.row.shareDeltaBps ?? 0;
+              if (inf === "decelerating" && share < 0)
+                push(r, sym, `sig:staples:weak:${rd.periodEnd}`, `${sym}: Nielsen scanner decelerating + losing share`, `Soft-quarter setup into the print — US $ L4wk ${f(rd.row.dollar.l4w)} vs L12wk ${f(rd.row.dollar.l12w)}, share ${share}bp (thru ${rd.periodEnd}).`, stockHref(sym));
+              else if (inf === "accelerating" && share > 0)
+                push(r, sym, `sig:staples:strong:${rd.periodEnd}`, `${sym}: Nielsen scanner accelerating + gaining share`, `Strong-quarter setup — US $ L4wk ${f(rd.row.dollar.l4w)} vs L12wk ${f(rd.row.dollar.l12w)}, share +${share}bp (thru ${rd.periodEnd}).`, stockHref(sym));
+            }
           }
         }
       }
