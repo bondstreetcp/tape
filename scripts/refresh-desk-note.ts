@@ -24,6 +24,7 @@ import { getNewsChecked, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
 import { buildMoveEvidence, cryptoExplains, type SocialBuzz } from "../lib/moveEvidence";
 import { getCryptoTape } from "../lib/market";
 import { latestScannerFor, type StaplesScannerData } from "../lib/staplesScanner";
+import { fetchLiveMarketHeadlines } from "../lib/marketHeadlinesFetch";
 import { askConfigured, gatherContext, askGemini } from "../lib/ask";
 import type { ApeWisdomData } from "../lib/apewisdom";
 import { detectRecentReport } from "../lib/preannounce";
@@ -401,6 +402,11 @@ async function main() {
     })
     .filter((x): x is string => !!x);
 
+  // Walter Bloomberg's curated market flashes crossing the tape — market-wide CONTEXT for the brief
+  // (Fed/macro/trade/geopolitics + company flashes). Free, from his public Telegram; degrade to none.
+  const wire = await fetchLiveMarketHeadlines(30).catch(() => []);
+  const wireLines = wire.filter((h) => h.curated).slice(0, 15).map((h) => `${h.title}${h.ticker ? ` [$${h.ticker}]` : ""}`);
+
   const [bio, bioVol, cvol, ipo] = await Promise.all([
     readJson<{ items?: any[] }>("biotech-catalysts.json"),
     readJson<{ rows?: any[] }>("biotech-vol.json"),
@@ -448,6 +454,10 @@ async function main() {
       scannerLines.length && scannerData?.summary?.headline
         ? [`DESK READ (whole scanner, thru ${scannerData.summary.periodEnd || "?"}): ${scannerData.summary.headline}`, ...scannerLines]
         : scannerLines,
+    ) +
+    block(
+      "WIRE — Walter Bloomberg's curated market flashes crossing the tape right now (Fed/macro/trade/geopolitics + company flashes). Use for MARKET-WIDE context and to make sure a big cross-asset or macro theme is reflected in the brief; treat a flash as a lead ONLY if the day's data corroborates it — never fabricate a single-stock bullet from a wire line alone",
+      wireLines,
     );
 
   const counts = { movers: movers.length, filings: filings.length, flow: flows.length, analyst: actions.length };
