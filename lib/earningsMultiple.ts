@@ -58,7 +58,10 @@ export async function getEarningsMultiple(symbol: string): Promise<EarningsMulti
     if (stepped.length < 30) return null;
 
     // the stock's own normal multiple = median of its trailing P/E over the window
-    const pes = stepped.map((s) => s.price / s.eps).filter((v) => Number.isFinite(v) && v > 0).sort((x, y) => x - y);
+    // Drop absurd multiples (P/E ≥ 200) before taking percentiles — a near-zero-EPS period makes
+    // price/eps astronomical and inflates the 75th-pctile band into the thousands (blew up the y-axis).
+    // 200 is generous: it clears the artifacts without clipping even hyper-growth names.
+    const pes = stepped.map((s) => s.price / s.eps).filter((v) => Number.isFinite(v) && v > 0 && v < 200).sort((x, y) => x - y);
     if (pes.length < 12) return null;
     const q = (pp: number) => pes[Math.min(pes.length - 1, Math.max(0, Math.round(pp * (pes.length - 1))))];
     const normalPE = q(0.5), loPE = q(0.25), hiPE = q(0.75);

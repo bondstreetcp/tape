@@ -63,11 +63,19 @@ function EMChart({ d, currency = "USD" }: { d: EM; currency?: string }) {
   const s = d.series;
   const W = 1000, H = 250, ML = 50, MR = 14, MT = 12, MB = 22;
   const n = s.length;
-  let yMin = Infinity, yMax = -Infinity;
-  for (const p of s) { yMin = Math.min(yMin, p.lo, p.price); yMax = Math.max(yMax, p.hi, p.price); }
-  yMin *= 0.94; yMax *= 1.06;
+  // The price + fair line set the scale; the band is context. A runaway percentile multiple (a
+  // near-zero-EPS period) must NOT squash the price line off the axis, so cap the band's pull at ~3.5×
+  // the price/fair envelope and clamp the band drawing to the visible range.
+  let pMax = -Infinity, pMin = Infinity;
+  for (const p of s) { pMax = Math.max(pMax, p.price, p.fair); pMin = Math.min(pMin, p.price, p.fair); }
+  const cap = pMax * 3.5;
+  let hiMax = -Infinity, loMin = Infinity;
+  for (const p of s) { hiMax = Math.max(hiMax, Math.min(p.hi, cap)); loMin = Math.min(loMin, p.lo); }
+  let yMin = Math.min(pMin, Math.max(0, loMin)) * 0.94;
+  let yMax = Math.max(pMax, hiMax) * 1.06;
   const x = (i: number) => ML + (i / Math.max(1, n - 1)) * (W - ML - MR);
-  const y = (v: number) => MT + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
+  const clampY = (v: number) => Math.max(yMin, Math.min(yMax, v));
+  const y = (v: number) => MT + (1 - (clampY(v) - yMin) / (yMax - yMin || 1)) * (H - MT - MB);
   const line = (f: (p: EMPoint) => number) => s.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(f(p)).toFixed(1)}`).join("");
   const band =
     s.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p.hi).toFixed(1)}`).join("") +

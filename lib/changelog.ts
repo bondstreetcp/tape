@@ -16,8 +16,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-08-25",
     title: "Staples Scanner, a live news wire & sharper earnings tools",
     items: [
-      "New Staples Scanner (Screens → Staples Scanner) — NielsenIQ US retail demand & share for consumer staples, with an AI desk read, sortable inline momentum sparklines, and a ~2-week-lagged leading read on each name's quarter.",
-      "New Market Headlines wire (Daily Desk → Market Headlines, and Macro → Headlines) — Walter Bloomberg's curated flashes leading, plus Reuters / Bloomberg / CNBC / WSJ. A scrolling ticker now runs along the bottom of every page.",
+      "New Staples Scanner (Screens → Staples Scanner) — NielsenIQ US retail demand & share for consumer staples: an AI desk read, sortable inline momentum sparklines, a ~2-week-lagged leading read on each name's quarter, and a new alert (Alerts → Signal → “Staples scanner inflection”) when a name accelerates or decelerates into its print.",
+      "New Market Wire (Markets → Market Wire, plus tabs on Daily Desk & Macro and a scrolling ticker on every page) — Walter Bloomberg's curated flashes leading, then Reuters / Bloomberg / CNBC / WSJ. Clickable $tickers jump to the stock, it refreshes ~every 2 min with NEW flags, and the flashes now feed the AI daily brief.",
       "Macro — live “Recent releases” straight from BEA & BLS (GDP, CPI, jobs, PCE), the moment they print.",
       "Earnings — a plain-English “what are the options positioned for?” read; the AI preview now factors in the Nielsen scanner for staples names; and the expected-move chart no longer clips outlier prints.",
       "Fixes across the board — realized-vol cone & dislocation sorting, IPO lockups, the backtest timeframe toggle, spin-off returns, merger-arb links, and the catalyst calendar.",
