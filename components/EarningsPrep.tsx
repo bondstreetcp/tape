@@ -51,6 +51,14 @@ interface AiPart {
   fromLastCall: string;
 }
 
+// The plain-English options-positioning read — mirrors the part=posread JSON (lib/earningsPositioning.ts).
+interface PosReadPart {
+  tldr: string;
+  lean: "bullish" | "bearish" | "two-sided" | "neutral";
+  points: string[];
+  caveat: string;
+}
+
 // The "Before the print" research × quant read — mirrors the part=preprint JSON (declared locally like
 // DataPart: importing lib/research/preprint would drag server-only deps into the client bundle).
 interface PreprintPart {
@@ -253,6 +261,7 @@ function Big({ value, label, color, info }: { value: string; label: string; colo
 export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory, scanner }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null; scanner?: ScannerRead | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
+  const [posRead, setPosRead] = useState<PosReadPart | null | "idle" | "loading">("idle"); // options-positioning AI read
   // "Before the print": idle → loading → { preprint (null when no research ingested), hasResearch } | null (error)
   const [pre, setPre] = useState<{ preprint: PreprintPart | null; hasResearch: boolean } | null | "idle" | "loading">("idle");
   const [openQ, setOpenQ] = useState<number | null>(null); // expanded quarter in the reactions table
@@ -283,6 +292,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     let a = true;
     setData("loading");
     setAi("idle");
+    setPosRead("idle");
     setPre("idle");
     setOpenQ(null);
     setWhy({});
@@ -323,6 +333,19 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       .then((r) => r.json())
       .then((d) => setAi(d.ai || null))
       .catch(() => setAi(null))
+      .finally(() => clearTimeout(timer));
+  };
+
+  // Plain-English "what are the options positioned for?" — same server-recompute + 75s abort as runAi.
+  const runPosRead = () => {
+    setPosRead("loading");
+    const eParam = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? `&e=${encodeURIComponent(earningsDate)}` : "";
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75_000);
+    fetch(`/api/earnings-prep/${encodeURIComponent(symbol)}?part=posread${eParam}`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((d) => setPosRead(d.posread || null))
+      .catch(() => setPosRead(null))
       .finally(() => clearTimeout(timer));
   };
 
@@ -786,6 +809,31 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
                 {ivs.avgCrushPct != null && <span> · <b className="text-[var(--text-2)]">realized crush</b><InfoDot text="Avg drop in ATM implied vol the session after past prints — the vol decay a long-premium buyer pays." /> <b style={{ color: ivs.avgCrushPct >= 15 ? "#ef4444" : "var(--text-2)" }}>−{ivs.avgCrushPct.toFixed(0)}%</b> <span className="text-[var(--text-4)]">avg after prints ({ivs.crushN})</span></span>}
               </div>
             )}
+            {/* AI: plain-English read of the options setup above (button-triggered) */}
+            <div className="mt-2.5 border-t border-[var(--divider)] pt-2.5">
+              {posRead === "idle" ? (
+                <div>
+                  <button onClick={() => runPosRead()} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90">What are the options positioned for? →</button>
+                  <p className="mt-1.5 text-[12px] text-[var(--text-4)]">A plain-English read of what the priced move, skew, rich/cheap premium &amp; walls above imply for the print.</p>
+                </div>
+              ) : posRead === "loading" ? (
+                <div className="flex items-center gap-2 text-[12px] text-[var(--text-4)]"><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" /> reading the setup…</div>
+              ) : posRead && posRead.tldr ? (() => {
+                const lc = posRead.lean === "bullish" ? "#22c55e" : posRead.lean === "bearish" ? "#ef4444" : posRead.lean === "two-sided" ? "#f59e0b" : "var(--text-3)";
+                return (
+                  <div className="space-y-2 text-[12px] leading-snug">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${lc}22`, color: lc }} title="The directional tilt of the options positioning">{posRead.lean}</span>
+                      <p className="text-[var(--text)]"><span className="font-semibold">Positioned for: </span>{posRead.tldr}</p>
+                    </div>
+                    {posRead.points.length > 0 && <ul className="space-y-1">{posRead.points.map((p, i) => <li key={i} className="text-[var(--text-2)]"><span className="text-[var(--accent)]">▸</span> {p}</li>)}</ul>}
+                    {posRead.caveat && <p className="text-[11px] italic text-[var(--text-4)]">{posRead.caveat}</p>}
+                  </div>
+                );
+              })() : (
+                <div className="text-[12px] text-[var(--text-4)]">Couldn&apos;t read the positioning just now. <button onClick={() => runPosRead()} className="text-[var(--accent)] underline hover:no-underline">Try again</button></div>
+              )}
+            </div>
           </Bento>
         )}
 

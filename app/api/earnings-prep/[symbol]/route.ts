@@ -4,6 +4,7 @@ import { getNews } from "@/lib/news";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
 import { computeQuant, peerReadThrough, buildSig, loadGuidance, loadSss } from "@/lib/earningsQuant";
 import { assemblePreviewContext, buildAiPreview, earningsReleaseText, raceTimeout } from "@/lib/earningsPreview";
+import { buildPositioningRead, type PositioningFacts } from "@/lib/earningsPositioning";
 import { computePreprint, narratePreprint, type PublicInputs } from "@/lib/research/preprint";
 import { listDocs, normTicker } from "@/lib/research/store";
 import { beatGuide } from "@/lib/guidance";
@@ -47,6 +48,47 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       );
       // Cache ONLY successes — a cached {ai:null} bricked the preview for every viewer for 3 hours.
       return NextResponse.json({ ai }, { headers: { "Cache-Control": ai ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
+    }
+
+    // ── Options-positioning read: plain-English "what are the options positioned for?" (button-triggered) ──
+    // Reuses the SAME quant the tab already shows — no new data, just an LLM translation of the setup.
+    if (part === "posread") {
+      if (!(await llmConfigured())) return NextResponse.json({ posread: null });
+      const posread = await memo(
+        `ep:pos:${sym}:${earningsISO ?? ""}`,
+        10_800_000,
+        async () => {
+          const q = await computeQuant(sym, earningsISO).catch(() => null);
+          if (!q || (!q.options && !q.straddle)) return null;
+          const o = q.options;
+          const atm = q.volRegime?.atmIV ?? o?.atmIV ?? null;
+          const facts: PositioningFacts = {
+            company: sym,
+            impliedMovePct: q.impliedMove ?? null,
+            eventMovePct: q.eventMove ?? null,
+            dte: q.straddle?.dte ?? null,
+            richnessVerdict: q.richness?.verdict ?? null,
+            richnessRatio: q.richness?.ratio ?? null,
+            richnessAvgRealizedPct: q.richness?.avgRealized ?? null,
+            skewVolPts: o?.skew != null ? o.skew * 100 : null,
+            maxPainVsSpotPct: o?.maxPainVsSpot != null ? o.maxPainVsSpot * 100 : null,
+            callWall: o?.callWall?.strike ?? null,
+            putWall: o?.putWall?.strike ?? null,
+            atmIVpct: atm != null ? atm * 100 : null,
+            ivHvRatio: q.volRegime?.ivHvRatio ?? null,
+            straddleExceeded: q.straddleWinRate?.exceeded ?? null,
+            straddleTotal: q.straddleWinRate?.total ?? null,
+            longPremiumVerdict: q.longPremium?.verdict ?? null,
+            termBackwardated: q.term?.frontIV != null && q.term?.backIV != null ? q.term.frontIV > q.term.backIV : null,
+            pastAvgAbsMovePct: q.reaction?.avgAbsMove != null ? q.reaction.avgAbsMove * 100 : null,
+            pastUpRate: q.reaction?.upRate ?? null,
+            pastN: q.reaction?.n ?? null,
+          };
+          return raceTimeout(buildPositioningRead(facts), 40_000, null);
+        },
+        { cacheIf: (v) => v != null },
+      );
+      return NextResponse.json({ posread }, { headers: { "Cache-Control": posread ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } });
     }
 
     // ── "Before the print": the ingested-research × quant read (button-triggered) ──
