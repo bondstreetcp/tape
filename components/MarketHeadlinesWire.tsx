@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { TOPIC_COLOR, type MarketHeadline } from "@/lib/marketHeadlines";
 
 // The market-headlines wire — macro / Fed / trade / energy / geopolitics flashes. Renders the SSR seed
@@ -8,6 +9,7 @@ import { TOPIC_COLOR, type MarketHeadline } from "@/lib/marketHeadlines";
 export default function MarketHeadlinesWire({ initial = [] }: { initial?: MarketHeadline[] }) {
   const [headlines, setHeadlines] = useState<MarketHeadline[]>(initial);
   const [mounted, setMounted] = useState(false);
+  const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500"; // ticker links stay in the current universe
 
   useEffect(() => {
     setMounted(true);
@@ -32,11 +34,8 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       {headlines.map((h, i) => (
-        <a
+        <div
           key={i}
-          href={h.url}
-          target="_blank"
-          rel="noopener noreferrer"
           className={"flex items-start justify-between gap-3 border-b border-[var(--divider)] px-4 py-2 text-sm last:border-0 hover:bg-[var(--surface-hover)] " + (h.curated ? "bg-[var(--accent-soft)]/40" : "")}
         >
           <span className="flex min-w-0 items-start gap-2">
@@ -45,10 +44,14 @@ export default function MarketHeadlinesWire({ initial = [] }: { initial?: Market
             ) : (
               <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${TOPIC_COLOR[h.topic]}22`, color: TOPIC_COLOR[h.topic] }}>{h.topic}</span>
             )}
-            <span className="min-w-0 text-[var(--text)]">{h.title}{h.curated ? "" : <span className="text-[var(--text-4)]"> · {h.publisher}</span>}</span>
+            <span className="min-w-0">
+              <a href={h.url} target="_blank" rel="noopener noreferrer" className="text-[var(--text)] hover:underline">{h.title}</a>
+              {!h.curated && <span className="text-[var(--text-4)]"> · {h.publisher}</span>}
+              {h.ticker && <a href={`/u/${universe}/stock/${h.ticker}`} className="ml-1.5 inline-block rounded px-1 py-0.5 align-middle text-[10px] font-semibold text-[var(--accent)] hover:brightness-125" style={{ background: "var(--accent-soft)" }} title={`Open ${h.ticker}`}>{h.ticker}</a>}
+            </span>
           </span>
           {ago(h.time) && <span className="shrink-0 tabular-nums text-[11px] text-[var(--text-4)]">{ago(h.time)}</span>}
-        </a>
+        </div>
       ))}
     </div>
   );

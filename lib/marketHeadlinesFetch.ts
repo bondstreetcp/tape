@@ -40,6 +40,16 @@ const CLICKBAIT = [
 const lc = (s: string) => s.toLowerCase();
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 70);
 
+// A clear cashtag → ticker ("$AAPL - APPLE…" → "AAPL"). Only $TICKER (letters), never $-amounts ($20B),
+// and skip $-prefixed non-tickers so we don't mis-link. Precision over recall — a wrong link is worse.
+const NOT_TICKERS = new Set(["US", "USD", "EUR", "GBP", "JPY", "GDP", "CPI", "PPI", "FED", "ECB", "BOJ", "OPEC", "CEO", "CFO", "IPO", "AI", "EV", "UK", "EU", "GOP", "FBI", "CIA", "UN"]);
+function extractTicker(t: string): string | null {
+  const m = t.match(/\$([A-Za-z]{1,5})\b/);
+  if (!m) return null;
+  const tk = m[1].toUpperCase();
+  return NOT_TICKERS.has(tk) ? null : tk;
+}
+
 async function fetchTopic(topic: HeadlineTopic, q: string): Promise<MarketHeadline[]> {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:2d")}&hl=en-US&gl=US&ceid=US:en`;
   const ctrl = new AbortController();
@@ -65,6 +75,7 @@ async function fetchTopic(topic: HeadlineTopic, q: string): Promise<MarketHeadli
         url: link,
         time: pub && !Number.isNaN(Date.parse(pub)) ? new Date(pub).toISOString() : null,
         topic,
+        ticker: extractTicker(title),
       });
     });
     return out;
@@ -118,6 +129,7 @@ async function fetchTelegramChannel(channel: string, brand: string): Promise<Mar
         time: dt && !Number.isNaN(Date.parse(dt)) ? new Date(dt).toISOString() : null,
         topic: classifyTopic(text),
         curated: true,
+        ticker: extractTicker(text),
       });
     }
     return out;

@@ -19,6 +19,7 @@ export interface MarketHeadline {
   time: string | null; // ISO
   topic: HeadlineTopic;
   curated?: boolean; // true = a hand-curated flash (Walter Bloomberg's public Telegram), not an aggregator hit
+  ticker?: string | null; // a cashtag parsed from the headline ($AAPL → "AAPL"), for a jump-to-stock link
 }
 
 export interface MarketHeadlinesData {
