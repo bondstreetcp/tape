@@ -98,6 +98,22 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
         <p className="text-[var(--text-4)]">Derived from licensed sell-side scans (NielsenIQ) — figures only, internal use. Nielsen covers tracked brick-and-mortar channels, not all e-commerce, so it understates some premium/online-skewed names. Research, not advice.</p>
       </HowToRead>
 
+      {data.summary && data.summary.headline && (
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" /> AI desk read
+            {data.summary.periodEnd && <span className="font-normal normal-case text-[var(--text-4)]">· data thru {data.summary.periodEnd}</span>}
+          </div>
+          <p className="text-[15px] font-semibold leading-snug text-[var(--text)]">{data.summary.headline}</p>
+          {data.summary.points.length > 0 && (
+            <ul className="mt-2 space-y-1 text-[13px] leading-snug text-[var(--text-2)]">
+              {data.summary.points.map((p, i) => <li key={i} className="flex gap-2"><span className="shrink-0 text-[var(--accent)]">▸</span> <span>{p}</span></li>)}
+            </ul>
+          )}
+          <p className="mt-2 text-[10.5px] text-[var(--text-4)]">AI summary of the scans below — decision-support, not advice.</p>
+        </div>
+      )}
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex flex-wrap rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           {segments.map((s) => <button key={s} onClick={() => setSeg(s)} className={TB(seg === s)}>{s}</button>)}

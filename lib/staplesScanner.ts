@@ -49,8 +49,18 @@ export interface ScanReport {
   rows: ScanRow[];
 }
 
+// AI "desk read" of the whole board — generated once at extraction time (biweekly data, so no per-view
+// LLM cost) and shown atop the Staples Scanner. Grounded ONLY in the extracted figures.
+export interface ScanSummary {
+  headline: string; // the single biggest takeaway, one sentence
+  points: string[]; // 3-6 plain-English bullets: accel/decel names, share gainers/losers, category trends, setups into prints
+  periodEnd: string; // the data-thru date this read covers
+  generatedAt: string;
+}
+
 export interface StaplesScannerData {
   generatedAt: string;
+  summary?: ScanSummary | null; // AI desk read of the current board (regenerated when new scans are extracted)
   reports: ScanReport[]; // most-recent periodEnd first; accretes into a time series as new notes are extracted
 }
 

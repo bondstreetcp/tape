@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { tickerFor, inflectionOf, type ScanLevel, type ScanRow, type ScanReport, type StaplesScannerData } from "../lib/staplesScanner";
+import { tickerFor, inflectionOf, type ScanLevel, type ScanRow, type ScanReport, type ScanSummary, type StaplesScannerData } from "../lib/staplesScanner";
 
 // Load .env.local into process.env for local tsx runs (CI injects the vars directly).
 try {
@@ -99,6 +99,47 @@ async function extractReport(file: string, text: string): Promise<ScanReport | n
   };
 }
 
+// AI "desk read" of the whole board — the trading takeaway across every extracted scan. Generated once
+// here (biweekly cadence → no per-view cost) and stored on the data so the board shows it instantly.
+async function buildSummary(reports: ScanReport[]): Promise<ScanSummary | null> {
+  // Latest row per (level|name|category), tagged with segment — the same de-dup the board renders.
+  const best = new Map<string, ScanRow & { segment: string; periodEnd: string }>();
+  for (const rep of reports) for (const row of rep.rows ?? []) {
+    const key = `${row.level}|${(row.ticker || row.label).toUpperCase()}|${row.category.toLowerCase()}`;
+    const cur = best.get(key);
+    if (!cur || (rep.periodEnd || "") > cur.periodEnd) best.set(key, { ...row, segment: rep.segment, periodEnd: rep.periodEnd });
+  }
+  const all = [...best.values()].filter((r) => r.level !== "brand"); // companies + categories carry the signal
+  if (all.length < 3) return null;
+  // Rank by salience: the acceleration (L4w − L12w) or the dollar-share move, whichever is larger.
+  const accel = (r: ScanRow) => (r.dollar.l4w ?? 0) - (r.dollar.l12w ?? 0);
+  const salience = (r: ScanRow) => Math.max(Math.abs(accel(r)), Math.abs((r.shareDeltaBps ?? 0) / 100));
+  const rows = all.sort((a, b) => salience(b) - salience(a)).slice(0, 60);
+  const n = (v: number | null | undefined) => (v == null ? "?" : `${v > 0 ? "+" : ""}${v}%`);
+  const line = (r: ScanRow & { segment: string }) =>
+    `${r.segment} · ${r.level} · ${r.label}${r.category && r.category !== "—" ? ` (${r.category})` : ""}: L4w ${n(r.dollar.l4w)} vs L12w ${n(r.dollar.l12w)}${r.volume != null ? `, vol ${n(r.volume)}` : ""}${r.shareDeltaBps != null ? `, shareΔ ${r.shareDeltaBps > 0 ? "+" : ""}${r.shareDeltaBps}bps` : ""}${r.inflection ? ` [${r.inflection}]` : ""}${r.note ? ` — ${r.note}` : ""}`;
+  const periodEnd = reports.map((r) => r.periodEnd).filter(Boolean).sort().at(-1) || "";
+
+  const SYSTEM =
+    "You are a consumer-staples analyst reading the latest NielsenIQ US retail-scanner data for a trading desk. " +
+    "From the figures provided, summarize the trading read: which companies/categories are ACCELERATING vs DECELERATING (L4-week vs L12-week $ growth — the inflection is the signal, not the level), who is GAINING or LOSING dollar share, the notable category trends, and which names the data flags as best/worst set up into their next print. " +
+    "Ground EVERY claim in the numbers/names provided — never invent a figure or a company not listed. Prefer volume-led over price-led growth when calling something healthy. Be concrete and terse. " +
+    NO_ADVICE;
+  const SCHEMA =
+    'Return ONLY JSON: {"headline":string (ONE sentence — the single biggest takeaway for a staples trader),' +
+    '"points":string[] (3-6 short plain-English bullets: the standout accelerating/decelerating names, share gainers/losers, category trends, and any name clearly set up well or poorly into its print — no bullet symbols)}';
+
+  const out = await chatJSON<{ headline?: string; points?: unknown }>(
+    SYSTEM,
+    `Data thru ${periodEnd}. ${rows.length} company/category reads (most salient first):\n${rows.map(line).join("\n")}\n\n${SCHEMA}`,
+    { maxTokens: 900, reasoningEffort: "low" },
+  );
+  if (!out || !out.headline || !Array.isArray(out.points)) return null;
+  const points = (out.points as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 280)).slice(0, 6);
+  if (!points.length) return null;
+  return { headline: String(out.headline).slice(0, 320), points, periodEnd, generatedAt: new Date().toISOString() };
+}
+
 async function main() {
   if (!(await llmConfigured())) {
     console.warn("staples-scanner: no LLM configured (OPENROUTER_API_KEY) — skipping.");
@@ -141,7 +182,16 @@ async function main() {
   const reports = [...bySrc.values()]
     .sort((a, b) => (b.periodEnd || "").localeCompare(a.periodEnd || "") || (b.publishedAt || "").localeCompare(a.publishedAt || ""))
     .slice(0, HISTORY_CAP);
-  writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), reports }));
+
+  // Regenerate the AI desk read when new scans came in (or when we have none yet); otherwise keep the prior
+  // one so a no-op run doesn't burn an LLM call. Never drop a good summary if the regen fails.
+  let summary = existing.summary ?? null;
+  if (reports.length && (extracted > 0 || !summary)) {
+    const fresh = await buildSummary(reports).catch((e) => { console.warn(`  summary: ${String(e?.message || e).slice(0, 80)}`); return null; });
+    if (fresh) { summary = fresh; console.log(`  summary: ${fresh.headline.slice(0, 90)}`); }
+  }
+
+  writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), summary, reports }));
   console.log(`staples-scanner: wrote ${reports.length} reports (${extracted} newly extracted) → ${OUT}`);
 }
 
