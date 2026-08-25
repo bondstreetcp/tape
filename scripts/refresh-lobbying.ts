@@ -103,8 +103,14 @@ async function loadResolver(): Promise<{ index: NameIndex; leads: Map<string, nu
  *  outage) so the caller can refuse to stamp a fresh file over a dead night. */
 async function pullFilings(store: Store, index: NameIndex, leads: Map<string, number>): Promise<boolean> {
   const key = process.env.LDA_API_KEY;
-  if (!key) { console.warn("lobbying: LDA_API_KEY not set — nothing pulled"); return false; }
-  const headers = { Authorization: `Token ${key}`, "User-Agent": UA };
+  // Fail-soft on a missing key: the LDA filings list is publicly readable, so pull ANONYMOUSLY rather
+  // than going dark. Anonymous is rate-limited harder (fetchJSON already backs off on 429) and the
+  // cursor checkpoints every page, so a large catch-up just spans a couple of runs. A genuinely dead
+  // pull still returns false below (sawAnyPage stays false) → the prior file is kept, never faked.
+  if (!key) console.warn("lobbying: LDA_API_KEY not set — pulling ANONYMOUSLY (lower rate limit; set the key to restore full-rate pulls)");
+  const headers: Record<string, string> = key
+    ? { Authorization: `Token ${key}`, "User-Agent": UA }
+    : { "User-Agent": UA };
   const have = new Set(store.rows.map((r) => r.uuid));
   // One-day overlap: the API doesn't document whether dt_posted_after is > or >= — re-pulling the
   // cursor day costs pages the uuid set absorbs. (UTC date math on a bare date is TZ-stable.)

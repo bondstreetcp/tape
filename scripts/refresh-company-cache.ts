@@ -15,7 +15,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { fetchCompanyBundle, readCompanyCache, companyCacheDir, companyCacheFile } from "../lib/companyCache";
-import { archiveWriter, readCompanyManifest, shouldStandDown } from "../lib/companyArchive";
+import { archiveWriter, readCompanyManifest, shouldStandDown, type CompanyManifest } from "../lib/companyArchive";
+import { notifyAlert } from "../lib/alertNotify";
 import { pool } from "../lib/edgar";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { UNIVERSES } from "../lib/universes";
@@ -29,6 +30,30 @@ const MAX_PER_RUN = Number(process.env.COMPANY_CACHE_MAX || 100000); // safety c
 
 const ageDays = (iso: string) => (Date.now() - Date.parse(iso)) / 86_400_000;
 
+// Early-warning when the good-IP bake pipe (the "pc" writer) goes dark. Once its R2 stamp is stale
+// past this, THIS box's fallback bake can't refresh the cache (its egress gets degraded Yahoo
+// payloads), so the per-stock cache silently drifts STALE — that's how it went ~10 days unnoticed in
+// 2026-08. Page once/day so a dark box is caught in hours. Stamp lives in lake/.tmp (gitignored, not
+// in the data tarball). Best-effort: never throws, never blocks the bake.
+const PC_DARK_WARN_H = Number(process.env.COMPANY_CACHE_PC_DARK_WARN_H || 48);
+const DARK_STAMP = path.join("lake", ".tmp", "company-cache-dark-alert.json");
+async function warnIfPrimaryPipeDark(manifest: CompanyManifest | null, self: string): Promise<void> {
+  try {
+    if (!manifest?.bakedAt || !manifest.writer || manifest.writer === self) return; // no foreign stamp to judge
+    const ageH = (Date.now() - Date.parse(manifest.bakedAt)) / 3_600_000;
+    if (!Number.isFinite(ageH) || ageH <= PC_DARK_WARN_H) return;
+    const today = new Date().toISOString().slice(0, 10);
+    try { if (JSON.parse(await fs.readFile(DARK_STAMP, "utf8")).date === today) return; } catch { /* not alerted today */ }
+    await notifyAlert(
+      `company-cache: the good-IP bake pipe (writer "${manifest.writer}") has been DARK ${ageH.toFixed(0)}h (>${PC_DARK_WARN_H}h). ` +
+        `"${self}" is baking as fallback, but its egress gets degraded Yahoo payloads — the per-stock cache will drift STALE ` +
+        `until the "${manifest.writer}" box runs scripts/pc/bake-company.cmd again.`,
+      "Tape company-cache pipe dark",
+    );
+    try { await fs.mkdir(path.dirname(DARK_STAMP), { recursive: true }); await fs.writeFile(DARK_STAMP, JSON.stringify({ date: today, ageH: Math.round(ageH) })); } catch { /* stamp best-effort */ }
+  } catch { /* a warning must never break the bake */ }
+}
+
 async function main() {
   // ── Standdown: the good-IP pipe owns this feed ──
   // Yahoo serves this NAS's (and GH's datacenter) egress IPs degraded quoteSummary payloads — the
@@ -37,8 +62,10 @@ async function main() {
   // open: no stamp / stale stamp / any read error → this box bakes as the fallback, and the
   // carry-forward + null-stats-is-due guards below bound the damage to STALE, never null.
   const self = archiveWriter();
-  const sd = shouldStandDown(await readCompanyManifest(), self, Date.now());
+  const manifest = await readCompanyManifest();
+  const sd = shouldStandDown(manifest, self, Date.now());
   console.log(`company-cache: ${sd.reason}`);
+  await warnIfPrimaryPipeDark(manifest, self); // early-warning if the good-IP bake box went dark
   if (sd.skip) return;
 
   await fs.mkdir(companyCacheDir(), { recursive: true });
