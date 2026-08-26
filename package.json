@@ -11,6 +11,7 @@
     "check-freshness": "tsx scripts/check-freshness.ts",
     "check-site-health": "tsx scripts/check-site-health.ts",
   "check-deploy-data": "tsx scripts/check-deploy-data.ts",
+  "diag-yahoo": "tsx scripts/diag-yahoo-quality.ts",
     "refresh-pairs": "tsx scripts/refresh-pairs.ts",
     "refresh-betas": "tsx scripts/refresh-betas.ts",
     "refresh-hedge-etfs": "tsx scripts/refresh-hedge-etfs.ts",
