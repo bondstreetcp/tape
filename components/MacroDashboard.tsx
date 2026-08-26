@@ -8,7 +8,9 @@ import type { VolOil } from "@/lib/curves";
 import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
 import { CATEGORY_COLOR, type MacroRelease } from "@/lib/macroReleases";
 import { type MarketHeadline } from "@/lib/marketHeadlines";
+import { type RealEconomyData } from "@/lib/realEconomy";
 import MarketHeadlinesWire from "./MarketHeadlinesWire";
+import RealEconomyPanel from "./RealEconomyPanel";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
@@ -276,6 +278,7 @@ export default function MacroDashboard({
   creditSeries,
   recentReleases,
   headlines,
+  realEconomy,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -287,6 +290,7 @@ export default function MacroDashboard({
   creditSeries?: CreditSeries;
   recentReleases?: MacroRelease[];
   headlines?: MarketHeadline[];
+  realEconomy?: RealEconomyData | null;
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -301,10 +305,11 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
-  const [section, setSection] = useState<"rates" | "indicators" | "credit" | "calendar" | "headlines">("rates");
+  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "credit" | "calendar" | "headlines">("rates");
   const SECTIONS = [
     { key: "rates", label: "Rates & Curves" },
     { key: "indicators", label: "Indicators" },
+    { key: "realecon", label: "Real economy" },
     { key: "credit", label: "Credit" },
     { key: "calendar", label: "Calendar" },
     { key: "headlines", label: "Headlines" },
@@ -377,6 +382,7 @@ export default function MacroDashboard({
       )}
 
       {section === "credit" && <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>}
+      {section === "realecon" && <div className="mb-5"><RealEconomyPanel data={realEconomy ?? null} /></div>}
 
       {section === "calendar" && (
       <section className="mb-5">

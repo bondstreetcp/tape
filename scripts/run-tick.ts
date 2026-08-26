@@ -176,6 +176,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh macro (FRED)", cmd: "npm run refresh-macro", when: "full" },
   // "Recent releases" — the actual BEA/BLS prints (GDP, PCE, CPI, jobs…). Keyless, no LLM.
   { name: "Refresh macro releases (BEA/BLS actuals)", cmd: "npm run refresh-macro-releases", when: "full" },
+  { name: "Refresh real-economy alt-data (freight/travel/housing)", cmd: "npm run refresh-real-economy", when: "full" },
   // Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
   { name: "Refresh market headlines (Google News wire)", cmd: "npm run refresh-market-headlines", when: "full" },
   { name: "Evaluate alerts", cmd: "npm run eval-alerts", when: "always" },

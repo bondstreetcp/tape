@@ -8,7 +8,7 @@ import { RELEASES, type ReleaseData } from "./releases";
 const FREDGRAPH = "https://fred.stlouisfed.org/graph/fredgraph.csv";
 const DAY = 86_400_000;
 
-interface Obs { date: string; value: number }
+export interface Obs { date: string; value: number }
 
 const UA = { "User-Agent": "stock-chart-screener (research)" };
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -70,7 +70,7 @@ async function fetchOnce(id: string, cosd: string): Promise<{ ok: boolean; obs: 
 /** Throttled + retried series fetch. A transient failure must not silently cost the whole night's
  *  macro build — which is exactly what happened on the NAS: 4 curve pts / 2 indicators (vs 11 / 17 on
  *  a fast link), tripping build-macro's don't-overwrite guard so macro.json rotted for days. */
-async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
+export async function fetchSeries(id: string, cosd: string): Promise<Obs[]> {
   for (let attempt = 0; attempt < 3; attempt++) {
     await throttle();
     const r = await fetchOnce(id, cosd);
