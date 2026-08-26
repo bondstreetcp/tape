@@ -37,11 +37,28 @@ export interface TsaThroughput {
   source: string;
 }
 
+export interface RealEconomyRead {
+  tldr: string; // one-line synthesis
+  regime: "expanding" | "cooling" | "mixed" | "contracting"; // the overall read
+  points: string[]; // 2-4 plain-English observations
+  readThrough?: string[]; // sector/ticker read-throughs
+  caveat?: string;
+  generatedAt: string;
+}
+
 export interface RealEconomyData {
   asOf: string;
   series: RealEcoSeries[];
   tsa: TsaThroughput | null;
+  read?: RealEconomyRead | null; // baked AI desk read (regenerates when a monthly series prints)
 }
+
+export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
+  expanding: "#22c55e",
+  cooling: "#f59e0b",
+  mixed: "var(--text-2)",
+  contracting: "#ef4444",
+};
 
 export const GROUP_ORDER: RealEcoGroup[] = ["Freight", "Travel", "Housing"];
 

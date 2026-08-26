@@ -12,9 +12,13 @@
  *
  *   npx tsx scripts/refresh-real-economy.ts
  */
+import { promises as fs } from "fs";
+import path from "path";
 import * as cheerio from "cheerio";
 import { fetchSeries } from "../lib/fred";
 import { writeFeedGuarded } from "../lib/feedGuard";
+import { llmConfigured } from "../lib/llm";
+import { buildRealEconomyRead } from "../lib/realEconomyRead";
 import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from "../lib/realEconomy";
 
 const COSD = new Date(Date.now() - 6 * 365 * 86_400_000).toISOString().slice(0, 10); // ~6yr of history
@@ -98,6 +102,23 @@ async function main() {
   console.log(tsa ? `  tsa                  ${tsa.latest} @ ${tsa.latestDate}  (7d-avg vs 1mo ${tsa.chg30dPct?.toFixed(1) ?? "—"}%)` : "  tsa                  unavailable (best-effort)");
 
   const data: RealEconomyData = { asOf: new Date().toISOString(), series, tsa };
+
+  // AI desk read — regenerate ONLY when a monthly (FRED) series printed a new period, so the synthesis
+  // stays stable rather than churning on daily TSA updates. Best-effort: no LLM / a bad call → no read
+  // (the panel just omits the card). The read is grounded in the numbers above (lib/realEconomyRead).
+  const vintage = (d: RealEconomyData) => d.series.map((s) => `${s.key}:${s.latestDate}`).sort().join("|");
+  let prior: RealEconomyData | null = null;
+  try { prior = JSON.parse(await fs.readFile(path.join(process.cwd(), "data", "real-economy.json"), "utf8")) as RealEconomyData; } catch { /* first run */ }
+  if (prior?.read && vintage(prior) === vintage(data)) {
+    data.read = prior.read;
+    console.log("  desk read: monthly vintage unchanged — kept prior");
+  } else if (await llmConfigured()) {
+    data.read = await buildRealEconomyRead(data).catch(() => null);
+    console.log(data.read ? `  desk read: regenerated (${data.read.regime}) — ${data.read.tldr.slice(0, 80)}…` : "  desk read: LLM returned nothing (skipped)");
+  } else {
+    console.log("  desk read: no LLM configured — skipped");
+  }
+
   const w = await writeFeedGuarded("real-economy.json", data);
   console.log(`refresh-real-economy: ${w.reason}`);
   if (!w.written) { console.error("refresh-real-economy: kept prior file (this run was too thin) — will retry next tick."); process.exitCode = 1; }

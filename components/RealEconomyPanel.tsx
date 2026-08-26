@@ -1,5 +1,5 @@
 "use client";
-import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, fmtVal, fmtPct, pctColor } from "@/lib/realEconomy";
+import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, fmtVal, fmtPct, pctColor } from "@/lib/realEconomy";
 
 // Tiny inline sparkline over the trimmed history — green if the window ends above where it started.
 function Spark({ points }: { points: [string, number][] }) {
@@ -75,6 +75,27 @@ export default function RealEconomyPanel({ data }: { data: RealEconomyData | nul
         <h3 className="text-base font-semibold text-[var(--text)]">Real economy <span className="text-[13px] font-normal text-[var(--text-4)]">· free freight, travel &amp; housing leads</span></h3>
         {asOf && <span className="text-[11px] text-[var(--text-4)]">refreshed {asOf}</span>}
       </div>
+      {data.read && (
+        <div className="mb-3 rounded-xl border p-3.5" style={{ background: "var(--accent-soft)", borderColor: "color-mix(in oklab, var(--accent) 30%, transparent)" }}>
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Desk read</span>
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${REGIME_COLOR[data.read.regime]}22`, color: REGIME_COLOR[data.read.regime] }} title="The overall read across freight, travel & housing">{data.read.regime}</span>
+          </div>
+          <p className="text-[13px] font-medium leading-snug text-[var(--text)]">{data.read.tldr}</p>
+          {data.read.points.length > 0 && (
+            <ul className="mt-2 space-y-1 text-[12px] leading-snug">
+              {data.read.points.map((p, i) => <li key={i} className="text-[var(--text-2)]"><span className="text-[var(--accent)]">▸</span> {p}</li>)}
+            </ul>
+          )}
+          {data.read.readThrough && data.read.readThrough.length > 0 && (
+            <div className="mt-2 border-t border-[var(--divider)] pt-1.5">
+              <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Read-through</div>
+              <ul className="space-y-0.5 text-[11.5px]">{data.read.readThrough.map((r, i) => <li key={i} className="text-[var(--text-3)]"><span className="text-[var(--text-4)]">•</span> {r}</li>)}</ul>
+            </div>
+          )}
+          {data.read.caveat && <p className="mt-1.5 text-[11px] italic text-[var(--text-4)]">{data.read.caveat}</p>}
+        </div>
+      )}
       <div className="space-y-3">
         {GROUP_ORDER.map((group) => {
           const items = data.series.filter((s) => s.group === group);
