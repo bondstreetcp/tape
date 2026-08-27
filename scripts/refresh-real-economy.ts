@@ -21,7 +21,7 @@ import { llmConfigured } from "../lib/llm";
 import { buildRealEconomyRead } from "../lib/realEconomyRead";
 import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from "../lib/realEconomy";
 
-const COSD = new Date(Date.now() - 6 * 365 * 86_400_000).toISOString().slice(0, 10); // ~6yr of history
+const COSD = new Date(Date.now() - 21 * 365 * 86_400_000).toISOString().slice(0, 10); // ~21yr — deep enough for the detail view's 1Y/3Y/5Y/10Y/Max windows
 
 type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts" };
 const FRED: FredCfg[] = [
@@ -70,7 +70,7 @@ function buildSeries(cfg: (typeof FRED)[number], obs: { date: string; value: num
     prev: prevV, yearAgo: yearV,
     momPct: chg(prevV),
     yoyPct: chg(yearV),
-    history: obs.slice(-60).map((o) => [o.date, o.value] as [string, number]),
+    history: obs.slice(-252).map((o) => [o.date, o.value] as [string, number]),
   };
 }
 

@@ -12,16 +12,25 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-27",
+    date: "2026-08-27",
+    title: "Top-down valuation, a real-economy dashboard & a free-options screener",
+    items: [
+      "Macro → Real economy — a new dashboard of free, primary-source alt-data that leads the hard prints: manufacturing (regional-Fed PMIs — the free ISM stand-in — plus industrial production & capacity use), freight (rail carloads/intermodal + a truck-freight index), the consumer (retail sales, durable-goods orders), air travel (TSA throughput), and housing (starts, permits, construction) — each with YoY/MoM & sparklines, topped by an AI desk read of what it's signaling.",
+      "Macro → Valuation — long-run trend channels: a log-price regression with ~68%/95% bands showing how far the S&P 500 (fit since 1932), Nasdaq, Russell 2000, and all 11 GICS sectors (ranked cheap → dear) sit above or below their own long-term growth trend, with a z-score gauge. Descriptive, not predictive.",
+      "Screens → Free Options — a single-stock screener for reasonably-priced names with under-appreciated multi-year earnings power: growth handed to you cheap (low PEG / 3-yr-out P/E) with rising estimates and a real revenue runway, quality-filtered, ranked and explained per name.",
+      "Earnings — the technical setup now flags relative strength vs the stock's sector (leading or lagging), the whole tab is reorganized into clear, scannable sections, and the AI desk reads fold away until you want them.",
+    ],
+  },
+  {
     id: "2026-08-25",
     date: "2026-08-25",
     title: "Staples Scanner, a live news wire & sharper earnings tools",
     items: [
       "New Staples Scanner (Screens → Staples Scanner) — NielsenIQ US retail demand & share for consumer staples: an AI desk read, sortable inline momentum sparklines, a ~2-week-lagged leading read on each name's quarter, and a new alert (Alerts → Signal → “Staples scanner inflection”) when a name accelerates or decelerates into its print.",
       "New Market Wire (Markets → Market Wire, plus tabs on Daily Desk & Macro and a scrolling ticker on every page) — Walter Bloomberg's curated flashes leading, then Reuters / Bloomberg / CNBC / WSJ. Clickable $tickers jump to the stock, it refreshes ~every 2 min with NEW flags, and the flashes now feed the AI daily brief.",
-      "Macro — live “Recent releases” straight from BEA & BLS (GDP, CPI, jobs, PCE), the moment they print; plus a new “Real economy” tab tracking free manufacturing (regional-Fed PMIs — the free ISM stand-in — industrial production, capacity use), freight (rail carloads/intermodal + a truck-freight index), the consumer (retail sales, durable-goods orders), air travel (TSA throughput), and housing (starts, permits, construction spend) — the alt-data that leads the hard prints, with an AI desk read of what it's signaling (hotel is a lodging-CPI proxy, not licensed RevPAR).",
-      "Screens → Free Options — a single-stock screener for reasonably-priced names with under-appreciated multi-year earnings power: growth handed to you cheap (low PEG / 3-yr-out P/E) with rising estimates and a real revenue runway, quality-filtered, ranked and explained per name.",
-      "Macro → Valuation — long-run trend channels: a log-price regression with ~68%/95% bands for the S&P 500 (fit since 1932), Nasdaq & Russell 2000, AND the 11 GICS sectors (ranked cheap → dear) — how far each sits above/below its own long-term growth trend, with a z-score gauge. Descriptive, not predictive.",
-      "Earnings — plain-English AI reads of “what are the options positioned for?” and the “technical setup” into the print (now flagging relative strength vs the stock’s sector — leading or lagging); the AI preview factors in the Nielsen scanner for staples names; the expected-move chart no longer clips outlier prints; and the whole tab is reorganized into clear, scannable sections — the setup, how it trades the print, and the AI desk reads (which now fold away until you want them).",
+      "Macro — live “Recent releases” straight from BEA & BLS (GDP, CPI, jobs, PCE), the moment they print.",
+      "Earnings — plain-English AI reads of “what are the options positioned for?” and the “technical setup” into the print; the AI preview factors in the Nielsen scanner for staples names; and the expected-move chart no longer clips outlier prints.",
       "Fixes across the board — realized-vol cone & dislocation sorting, IPO lockups, the backtest timeframe toggle, spin-off returns, merger-arb links, and the catalyst calendar.",
     ],
   },
