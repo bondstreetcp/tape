@@ -49,6 +49,7 @@
     "refresh-macro-releases": "tsx scripts/refresh-macro-releases.ts",
   "refresh-real-economy": "tsx scripts/refresh-real-economy.ts",
   "refresh-index-trend": "tsx scripts/refresh-index-trend.ts",
+  "refresh-sector-trend": "tsx scripts/refresh-sector-trend.ts",
     "refresh-market-headlines": "tsx scripts/refresh-market-headlines.ts",
     "refresh-flow": "tsx scripts/build-flow.ts",
     "refresh-sectors": "tsx scripts/patch-sectors.ts",

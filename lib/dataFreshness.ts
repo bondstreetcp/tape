@@ -94,6 +94,7 @@ const FEEDS: FeedSpec[] = [
   { file: "guidance.json", affects: ["/guidance", "/earnings-desk", "/pead"], label: "Guidance", tier: "core", maxAgeHours: CORE, countPath: "byTicker", minCount: 20 },
   { file: "real-economy.json", affects: ["/macro"], label: "Real-economy alt-data", tier: "core", maxAgeHours: CORE, countPath: "series", minCount: 5 },
   { file: "index-trend.json", affects: ["/macro"], label: "Index trend channels", tier: "core", maxAgeHours: CORE, countPath: "indices", minCount: 2 },
+  { file: "sector-trend.json", affects: ["/macro"], label: "Sector trend channels", tier: "core", maxAgeHours: CORE, countPath: "indices", minCount: 8 },
   { file: "catalysts.json", affects: ["", "/catalyst-calendar", "/binary-week", "/positioning", "/portfolio-radar"], label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
   { file: "options-flow.json", affects: ["/flow", "/positioning", "/confluence", "/signal-record"], label: "Options flow", tier: "core", maxAgeHours: CORE },
   { file: "gamma-board.json", affects: ["/gamma-board", "/coiled", "/signal-record", "/morning-desk"], label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },

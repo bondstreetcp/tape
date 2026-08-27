@@ -5,7 +5,7 @@ import { getEconEstimates, matchEstimate } from "@/lib/econEstimates";
 import { LABEL_TO_RELEASE } from "@/lib/releases";
 import { getMacroReleases } from "@/lib/macroReleasesServer";
 import { getRealEconomy } from "@/lib/realEconomyServer";
-import { getIndexTrend } from "@/lib/indexTrendServer";
+import { getIndexTrend, getSectorTrend } from "@/lib/indexTrendServer";
 import { getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import MacroDashboard from "@/components/MacroDashboard";
 
@@ -13,7 +13,7 @@ import MacroDashboard from "@/components/MacroDashboard";
 export const revalidate = 3600;
 
 export default async function MacroPage() {
-  const [macro, calendar, volOil, ff, recentReleases, headlines, realEconomy, indexTrend] = await Promise.all([
+  const [macro, calendar, volOil, ff, recentReleases, headlines, realEconomy, indexTrend, sectorTrend] = await Promise.all([
     getMacroCached(),
     getEconCalendar(),
     getVolOilCurves().catch(() => ({ vix: [], oil: [], asOf: "" })),
@@ -22,6 +22,7 @@ export default async function MacroPage() {
     getMarketHeadlines().catch(() => []),
     getRealEconomy().catch(() => null),
     getIndexTrend().catch(() => null),
+    getSectorTrend().catch(() => null),
   ]);
   // Attach the consensus estimate to each upcoming release where we have one.
   const calendarWithEst = calendar.map((e) => ({
@@ -42,6 +43,7 @@ export default async function MacroPage() {
       headlines={headlines}
       realEconomy={realEconomy}
       indexTrend={indexTrend}
+      sectorTrend={sectorTrend}
     />
   );
 }

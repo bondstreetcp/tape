@@ -928,6 +928,12 @@ jobs:
         run: npm run refresh-index-trend
         continue-on-error: true
 
+      # Sector valuation — the same channel across the 11 GICS sector ETFs (Yahoo). Keyless, no LLM.
+      - name: Refresh sector trend channels (valuation)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-sector-trend
+        continue-on-error: true
+
       # Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
       - name: Refresh market headlines (Google News wire)
         if: ${{ env.FULL == 'true' }}

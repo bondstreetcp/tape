@@ -282,6 +282,7 @@ export default function MacroDashboard({
   headlines,
   realEconomy,
   indexTrend,
+  sectorTrend,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -295,6 +296,7 @@ export default function MacroDashboard({
   headlines?: MarketHeadline[];
   realEconomy?: RealEconomyData | null;
   indexTrend?: IndexTrendData | null;
+  sectorTrend?: IndexTrendData | null;
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -388,7 +390,21 @@ export default function MacroDashboard({
 
       {section === "credit" && <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>}
       {section === "realecon" && <div className="mb-5"><RealEconomyPanel data={realEconomy ?? null} /></div>}
-      {section === "valuation" && <div className="mb-5"><IndexTrendPanel data={indexTrend ?? null} /></div>}
+      {section === "valuation" && (
+        <div className="mb-5 space-y-5">
+          <IndexTrendPanel data={indexTrend ?? null} />
+          <IndexTrendPanel
+            data={sectorTrend ?? null}
+            title="Sector valuation"
+            subtitle="sectors ranked cheap → dear vs their own trend"
+            footer={
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+                The same log-linear channel applied to the 11 GICS sector ETFs (Yahoo, from ~1998 — a shorter history than the S&amp;P&apos;s deep series, so fewer cycles; XLRE &amp; XLC are younger still), sorted cheapest → dearest. <span className="text-[#f59e0b]">Descriptive, not predictive</span> — price-only, sensitive to the window. Decision-support, not advice.
+              </p>
+            }
+          />
+        </div>
+      )}
 
       {section === "calendar" && (
       <section className="mb-5">

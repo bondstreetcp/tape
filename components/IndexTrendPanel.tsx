@@ -1,4 +1,5 @@
 "use client";
+import { type ReactNode } from "react";
 import { type IndexTrendData, type IndexTrend, VERDICT_COLOR, fmtIdx, signPct } from "@/lib/indexTrend";
 
 const yearOf = (ms: number) => new Date(ms).getUTCFullYear();
@@ -80,21 +81,33 @@ function IndexCard({ t }: { t: IndexTrend }) {
   );
 }
 
-export default function IndexTrendPanel({ data }: { data: IndexTrendData | null }) {
+export default function IndexTrendPanel({
+  data,
+  title = "Index valuation",
+  subtitle = "price vs its long-run trend channel",
+  footer,
+}: {
+  data: IndexTrendData | null;
+  title?: string;
+  subtitle?: string;
+  footer?: ReactNode;
+}) {
   if (!data || !data.indices.length) return null;
   const asOf = (() => { const d = Date.parse(data.asOf); return Number.isNaN(d) ? "" : new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }); })();
   return (
     <section className="mt-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold text-[var(--text)]">Index valuation <span className="text-[13px] font-normal text-[var(--text-4)]">· price vs its long-run trend channel</span></h3>
+        <h3 className="text-base font-semibold text-[var(--text)]">{title} <span className="text-[13px] font-normal text-[var(--text-4)]">· {subtitle}</span></h3>
         {asOf && <span className="text-[11px] text-[var(--text-4)]">as of {asOf}</span>}
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {data.indices.map((t) => <IndexCard key={t.key} t={t} />)}
       </div>
-      <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
-        A log-linear regression of price on time with ±1σ/±2σ (~68% / ~95%) bands — where price sits in the channel gauges how cheap/dear the market is vs its own long-term exponential growth. S&amp;P fit from 1932 (Shiller/datahub); Nasdaq &amp; Russell from their modern history (Yahoo). <span className="text-[#f59e0b]">Descriptive, not predictive</span> — reversion to a fitted trend isn&apos;t guaranteed and the fit is sensitive to the start year. Price-only (ex-dividends). Decision-support, not advice.
-      </p>
+      {footer ?? (
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
+          A log-linear regression of price on time with ±1σ/±2σ (~68% / ~95%) bands — where price sits in the channel gauges how cheap/dear the market is vs its own long-term exponential growth. S&amp;P fit from 1932 (Shiller/datahub); Nasdaq &amp; Russell from their modern history (Yahoo). <span className="text-[#f59e0b]">Descriptive, not predictive</span> — reversion to a fitted trend isn&apos;t guaranteed and the fit is sensitive to the start year. Price-only (ex-dividends). Decision-support, not advice.
+        </p>
+      )}
     </section>
   );
 }
