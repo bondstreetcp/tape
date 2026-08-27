@@ -180,6 +180,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh index trend channels (valuation)", cmd: "npm run refresh-index-trend", when: "full" },
   { name: "Refresh sector trend channels (valuation)", cmd: "npm run refresh-sector-trend", when: "full" },
   { name: "Refresh CFTC COT futures positioning", cmd: "npm run refresh-cot", when: "full" },
+  { name: "Refresh energy (prices + EIA weekly balance)", cmd: "npm run refresh-energy", when: "full" },
   // Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
   { name: "Refresh market headlines (Google News wire)", cmd: "npm run refresh-market-headlines", when: "full" },
   { name: "Evaluate alerts", cmd: "npm run eval-alerts", when: "always" },

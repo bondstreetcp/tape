@@ -941,6 +941,16 @@ jobs:
         run: npm run refresh-cot
         continue-on-error: true
 
+      # Energy — keyless FRED prices (WTI/Brent/Henry Hub, retail gasoline & diesel) always write; the
+      # EIA weekly balance (inventories, production, refinery util, implied demand) fills in when
+      # EIA_API_KEY is set as a secret. Weekly data, no LLM.
+      - name: Refresh energy (prices + EIA weekly balance)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-energy
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+        continue-on-error: true
+
       # Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
       - name: Refresh market headlines (Google News wire)
         if: ${{ env.FULL == 'true' }}

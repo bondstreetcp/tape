@@ -50,6 +50,7 @@
     "refresh-real-economy": "tsx scripts/refresh-real-economy.ts",
     "refresh-index-trend": "tsx scripts/refresh-index-trend.ts",
     "refresh-cot": "tsx scripts/refresh-cot.ts",
+    "refresh-energy": "tsx scripts/refresh-energy.ts",
     "refresh-sector-trend": "tsx scripts/refresh-sector-trend.ts",
     "refresh-market-headlines": "tsx scripts/refresh-market-headlines.ts",
     "refresh-flow": "tsx scripts/build-flow.ts",
