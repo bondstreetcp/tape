@@ -23,7 +23,7 @@ import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from
 
 const COSD = new Date(Date.now() - 21 * 365 * 86_400_000).toISOString().slice(0, 10); // ~21yr — deep enough for the detail view's 1Y/3Y/5Y/10Y/Max windows
 
-type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts" };
+type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number };
 const FRED: FredCfg[] = [
   // Manufacturing / PMIs — regional Fed surveys are the FREE stand-in for the proprietary ISM PMI
   // (ISM had FRED discontinue its series). Diffusion indices: >0 = expansion, and a POINT move (not a
@@ -37,6 +37,8 @@ const FRED: FredCfg[] = [
   { key: "rail-carloads", id: "RAILFRTCARLOADSD11", label: "Rail carloads", group: "Freight", unit: "carloads/mo", source: "FRED · AAR (SA)" },
   { key: "rail-intermodal", id: "RAILFRTINTERMODALD11", label: "Rail intermodal", group: "Freight", unit: "units/mo", source: "FRED · AAR (SA)" },
   { key: "truck-freight-tsi", id: "TSIFRGHT", label: "Freight index (truck-heavy)", group: "Freight", unit: "index", source: "FRED · BTS Freight TSI", note: "Free public stand-in for the proprietary ATA Truck Tonnage Index" },
+  { key: "cass-shipments", id: "FRGSHPUSM649NCIS", label: "Cass shipments", group: "Freight", unit: "index (1990=100)", scale: 100, source: "FRED · Cass Information Systems", note: "Freight VOLUME across all modes (truck, rail, air, water)" },
+  { key: "cass-expenditures", id: "FRGEXPUSM649NCIS", label: "Cass expenditures", group: "Freight", unit: "index (1990=100)", scale: 100, source: "FRED · Cass Information Systems", note: "Freight SPEND (volume × rate) — includes rate inflation" },
   // Consumer / demand (consumer sentiment lives on the Indicators tab — not duplicated here)
   { key: "retail-sales", id: "RSAFS", label: "Retail sales", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
   { key: "durable-goods", id: "DGORDER", label: "Durable-goods orders", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
@@ -113,7 +115,8 @@ async function fetchTsa(): Promise<TsaThroughput | null> {
 async function main() {
   const series: RealEcoSeries[] = [];
   for (const cfg of FRED) {
-    const obs = await fetchSeries(cfg.id, COSD).catch(() => []);
+    let obs = await fetchSeries(cfg.id, COSD).catch(() => []);
+    if (cfg.scale && cfg.scale !== 1) obs = obs.map((o) => ({ date: o.date, value: Math.round(o.value * cfg.scale! * 100) / 100 })); // re-base (e.g. Cass 1990=1.0 → =100)
     const s = buildSeries(cfg, obs);
     if (s) { series.push(s); console.log(`  ${cfg.key.padEnd(22)} ${s.latest} @ ${s.latestDate}  (YoY ${s.yoyPct?.toFixed(1) ?? "—"}${s.changeUnit === "pts" ? "pts" : "%"})`); }
     else console.warn(`  ${cfg.key.padEnd(20)} no data (kept out of this run)`);

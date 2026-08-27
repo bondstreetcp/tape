@@ -77,3 +77,30 @@ export const fmtPct = (v: number | null): string => (v == null ? "—" : `${v >=
 /** A change value with its unit — "+3.2%" for levels, "+3.2 pts" for diffusion-index surveys. */
 export const fmtChange = (v: number | null, unit: "%" | "pts" = "%"): string =>
   v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${unit === "pts" ? " pts" : "%"}`;
+
+/** Hover explanations for each series (keyed by RealEcoSeries.key), + TSA. Presentation, not data. */
+export const SERIES_TOOLTIPS: Record<string, string> = {
+  // Manufacturing
+  "pmi-empire": "Empire State Manufacturing Survey (NY Fed) — a diffusion index: the net % of factories reporting expansion vs contraction. >0 = expanding, <0 = contracting; the month-to-month POINT move is the signal. A free, timely stand-in for the licensed ISM PMI.",
+  "pmi-philly": "Philadelphia Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",
+  "pmi-dallas": "Dallas Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",
+  "industrial-production": "Federal Reserve Industrial Production index (2017 = 100) — the real output of US factories, mines and utilities. The core HARD measure of manufacturing output.",
+  "capacity-util": "Capacity utilization (%, Federal Reserve) — how much of the economy's productive capacity is actually in use. High = tight (potential price pressure); falling = slack building.",
+  // Freight
+  "rail-carloads": "US rail carloads (AAR, seasonally adjusted) — bulk goods moved by rail: coal, chemicals, grain, autos, metals. A read on heavy-industry & commodity freight demand.",
+  "rail-intermodal": "US rail intermodal units (AAR, SA) — containers & trailers on rail, mostly consumer & imported goods. Tracks the retail/import goods pipeline.",
+  "truck-freight-tsi": "BTS Freight Transportation Services Index — the US GOVERNMENT's index of for-hire freight VOLUME across all modes (trucking-dominated), monthly since 2000. Free public stand-in for the proprietary ATA Truck Tonnage Index. Modeled from carrier output data.",
+  "cass-shipments": "Cass Freight Index — SHIPMENTS: the number of freight shipments Cass Information Systems processes for its North American shipper clients — a PRIVATE, real-invoice sample across all modes (rebased 1990 = 100). Vs the BTS index: Cass is transaction-based (actual freight bills, more timely, North America, truckload-heavy), while BTS is a government model of US for-hire output — the two corroborate each other.",
+  "cass-expenditures": "Cass Freight Index — EXPENDITURES: total freight SPEND (shipments × rate) from Cass's invoice data (1990 = 100). Because it includes freight-RATE inflation, Expenditures ÷ Shipments is a proxy for freight rates — rising expenditures while shipments fall = higher rates.",
+  // Consumer
+  "retail-sales": "Advance monthly retail & food-services sales (Census Bureau, SAAR $) — the headline read on consumer spending.",
+  "durable-goods": "New orders for manufactured durable goods (Census, SAAR $) — big-ticket items (machinery, aircraft, autos). A forward read on business & consumer investment demand.",
+  // Travel
+  "hotel-lodging-cpi": "CPI for lodging away from home (hotels/motels, BLS) — a PRICE proxy for hotels: it captures room-price inflation, NOT occupancy or revenue. Real RevPAR is STR/CoStar-licensed and isn't free.",
+  // Housing
+  "housing-starts": "New privately-owned housing units STARTED, annualized (SAAR, Census) — a read on residential construction breaking ground.",
+  "building-permits": "New housing units AUTHORIZED by building permits (SAAR, Census) — leads housing starts, since permits come before ground-breaking.",
+  "construction-spend": "Total US construction spending, residential + non-residential (SAAR, Census) — the broad construction-activity gauge.",
+  // TSA (keyed separately)
+  tsa: "TSA airport checkpoint throughput — daily count of US air passengers screened. A real-time DEMAND proxy for air travel (not load factor). The TSA page is year-to-date only, so there's no true year-over-year — the 'vs 1mo' is near-term momentum.",
+};

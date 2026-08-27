@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
+import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, SERIES_TOOLTIPS, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
 
 // ── a normalized item for the detail modal (from a FRED series or the TSA feed) ──
 type DetailItem = {
@@ -12,17 +12,18 @@ type DetailItem = {
   latestDate: string | null;
   source: string;
   note?: string;
+  tooltip?: string;
   lines: { label: string; value: string; color?: string }[];
 };
 const seriesDetail = (s: RealEcoSeries): DetailItem => ({
-  label: s.label, unit: s.unit, changeUnit: s.changeUnit, history: s.history, current: s.latest, latestDate: s.latestDate, source: s.source, note: s.note,
+  label: s.label, unit: s.unit, changeUnit: s.changeUnit, history: s.history, current: s.latest, latestDate: s.latestDate, source: s.source, note: s.note, tooltip: SERIES_TOOLTIPS[s.key],
   lines: [
     { label: "YoY", value: fmtChange(s.yoyPct, s.changeUnit), color: pctColor(s.yoyPct) },
     ...(s.momPct != null ? [{ label: "MoM", value: fmtChange(s.momPct, s.changeUnit), color: pctColor(s.momPct) }] : []),
   ],
 });
 const tsaDetail = (t: TsaThroughput): DetailItem => ({
-  label: "Air travel · TSA throughput", unit: "pax/day", history: t.history, current: t.latest, latestDate: t.latestDate, source: t.source, note: "daily demand proxy (not load factor)",
+  label: "Air travel · TSA throughput", unit: "pax/day", history: t.history, current: t.latest, latestDate: t.latestDate, source: t.source, note: "daily demand proxy (not load factor)", tooltip: SERIES_TOOLTIPS.tsa,
   lines: [
     { label: "7-day avg", value: fmtVal(t.avg7, "") },
     { label: "vs 1mo", value: fmtPct(t.chg30dPct), color: pctColor(t.chg30dPct) },
@@ -140,7 +141,8 @@ function DetailModal({ item, onClose }: { item: DetailItem; onClose: () => void 
           ))}
         </div>
         <DetailChart points={pts} unit={item.unit} />
-        <div className="mt-2 text-[11px] leading-snug text-[var(--text-4)]">{item.source}{item.note ? <span className="text-[#f59e0b]"> · {item.note}</span> : null}</div>
+        {item.tooltip && <p className="mt-2 text-[11.5px] leading-snug text-[var(--text-3)]">{item.tooltip}</p>}
+        <div className="mt-1.5 text-[11px] leading-snug text-[var(--text-4)]">{item.source}{item.note ? <span className="text-[#f59e0b]"> · {item.note}</span> : null}</div>
       </div>
     </div>
   );
@@ -165,7 +167,10 @@ function SeriesCard({ s, onOpen }: { s: RealEcoSeries; onOpen: () => void }) {
     <Card onOpen={onOpen}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[12px] font-medium text-[var(--text-2)]" title={s.label}>{s.label}</div>
+          <div className="flex items-center gap-1">
+            <span className="truncate text-[12px] font-medium text-[var(--text-2)]" title={s.label}>{s.label}</span>
+            {SERIES_TOOLTIPS[s.key] && <span className="shrink-0 cursor-help text-[10px] text-[var(--text-4)]" title={SERIES_TOOLTIPS[s.key]}>ⓘ</span>}
+          </div>
           <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums" style={{ color: s.changeUnit === "pts" ? pctColor(s.latest) : "var(--text)" }} title={s.changeUnit === "pts" ? "Diffusion index: >0 = expansion, <0 = contraction" : undefined}>{fmtVal(s.latest, s.unit)}</div>
           <div className="mt-0.5 text-[10px] text-[var(--text-4)]">{s.unit}{s.latestDate ? ` · ${asOfLabel(s.latestDate)}` : ""}</div>
         </div>
@@ -187,7 +192,10 @@ function TsaCard({ tsa, onOpen }: { tsa: TsaThroughput; onOpen: () => void }) {
     <Card onOpen={onOpen}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[12px] font-medium text-[var(--text-2)]">Air travel · TSA throughput</div>
+          <div className="flex items-center gap-1">
+            <span className="truncate text-[12px] font-medium text-[var(--text-2)]">Air travel · TSA throughput</span>
+            <span className="shrink-0 cursor-help text-[10px] text-[var(--text-4)]" title={SERIES_TOOLTIPS.tsa}>ⓘ</span>
+          </div>
           <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums text-[var(--text)]">{fmtVal(tsa.avg7, "")}</div>
           <div className="mt-0.5 text-[10px] text-[var(--text-4)]">7-day avg pax/day{tsa.latestDate ? ` · thru ${new Date(tsa.latestDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</div>
         </div>
@@ -250,7 +258,7 @@ export default function RealEconomyPanel({ data }: { data: RealEconomyData | nul
         })}
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
-        Click any card for the full history with selectable timeframes. Free primary sources — FRED (fredgraph) for the monthly series, TSA for daily air-travel throughput. The manufacturing surveys are the regional Fed diffusion indices (Empire / Philly / Dallas), the free stand-in for the licensed ISM PMI; the truck line is BTS&apos;s Freight TSI (a free stand-in for the proprietary ATA Truck Tonnage Index); hotel is a lodging-CPI <span className="text-[#f59e0b]">price proxy, not STR RevPAR</span>.
+        Click any card for the full history with selectable timeframes. Free primary sources — FRED (fredgraph) for the monthly series, TSA for daily air-travel throughput. The manufacturing surveys are the regional Fed diffusion indices (Empire / Philly / Dallas), the free stand-in for the licensed ISM PMI; the truck line is BTS&apos;s Freight TSI (a free stand-in for the proprietary ATA Truck Tonnage Index) and the Cass Freight Index (shipments = volume, expenditures = spend) covers all modes; hotel is a lodging-CPI <span className="text-[#f59e0b]">price proxy, not STR RevPAR</span>.
       </p>
       {detail && <DetailModal item={detail} onClose={() => setDetail(null)} />}
     </section>
