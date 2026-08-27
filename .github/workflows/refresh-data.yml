@@ -934,6 +934,13 @@ jobs:
         run: npm run refresh-sector-trend
         continue-on-error: true
 
+      # CFTC Commitments of Traders — large-spec futures positioning + 5yr-percentile crowding. Free
+      # CFTC public API (Socrata, keyless), no LLM. Weekly data (published Fri), refreshed on FULL.
+      - name: Refresh CFTC COT futures positioning
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-cot
+        continue-on-error: true
+
       # Market-headlines wire — macro/Fed/trade/energy/geopolitics flashes off Google News. Keyless, no LLM.
       - name: Refresh market headlines (Google News wire)
         if: ${{ env.FULL == 'true' }}

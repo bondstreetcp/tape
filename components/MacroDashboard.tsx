@@ -10,9 +10,11 @@ import { CATEGORY_COLOR, type MacroRelease } from "@/lib/macroReleases";
 import { type MarketHeadline } from "@/lib/marketHeadlines";
 import { type RealEconomyData } from "@/lib/realEconomy";
 import { type IndexTrendData } from "@/lib/indexTrend";
+import { type CotData } from "@/lib/cot";
 import MarketHeadlinesWire from "./MarketHeadlinesWire";
 import RealEconomyPanel from "./RealEconomyPanel";
 import IndexTrendPanel from "./IndexTrendPanel";
+import CotPanel from "./CotPanel";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
@@ -283,6 +285,7 @@ export default function MacroDashboard({
   realEconomy,
   indexTrend,
   sectorTrend,
+  cot,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -297,6 +300,7 @@ export default function MacroDashboard({
   realEconomy?: RealEconomyData | null;
   indexTrend?: IndexTrendData | null;
   sectorTrend?: IndexTrendData | null;
+  cot?: CotData | null;
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -311,12 +315,13 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
-  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "valuation" | "credit" | "calendar" | "headlines">("rates");
+  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "valuation" | "positioning" | "credit" | "calendar" | "headlines">("rates");
   const SECTIONS = [
     { key: "rates", label: "Rates & Curves" },
     { key: "indicators", label: "Indicators" },
     { key: "realecon", label: "Real economy" },
     { key: "valuation", label: "Valuation" },
+    { key: "positioning", label: "Positioning" },
     { key: "credit", label: "Credit" },
     { key: "calendar", label: "Calendar" },
     { key: "headlines", label: "Headlines" },
@@ -390,6 +395,12 @@ export default function MacroDashboard({
 
       {section === "credit" && <div className="mb-5"><CreditSpreads creditSeries={creditSeries} /></div>}
       {section === "realecon" && <div className="mb-5"><RealEconomyPanel data={realEconomy ?? null} /></div>}
+      {section === "positioning" && (
+        <section className="mb-5">
+          <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Futures positioning <span className="font-normal text-[var(--text-4)]">— CFTC Commitments of Traders, the crowding read</span></h2>
+          <CotPanel data={cot ?? null} />
+        </section>
+      )}
       {section === "valuation" && (
         <div className="mb-5 space-y-5">
           <IndexTrendPanel data={indexTrend ?? null} />
