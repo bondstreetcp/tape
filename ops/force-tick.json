@@ -1,7 +1,7 @@
 {
-  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27 (macro build-out): generate ALL the new alt-data feeds off-schedule in one FULL — refresh-cot (Positioning), refresh-energy (Energy; keyless prices now, EIA balance pending EIA_API_KEY), refresh-econ-surprise (Surprises; starts thin, accretes), refresh-attention (Attention; Wikipedia pageviews). Also re-runs real-economy + valuation. Populates the four new Economy tabs without waiting for the 23:00 UTC scheduled FULL.",
+  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27 (eia-live): EIA_API_KEY was merged into R2 site-data/runner.env; after the tape-runner container is restarted (so tape-entrypoint sources the refreshed .alert-env), this forced FULL runs refresh-energy WITH the key and back-fills the EIA inventory/production/demand rows, then data-to-r2 ships them. Backstop is the 23:00 UTC scheduled FULL.",
   "mode": "full",
-  "notBeforeUtc": "2026-08-27T19:40:00Z",
+  "notBeforeUtc": "2026-08-27T21:05:00Z",
   "expiresUtc": "2026-08-28T12:00:00Z",
-  "key": "2026-08-27-macro-buildout"
+  "key": "2026-08-27-eia-live"
 }
