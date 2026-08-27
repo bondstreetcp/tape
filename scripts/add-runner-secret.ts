@@ -22,15 +22,20 @@ async function main() {
   const cur = (await getObject(OBJ).catch(() => null))?.toString("utf8") ?? "";
   const map = new Map<string, string>();
   for (const line of cur.split(/\r?\n/)) {
-    const t = line.trim();
+    let t = line.trim();
     if (!t || t.startsWith("#")) continue;
+    if (t.startsWith("export ")) t = t.slice(7).trim(); // tolerate (and normalize) existing export lines
     const i = t.indexOf("=");
     if (i > 0) map.set(t.slice(0, i).trim(), t.slice(i + 1));
   }
   const existed = map.has(name);
   map.set(name, value);
 
-  const body = [...map].map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
+  // `export KEY=value`, not bare `KEY=value`: tape-entrypoint sources this file with a plain `.` (no
+  // `set -a`), so without the export keyword the vars set as shell locals and never reach the tick's
+  // child processes — the bug that made EIA_API_KEY/ALERT_WEBHOOK_URL silently not apply. Self-exporting
+  // lines work on the current container with no recreate.
+  const body = [...map].map(([k, v]) => `export ${k}=${v}`).join("\n") + "\n";
   await putObject(OBJ, Buffer.from(body), "text/plain");
   console.log(`add-runner-secret: ${existed ? "updated" : "added"} ${name} — ${map.size} secret(s) now in ${OBJ}. Live on the NAS next tick.`);
   console.log(`  (kept: ${[...map.keys()].filter((k) => k !== name).join(", ") || "none"})`);

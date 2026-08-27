@@ -25,8 +25,9 @@ git pull --ff-only origin main || echo "[entrypoint] git pull failed — using t
 # volume rather than tape.env, because env_file edits need a container DELETE+recreate on Synology
 # while this file lands with one `docker exec` + restart. Never commit the real topic.
 # This boot-time source covers the immediate tick below; the loop re-sources per tick (see there) so a
-# secret rotated in via sync-runner-env goes live on the next tick without a restart.
-[ -f "$APP/.alert-env" ] && . "$APP/.alert-env"
+# secret rotated in via sync-runner-env goes live on the next tick without a restart. `set -a` so the
+# vars EXPORT to child processes even if a line lacks the `export` keyword.
+if [ -f "$APP/.alert-env" ]; then set -a; . "$APP/.alert-env"; set +a; fi
 
 # onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads the
 # CUDA 12 EP binaries on linux/x64 BY DEFAULT (its install metadata lists requirements["linux/x64"] =
@@ -59,6 +60,7 @@ while true; do
   # R2 secrets into .alert-env, and sourcing here means the value it wrote LAST tick is in this tick's
   # env. Sourcing only above the loop (as it did before) silently required a container restart for any
   # rotation to take effect — the exact "takes effect next tick" contract run-tick documents was a lie.
-  [ -f "$APP/.alert-env" ] && . "$APP/.alert-env"
+  # `set -a` exports the vars to the tick's child processes even when a line lacks the `export` keyword.
+  if [ -f "$APP/.alert-env" ]; then set -a; . "$APP/.alert-env"; set +a; fi
   npx tsx scripts/run-tick.ts auto || echo "[entrypoint] tick exited non-zero (continue-on-error; check tick.log)"
 done
