@@ -1,7 +1,7 @@
 {
-  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27 (energy+cot): generate the NEW alt-data feeds off-schedule — the forced FULL runs refresh-cot (Macro → Positioning) and refresh-energy (Macro → Energy; keyless prices populate now, the EIA weekly balance stays pending until EIA_API_KEY is set on the box + as a GH secret). Also harmlessly re-runs the valuation + real-economy feeds. Populates the two new tabs without waiting for the 23:00 UTC scheduled FULL.",
+  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27 (macro build-out): generate ALL the new alt-data feeds off-schedule in one FULL — refresh-cot (Positioning), refresh-energy (Energy; keyless prices now, EIA balance pending EIA_API_KEY), refresh-econ-surprise (Surprises; starts thin, accretes), refresh-attention (Attention; Wikipedia pageviews). Also re-runs real-economy + valuation. Populates the four new Economy tabs without waiting for the 23:00 UTC scheduled FULL.",
   "mode": "full",
-  "notBeforeUtc": "2026-08-27T19:25:00Z",
+  "notBeforeUtc": "2026-08-27T19:40:00Z",
   "expiresUtc": "2026-08-28T12:00:00Z",
-  "key": "2026-08-27-energy-cot-feeds"
+  "key": "2026-08-27-macro-buildout"
 }
