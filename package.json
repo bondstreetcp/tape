@@ -52,6 +52,7 @@
     "refresh-cot": "tsx scripts/refresh-cot.ts",
     "refresh-energy": "tsx scripts/refresh-energy.ts",
     "refresh-econ-surprise": "tsx scripts/refresh-econ-surprise.ts",
+    "refresh-attention": "tsx scripts/refresh-attention.ts",
     "refresh-sector-trend": "tsx scripts/refresh-sector-trend.ts",
     "refresh-market-headlines": "tsx scripts/refresh-market-headlines.ts",
     "refresh-flow": "tsx scripts/build-flow.ts",

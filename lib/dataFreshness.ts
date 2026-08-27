@@ -98,6 +98,7 @@ const FEEDS: FeedSpec[] = [
   { file: "cot.json", affects: ["/macro"], label: "CFTC positioning (COT)", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
   { file: "energy.json", affects: ["/macro"], label: "Energy (prices + EIA weekly)", tier: "core", maxAgeHours: CORE, countPath: "series", minCount: 4 },
   { file: "econ-surprises.json", affects: ["/macro"], label: "Economic surprise index", tier: "core", maxAgeHours: CORE },
+  { file: "attention.json", affects: ["/macro"], label: "Attention (Wikipedia pageviews)", tier: "core", maxAgeHours: CORE, countPath: "items", minCount: 6 },
   { file: "catalysts.json", affects: ["", "/catalyst-calendar", "/binary-week", "/positioning", "/portfolio-radar"], label: "Mover catalysts", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 50 },
   { file: "options-flow.json", affects: ["/flow", "/positioning", "/confluence", "/signal-record"], label: "Options flow", tier: "core", maxAgeHours: CORE },
   { file: "gamma-board.json", affects: ["/gamma-board", "/coiled", "/signal-record", "/morning-desk"], label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
