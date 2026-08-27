@@ -1,7 +1,7 @@
 {
-  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main hourly). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-25: recover the lobbying feed off-schedule after the keyless-fallback fix (2736a666) — the forced FULL runs refresh-lobbying, which now pulls the LDA filings list anonymously when the NAS key is absent, so lobbying.json refreshes without waiting for the 23:00 UTC scheduled FULL. (It also re-runs the whole FULL; company-cache still needs the good-IP PC box and will fire the new dark-pipe alert.)",
+  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main hourly). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27: generate the NEW valuation feeds off-schedule — the forced FULL runs refresh-index-trend + refresh-sector-trend (which didn't exist at the last FULL, so the Macro → Valuation tab is currently blank), plus refresh-real-economy with its deepened ~21yr history for the new detail view. Populates the Valuation tab + the drill-down without waiting for the 23:00 UTC scheduled FULL.",
   "mode": "full",
-  "notBeforeUtc": "2026-08-25T21:20:00Z",
-  "expiresUtc": "2026-08-26T12:00:00Z",
-  "key": "2026-08-25-recover-lobbying"
+  "notBeforeUtc": "2026-08-27T15:45:00Z",
+  "expiresUtc": "2026-08-28T10:00:00Z",
+  "key": "2026-08-27-valuation-feeds"
 }
