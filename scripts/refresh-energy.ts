@@ -116,7 +116,13 @@ async function eiaFetch(route: string, series: string): Promise<Obs[]> {
   const url = `${EIA}/${route}/data/?api_key=${KEY}&frequency=weekly&data[0]=value` +
     `&facets[series][]=${encodeURIComponent(series)}&sort[0][column]=period&sort[0][direction]=desc&length=600`;
   const res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(25_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    // Surface EIA's own error (e.g. API_KEY_INVALID) instead of a bare status — the difference between
+    // "the key is bad" and "the route is wrong" is exactly this message.
+    let detail = "";
+    try { const b = await res.text(); const j = JSON.parse(b); detail = j?.error?.code || j?.error?.message || b.slice(0, 80); } catch { /* non-JSON body */ }
+    throw new Error(`HTTP ${res.status}${detail ? ` · ${String(detail).slice(0, 90)}` : ""}`);
+  }
   const j: any = await res.json();
   const rows: any[] = j?.response?.data ?? [];
   return rows
@@ -156,12 +162,17 @@ async function main() {
   }
 
   if (KEY) {
+    let lastErr = "";
     for (const c of EIA_SERIES) {
       try {
         const s = await buildEia(c);
         if (s) { series.push(s); console.log(`  eia   ${c.key.padEnd(12)} ${s.latest} ${c.unit} @ ${s.latestDate} (wow ${s.wow}${s.vsSeasonalPct != null ? `, vs5yr ${s.vsSeasonalPct.toFixed(1)}%` : ""})`); }
         else console.warn(`  eia   ${c.key}: no data — check route/series (${c.route} · ${c.series})`);
-      } catch (e: any) { console.warn(`  eia   ${c.key}: ${String(e?.message || e).slice(0, 60)}`); }
+      } catch (e: any) { lastErr = String(e?.message || e); console.warn(`  eia   ${c.key}: ${lastErr.slice(0, 90)}`); }
+    }
+    // A uniform key rejection means the routes are fine and the key is the problem — say so plainly.
+    if (!series.some((s) => s.source === "EIA") && /API_KEY_INVALID|API_KEY_MISSING|403/.test(lastErr)) {
+      console.warn("  → EIA rejected the API key (the routes/series are correct). Confirm the key is ACTIVATED (check the registration email for a confirmation link) and copied EXACTLY (no dropped character or trailing space), then retry. New keys can take a few minutes to go live.");
     }
   } else {
     console.warn("  EIA_API_KEY not set — wrote prices only. Add a free key (https://www.eia.gov/opendata/register.php) on the NAS + as a GH secret to fill in the weekly balance.");
