@@ -1,5 +1,5 @@
 "use client";
-import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, fmtVal, fmtPct, pctColor } from "@/lib/realEconomy";
+import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
 
 // Tiny inline sparkline over the trimmed history — green if the window ends above where it started.
 function Spark({ points }: { points: [string, number][] }) {
@@ -30,14 +30,14 @@ function SeriesCard({ s }: { s: RealEcoSeries }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-[12px] font-medium text-[var(--text-2)]" title={s.label}>{s.label}</div>
-          <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums text-[var(--text)]">{fmtVal(s.latest, s.unit)}</div>
+          <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums" style={{ color: s.changeUnit === "pts" ? pctColor(s.latest) : "var(--text)" }} title={s.changeUnit === "pts" ? "Diffusion index: >0 = expansion, <0 = contraction" : undefined}>{fmtVal(s.latest, s.unit)}</div>
           <div className="mt-0.5 text-[10px] text-[var(--text-4)]">{s.unit}{s.latestDate ? ` · ${asOfLabel(s.latestDate)}` : ""}</div>
         </div>
         <Spark points={s.history} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
-        <span title="Year-over-year change"><b className="text-[var(--text-4)]">YoY</b> <span className="font-semibold tabular-nums" style={{ color: pctColor(s.yoyPct) }}>{fmtPct(s.yoyPct)}</span></span>
-        {s.momPct != null && <span title="Month-over-month change"><b className="text-[var(--text-4)]">MoM</b> <span className="tabular-nums" style={{ color: pctColor(s.momPct) }}>{fmtPct(s.momPct)}</span></span>}
+        <span title="Year-over-year change"><b className="text-[var(--text-4)]">YoY</b> <span className="font-semibold tabular-nums" style={{ color: pctColor(s.yoyPct) }}>{fmtChange(s.yoyPct, s.changeUnit)}</span></span>
+        {s.momPct != null && <span title="Month-over-month change"><b className="text-[var(--text-4)]">MoM</b> <span className="tabular-nums" style={{ color: pctColor(s.momPct) }}>{fmtChange(s.momPct, s.changeUnit)}</span></span>}
       </div>
       <div className="mt-1.5 text-[10px] leading-snug text-[var(--text-4)]">
         {s.source}{s.note ? <span className="text-[#f59e0b]" title={s.note}> · {s.note}</span> : null}
@@ -113,7 +113,7 @@ export default function RealEconomyPanel({ data }: { data: RealEconomyData | nul
         })}
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">
-        Free primary sources — FRED (fredgraph) for the monthly index series, TSA for daily air-travel throughput. These lead the hard prints (retail, GDP, PMIs). Hotel is a lodging-CPI <span className="text-[#f59e0b]">price proxy, not STR RevPAR</span>; the truck line is BTS&apos;s Freight TSI (a free stand-in for the proprietary ATA Truck Tonnage Index).
+        Free primary sources — FRED (fredgraph) for the monthly series, TSA for daily air-travel throughput. The manufacturing surveys are the regional Fed diffusion indices (Empire / Philly / Dallas), the free stand-in for the licensed ISM PMI; the truck line is BTS&apos;s Freight TSI (a free stand-in for the proprietary ATA Truck Tonnage Index); hotel is a lodging-CPI <span className="text-[#f59e0b]">price proxy, not STR RevPAR</span>. These lead the hard prints.
       </p>
     </section>
   );

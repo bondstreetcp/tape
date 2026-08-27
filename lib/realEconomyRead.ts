@@ -12,16 +12,19 @@ const sp = (v: number | null): string => (v == null ? "?" : `${v >= 0 ? "+" : ""
 /** Build the desk read from the feed's own numbers. null if the LLM is unreachable or returns junk. */
 export async function buildRealEconomyRead(data: RealEconomyData): Promise<RealEconomyRead | null> {
   const byGroup = (g: string) => data.series.filter((s) => s.group === g);
-  const line = (s: (typeof data.series)[number]) => `${s.label}: ${s.latest ?? "?"} ${s.unit} — YoY ${sp(s.yoyPct)}, MoM ${sp(s.momPct)} (as of ${s.latestDate ?? "?"})`;
+  const line = (s: (typeof data.series)[number]) => {
+    const c = (v: number | null) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${s.changeUnit === "pts" ? "pts" : "%"}`);
+    return `${s.label}: ${s.latest ?? "?"} ${s.unit} — YoY ${c(s.yoyPct)}, MoM ${c(s.momPct)} (as of ${s.latestDate ?? "?"})`;
+  };
   const section = (g: string) => { const rows = byGroup(g); return rows.length ? `${g}:\n${rows.map((s) => `  ${line(s)}`).join("\n")}` : ""; };
   const tsaLine = data.tsa
     ? `Air travel (TSA checkpoint throughput): 7-day avg ${Math.round(data.tsa.avg7 ?? 0).toLocaleString()} pax/day, ${sp(data.tsa.chg30dPct)} vs ~1 month ago (YTD table — no true YoY).`
     : "";
-  const sheet = [section("Freight"), section("Housing"), section("Travel"), tsaLine].filter(Boolean).join("\n\n");
+  const sheet = [section("Manufacturing"), section("Freight"), section("Consumer"), section("Housing"), section("Travel"), tsaLine].filter(Boolean).join("\n\n");
 
   const SYSTEM =
-    "You are a macro/cross-asset analyst reading FREE real-economy alt-data — freight (rail carloads/intermodal, a truck-freight index), air-travel demand, and housing (starts, permits, construction) — for a trading desk. " +
-    "From ONLY the figures provided, synthesize what the real economy is telling us right now: is the goods economy (freight) expanding or cooling; is travel demand holding up; is housing firming or softening — and name the CROSS-CURRENTS (e.g. intermodal up while the truck index is flat, or permits up while starts fall). Then give the read-through to sectors/industries (rails, truckers, homebuilders, building products, airlines, lodging). " +
+    "You are a macro/cross-asset analyst reading FREE real-economy alt-data — manufacturing (regional-Fed PMI surveys, industrial production, capacity utilization), freight (rail carloads/intermodal, a truck-freight index), consumer demand (retail sales, durable-goods orders), air-travel demand, and housing (starts, permits, construction) — for a trading desk. " +
+    "From ONLY the figures provided, synthesize what the real economy is telling us right now: is manufacturing expanding or contracting (the regional-Fed diffusion indices read >0 = expansion; weigh their POINT moves), is the goods economy (freight) accelerating or cooling, is the consumer still spending, is travel demand holding, is housing firming or softening — and name the CROSS-CURRENTS (e.g. PMIs turning up while freight is still soft, or permits up while starts fall). Then give the read-through to sectors/industries (industrials/manufacturers, rails, truckers, retailers, homebuilders, building products, airlines, lodging). " +
     "The inflection matters more than the level; weigh YoY over one-month noise. Ground EVERY claim in the numbers/series provided — never invent a figure or a series not listed. Remember the truck line is the BTS Freight TSI (a proxy for the proprietary ATA Truck Tonnage Index) and hotel is a lodging-CPI PRICE proxy, NOT RevPAR — don't overstate either. Be concrete and terse. " +
     NO_ADVICE;
   const SCHEMA =

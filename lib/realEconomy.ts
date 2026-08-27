@@ -8,13 +8,14 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Freight" | "Travel" | "Housing";
+export type RealEcoGroup = "Manufacturing" | "Freight" | "Consumer" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
   label: string;
   group: RealEcoGroup;
   unit: string; // human unit for the value, e.g. "carloads/mo", "index", "k units SAAR", "$B SAAR"
+  changeUnit?: "%" | "pts"; // "pts" for diffusion indices (a point move, not a % — a % change of a survey index is meaningless)
   seriesId: string; // FRED id (provenance)
   latest: number | null;
   latestDate: string | null; // period end (YYYY-MM-DD)
@@ -60,7 +61,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Freight", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Manufacturing", "Freight", "Consumer", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -73,3 +74,6 @@ export function fmtVal(v: number | null, unit: string): string {
 
 export const pctColor = (v: number | null): string => (v == null ? "var(--text-3)" : v >= 0 ? "#22c55e" : "#ef4444");
 export const fmtPct = (v: number | null): string => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+/** A change value with its unit — "+3.2%" for levels, "+3.2 pts" for diffusion-index surveys. */
+export const fmtChange = (v: number | null, unit: "%" | "pts" = "%"): string =>
+  v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${unit === "pts" ? " pts" : "%"}`;

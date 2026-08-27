@@ -23,11 +23,26 @@ import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from
 
 const COSD = new Date(Date.now() - 6 * 365 * 86_400_000).toISOString().slice(0, 10); // ~6yr of history
 
-const FRED: { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string }[] = [
+type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts" };
+const FRED: FredCfg[] = [
+  // Manufacturing / PMIs — regional Fed surveys are the FREE stand-in for the proprietary ISM PMI
+  // (ISM had FRED discontinue its series). Diffusion indices: >0 = expansion, and a POINT move (not a
+  // %) is the meaningful change. Plus hard output: industrial production + capacity utilization.
+  { key: "pmi-empire", id: "GACDISA066MSFRBNY", label: "Empire State (NY Fed)", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · NY Fed", note: "Free ISM-style survey; >0 = expansion" },
+  { key: "pmi-philly", id: "GACDFSA066MSFRBPHI", label: "Philadelphia Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · Philly Fed", note: ">0 = expansion" },
+  { key: "pmi-dallas", id: "BACTSAMFRBDAL", label: "Dallas Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · Dallas Fed", note: ">0 = expansion" },
+  { key: "industrial-production", id: "INDPRO", label: "Industrial production", group: "Manufacturing", unit: "index 2017=100", source: "FRED · Federal Reserve" },
+  { key: "capacity-util", id: "TCU", label: "Capacity utilization", group: "Manufacturing", unit: "%", source: "FRED · Federal Reserve" },
+  // Freight
   { key: "rail-carloads", id: "RAILFRTCARLOADSD11", label: "Rail carloads", group: "Freight", unit: "carloads/mo", source: "FRED · AAR (SA)" },
   { key: "rail-intermodal", id: "RAILFRTINTERMODALD11", label: "Rail intermodal", group: "Freight", unit: "units/mo", source: "FRED · AAR (SA)" },
   { key: "truck-freight-tsi", id: "TSIFRGHT", label: "Freight index (truck-heavy)", group: "Freight", unit: "index", source: "FRED · BTS Freight TSI", note: "Free public stand-in for the proprietary ATA Truck Tonnage Index" },
+  // Consumer / demand (consumer sentiment lives on the Indicators tab — not duplicated here)
+  { key: "retail-sales", id: "RSAFS", label: "Retail sales", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
+  { key: "durable-goods", id: "DGORDER", label: "Durable-goods orders", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
+  // Travel
   { key: "hotel-lodging-cpi", id: "CUSR0000SEHB", label: "Lodging-away CPI", group: "Travel", unit: "CPI index", source: "FRED · BLS", note: "Hotel PRICE proxy — NOT STR RevPAR (no occupancy/revenue)" },
+  // Housing
   { key: "housing-starts", id: "HOUST", label: "Housing starts", group: "Housing", unit: "k units SAAR", source: "FRED · Census" },
   { key: "building-permits", id: "PERMIT", label: "Building permits", group: "Housing", unit: "k units SAAR", source: "FRED · Census" },
   { key: "construction-spend", id: "TTLCONS", label: "Construction spending", group: "Housing", unit: "$M SAAR", source: "FRED · Census" },
@@ -44,12 +59,17 @@ function buildSeries(cfg: (typeof FRED)[number], obs: { date: string; value: num
   const yearTargetMs = Date.parse(latestObs.date) - 365 * 86_400_000;
   let yearAgoObs: { date: string; value: number } | null = null;
   for (const o of obs) { if (Date.parse(o.date) <= yearTargetMs) yearAgoObs = o; else break; }
+  const prevV = prevObs?.value ?? null, yearV = yearAgoObs?.value ?? null;
+  // Diffusion-index surveys change in POINTS (a % move of a survey index is meaningless); everything
+  // else in %. momPct/yoyPct carry whichever, tagged by changeUnit for the UI to render correctly.
+  const chg = (base: number | null): number | null =>
+    cfg.changeUnit === "pts" ? (base != null ? latestObs.value - base : null) : pct(latestObs.value, base);
   return {
-    key: cfg.key, label: cfg.label, group: cfg.group, unit: cfg.unit, seriesId: cfg.id, source: cfg.source, note: cfg.note,
+    key: cfg.key, label: cfg.label, group: cfg.group, unit: cfg.unit, changeUnit: cfg.changeUnit, seriesId: cfg.id, source: cfg.source, note: cfg.note,
     latest: latestObs.value, latestDate: latestObs.date,
-    prev: prevObs?.value ?? null, yearAgo: yearAgoObs?.value ?? null,
-    momPct: pct(latestObs.value, prevObs?.value ?? null),
-    yoyPct: pct(latestObs.value, yearAgoObs?.value ?? null),
+    prev: prevV, yearAgo: yearV,
+    momPct: chg(prevV),
+    yoyPct: chg(yearV),
     history: obs.slice(-60).map((o) => [o.date, o.value] as [string, number]),
   };
 }
@@ -95,7 +115,7 @@ async function main() {
   for (const cfg of FRED) {
     const obs = await fetchSeries(cfg.id, COSD).catch(() => []);
     const s = buildSeries(cfg, obs);
-    if (s) { series.push(s); console.log(`  ${cfg.key.padEnd(20)} ${s.latest} @ ${s.latestDate}  (YoY ${s.yoyPct?.toFixed(1) ?? "—"}%)`); }
+    if (s) { series.push(s); console.log(`  ${cfg.key.padEnd(22)} ${s.latest} @ ${s.latestDate}  (YoY ${s.yoyPct?.toFixed(1) ?? "—"}${s.changeUnit === "pts" ? "pts" : "%"})`); }
     else console.warn(`  ${cfg.key.padEnd(20)} no data (kept out of this run)`);
   }
   const tsa = await fetchTsa();
