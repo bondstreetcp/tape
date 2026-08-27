@@ -12,11 +12,13 @@ import { type RealEconomyData } from "@/lib/realEconomy";
 import { type IndexTrendData } from "@/lib/indexTrend";
 import { type CotData } from "@/lib/cot";
 import { type EnergyData } from "@/lib/energy";
+import { type EconSurpriseData } from "@/lib/econSurprise";
 import MarketHeadlinesWire from "./MarketHeadlinesWire";
 import RealEconomyPanel from "./RealEconomyPanel";
 import IndexTrendPanel from "./IndexTrendPanel";
 import CotPanel from "./CotPanel";
 import EnergyPanel from "./EnergyPanel";
+import EconSurprisePanel from "./EconSurprisePanel";
 import type { EconEstimate } from "@/lib/econEstimates";
 import { fmtDateTime } from "@/lib/format";
 import CurveChart from "./CurveChart";
@@ -289,6 +291,7 @@ export default function MacroDashboard({
   sectorTrend,
   cot,
   energy,
+  econSurprise,
 }: {
   curve: CurvePoint[];
   indicators: MacroInd[];
@@ -305,6 +308,7 @@ export default function MacroDashboard({
   sectorTrend?: IndexTrendData | null;
   cot?: CotData | null;
   energy?: EnergyData | null;
+  econSurprise?: EconSurpriseData | null;
 }) {
   const router = useRouter();
   const universe = (usePathname() || "").match(/^\/u\/([^/]+)/)?.[1] || "sp500";
@@ -319,7 +323,7 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
-  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "energy" | "valuation" | "positioning" | "credit" | "calendar" | "headlines">("rates");
+  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "energy" | "valuation" | "positioning" | "credit" | "calendar" | "surprises" | "headlines">("rates");
   const SECTIONS = [
     { key: "rates", label: "Rates & Curves" },
     { key: "indicators", label: "Indicators" },
@@ -329,6 +333,7 @@ export default function MacroDashboard({
     { key: "positioning", label: "Positioning" },
     { key: "credit", label: "Credit" },
     { key: "calendar", label: "Calendar" },
+    { key: "surprises", label: "Surprises" },
     { key: "headlines", label: "Headlines" },
   ] as const;
   return (
@@ -410,6 +415,12 @@ export default function MacroDashboard({
         <section className="mb-5">
           <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Futures positioning <span className="font-normal text-[var(--text-4)]">— CFTC Commitments of Traders, the crowding read</span></h2>
           <CotPanel data={cot ?? null} />
+        </section>
+      )}
+      {section === "surprises" && (
+        <section className="mb-5">
+          <h2 className="mb-2 text-sm font-semibold text-[var(--text-2)]">Economic surprise index <span className="font-normal text-[var(--text-4)]">— how US data is printing vs consensus</span></h2>
+          <EconSurprisePanel data={econSurprise ?? null} />
         </section>
       )}
       {section === "valuation" && (
