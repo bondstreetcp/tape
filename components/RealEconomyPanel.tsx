@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, SERIES_TOOLTIPS, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
 
+// change colour, inverted for lower-is-better series (falling jobless claims / mortgage rates = green).
+const cc = (v: number | null, invert?: boolean) => pctColor(v == null ? null : invert ? -v : v);
+
 // ── a normalized item for the detail modal (from a FRED series or the TSA feed) ──
 type DetailItem = {
   label: string;
@@ -171,14 +174,14 @@ function SeriesCard({ s, onOpen }: { s: RealEcoSeries; onOpen: () => void }) {
             <span className="truncate text-[12px] font-medium text-[var(--text-2)]" title={s.label}>{s.label}</span>
             {SERIES_TOOLTIPS[s.key] && <span className="shrink-0 cursor-help text-[10px] text-[var(--text-4)]" title={SERIES_TOOLTIPS[s.key]}>ⓘ</span>}
           </div>
-          <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums" style={{ color: s.changeUnit === "pts" ? pctColor(s.latest) : "var(--text)" }} title={s.changeUnit === "pts" ? "Diffusion index: >0 = expansion, <0 = contraction" : undefined}>{fmtVal(s.latest, s.unit)}</div>
+          <div className="mt-0.5 font-mono text-xl font-bold leading-none tabular-nums" style={{ color: s.signLevel ? pctColor(s.latest) : "var(--text)" }} title={s.signLevel ? "Index level: >0 = expansion / above-trend, <0 = contraction / below-trend" : undefined}>{fmtVal(s.latest, s.unit)}</div>
           <div className="mt-0.5 text-[10px] text-[var(--text-4)]">{s.unit}{s.latestDate ? ` · ${asOfLabel(s.latestDate)}` : ""}</div>
         </div>
-        <Spark points={s.history.slice(-60)} />
+        <Spark points={s.history.slice(s.freq === "W" ? -104 : -60)} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
-        <span title="Year-over-year change"><b className="text-[var(--text-4)]">YoY</b> <span className="font-semibold tabular-nums" style={{ color: pctColor(s.yoyPct) }}>{fmtChange(s.yoyPct, s.changeUnit)}</span></span>
-        {s.momPct != null && <span title="Month-over-month change"><b className="text-[var(--text-4)]">MoM</b> <span className="tabular-nums" style={{ color: pctColor(s.momPct) }}>{fmtChange(s.momPct, s.changeUnit)}</span></span>}
+        <span title="Year-over-year change"><b className="text-[var(--text-4)]">YoY</b> <span className="font-semibold tabular-nums" style={{ color: cc(s.yoyPct, s.invert) }}>{fmtChange(s.yoyPct, s.changeUnit)}</span></span>
+        {s.momPct != null && <span title={s.freq === "W" ? "Week-over-week change" : "Month-over-month change"}><b className="text-[var(--text-4)]">{s.freq === "W" ? "WoW" : "MoM"}</b> <span className="tabular-nums" style={{ color: cc(s.momPct, s.invert) }}>{fmtChange(s.momPct, s.changeUnit)}</span></span>}
       </div>
       <div className="mt-1.5 text-[10px] leading-snug text-[var(--text-4)]">
         {s.source}{s.note ? <span className="text-[#f59e0b]" title={s.note}> · {s.note}</span> : null}

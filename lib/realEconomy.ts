@@ -8,14 +8,17 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Manufacturing" | "Freight" | "Consumer" | "Travel" | "Housing";
+export type RealEcoGroup = "Activity" | "Manufacturing" | "Freight" | "Consumer" | "Labor" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
   label: string;
   group: RealEcoGroup;
   unit: string; // human unit for the value, e.g. "carloads/mo", "index", "k units SAAR", "$B SAAR"
-  changeUnit?: "%" | "pts"; // "pts" for diffusion indices (a point move, not a % — a % change of a survey index is meaningless)
+  changeUnit?: "%" | "pts"; // "pts" for diffusion/index/rate levels (a point move, not a % — a % change of a survey index is meaningless)
+  freq?: "M" | "W"; // cadence — drives the short-change label ("MoM" vs "WoW"); default monthly
+  signLevel?: boolean; // colour the LEVEL by sign (>0 green) — for diffusion/activity indices where >0 = expansion
+  invert?: boolean; // invert the CHANGE colour — for lower-is-better series (jobless claims, mortgage rates)
   seriesId: string; // FRED id (provenance)
   latest: number | null;
   latestDate: string | null; // period end (YYYY-MM-DD)
@@ -61,7 +64,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Manufacturing", "Freight", "Consumer", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Freight", "Consumer", "Labor", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -80,6 +83,20 @@ export const fmtChange = (v: number | null, unit: "%" | "pts" = "%"): string =>
 
 /** Hover explanations for each series (keyed by RealEcoSeries.key), + TSA. Presentation, not data. */
 export const SERIES_TOOLTIPS: Record<string, string> = {
+  // Activity (broad pulse)
+  "cfnai": "Chicago Fed National Activity Index — a weighted average of 85 monthly indicators of US real activity. 0 = trend growth; positive = above-trend, negative = below-trend. The single best 'how's the real economy' number (the 3-month average smooths the noise).",
+  "wei": "Weekly Economic Index (Lewis-Mertens-Stock, Dallas Fed) — a WEEKLY index of 10 daily/weekly real-activity series (retail, jobless claims, fuel, steel, electricity…), scaled to 4-quarter GDP growth. The timeliest broad read on the economy.",
+  "nfci": "Chicago Fed National Financial Conditions Index — a weekly gauge of risk, credit and leverage across money, bond & equity markets. 0 = average; NEGATIVE = LOOSER (easier) conditions, positive = tighter. Financial-conditions context for the real economy.",
+  // Labor
+  "initial-claims": "Initial jobless claims — weekly new filings for unemployment insurance (Dept. of Labor). The timeliest read on the labor market turning; LOWER = healthier. Watch the 4-week trend, not any single week.",
+  "continued-claims": "Continued jobless claims — people still collecting unemployment (a week lagged vs initial claims). Rising continued claims = laid-off workers taking longer to find work. LOWER = healthier.",
+  // Goods cycle (added into their natural groups)
+  "core-capex": "Core capital-goods orders — new orders for nondefense capital goods EX-aircraft (Census). The cleanest read on business INVESTMENT demand; leads capex spending and equipment output.",
+  "inventories-sales": "Total business inventories-to-sales ratio (Census) — months of inventory relative to sales. RISING = overhang (a headwind for production & freight as firms destock); falling = lean, demand outrunning stock.",
+  "vehicle-sales": "Total light-vehicle sales (BEA, SAAR) — cars + light trucks sold, annualized. A big, timely read on consumer big-ticket demand and credit appetite.",
+  // Housing (added)
+  "new-home-sales": "New single-family homes sold, annualized (Census) — the demand side of new construction; pairs with starts/permits (supply).",
+  "mortgage-30yr": "30-year fixed mortgage rate (Freddie Mac, weekly) — the primary driver of housing affordability & demand. LOWER = more supportive for housing.",
   // Manufacturing
   "pmi-empire": "Empire State Manufacturing Survey (NY Fed) — a diffusion index: the net % of factories reporting expansion vs contraction. >0 = expanding, <0 = contracting; the month-to-month POINT move is the signal. A free, timely stand-in for the licensed ISM PMI.",
   "pmi-philly": "Philadelphia Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",

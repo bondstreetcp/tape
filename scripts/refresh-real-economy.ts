@@ -23,31 +23,43 @@ import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from
 
 const COSD = new Date(Date.now() - 21 * 365 * 86_400_000).toISOString().slice(0, 10); // ~21yr — deep enough for the detail view's 1Y/3Y/5Y/10Y/Max windows
 
-type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number };
+type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number; freq?: "M" | "W"; signLevel?: boolean; invert?: boolean };
 const FRED: FredCfg[] = [
+  // Activity — the broad, timely "how's the real economy" pulse (CFNAI monthly, WEI/NFCI weekly).
+  { key: "cfnai", id: "CFNAI", label: "Chicago Fed activity (CFNAI)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "85-indicator composite; >0 = above-trend growth" },
+  { key: "wei", id: "WEI", label: "Weekly Economic Index", group: "Activity", unit: "% ann.", changeUnit: "pts", freq: "W", signLevel: true, source: "FRED · Dallas Fed (LMS)", note: "Weekly real-activity, scaled to GDP growth" },
+  { key: "nfci", id: "NFCI", label: "Financial conditions (NFCI)", group: "Activity", unit: "index · 0=avg", changeUnit: "pts", freq: "W", invert: true, source: "FRED · Chicago Fed", note: "NEGATIVE = looser conditions" },
   // Manufacturing / PMIs — regional Fed surveys are the FREE stand-in for the proprietary ISM PMI
   // (ISM had FRED discontinue its series). Diffusion indices: >0 = expansion, and a POINT move (not a
-  // %) is the meaningful change. Plus hard output: industrial production + capacity utilization.
-  { key: "pmi-empire", id: "GACDISA066MSFRBNY", label: "Empire State (NY Fed)", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · NY Fed", note: "Free ISM-style survey; >0 = expansion" },
-  { key: "pmi-philly", id: "GACDFSA066MSFRBPHI", label: "Philadelphia Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · Philly Fed", note: ">0 = expansion" },
-  { key: "pmi-dallas", id: "BACTSAMFRBDAL", label: "Dallas Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", source: "FRED · Dallas Fed", note: ">0 = expansion" },
+  // %) is the meaningful change. Plus hard output: industrial production, capacity use, core capex.
+  { key: "pmi-empire", id: "GACDISA066MSFRBNY", label: "Empire State (NY Fed)", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · NY Fed", note: "Free ISM-style survey; >0 = expansion" },
+  { key: "pmi-philly", id: "GACDFSA066MSFRBPHI", label: "Philadelphia Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · Philly Fed", note: ">0 = expansion" },
+  { key: "pmi-dallas", id: "BACTSAMFRBDAL", label: "Dallas Fed", group: "Manufacturing", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · Dallas Fed", note: ">0 = expansion" },
   { key: "industrial-production", id: "INDPRO", label: "Industrial production", group: "Manufacturing", unit: "index 2017=100", source: "FRED · Federal Reserve" },
   { key: "capacity-util", id: "TCU", label: "Capacity utilization", group: "Manufacturing", unit: "%", source: "FRED · Federal Reserve" },
+  { key: "core-capex", id: "NEWORDER", label: "Core capital-goods orders", group: "Manufacturing", unit: "$M SAAR", source: "FRED · Census", note: "Nondefense ex-aircraft — business investment demand" },
   // Freight
   { key: "rail-carloads", id: "RAILFRTCARLOADSD11", label: "Rail carloads", group: "Freight", unit: "carloads/mo", source: "FRED · AAR (SA)" },
   { key: "rail-intermodal", id: "RAILFRTINTERMODALD11", label: "Rail intermodal", group: "Freight", unit: "units/mo", source: "FRED · AAR (SA)" },
   { key: "truck-freight-tsi", id: "TSIFRGHT", label: "Freight index (truck-heavy)", group: "Freight", unit: "index", source: "FRED · BTS Freight TSI", note: "Free public stand-in for the proprietary ATA Truck Tonnage Index" },
   { key: "cass-shipments", id: "FRGSHPUSM649NCIS", label: "Cass shipments", group: "Freight", unit: "index (1990=100)", scale: 100, source: "FRED · Cass Information Systems", note: "Freight VOLUME across all modes (truck, rail, air, water)" },
   { key: "cass-expenditures", id: "FRGEXPUSM649NCIS", label: "Cass expenditures", group: "Freight", unit: "index (1990=100)", scale: 100, source: "FRED · Cass Information Systems", note: "Freight SPEND (volume × rate) — includes rate inflation" },
+  { key: "inventories-sales", id: "ISRATIO", label: "Inventories-to-sales", group: "Freight", unit: "ratio", source: "FRED · Census", note: "Rising = inventory overhang (a freight/production headwind)" },
   // Consumer / demand (consumer sentiment lives on the Indicators tab — not duplicated here)
   { key: "retail-sales", id: "RSAFS", label: "Retail sales", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
   { key: "durable-goods", id: "DGORDER", label: "Durable-goods orders", group: "Consumer", unit: "$M SAAR", source: "FRED · Census" },
+  { key: "vehicle-sales", id: "TOTALSA", label: "Vehicle sales", group: "Consumer", unit: "M units SAAR", source: "FRED · BEA", note: "Total light-vehicle sales — big-ticket consumer demand" },
+  // Labor — weekly, the timeliest read on the labor market turning (lower = healthier).
+  { key: "initial-claims", id: "ICSA", label: "Initial jobless claims", group: "Labor", unit: "claims/wk", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Weekly UI filings — LOWER = healthier; watch the trend" },
+  { key: "continued-claims", id: "CCSA", label: "Continued claims", group: "Labor", unit: "claims", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Still collecting UI — LOWER = healthier" },
   // Travel
   { key: "hotel-lodging-cpi", id: "CUSR0000SEHB", label: "Lodging-away CPI", group: "Travel", unit: "CPI index", source: "FRED · BLS", note: "Hotel PRICE proxy — NOT STR RevPAR (no occupancy/revenue)" },
   // Housing
   { key: "housing-starts", id: "HOUST", label: "Housing starts", group: "Housing", unit: "k units SAAR", source: "FRED · Census" },
   { key: "building-permits", id: "PERMIT", label: "Building permits", group: "Housing", unit: "k units SAAR", source: "FRED · Census" },
   { key: "construction-spend", id: "TTLCONS", label: "Construction spending", group: "Housing", unit: "$M SAAR", source: "FRED · Census" },
+  { key: "new-home-sales", id: "HSN1F", label: "New home sales", group: "Housing", unit: "k units SAAR", source: "FRED · Census", note: "New single-family homes sold — the demand side" },
+  { key: "mortgage-30yr", id: "MORTGAGE30US", label: "30-yr mortgage rate", group: "Housing", unit: "%", changeUnit: "pts", freq: "W", invert: true, source: "FRED · Freddie Mac", note: "LOWER = more supportive for housing demand" },
 ];
 
 const pct = (a: number | null, b: number | null): number | null =>
@@ -67,7 +79,7 @@ function buildSeries(cfg: (typeof FRED)[number], obs: { date: string; value: num
   const chg = (base: number | null): number | null =>
     cfg.changeUnit === "pts" ? (base != null ? latestObs.value - base : null) : pct(latestObs.value, base);
   return {
-    key: cfg.key, label: cfg.label, group: cfg.group, unit: cfg.unit, changeUnit: cfg.changeUnit, seriesId: cfg.id, source: cfg.source, note: cfg.note,
+    key: cfg.key, label: cfg.label, group: cfg.group, unit: cfg.unit, changeUnit: cfg.changeUnit, freq: cfg.freq, signLevel: cfg.signLevel, invert: cfg.invert, seriesId: cfg.id, source: cfg.source, note: cfg.note,
     latest: latestObs.value, latestDate: latestObs.date,
     prev: prevV, yearAgo: yearV,
     momPct: chg(prevV),
