@@ -24,6 +24,8 @@ git pull --ff-only origin main || echo "[entrypoint] git pull failed — using t
 # ALERT_WEBHOOK_URL for run-tick's alarms (checkout-age, freshness) — from the persistent /app
 # volume rather than tape.env, because env_file edits need a container DELETE+recreate on Synology
 # while this file lands with one `docker exec` + restart. Never commit the real topic.
+# This boot-time source covers the immediate tick below; the loop re-sources per tick (see there) so a
+# secret rotated in via sync-runner-env goes live on the next tick without a restart.
 [ -f "$APP/.alert-env" ] && . "$APP/.alert-env"
 
 # onnxruntime-node (pulled in by @huggingface/transformers, the filing-index embedder) downloads the
@@ -53,5 +55,10 @@ while true; do
   # every fix of that window). Failure-tolerant like boot; the sha log line makes drift visible.
   git pull --ff-only origin main >/dev/null 2>&1 || echo "[entrypoint] git pull failed — ticking on the current checkout"
   echo "[entrypoint] checkout @ $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+  # Re-source PER TICK, not just at boot — run-tick's first step (sync-runner-env) writes new/rotated
+  # R2 secrets into .alert-env, and sourcing here means the value it wrote LAST tick is in this tick's
+  # env. Sourcing only above the loop (as it did before) silently required a container restart for any
+  # rotation to take effect — the exact "takes effect next tick" contract run-tick documents was a lie.
+  [ -f "$APP/.alert-env" ] && . "$APP/.alert-env"
   npx tsx scripts/run-tick.ts auto || echo "[entrypoint] tick exited non-zero (continue-on-error; check tick.log)"
 done
