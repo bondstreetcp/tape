@@ -360,7 +360,7 @@ export default function FinancialsView({
             { key: "filings", label: "Filings & Calls" },
             { key: "research", label: "Research" },
             { key: "options", label: "Options" },
-            { key: "wheel", label: "Covered Calls" },
+            { key: "wheel", label: "Wheel" },
             { key: "social", label: "Social" },
             { key: "profile", label: "Profile" },
           ]}

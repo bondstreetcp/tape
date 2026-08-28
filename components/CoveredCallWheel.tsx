@@ -29,6 +29,13 @@ interface Roll {
   earningsConflict: boolean; up: boolean;
 }
 
+interface PutCand {
+  expiry: string; dte: number; strike: number; mid: number;
+  iv: number | null; delta: number | null; assignProb: number | null;
+  premiumPct: number; annYield: number; breakeven: number; cushionPct: number;
+  otmPct: number; liquid: boolean; earningsConflict: boolean;
+}
+
 interface Backtest { months: number; startDate: string; endDate: string; premIncomeAnn: number; assignRate: number; assignCount: number; wheelAnnRet: number; bhAnnRet: number }
 
 const DAY = 86_400_000;
@@ -100,6 +107,36 @@ function buildRolls(spot: number, curStrike: number, curDte: number, curMark: nu
   return out;
 }
 
+// Cash-secured PUT candidates — the wheel's entry leg: sell an OTM put; if assigned you own the shares
+// at the strike (minus premium). Yield is on the cash collateral (strike × 100).
+function buildPuts(spot: number, chains: { expiry: string; dte: number; puts: Opt[] }[], earn: string | null): PutCand[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const out: PutCand[] = [];
+  for (const { expiry, dte, puts } of chains) {
+    if (dte <= 0) continue;
+    const T = dte / 365;
+    const earningsConflict = !!(earn && earn >= today && earn <= expiry);
+    for (const p of puts) {
+      if (p.strike >= spot) continue; // OTM puts only
+      const mid = midOf(p);
+      if (!(mid > 0)) continue;
+      const iv = ivFromPrice("put", spot, p.strike, T, mid) ?? (p.iv && p.iv > 0 ? p.iv : null);
+      const g = iv ? bsGreeks("put", spot, p.strike, T, iv) : null;
+      const premiumPct = (mid / p.strike) * 100; // yield on cash collateral
+      out.push({
+        expiry, dte, strike: p.strike, mid,
+        iv, delta: g ? Math.abs(g.delta) : null, assignProb: g?.probItm ?? null,
+        premiumPct, annYield: premiumPct * (365 / dte),
+        breakeven: p.strike - mid, cushionPct: ((spot - p.strike) / spot) * 100,
+        otmPct: (1 - p.strike / spot) * 100,
+        liquid: (p.bid ?? 0) > 0 && (p.oi ?? 0) >= 25,
+        earningsConflict,
+      });
+    }
+  }
+  return out;
+}
+
 const yieldColor = (ann: number) => (ann >= 40 ? "#22c55e" : ann >= 20 ? "#f59e0b" : "var(--text-3)");
 
 const Row = ({ k, v, color }: { k: string; v: string; color?: string }) => (
@@ -158,13 +195,34 @@ function PayoffChart({ spot, strike, premium, ref }: { spot: number; strike: num
   );
 }
 
+function PutCardEl({ c, label, tone }: { c: PutCand; label: string; tone: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" style={{ borderColor: `${tone}55` }}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: tone }}>{label}</span>
+        <span className="text-[10px] text-[var(--text-4)]">Δ {c.delta != null ? c.delta.toFixed(2) : "—"}</span>
+      </div>
+      <div className="mt-1 font-mono text-lg font-bold text-[var(--text)]">${c.strike}<span className="ml-1 text-[11px] font-normal text-[var(--text-4)]">put</span></div>
+      <div className="text-[11px] text-[var(--text-3)]">{fmtDate(c.expiry)} · {c.dte}d · {pct(c.otmPct)} below</div>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        <Row k="Premium" v={`${money(c.mid)} (${pct(c.premiumPct)})`} />
+        <Row k="Annualized" v={pct(c.annYield, 0)} color={yieldColor(c.annYield)} />
+        <Row k="Assign odds" v={c.assignProb != null ? pct(c.assignProb * 100, 0) : "—"} />
+        <Row k="Breakeven" v={money(c.breakeven)} />
+        <Row k="Cushion" v={pct(c.cushionPct)} />
+      </div>
+    </div>
+  );
+}
+
 export default function CoveredCallWheel({ symbol, earningsDate, universe, exDividend }: { symbol: string; currency?: string; earningsDate?: string | number | null; universe?: string; exDividend?: string | number | null }) {
   const [spot, setSpot] = useState<number | null>(null);
   const [expirations, setExpirations] = useState<string[]>([]);
   const [chainsByExp, setChainsByExp] = useState<Record<string, Opt[]>>({});
+  const [putsByExp, setPutsByExp] = useState<Record<string, Opt[]>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"new" | "roll">("new");
+  const [mode, setMode] = useState<"new" | "roll" | "put">("new");
   const [shares, setShares] = useState(100);
   const [basis, setBasis] = useState<number | null>(null);
   const [curExpiry, setCurExpiry] = useState<string>("");
@@ -197,7 +255,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setErr(null); setChainsByExp({}); setSpot(null); setExpirations([]); setCurExpiry(""); setCurStrike(null);
+    setLoading(true); setErr(null); setChainsByExp({}); setPutsByExp({}); setSpot(null); setExpirations([]); setCurExpiry(""); setCurStrike(null);
     (async () => {
       try {
         const base: Chain = await fetch(`/api/options/${encodeURIComponent(symbol)}`).then((r) => r.json());
@@ -205,17 +263,17 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
         if (!base.underlying) { setErr("No live options chain for this name."); setLoading(false); return; }
         setSpot(base.underlying);
         setExpirations(base.expirations || []);
-        const seed: Record<string, Opt[]> = {};
-        if (base.selected) seed[base.selected] = base.calls || [];
+        const seed: Record<string, Opt[]> = {}, putSeed: Record<string, Opt[]> = {};
+        if (base.selected) { seed[base.selected] = base.calls || []; putSeed[base.selected] = base.puts || []; }
         // Wheel-relevant tenors: 7–70 DTE, up to 6 expiries (the theta sweet spot lives ~30–45d).
         const windowed = (base.expirations || []).map((e) => ({ e, dte: dteOf(e) })).filter((x) => x.dte >= 7 && x.dte <= 70);
         const picked = windowed.length > 6 ? windowed.filter((_, i) => i % Math.ceil(windowed.length / 6) === 0).slice(0, 6) : windowed;
         await Promise.all(picked.map(async ({ e }) => {
           if (seed[e]) return;
-          try { const ch: Chain = await fetch(`/api/options/${encodeURIComponent(symbol)}?date=${e}`).then((r) => r.json()); seed[e] = ch.calls || []; } catch { /* skip */ }
+          try { const ch: Chain = await fetch(`/api/options/${encodeURIComponent(symbol)}?date=${e}`).then((r) => r.json()); seed[e] = ch.calls || []; putSeed[e] = ch.puts || []; } catch { /* skip */ }
         }));
         if (!alive) return;
-        setChainsByExp(seed);
+        setChainsByExp(seed); setPutsByExp(putSeed);
       } catch (e) { if (alive) setErr(String(e)); }
       finally { if (alive) setLoading(false); }
     })();
@@ -225,7 +283,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
   // Fetch a specific expiry's chain on demand (for a rolled call's current expiry, which may be outside the window).
   const ensureChain = useCallback(async (expiry: string) => {
     if (!expiry || chainsByExp[expiry]) return;
-    try { const ch: Chain = await fetch(`/api/options/${encodeURIComponent(symbol)}?date=${expiry}`).then((r) => r.json()); setChainsByExp((prev) => ({ ...prev, [expiry]: ch.calls || [] })); } catch { /* skip */ }
+    try { const ch: Chain = await fetch(`/api/options/${encodeURIComponent(symbol)}?date=${expiry}`).then((r) => r.json()); setChainsByExp((prev) => ({ ...prev, [expiry]: ch.calls || [] })); setPutsByExp((prev) => ({ ...prev, [expiry]: ch.puts || [] })); } catch { /* skip */ }
   }, [symbol, chainsByExp]);
 
   // Default the roll inputs once the chain loads: nearest expiry ~3–45 DTE, nearest strike to spot.
@@ -282,6 +340,27 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
     }));
   }, [cands]);
 
+  // ── put (entry) mode derived ──
+  const windowPuts = useMemo(() => Object.entries(putsByExp).map(([expiry, puts]) => ({ expiry, dte: dteOf(expiry), puts })).filter((x) => x.dte >= 7 && x.dte <= 70), [putsByExp]);
+  const putCands = useMemo(() => (spot ? buildPuts(spot, windowPuts, earn) : []), [spot, windowPuts, earn]);
+  const pickPut = (targetDelta: number): PutCand | null => {
+    const pool = putCands.filter((c) => c.assignProb != null && c.delta != null && !c.earningsConflict && c.dte >= 20 && c.dte <= 50 && c.liquid);
+    const fallback = putCands.filter((c) => c.delta != null && !c.earningsConflict);
+    const use = pool.length ? pool : fallback;
+    return use.reduce<PutCand | null>((best, c) => (best == null || Math.abs((c.delta as number) - targetDelta) < Math.abs((best.delta as number) - targetDelta) ? c : best), null);
+  };
+  const pConservative = useMemo(() => pickPut(0.15), [putCands]);
+  const pBalanced = useMemo(() => pickPut(0.22), [putCands]);
+  const pAggressive = useMemo(() => pickPut(0.3), [putCands]);
+  const putGrid = useMemo(() => {
+    const byExp = new Map<string, PutCand[]>();
+    for (const c of putCands) { const a = byExp.get(c.expiry) || []; a.push(c); byExp.set(c.expiry, a); }
+    return [...byExp.entries()].sort((a, b) => dteOf(a[0]) - dteOf(b[0])).map(([expiry, list]) => ({
+      expiry, dte: dteOf(expiry), earningsConflict: list[0]?.earningsConflict ?? false,
+      cells: buckets.map((b) => list.reduce<PutCand | null>((best, c) => (best == null || Math.abs(c.otmPct - b) < Math.abs(best.otmPct - b) ? c : best), null)),
+    }));
+  }, [putCands]);
+
   // ── roll mode derived ──
   const curCall = useMemo(() => {
     if (mode !== "roll" || !curExpiry || curStrike == null) return null;
@@ -306,8 +385,8 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
 
   const Toggle = () => (
     <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
-      {(["new", "roll"] as const).map((m) => (
-        <button key={m} onClick={() => setMode(m)} className={"rounded-md px-3 py-1 " + (mode === m ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{m === "new" ? "Sell a new call" : "Roll an open call"}</button>
+      {([["new", "Sell a call"], ["put", "Sell a put (enter)"], ["roll", "Roll an open call"]] as const).map(([m, label]) => (
+        <button key={m} onClick={() => setMode(m)} className={"rounded-md px-3 py-1 " + (mode === m ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{label}</button>
       ))}
     </div>
   );
@@ -315,7 +394,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-[var(--text)]">Covered-call recommender <span className="font-normal text-[var(--text-4)]">— {symbol} at {money(spot)}</span></h3>
+        <h3 className="text-base font-bold text-[var(--text)]">Wheel recommender <span className="font-normal text-[var(--text-4)]">— {symbol} at {money(spot)} · calls & cash-secured puts</span></h3>
         <Toggle />
       </div>
 
@@ -410,6 +489,61 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
                 <div className="mt-1 text-[11px] text-[var(--text-4)]">Simulated ~0.30Δ monthly calls, {bt.startDate} → {bt.endDate}. Premiums estimated from realized vol (conservative — live IV is usually richer), so real income likely runs higher. Approximate — a shape read, not a promise.</div>
               </div>
             )}
+          </>
+        )
+      ) : mode === "put" ? (
+        !putCands.length ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">No sellable out-of-the-money puts in the 7–70 day window.</div>
+        ) : (
+          <>
+            <p className="max-w-3xl text-[12px] leading-relaxed text-[var(--text-3)]">The wheel&apos;s ENTRY leg — sell a cash-secured put below the price; you collect premium, and if it&apos;s assigned you own the shares at the strike (minus premium). Ranked by annualized yield on the cash collateral, assignment odds, and downside cushion.</p>
+
+            {earn && earn >= new Date().toISOString().slice(0, 10) && (
+              <div className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-3 py-2 text-[12px] text-[var(--text-2)]">⚠ Earnings {fmtDate(earn)} — expiries spanning it carry event risk; the recommendation avoids them.</div>
+            )}
+
+            {pBalanced && (
+              <div className="rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/[0.06] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--accent)]">Recommended entry</div>
+                <div className="mt-1 text-[15px] font-semibold text-[var(--text)]">Sell the <b>{money(pBalanced.strike, 0)} put</b> expiring <b>{fmtDate(pBalanced.expiry)}</b> ({pBalanced.dte}d)</div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-3)]">
+                  <span>Collect <b className="text-[#22c55e]">{money(pBalanced.mid)}</b>/sh ({pct(pBalanced.premiumPct)} on ${(pBalanced.strike * 100).toFixed(0)} cash)</span>
+                  <span><b style={{ color: yieldColor(pBalanced.annYield) }}>{pct(pBalanced.annYield, 0)}</b> annualized</span>
+                  <span>~<b>{pBalanced.assignProb != null ? pct(pBalanced.assignProb * 100, 0) : "—"}</b> assigned</span>
+                  <span>breakeven <b>{money(pBalanced.breakeven)}</b> ({pct(pBalanced.cushionPct)} cushion)</span>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--text-4)]">A ~0.22-delta put ~{pct(pBalanced.otmPct)} below spot — enough premium at a comfortable chance of being put the shares (which is the point: you want to own it).</div>
+              </div>
+            )}
+
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Pick your entry</div>
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {pConservative && <PutCardEl c={pConservative} label="Conservative" tone="#22c55e" />}
+                {pBalanced && <PutCardEl c={pBalanced} label="Balanced" tone="#60a5fa" />}
+                {pAggressive && <PutCardEl c={pAggressive} label="Aggressive" tone="#f59e0b" />}
+              </div>
+              <div className="mt-1 text-[11px] text-[var(--text-4)]">Conservative = further OTM (~0.15Δ, less likely assigned). Aggressive = nearer the money (~0.30Δ, more premium, likelier to own the shares sooner).</div>
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Annualized yield on collateral · expiry × how far below spot</div>
+              <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+                <table className="w-full min-w-[420px] text-[12px]">
+                  <thead><tr className="bg-[var(--surface-2)] text-[var(--text-4)]"><th className="px-2 py-1.5 text-left font-medium">Expiry</th>{buckets.map((b) => <th key={b} className="px-2 py-1.5 text-right font-medium">−{b}%</th>)}</tr></thead>
+                  <tbody>
+                    {putGrid.map((r) => (
+                      <tr key={r.expiry} className="border-t border-[var(--divider)]">
+                        <td className="px-2 py-1.5 text-[var(--text-2)]">{fmtDate(r.expiry)} <span className="text-[10px] text-[var(--text-4)]">{r.dte}d</span>{r.earningsConflict && <span className="ml-1 text-[#f59e0b]" title="Spans earnings">⚠</span>}{spansExDiv(r.expiry) && <span className="ml-1 text-[#a855f7]" title="Ex-dividend in window">ⓓ</span>}</td>
+                        {r.cells.map((c, i) => (
+                          <td key={i} className="px-2 py-1.5 text-right tabular-nums" title={c ? `$${c.strike} put · ${money(c.mid)} · Δ${c.delta?.toFixed(2)} · assign ${c.assignProb != null ? Math.round(c.assignProb * 100) : "—"}%` : ""}>{c ? <span style={{ color: yieldColor(c.annYield) }}>{pct(c.annYield, 0)}</span> : <span className="text-[var(--text-4)]">—</span>}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </>
         )
       ) : (
