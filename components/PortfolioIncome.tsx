@@ -106,7 +106,7 @@ export default function PortfolioIncome({ universe, candidates, generatedAt }: {
                   {result.rows.map((r) => (
                     <tr key={r.symbol} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                       <td className="px-3 py-2.5">
-                        <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=options`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                        <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel`} title="Open the covered-call recommender for this name" className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
                         <div className="max-w-[200px] truncate text-[11px] text-[var(--text-4)]">{r.name}</div>
                         {r.earningsBeforeExpiry && <span className="mt-0.5 inline-block rounded bg-[#f59e0b]/15 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-[#f59e0b]" title={`Earnings ${r.nextEarnings ? fmtDate(r.nextEarnings) : ""}${r.earningsEstimate ? " (est)" : ""} lands before this call expires`}>⚠ earnings in window</span>}
                       </td>

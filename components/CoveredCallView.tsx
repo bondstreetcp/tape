@@ -257,7 +257,7 @@ export default function CoveredCallView({
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{pctFrac(c.atmIV)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
-                        {k ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=options`} title="Open the live chain & strategy lab" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[var(--accent)]">${k.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{k.delta.toFixed(2)}</span></Link> : "—"}
+                        {k ? <Link href={`/u/${universe}/stock/${encodeURIComponent(c.symbol)}?tab=wheel`} title="Open the covered-call recommender — full strike/expiry ladder for this name" className="text-[var(--text)] underline decoration-dotted decoration-[var(--text-4)] underline-offset-2 hover:text-[var(--accent)]">${k.strike}<span className="ml-1 text-[10px] text-[var(--text-4)]">Δ{k.delta.toFixed(2)}</span></Link> : "—"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{k ? <>{expLabel(k.expiry)}<span className="ml-1 text-[10px] text-[var(--text-4)]">{k.dte}d</span></> : "—"}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{renderEarn(c, k?.expiry)}</td>
