@@ -29,6 +29,8 @@ interface Roll {
   earningsConflict: boolean; up: boolean;
 }
 
+interface Backtest { months: number; startDate: string; endDate: string; premIncomeAnn: number; assignRate: number; assignCount: number; wheelAnnRet: number; bhAnnRet: number }
+
 const DAY = 86_400_000;
 const dteOf = (expiry: string) => Math.round((Date.parse(expiry + "T00:00:00Z") - Date.now()) / DAY);
 const pct = (v: number | null, d = 1) => (v == null || !Number.isFinite(v) ? "—" : `${v.toFixed(d)}%`);
@@ -168,8 +170,16 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
   const [curExpiry, setCurExpiry] = useState<string>("");
   const [curStrike, setCurStrike] = useState<number | null>(null);
   const [cone, setCone] = useState<{ rv21: number | null; rvPct: number | null } | null>(null);
+  const [bt, setBt] = useState<Backtest | null>(null);
 
   const earn = useMemo(() => earnISO(earningsDate), [earningsDate]);
+
+  // Historical "does this name wheel well?" backtest (server-computed off the price series).
+  useEffect(() => {
+    let alive = true; setBt(null);
+    fetch(`/api/wheel-backtest/${encodeURIComponent(symbol)}`).then((r) => r.json()).then((d) => { if (alive && d && !d.error && typeof d.months === "number") setBt(d as Backtest); }).catch(() => {});
+    return () => { alive = false; };
+  }, [symbol]);
   const exDiv = useMemo(() => earnISO(exDividend), [exDividend]);
   const nowISO = new Date().toISOString().slice(0, 10);
   const spansExDiv = (expiry: string) => !!(exDiv && exDiv >= nowISO && exDiv <= expiry);
@@ -388,6 +398,18 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
                 </table>
               </div>
             </div>
+
+            {bt && (
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Does {symbol} wheel well? <span className="font-normal">— backtest, last {bt.months} months</span></div>
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-[12px] text-[var(--text-3)]">
+                  <span>Premium income <b className="text-[#22c55e]">{pct(bt.premIncomeAnn, 0)}</b>/yr</span>
+                  <span>Called away <b className="text-[var(--text-2)]">{pct(bt.assignRate, 0)}</b> of months ({bt.assignCount}×)</span>
+                  <span>Covered-call return <b className="text-[var(--text-2)]">{pct(bt.wheelAnnRet, 0)}</b>/yr vs buy-hold <b className="text-[var(--text-2)]">{pct(bt.bhAnnRet, 0)}</b>/yr</span>
+                </div>
+                <div className="mt-1 text-[11px] text-[var(--text-4)]">Simulated ~0.30Δ monthly calls, {bt.startDate} → {bt.endDate}. Premiums estimated from realized vol (conservative — live IV is usually richer), so real income likely runs higher. Approximate — a shape read, not a promise.</div>
+              </div>
+            )}
           </>
         )
       ) : (
