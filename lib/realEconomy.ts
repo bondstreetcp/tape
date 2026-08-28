@@ -8,7 +8,7 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Prices" | "Money & Credit" | "Labor" | "Travel" | "Housing";
+export type RealEcoGroup = "Activity" | "Recession watch" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Prices" | "Money & Credit" | "Labor" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
@@ -64,7 +64,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Money & Credit", "Labor", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Recession watch", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Money & Credit", "Labor", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -113,6 +113,11 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   // Housing (added)
   "new-home-sales": "New single-family homes sold, annualized (Census) — the demand side of new construction; pairs with starts/permits (supply).",
   "mortgage-30yr": "30-year fixed mortgage rate (Freddie Mac, weekly) — the primary driver of housing affordability & demand. LOWER = more supportive for housing.",
+  // Recession watch
+  "sahm": "Sahm Rule (real-time) — fires a recession signal when the 3-month-average unemployment rate rises 0.5pt above its 12-month low. Below 0.5 = no signal; the closer to +0.5, the nearer a downturn. One of the most reliable real-time recession triggers.",
+  "recession-prob": "Smoothed U.S. recession probability — a statistical model's estimate of the odds the economy is currently in recession (Chauvet-Piger, from output/income/sales/jobs). Sits near 0% in expansions and spikes toward 100% around actual recessions.",
+  "fin-stress": "St. Louis Fed Financial Stress Index — 18 market indicators (rates, credit spreads, volatility) in one gauge: 0 = average stress, >0 = elevated (risk-off), <0 = calm. A real-time read on financial-system strain.",
+  "heavy-trucks": "Heavy (Class-8) truck retail sales — big-rig demand is discretionary business investment that rolls over EARLY in a slowdown, so a sharp drop is a classic recession warning. Higher = healthier freight/industrial demand.",
   // Manufacturing
   "pmi-empire": "Empire State Manufacturing Survey (NY Fed) — a diffusion index: the net % of factories reporting expansion vs contraction. >0 = expanding, <0 = contracting; the month-to-month POINT move is the signal. A free, timely stand-in for the licensed ISM PMI.",
   "pmi-philly": "Philadelphia Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",

@@ -20,7 +20,7 @@ export async function buildRealEconomyRead(data: RealEconomyData): Promise<RealE
   const tsaLine = data.tsa
     ? `Air travel (TSA checkpoint throughput): 7-day avg ${Math.round(data.tsa.avg7 ?? 0).toLocaleString()} pax/day, ${sp(data.tsa.chg30dPct)} vs ~1 month ago (YTD table — no true YoY).`
     : "";
-  const sheet = [section("Activity"), section("Manufacturing"), section("Services"), section("Freight"), section("Consumer"), section("Prices"), section("Money & Credit"), section("Labor"), section("Housing"), section("Travel"), tsaLine].filter(Boolean).join("\n\n");
+  const sheet = [section("Activity"), section("Recession watch"), section("Manufacturing"), section("Services"), section("Freight"), section("Consumer"), section("Prices"), section("Money & Credit"), section("Labor"), section("Housing"), section("Travel"), tsaLine].filter(Boolean).join("\n\n");
 
   const SYSTEM =
     "You are a macro/cross-asset analyst reading FREE real-economy alt-data — broad activity (Chicago Fed CFNAI, the Weekly Economic Index, financial conditions), manufacturing (regional-Fed PMI surveys, industrial production, capacity utilization, core capex orders), freight (rail carloads/intermodal, a truck-freight index, and the Cass freight index — shipments = volume, expenditures = spend, so expenditures rising while shipments fall = firmer rates; plus inventories-to-sales), consumer demand (retail sales, durable-goods orders, vehicle sales), the labor market (weekly jobless claims — LOWER = healthier), air-travel demand, and housing (starts, permits, construction, new-home sales, the 30-yr mortgage rate — LOWER rate = more supportive) — for a trading desk. " +

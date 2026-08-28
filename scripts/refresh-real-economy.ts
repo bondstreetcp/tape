@@ -30,6 +30,13 @@ const FRED: FredCfg[] = [
   { key: "wei", id: "WEI", label: "Weekly Economic Index", group: "Activity", unit: "% ann.", changeUnit: "pts", freq: "W", signLevel: true, source: "FRED · Dallas Fed (LMS)", note: "Weekly real-activity, scaled to GDP growth" },
   { key: "nfci", id: "NFCI", label: "Financial conditions (NFCI)", group: "Activity", unit: "index · 0=avg", changeUnit: "pts", freq: "W", invert: true, source: "FRED · Chicago Fed", note: "NEGATIVE = looser conditions" },
   { key: "chicago-cfsec", id: "CFSBCACTIVITY", label: "Chicago Fed survey (CFSEC)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "District-7 business conditions; >0 = above-trend (free — not the licensed Chicago PMI)" },
+
+  // Recession watch — the "where are we in the cycle" signals. Most rise when risk rises, so invert
+  // (falling = green); heavy-truck sales are the exception (more = healthier).
+  { key: "sahm", id: "SAHMREALTIME", label: "Sahm Rule (recession)", group: "Recession watch", unit: "pts", changeUnit: "pts", invert: true, source: "FRED · real-time Sahm", note: "Fires at +0.5pt; below = no recession signal" },
+  { key: "recession-prob", id: "RECPROUSM156N", label: "Recession probability", group: "Recession watch", unit: "%", changeUnit: "pts", invert: true, source: "FRED · Chauvet-Piger", note: "Model odds the economy is in recession now" },
+  { key: "fin-stress", id: "STLFSI4", label: "Financial stress (STLFSI)", group: "Recession watch", unit: "index · 0=avg", changeUnit: "pts", freq: "W", signLevel: true, invert: true, source: "FRED · St. Louis Fed", note: ">0 = above-average market stress (risk-off)" },
+  { key: "heavy-trucks", id: "HTRUCKSSAAR", label: "Heavy truck sales", group: "Recession watch", unit: "M SAAR", changeUnit: "%", source: "FRED · BEA", note: "Class-8 big-rig demand — rolls over early in a slowdown; higher = healthier" },
   // Manufacturing / PMIs — regional Fed surveys are the FREE stand-in for the proprietary ISM PMI
   // (ISM had FRED discontinue its series). Diffusion indices: >0 = expansion, and a POINT move (not a
   // %) is the meaningful change. Plus hard output: industrial production, capacity use, core capex.

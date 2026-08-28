@@ -16,7 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-08-27",
     title: "A macro build-out — valuation, real-economy, positioning, energy, surprises, attention & free options",
     items: [
-      "Macro → Real economy — a free, 44-series dashboard across 10 groups: activity, manufacturing, services, freight, consumer, prices & inflation, money & credit, labor, travel and housing. Every card opens a timeframed chart with a plain-English explainer, topped by an AI desk read.",
+      "Macro → Real economy — a free, 48-series dashboard across 11 groups: activity, recession watch, manufacturing, services, freight, consumer, prices & inflation, money & credit, labor, travel and housing. Every card opens a timeframed chart with a plain-English explainer, topped by an AI desk read.",
       "Macro → Valuation — long-run log-price trend channels (±1σ/2σ bands) for the S&P 500 (fit since 1932), Nasdaq, Russell 2000 and the 11 GICS sectors, ranked cheap → dear. Descriptive, not predictive.",
       "Macro → Positioning — CFTC Commitments of Traders across index, rate, FX, energy, metal, ag & bitcoin futures, with a 5-year crowding percentile (the contrarian read).",
       "Macro → Energy — WTI / Brent / Henry Hub + US retail gasoline & diesel, plus the EIA weekly balance: inventories vs their 5-yr seasonal norm, production, refinery runs and implied demand.",
