@@ -28,6 +28,7 @@ import TickerResearch from "./TickerResearch";
 import SharesChart from "./SharesChart";
 import MarginsChart from "./MarginsChart";
 import OptionsChain from "./OptionsChain";
+import CoveredCallWheel from "./CoveredCallWheel";
 import VolContext from "./VolContext";
 import NamePositioning from "./NamePositioning";
 import DcfPanel from "./DcfPanel";
@@ -194,7 +195,7 @@ export default function FinancialsView({
   /** "Signals on this name" — board-membership chips, server-computed by the page (NameSignals) */
   signalsStrip?: React.ReactNode;
 }) {
-  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "social";
+  type View = "overview" | "statements" | "earnings" | "stats" | "ownership" | "profile" | "peers" | "filings" | "research" | "options" | "wheel" | "social";
   const [view, setView] = useState<View>("overview");
   const [researchSub, setResearchSub] = useState<"notes" | "docs">("notes");
   const [type, setType] = useState<"annual" | "quarterly">("annual");
@@ -207,7 +208,7 @@ export default function FinancialsView({
   // different tab (we no longer carry the last-used tab across tickers via localStorage,
   // which made every new ticker open on whatever you last viewed).
   useEffect(() => {
-    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options", "social"];
+    const valid = ["overview", "statements", "earnings", "stats", "peers", "ownership", "profile", "filings", "research", "options", "wheel", "social"];
     const t = new URLSearchParams(window.location.search).get("tab");
     if (t && valid.includes(t) && t !== "overview") setView(t as View);
   }, []);
@@ -359,6 +360,7 @@ export default function FinancialsView({
             { key: "filings", label: "Filings & Calls" },
             { key: "research", label: "Research" },
             { key: "options", label: "Options" },
+            { key: "wheel", label: "Covered Calls" },
             { key: "social", label: "Social" },
             { key: "profile", label: "Profile" },
           ]}
@@ -422,6 +424,8 @@ export default function FinancialsView({
           <NamePositioning symbol={symbol} />
           <OptionsChain symbol={symbol} currency={currency} />
         </div>
+      ) : view === "wheel" ? (
+        <CoveredCallWheel symbol={symbol} currency={currency} earningsDate={row?.earningsDate} />
       ) : view === "social" ? (
         <div className="space-y-4">
           <StockTwitsPanel symbol={symbol} />

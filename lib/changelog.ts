@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-28-wheel",
+    date: "2026-08-28",
+    title: "A covered-call recommender for the wheel",
+    items: [
+      "Any stock → the new Covered Calls tab — for a name you own, it reads the live options chain and names a strike + expiry to sell calls on, ranked by premium, annualized yield, assignment odds and if-called return. Conservative / balanced / aggressive picks by delta, an expiry × %-out-of-the-money yield grid, an earnings-in-window warning, and optional cost-basis discipline (it won't suggest a strike that would lock in a loss if you're called away). Decision-support, not advice.",
+    ],
+  },
+  {
     id: "2026-08-27i",
     date: "2026-08-27",
     title: "A macro build-out — valuation, real-economy, positioning, energy, surprises, attention & free options",
