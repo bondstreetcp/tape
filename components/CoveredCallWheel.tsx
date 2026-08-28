@@ -222,7 +222,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
   const [putsByExp, setPutsByExp] = useState<Record<string, Opt[]>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"new" | "roll" | "put">("new");
+  const [mode, setMode] = useState<"new" | "roll" | "put" | "pmcc">("new");
   const [shares, setShares] = useState(100);
   const [basis, setBasis] = useState<number | null>(null);
   const [curExpiry, setCurExpiry] = useState<string>("");
@@ -294,6 +294,13 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
   }, [mode, spot, expirations, curExpiry, ensureChain]);
 
   useEffect(() => { if (mode === "roll" && curExpiry) ensureChain(curExpiry); }, [mode, curExpiry, ensureChain]);
+
+  // PMCC: the long leg is a LEAPS-ish deep-ITM call — fetch a long-dated expiry (nearest ~1yr, ≥150d) on demand.
+  const longExpiry = useMemo(() => {
+    const c = expirations.map((e) => ({ e, dte: dteOf(e) })).filter((x) => x.dte >= 150);
+    return c.length ? c.sort((a, b) => Math.abs(a.dte - 365) - Math.abs(b.dte - 365))[0].e : (expirations.length ? expirations[expirations.length - 1] : "");
+  }, [expirations]);
+  useEffect(() => { if (mode === "pmcc" && longExpiry) ensureChain(longExpiry); }, [mode, longExpiry, ensureChain]);
 
   // Default the current strike to the nearest strike ≥ spot once the current expiry's chain is in.
   useEffect(() => {
@@ -379,13 +386,42 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
     return pool.reduce<Roll | null>((best, r) => (best == null || r.netCredit > best.netCredit ? r : best), null);
   }, [rolls]);
 
+  // ── PMCC (poor-man's covered call = diagonal) derived ──
+  const pmcc = useMemo(() => {
+    if (!spot || mode !== "pmcc") return null;
+    const longCalls = chainsByExp[longExpiry];
+    const longDte = dteOf(longExpiry);
+    if (!longCalls || longDte < 90) return null;
+    const T = longDte / 365;
+    let longPick: { strike: number; mid: number; delta: number } | null = null; // deep-ITM ≈ 0.80Δ
+    for (const c of longCalls) {
+      if (c.strike >= spot) continue;
+      const m = midOf(c); if (!(m > 0)) continue;
+      const iv = ivFromPrice("call", spot, c.strike, T, m); const g = iv ? bsGreeks("call", spot, c.strike, T, iv) : null;
+      if (!g) continue;
+      if (!longPick || Math.abs(g.delta - 0.8) < Math.abs(longPick.delta - 0.8)) longPick = { strike: c.strike, mid: m, delta: g.delta };
+    }
+    const short = balanced; // the ~0.30Δ, ~30–45d short call from the call side
+    if (!longPick || !short) return null;
+    const netDebit = longPick.mid - short.mid;
+    if (!(netDebit > 0)) return null;
+    const capPmcc = netDebit * 100, capShares = spot * 100;
+    const width = short.strike - longPick.strike;
+    return {
+      longDte, longStrike: longPick.strike, longMid: longPick.mid, longDelta: longPick.delta, short,
+      netDebit, capPmcc, capShares, savedPct: (1 - capPmcc / capShares) * 100,
+      cycleYield: (short.mid / netDebit) * 100, annYield: (short.mid / netDebit) * 100 * (365 / short.dte),
+      maxProfit: width > 0 ? (width - netDebit) * 100 : null, ok: short.strike > longPick.strike,
+    };
+  }, [spot, mode, chainsByExp, longExpiry, balanced]);
+
   if (loading) return <LoadingState label="Reading the options chain…" />;
   if (err) return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">{err}</div>;
   if (!spot) return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">No options chain for {symbol}.</div>;
 
   const Toggle = () => (
     <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5 text-xs font-medium">
-      {([["new", "Sell a call"], ["put", "Sell a put (enter)"], ["roll", "Roll an open call"]] as const).map(([m, label]) => (
+      {([["new", "Sell a call"], ["put", "Sell a put (enter)"], ["roll", "Roll an open call"], ["pmcc", "Poor-man's CC"]] as const).map(([m, label]) => (
         <button key={m} onClick={() => setMode(m)} className={"rounded-md px-3 py-1 " + (mode === m ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]")}>{label}</button>
       ))}
     </div>
@@ -544,6 +580,32 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
                 </table>
               </div>
             </div>
+          </>
+        )
+      ) : mode === "pmcc" ? (
+        !pmcc ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">No long-dated (LEAPS) calls available to build a poor-man&apos;s covered call — needs an expiry ≥ ~90 days plus a ~30–45d short call.</div>
+        ) : (
+          <>
+            <p className="max-w-3xl text-[12px] leading-relaxed text-[var(--text-3)]">A <b className="text-[var(--text-2)]">poor-man&apos;s covered call</b> replaces the 100 shares with a long-dated, deep-in-the-money call (a stock substitute), then sells a short-dated call against it — the same income idea for a fraction of the capital. More leverage, and no dividend; the long call can decay if the stock stalls or falls.</p>
+
+            <div className="rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/[0.06] p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--accent)]">The diagonal</div>
+              <div className="mt-1 space-y-1 text-[13px] text-[var(--text)]">
+                <div>BUY <b>{money(pmcc.longStrike, 0)} call</b> · {fmtDate(longExpiry)} ({pmcc.longDte}d, Δ{pmcc.longDelta.toFixed(2)}) for <b>{money(pmcc.longMid)}</b>/sh</div>
+                <div>SELL <b>{money(pmcc.short.strike, 0)} call</b> · {fmtDate(pmcc.short.expiry)} ({pmcc.short.dte}d, Δ{pmcc.short.delta != null ? pmcc.short.delta.toFixed(2) : "—"}) for <b className="text-[#22c55e]">{money(pmcc.short.mid)}</b>/sh</div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-3)]">
+                <span>Net debit <b className="text-[var(--text)]">{money(pmcc.netDebit)}</b>/sh = <b>{money(pmcc.capPmcc, 0)}</b> vs {money(pmcc.capShares, 0)} for 100 shares (<b className="text-[#22c55e]">{pct(pmcc.savedPct, 0)} less capital</b>)</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--text-3)]">
+                <span>Short premium <b style={{ color: yieldColor(pmcc.annYield) }}>{pct(pmcc.annYield, 0)}</b>/yr on capital deployed ({pct(pmcc.cycleYield)} this cycle)</span>
+                {pmcc.maxProfit != null && <span>max ≈ <b className="text-[#22c55e]">{money(pmcc.maxProfit, 0)}</b> if it finishes near the short strike</span>}
+              </div>
+              {!pmcc.ok && <div className="mt-1 text-[11px] font-semibold text-[#f59e0b]">⚠ The short strike sits below the long strike — pick a higher short (above {money(pmcc.longStrike, 0)}) so an assignment is covered by the long call.</div>}
+            </div>
+
+            <p className="max-w-3xl text-[11px] leading-relaxed text-[var(--text-4)]">Run it like a wheel: sell a fresh short call each ~month against the same long LEAPS, rolling as it nears expiry, and keep the short strike above the long. The risks vs owning shares: the long call bleeds theta if the stock goes nowhere, there&apos;s no dividend, and you must roll the LONG well before its own expiry. Decision-support, not advice.</p>
           </>
         )
       ) : (
