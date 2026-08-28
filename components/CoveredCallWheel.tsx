@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { bsGreeks, ivFromPrice } from "@/lib/blackScholes";
 import { LoadingState } from "./Spinner";
 
@@ -123,7 +124,7 @@ function StatCard({ c, contracts, label, tone }: { c: Cand; contracts: number; l
   );
 }
 
-export default function CoveredCallWheel({ symbol, earningsDate }: { symbol: string; currency?: string; earningsDate?: string | number | null }) {
+export default function CoveredCallWheel({ symbol, earningsDate, universe }: { symbol: string; currency?: string; earningsDate?: string | number | null; universe?: string }) {
   const [spot, setSpot] = useState<number | null>(null);
   const [expirations, setExpirations] = useState<string[]>([]);
   const [chainsByExp, setChainsByExp] = useState<Record<string, Opt[]>>({});
@@ -134,8 +135,20 @@ export default function CoveredCallWheel({ symbol, earningsDate }: { symbol: str
   const [basis, setBasis] = useState<number | null>(null);
   const [curExpiry, setCurExpiry] = useState<string>("");
   const [curStrike, setCurStrike] = useState<number | null>(null);
+  const [cone, setCone] = useState<{ rv21: number | null; rvPct: number | null } | null>(null);
 
   const earn = useMemo(() => earnISO(earningsDate), [earningsDate]);
+
+  // The name's realized-vol cone — for the "is premium rich vs realized?" (variance-premium) read.
+  useEffect(() => {
+    let alive = true; setCone(null);
+    fetch(`/api/vol-cone/${encodeURIComponent(symbol)}`).then((r) => r.json()).then((d) => {
+      if (!alive) return;
+      const b = (d?.bands || []).find((x: { h: number }) => x.h === 21);
+      setCone(b ? { rv21: b.cur, rvPct: b.pct } : null);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [symbol]);
 
   useEffect(() => {
     let alive = true;
@@ -190,6 +203,19 @@ export default function CoveredCallWheel({ symbol, earningsDate }: { symbol: str
   const windowChains = useMemo(() => Object.entries(chainsByExp).map(([expiry, calls]) => ({ expiry, dte: dteOf(expiry), calls })).filter((x) => x.dte >= 7 && x.dte <= 70), [chainsByExp]);
   const cands = useMemo(() => (spot ? buildCands(spot, windowChains, earn, basis) : []), [spot, windowChains, earn, basis]);
   const contracts = Math.floor(shares / 100);
+
+  // Variance-premium — is now a rich time to SELL? ATM IV vs the name's own 21-day realized vol.
+  const atmIV = useMemo(() => {
+    if (!spot) return null;
+    const ch = windowChains.slice().sort((a, b) => Math.abs(a.dte - 30) - Math.abs(b.dte - 30))[0];
+    if (!ch) return null;
+    const near = ch.calls.reduce<Opt | null>((best, c) => (best == null || Math.abs(c.strike - spot) < Math.abs(best.strike - spot) ? c : best), null);
+    const mid = near ? midOf(near) : 0;
+    return near && mid > 0 ? ivFromPrice("call", spot, near.strike, ch.dte / 365, mid) : null;
+  }, [spot, windowChains]);
+  const ivPrem = atmIV && cone?.rv21 ? atmIV / cone.rv21 : null;
+  const verdict = ivPrem == null ? null : ivPrem >= 1.4 ? "rich" : ivPrem <= 1.1 ? "cheap" : "fair";
+  const verdictCol = verdict === "rich" ? "#22c55e" : verdict === "cheap" ? "#ef4444" : "#f59e0b";
 
   const pick = (targetDelta: number): Cand | null => {
     const pool = cands.filter((c) => c.assignProb != null && c.delta != null && !c.earningsConflict && !c.belowBasis && c.dte >= 20 && c.dte <= 50 && c.liquid);
@@ -247,6 +273,13 @@ export default function CoveredCallWheel({ symbol, earningsDate }: { symbol: str
         <h3 className="text-base font-bold text-[var(--text)]">Covered-call recommender <span className="font-normal text-[var(--text-4)]">— {symbol} at {money(spot)}</span></h3>
         <Toggle />
       </div>
+
+      {verdict && atmIV != null && cone?.rv21 != null && ivPrem != null && (
+        <div className="rounded-lg border px-3 py-2 text-[12px] text-[var(--text-3)]" style={{ borderColor: `${verdictCol}55`, background: `${verdictCol}12` }}>
+          <b className="text-[var(--text-2)]">Premium check:</b> ATM IV <b className="tabular-nums text-[var(--text-2)]">{pct(atmIV * 100, 0)}</b> vs 21-day realized <b className="tabular-nums text-[var(--text-2)]">{pct(cone.rv21 * 100, 0)}</b> → option premium looks <b style={{ color: verdictCol }}>{verdict} to sell</b> ({ivPrem.toFixed(2)}× variance premium){cone.rvPct != null ? ` · realized vol in the ${Math.round(cone.rvPct)}th %ile of its year` : ""}.
+          {universe && <> <Link href={`/u/${universe}/vol-dislocation`} className="text-[var(--accent)] hover:underline">find the richest names →</Link></>}
+        </div>
+      )}
 
       {mode === "new" ? (
         !cands.length ? (
