@@ -65,7 +65,15 @@ function rankColor(v: number | null | undefined): string {
   return "var(--text-3)";
 }
 
-type SortKey = "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap" | "price" | "earn";
+type SortKey = "wheel" | "ann" | "cushion" | "iv" | "vol" | "roe" | "pe" | "yield" | "mktcap" | "price" | "earn";
+
+// Wheel-entry score colour ramp (0–100).
+function wheelColor(v: number): string {
+  if (v >= 70) return "#16a34a";
+  if (v >= 55) return "#22c55e";
+  if (v >= 40) return "#f59e0b";
+  return "var(--text-3)";
+}
 
 // Tenor tabs (kept in sync with PUT_TENORS in lib/putwrite; inlined to avoid pulling the fs
 // loader into the client bundle). "1M" = the standard ~16Δ CSP; "3M" = lower-delta, further OTM.
@@ -91,17 +99,32 @@ export default function PutWriteView({
   const [clearEarnings, setClearEarnings] = useState(false);
   const [watchOnly, setWatchOnly] = useState(false);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<SortKey>("ann");
+  const [sort, setSort] = useState<SortKey>("wheel");
   const [tenor, setTenor] = useState<TenorId>("m1");
 
   const put = (c: PutWriteCandidate) => c.puts[tenor]; // the suggestion for the selected tenor
   const tab = TENOR_TABS.find((t) => t.id === tenor)!;
   // current "vol rank" = IV rank once enough history is banked, else realized-vol rank
   const volRank = (c: PutWriteCandidate) => (c.ivRank ?? c.rvolRank);
+  // Wheel-ENTRY score (0–100) — ranks good names to START a wheel on (sell a cash-secured put): blends
+  // annualized yield, an assignment-comfort band (~0.20Δ magnitude — enough premium, comfortable being
+  // put the shares), quality (ROE — a name you're happy to own if assigned), downside cushion, and an
+  // earnings-in-window penalty.
+  const wheelScore = (c: PutWriteCandidate): number => {
+    const p = put(c);
+    if (!p) return -1;
+    const yld = Math.max(0, Math.min(1, (p.annPct ?? 0) / 20));
+    const comfort = Math.max(0, Math.min(1, 1 - Math.abs(Math.abs(p.delta ?? 0.5) - 0.2) / 0.18)); // bell at ~0.20Δ
+    const quality = Math.max(0, Math.min(1, ((c.roe ?? 0.15) - 0.15) / 0.35));
+    const cushion = Math.max(0, Math.min(1, (p.cushionPct ?? 0) / 15));
+    const penalty = earnsBeforeExpiry(c, p.expiry) ? 0.65 : 1;
+    return Math.round((0.4 * yld + 0.3 * comfort + 0.2 * quality + 0.1 * cushion) * penalty * 100);
+  };
 
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     const get: Record<SortKey, (c: PutWriteCandidate) => number> = {
+      wheel: (c) => wheelScore(c),
       ann: (c) => put(c)?.annPct ?? -1,
       yield: (c) => put(c)?.yieldPct ?? -1,
       cushion: (c) => put(c)?.cushionPct ?? -1,
@@ -131,12 +154,12 @@ export default function PutWriteView({
   }, [candidates, minAnn, minCushion, elevatedOnly, clearEarnings, watchOnly, q, sort, tenor, has]);
 
   const TB = (a: boolean) => "rounded-md px-2.5 py-1 text-xs font-medium transition-colors " + (a ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-3)] hover:text-[var(--text)]");
-  const SortTh = ({ k, children, cls = "", info }: { k: SortKey; children: React.ReactNode; cls?: string; info?: string }) => (
+  const SortTh = ({ k, children, cls = "", info, infoText }: { k: SortKey; children: React.ReactNode; cls?: string; info?: string; infoText?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}>
       <button onClick={() => setSort(k)} className={"inline-flex items-center gap-0.5 hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>
         {children}{sort === k && <span className="text-[9px]">▼</span>}
       </button>
-      {info && <InfoDot term={info} className="ml-1" />}
+      {(info || infoText) && <InfoDot term={info} text={infoText} className="ml-1" />}
     </th>
   );
 
@@ -172,6 +195,7 @@ export default function PutWriteView({
 
       {/* strategy primer — reflects the selected tenor */}
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
+        <span><b className="text-[var(--text-2)]">Wheel score</b> = ann. yield × assignment-comfort (~0.20Δ) × quality × cushion, minus an earnings penalty — the default sort</span>
         <span><b className="text-[var(--text-2)]">Strike</b> <InfoDot text="The price at which the put obligates you to buy the shares." /> {tab.deltaLabel} {tenor === "m3" ? "(~15%+ OTM)" : "(~16% chance assigned)"}</span>
         <span><b className="text-[var(--text-2)]">Tenor</b> <InfoDot text="Time until the option expires." /> {tenor === "m1" ? "30–45 DTE" : "~3 months"}</span>
         <span><b className="text-[var(--text-2)]">Style</b> {tenor === "m1" ? "standard cash-secured put" : "lower-delta, longer-dated — less market-beta risk"}</span>
@@ -221,6 +245,7 @@ export default function PutWriteView({
                   <th className="w-7 px-2 py-2"></th>
                   <th className="px-2 py-2 font-medium">Ticker</th>
                   <th className="px-2 py-2 font-medium">Company</th>
+                  <SortTh k="wheel" cls="text-right" infoText="Wheel-entry score (0–100): blends annualized yield, an assignment-comfort band (~0.20Δ), quality (ROE), downside cushion, and an earnings penalty — ranks good names to start a wheel on, not just the fattest premium.">Wheel</SortTh>
                   <SortTh k="price" cls="text-right">Price</SortTh>
                   <SortTh k="mktcap" cls="text-right">Mkt cap</SortTh>
                   <SortTh k="roe" cls="text-right" info="ROE">ROE</SortTh>
@@ -240,6 +265,7 @@ export default function PutWriteView({
                 {rows.map((c) => {
                   const vr = volRank(c);
                   const p = put(c);
+                  const ws = wheelScore(c);
                   return (
                     <tr key={c.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                       <td className="px-2 py-1.5 text-center">
@@ -251,6 +277,9 @@ export default function PutWriteView({
                       <td className="max-w-[15rem] truncate px-2 py-1.5">
                         <span className="text-[var(--text-2)]">{c.name}</span>
                         <span className="ml-1.5 text-[10px] text-[var(--text-4)]">{c.sector}</span>
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        {ws >= 0 ? <span className="inline-block rounded px-1.5 py-0.5 font-mono text-xs font-bold tabular-nums" style={{ background: `${wheelColor(ws)}1f`, color: wheelColor(ws) }} title="Wheel-entry score — see the column header">{ws}</span> : <span className="text-[var(--text-4)]">—</span>}
                       </td>
                       <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">{c.price != null ? `$${c.price.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{fmtMarketCap(c.marketCap)}</td>
