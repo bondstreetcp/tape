@@ -20,6 +20,7 @@ const SIGNALS = [
   { key: "rs_breakout", label: "Relative-strength breakout" },
   { key: "short_squeeze", label: "Short-squeeze risk" },
   { key: "staples_inflection", label: "Staples scanner inflection (accel + share, into the print)" },
+  { key: "rich_premium", label: "Option premium is rich (IV ≫ realized) — good to sell calls/puts" },
 ];
 
 function describeRule(r: AlertRule): string {

@@ -100,6 +100,9 @@ async function main() {
     const valuation = loadJSON("valuation-history.json")?.names ?? {};
     const estimates = loadJSON("estimates.json")?.names ?? {};
     const scannerData = loadJSON("staples-scanner.json"); // NielsenIQ scanner reads (staples names only)
+    const volDis = loadJSON("vol-dislocation.json"); // variance premium (ATM IV ÷ realized vol) per name
+    const premBy = new Map<string, any>();
+    for (const row of volDis?.rows ?? []) premBy.set(row.symbol, row);
 
     const events: Ev[] = [];
     const push = (r: Rule, symbol: string | null, dedup: string, title: string, body: string | null, href: string | null) =>
@@ -172,6 +175,17 @@ async function main() {
                 push(r, sym, `sig:staples:weak:${rd.periodEnd}`, `${sym}: Nielsen scanner decelerating + losing share`, `Soft-quarter setup into the print — US $ L4wk ${f(rd.row.dollar.l4w)} vs L12wk ${f(rd.row.dollar.l12w)}, share ${share}bp (thru ${rd.periodEnd}).`, stockHref(sym));
               else if (inf === "accelerating" && share > 0)
                 push(r, sym, `sig:staples:strong:${rd.periodEnd}`, `${sym}: Nielsen scanner accelerating + gaining share`, `Strong-quarter setup — US $ L4wk ${f(rd.row.dollar.l4w)} vs L12wk ${f(rd.row.dollar.l12w)}, share +${share}bp (thru ${rd.periodEnd}).`, stockHref(sym));
+            }
+          } else if (p.signal === "rich_premium") {
+            // Option premium is rich vs realized — a good time to SELL (covered calls / cash-secured puts).
+            const vd = premBy.get(sym);
+            const min = typeof p.min === "number" ? p.min : 1.4; // ivPremium threshold (1.4 = the "rich" cutoff)
+            if (vd && num(vd.ivPremium) != null && vd.ivPremium >= min) {
+              const cycle = String(volDis?.generatedAt || today).slice(0, 10);
+              const q = quotes.get(sym);
+              const href = q ? `/u/${q.universe}/stock/${sym}?tab=wheel` : stockHref(sym);
+              const tag = vd.earningsDriven ? " (elevated into earnings — expected)" : "";
+              push(r, sym, `sig:richprem:${cycle}`, `${sym}: option premium is rich`, `IV ${(vd.atmIV * 100).toFixed(0)}% ≈ ${vd.ivPremium.toFixed(2)}× realized${tag} — a good time to sell premium (calls/puts).`, href);
             }
           }
         }

@@ -16,7 +16,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-08-28",
     title: "A full theta-wheel workbench",
     items: [
-      "Any stock → the new Wheel tab — reads the live options chain and names a strike + expiry for BOTH legs: sell a covered call, sell a cash-secured put to enter, or roll an open call. Conservative / balanced / aggressive picks by delta, expiry × moneyness yield grids, a payoff diagram, a premium-rich check (current IV vs realized vol), a “does this name wheel well?” backtest, and guards for both earnings and ex-dividend dates (early-assignment risk).",
+      "Any stock → the new Wheel tab — reads the live options chain and names a strike + expiry for every leg: sell a covered call, sell a cash-secured put to enter, roll an open call, or build a poor-man's covered call (a capital-efficient LEAPS diagonal). Conservative / balanced / aggressive picks by delta, expiry × moneyness yield grids, a payoff diagram, a premium-rich check (current IV vs realized vol), a “does this name wheel well?” backtest, and guards for both earnings and ex-dividend dates (early-assignment risk).",
+      "Alerts → Signal → “Option premium is rich” — get pinged when a name's implied vol runs rich vs its realized (the variance premium ≥ ~1.4×) — a good time to sell calls or puts. Set it on one name or your whole watchlist.",
       "Put-Writing & Covered-Call screeners now sort by a Wheel score — annualized yield × assignment-comfort (~0.2–0.35Δ) × quality, minus an earnings penalty — so good wheels rank up top, alongside a one-click “clear of earnings” filter.",
       "New Wheel Tracker (Options → Income) — log your active wheels (which leg, shares, cost basis, premium collected), watch your adjusted basis grind down, and get a roll reminder as your short calls near expiry. Stays in your browser.",
     ],
