@@ -65,7 +65,15 @@ function rankColor(v: number | null | undefined): string {
   return "var(--text-3)";
 }
 
-type SortKey = "static" | "ifcalled" | "cap" | "iv" | "vol" | "roe" | "pe" | "mktcap" | "price" | "earn";
+type SortKey = "wheel" | "static" | "ifcalled" | "cap" | "iv" | "vol" | "roe" | "pe" | "mktcap" | "price" | "earn";
+
+// Wheel score colour ramp (0–100).
+function wheelColor(v: number): string {
+  if (v >= 70) return "#16a34a";
+  if (v >= 55) return "#22c55e";
+  if (v >= 40) return "#f59e0b";
+  return "var(--text-3)";
+}
 
 const TENOR_TABS: { id: TenorId; deltaLabel: string; note: string }[] = [
   { id: "m1", deltaLabel: "30Δ", note: "≈30-delta · 30–45 DTE · the standard buy-write" },
@@ -89,16 +97,30 @@ export default function CoveredCallView({
   const [clearEarnings, setClearEarnings] = useState(false);
   const [watchOnly, setWatchOnly] = useState(false);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<SortKey>("static");
+  const [sort, setSort] = useState<SortKey>("wheel");
   const [tenor, setTenor] = useState<TenorId>("m1");
 
   const call = (c: PutWriteCandidate) => c.calls?.[tenor] ?? null; // the call for the selected tenor (guard older snapshots)
   const tab = TENOR_TABS.find((t) => t.id === tenor)!;
   const volRank = (c: PutWriteCandidate) => (c.ivRank ?? c.rvolRank);
+  // Wheel score (0–100) — ranks GOOD wheels, not just the fattest premium: blends annualized income
+  // yield, an assignment-comfort band (favours ~0.20–0.35Δ so you keep the shares more often than
+  // you're called away), quality (ROE — a name you're happy to hold or be assigned), and an
+  // earnings-in-window penalty.
+  const wheelScore = (c: PutWriteCandidate): number => {
+    const k = call(c);
+    if (!k) return -1;
+    const yld = Math.max(0, Math.min(1, (k.annPct ?? 0) / 20)); // income yield, 20%+ → full
+    const comfort = Math.max(0, Math.min(1, 1 - Math.abs((k.delta ?? 0.5) - 0.27) / 0.22)); // bell at ~0.27Δ
+    const quality = Math.max(0, Math.min(1, ((c.roe ?? 0.15) - 0.15) / 0.35)); // ROE 15%→0, 50%→1
+    const penalty = earnsBeforeExpiry(c, k.expiry) ? 0.65 : 1; // earnings before expiry = event risk
+    return Math.round((0.4 * yld + 0.35 * comfort + 0.25 * quality) * penalty * 100);
+  };
 
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     const get: Record<SortKey, (c: PutWriteCandidate) => number> = {
+      wheel: (c) => wheelScore(c),
       static: (c) => call(c)?.annPct ?? -1,
       ifcalled: (c) => call(c)?.ifCalledPct ?? -1,
       cap: (c) => call(c)?.capPct ?? -1,
@@ -169,6 +191,7 @@ export default function CoveredCallView({
 
       {/* strategy primer */}
       <div className="mb-4 flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-3)]">
+        <span><b className="text-[var(--text-2)]">Wheel score</b> = income yield × assignment-comfort (~0.2–0.35Δ) × quality, minus an earnings penalty — the default sort</span>
         <span><b className="text-[var(--text-2)]">Strike</b> <InfoDot term="OTM" /> {tab.deltaLabel} OTM call {tenor === "m3" ? "(~more room)" : "(~30% chance called)"}</span>
         <span><b className="text-[var(--text-2)]">Static yield</b> = premium income if the stock stays below the strike</span>
         <span><b className="text-[var(--text-2)]">If-called</b> = total return if assigned (premium + gain to the strike)</span>
@@ -217,6 +240,7 @@ export default function CoveredCallView({
                   <th className="w-7 px-2 py-2"></th>
                   <th className="px-2 py-2 font-medium">Ticker</th>
                   <th className="px-2 py-2 font-medium">Company</th>
+                  <SortTh k="wheel" cls="text-right" infoText="Wheel score (0–100): blends annualized income yield, an assignment-comfort band (favours ~0.20–0.35Δ so you keep the shares more often than you're called away), quality (ROE), and an earnings-in-window penalty. Ranks good wheels, not just the fattest premium.">Wheel</SortTh>
                   <SortTh k="price" cls="text-right">Price</SortTh>
                   <SortTh k="mktcap" cls="text-right">Mkt cap</SortTh>
                   <SortTh k="roe" cls="text-right" info="ROE">ROE</SortTh>
@@ -236,6 +260,7 @@ export default function CoveredCallView({
                 {rows.map((c) => {
                   const vr = volRank(c);
                   const k = call(c);
+                  const ws = wheelScore(c);
                   return (
                     <tr key={c.symbol} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                       <td className="px-2 py-1.5 text-center">
@@ -247,6 +272,9 @@ export default function CoveredCallView({
                       <td className="max-w-[15rem] truncate px-2 py-1.5">
                         <span className="text-[var(--text-2)]">{c.name}</span>
                         <span className="ml-1.5 text-[10px] text-[var(--text-4)]">{c.sector}</span>
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        {ws >= 0 ? <span className="inline-block rounded px-1.5 py-0.5 font-mono text-xs font-bold tabular-nums" style={{ background: `${wheelColor(ws)}1f`, color: wheelColor(ws) }} title="Wheel score — see the column header">{ws}</span> : <span className="text-[var(--text-4)]">—</span>}
                       </td>
                       <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[var(--text)]">{c.price != null ? `$${c.price.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-2)]">{fmtMarketCap(c.marketCap)}</td>
