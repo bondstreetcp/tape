@@ -425,7 +425,7 @@ export default function FinancialsView({
           <OptionsChain symbol={symbol} currency={currency} />
         </div>
       ) : view === "wheel" ? (
-        <CoveredCallWheel symbol={symbol} currency={currency} earningsDate={row?.earningsDate} universe={universe} />
+        <CoveredCallWheel symbol={symbol} currency={currency} earningsDate={row?.earningsDate} universe={universe} exDividend={profile?.exDividend} />
       ) : view === "social" ? (
         <div className="space-y-4">
           <StockTwitsPanel symbol={symbol} />

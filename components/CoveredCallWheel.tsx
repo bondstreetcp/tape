@@ -124,7 +124,7 @@ function StatCard({ c, contracts, label, tone }: { c: Cand; contracts: number; l
   );
 }
 
-export default function CoveredCallWheel({ symbol, earningsDate, universe }: { symbol: string; currency?: string; earningsDate?: string | number | null; universe?: string }) {
+export default function CoveredCallWheel({ symbol, earningsDate, universe, exDividend }: { symbol: string; currency?: string; earningsDate?: string | number | null; universe?: string; exDividend?: string | number | null }) {
   const [spot, setSpot] = useState<number | null>(null);
   const [expirations, setExpirations] = useState<string[]>([]);
   const [chainsByExp, setChainsByExp] = useState<Record<string, Opt[]>>({});
@@ -138,6 +138,9 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe }: { s
   const [cone, setCone] = useState<{ rv21: number | null; rvPct: number | null } | null>(null);
 
   const earn = useMemo(() => earnISO(earningsDate), [earningsDate]);
+  const exDiv = useMemo(() => earnISO(exDividend), [exDividend]);
+  const nowISO = new Date().toISOString().slice(0, 10);
+  const spansExDiv = (expiry: string) => !!(exDiv && exDiv >= nowISO && exDiv <= expiry);
 
   // The name's realized-vol cone — for the "is premium rich vs realized?" (variance-premium) read.
   useEffect(() => {
@@ -281,6 +284,12 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe }: { s
         </div>
       )}
 
+      {exDiv && exDiv >= nowISO && (
+        <div className="rounded-lg border border-[#a855f7]/40 bg-[#a855f7]/10 px-3 py-2 text-[12px] text-[var(--text-2)]">
+          <span className="font-semibold text-[#a855f7]">ⓓ Ex-dividend {fmtDate(exDiv)}</span> — a short call that&apos;s in-the-money near then can be assigned <b>early</b> (the holder exercises to capture the dividend), costing you the shares before expiry. Out-of-the-money calls are low-risk; watch it if the stock rallies to your strike. Expiries spanning it are marked <span className="text-[#a855f7]">ⓓ</span> below.
+        </div>
+      )}
+
       {mode === "new" ? (
         !cands.length ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">No sellable out-of-the-money calls in the 7–70 day window.</div>
@@ -333,7 +342,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe }: { s
                   <tbody>
                     {grid.map((r) => (
                       <tr key={r.expiry} className="border-t border-[var(--divider)]">
-                        <td className="px-2 py-1.5 text-[var(--text-2)]">{fmtDate(r.expiry)} <span className="text-[10px] text-[var(--text-4)]">{r.dte}d</span>{r.earningsConflict && <span className="ml-1 text-[#f59e0b]" title="Spans earnings">⚠</span>}</td>
+                        <td className="px-2 py-1.5 text-[var(--text-2)]">{fmtDate(r.expiry)} <span className="text-[10px] text-[var(--text-4)]">{r.dte}d</span>{r.earningsConflict && <span className="ml-1 text-[#f59e0b]" title="Spans earnings">⚠</span>}{spansExDiv(r.expiry) && <span className="ml-1 text-[#a855f7]" title="Ex-dividend in window">ⓓ</span>}</td>
                         {r.cells.map((c, i) => (
                           <td key={i} className="px-2 py-1.5 text-right tabular-nums" title={c ? `$${c.strike} call · ${money(c.mid)} · Δ${c.delta?.toFixed(2)} · assign ${c.assignProb != null ? Math.round(c.assignProb * 100) : "—"}%` : ""}>{c ? <span style={{ color: yieldColor(c.annYield) }}>{pct(c.annYield, 0)}</span> : <span className="text-[var(--text-4)]">—</span>}</td>
                         ))}
@@ -399,7 +408,7 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe }: { s
                       <tbody>
                         {[...rolls].filter((r) => r.up ? r.newCapPct <= 15 : true).sort((a, b) => b.netCredit - a.netCredit).slice(0, 12).map((r, i) => (
                           <tr key={i} className="border-t border-[var(--divider)]">
-                            <td className="px-2 py-1.5 text-[var(--text-2)]">${r.strike} · {fmtDate(r.expiry)} {r.up && <span className="text-[10px] text-[var(--accent)]">up</span>}{r.earningsConflict && <span className="ml-1 text-[#f59e0b]" title="Spans earnings">⚠</span>}</td>
+                            <td className="px-2 py-1.5 text-[var(--text-2)]">${r.strike} · {fmtDate(r.expiry)} {r.up && <span className="text-[10px] text-[var(--accent)]">up</span>}{r.earningsConflict && <span className="ml-1 text-[#f59e0b]" title="Spans earnings">⚠</span>}{spansExDiv(r.expiry) && <span className="ml-1 text-[#a855f7]" title="Ex-dividend in window">ⓓ</span>}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: r.netCredit >= 0 ? "#22c55e" : "#ef4444" }}>{money(r.netCredit)}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">+{r.addlDays}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-3)]">{r.delta != null ? r.delta.toFixed(2) : "—"}</td>
