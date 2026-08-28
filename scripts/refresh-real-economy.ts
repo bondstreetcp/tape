@@ -23,7 +23,7 @@ import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from
 
 const COSD = new Date(Date.now() - 21 * 365 * 86_400_000).toISOString().slice(0, 10); // ~21yr — deep enough for the detail view's 1Y/3Y/5Y/10Y/Max windows
 
-type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number; freq?: "M" | "W"; signLevel?: boolean; invert?: boolean; daily?: boolean };
+type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number; freq?: "M" | "W" | "Q"; signLevel?: boolean; invert?: boolean; daily?: boolean };
 const FRED: FredCfg[] = [
   // Activity — the broad, timely "how's the real economy" pulse (CFNAI monthly, WEI/NFCI weekly).
   { key: "cfnai", id: "CFNAI", label: "Chicago Fed activity (CFNAI)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "85-indicator composite; >0 = above-trend growth" },
@@ -69,6 +69,15 @@ const FRED: FredCfg[] = [
   { key: "breakeven-5yr", id: "T5YIE", label: "5yr breakeven (market)", group: "Prices", unit: "%", changeUnit: "pts", invert: true, daily: true, source: "FRED · Treasury/FRB", note: "Market-implied 5-yr inflation from TIPS (month-end)" },
   { key: "infl-exp-5y5y", id: "T5YIFR", label: "5y5y forward inflation", group: "Prices", unit: "%", changeUnit: "pts", invert: true, daily: true, source: "FRED · FRB", note: "Long-run market inflation expectation (month-end)" },
   { key: "wage-growth", id: "FRBATLWGT3MMAUMHWGO", label: "Wage growth (Atlanta Fed)", group: "Prices", unit: "%", changeUnit: "pts", source: "FRED · Atlanta Fed", note: "Median hourly wage growth, 3-mo avg — the wage/cost side of inflation" },
+
+  // Money & Credit — the credit impulse (quantity of credit & money). Distinct from the Credit TAB,
+  // which shows credit SPREADS. Loan/M2 levels are re-scaled to $ trillions; the YoY% is the signal.
+  { key: "credit-ci", id: "BUSLOANS", label: "C&I loans (business)", group: "Money & Credit", unit: "$T", scale: 0.001, changeUnit: "%", source: "FRED · Federal Reserve (H.8)", note: "Bank lending to businesses — YoY growth = credit impulse; contracting = a squeeze" },
+  { key: "consumer-credit", id: "TOTALSL", label: "Consumer credit", group: "Money & Credit", unit: "$T", scale: 0.000001, changeUnit: "%", source: "FRED · Federal Reserve (G.19)", note: "Household borrowing (cards/auto/student) — a slowdown signals caution/stress" },
+  { key: "m2", id: "M2SL", label: "M2 money supply", group: "Money & Credit", unit: "$T", scale: 0.001, changeUnit: "%", source: "FRED · Federal Reserve", note: "Money & liquidity; YoY went NEGATIVE in 2023 for the first time in the modern era" },
+  { key: "bank-credit", id: "TOTBKCR", label: "Bank credit (total)", group: "Money & Credit", unit: "$T", scale: 0.001, changeUnit: "%", freq: "W", source: "FRED · Federal Reserve (H.8)", note: "Broadest bank lending (loans + securities) — aggregate credit impulse" },
+  { key: "lending-standards", id: "DRTSCILM", label: "Bank lending standards (SLOOS)", group: "Money & Credit", unit: "net %", changeUnit: "pts", freq: "Q", signLevel: true, invert: true, source: "FRED · Federal Reserve (SLOOS)", note: ">0 = banks net TIGHTENING C&I loan standards (a credit headwind); a leading signal" },
+  { key: "card-delinquency", id: "DRCCLACBS", label: "Credit-card delinquency", group: "Money & Credit", unit: "%", changeUnit: "pts", freq: "Q", invert: true, source: "FRED · Federal Reserve", note: "Share of card balances past due — rising = household stress building" },
 
   { key: "quits-rate", id: "JTSQUR", label: "Quits rate (JOLTS)", group: "Labor", unit: "%", changeUnit: "pts", source: "FRED · BLS", note: "Share of workers voluntarily quitting — worker confidence; rising = hot labor market" },
   { key: "temp-help", id: "TEMPHELPS", label: "Temp-help payrolls", group: "Labor", unit: "M", scale: 0.001, changeUnit: "%", source: "FRED · BLS", note: "Temporary-help employment — employers add/cut temps before permanent staff, so it turns first (leading)" },

@@ -8,7 +8,7 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Prices" | "Labor" | "Travel" | "Housing";
+export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Prices" | "Money & Credit" | "Labor" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
@@ -16,7 +16,7 @@ export interface RealEcoSeries {
   group: RealEcoGroup;
   unit: string; // human unit for the value, e.g. "carloads/mo", "index", "k units SAAR", "$B SAAR"
   changeUnit?: "%" | "pts"; // "pts" for diffusion/index/rate levels (a point move, not a % — a % change of a survey index is meaningless)
-  freq?: "M" | "W"; // cadence — drives the short-change label ("MoM" vs "WoW"); default monthly
+  freq?: "M" | "W" | "Q"; // cadence — drives the short-change label ("MoM"/"WoW"/"QoQ"); default monthly
   signLevel?: boolean; // colour the LEVEL by sign (>0 green) — for diffusion/activity indices where >0 = expansion
   invert?: boolean; // invert the CHANGE colour — for lower-is-better series (jobless claims, mortgage rates)
   seriesId: string; // FRED id (provenance)
@@ -64,7 +64,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Labor", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Money & Credit", "Labor", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -94,6 +94,13 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   "breakeven-5yr": "5-year breakeven inflation rate — the market's expected average inflation over 5 years, implied by the gap between nominal Treasuries and TIPS. A real-time, market-priced inflation expectation (month-end shown). Falling = the market sees cooler inflation ahead.",
   "infl-exp-5y5y": "5-year, 5-year forward inflation rate — the market's expected inflation for the 5 years starting 5 years out. The Fed's favourite gauge of LONG-RUN inflation credibility, stripped of near-term noise (month-end shown). Well-anchored ≈ 2–2.5%.",
   "wage-growth": "Atlanta Fed Wage Growth Tracker — median hourly pay growth for the same workers year-over-year (3-month average). The wage/cost-push side of inflation: strong for workers, but persistent >~3.5% growth is hard to square with 2% price inflation.",
+  // Money & Credit (the credit impulse — quantity of credit & money, distinct from the Credit tab's spreads)
+  "credit-ci": "C&I loans — bank lending to businesses (Fed H.8, all commercial banks). Year-over-year growth is a core 'credit impulse': accelerating = expansion fuel; contracting = a credit squeeze that often precedes slowdowns.",
+  "consumer-credit": "Total consumer credit outstanding (Fed G.19) — household borrowing (cards, auto, student). YoY growth shows whether consumers are leaning on credit; a sharp slowdown signals caution or stress.",
+  "m2": "M2 money supply — cash, deposits & money-market funds. YoY growth = how fast liquidity is expanding; it went NEGATIVE in 2023 for the first time in the modern era (a sharp monetary tightening). More growth = more liquidity in the system.",
+  "bank-credit": "Total bank credit (all commercial banks, H.8) — the broadest measure of bank lending (loans + securities). YoY growth is the aggregate credit impulse.",
+  "lending-standards": "Senior Loan Officer Survey (SLOOS) — the NET % of banks tightening standards on business (C&I) loans. Above 0 = more banks tightening than easing (a credit headwind); below 0 = easing. A powerful LEADING signal — tightening precedes slower loan growth. Quarterly.",
+  "card-delinquency": "Credit-card delinquency rate (all commercial banks) — the % of card balances past due. Rising = household financial stress building; a key consumer-health & credit-risk read. Quarterly.",
   // Labor
   "initial-claims": "Initial jobless claims — weekly new filings for unemployment insurance (Dept. of Labor). The timeliest read on the labor market turning; LOWER = healthier. Watch the 4-week trend, not any single week.",
   "continued-claims": "Continued jobless claims — people still collecting unemployment (a week lagged vs initial claims). Rising continued claims = laid-off workers taking longer to find work. LOWER = healthier.",

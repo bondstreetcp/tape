@@ -22,7 +22,7 @@ const seriesDetail = (s: RealEcoSeries): DetailItem => ({
   label: s.label, unit: s.unit, changeUnit: s.changeUnit, history: s.history, current: s.latest, latestDate: s.latestDate, source: s.source, note: s.note, tooltip: SERIES_TOOLTIPS[s.key],
   lines: [
     { label: "YoY", value: fmtChange(s.yoyPct, s.changeUnit), color: pctColor(s.yoyPct) },
-    ...(s.momPct != null ? [{ label: "MoM", value: fmtChange(s.momPct, s.changeUnit), color: pctColor(s.momPct) }] : []),
+    ...(s.momPct != null ? [{ label: s.freq === "W" ? "WoW" : s.freq === "Q" ? "QoQ" : "MoM", value: fmtChange(s.momPct, s.changeUnit), color: pctColor(s.momPct) }] : []),
   ],
 });
 const tsaDetail = (t: TsaThroughput): DetailItem => ({
@@ -181,7 +181,7 @@ function SeriesCard({ s, onOpen }: { s: RealEcoSeries; onOpen: () => void }) {
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]">
         <span title="Year-over-year change"><b className="text-[var(--text-4)]">YoY</b> <span className="font-semibold tabular-nums" style={{ color: cc(s.yoyPct, s.invert) }}>{fmtChange(s.yoyPct, s.changeUnit)}</span></span>
-        {s.momPct != null && <span title={s.freq === "W" ? "Week-over-week change" : "Month-over-month change"}><b className="text-[var(--text-4)]">{s.freq === "W" ? "WoW" : "MoM"}</b> <span className="tabular-nums" style={{ color: cc(s.momPct, s.invert) }}>{fmtChange(s.momPct, s.changeUnit)}</span></span>}
+        {s.momPct != null && <span title={s.freq === "W" ? "Week-over-week change" : s.freq === "Q" ? "Quarter-over-quarter change" : "Month-over-month change"}><b className="text-[var(--text-4)]">{s.freq === "W" ? "WoW" : s.freq === "Q" ? "QoQ" : "MoM"}</b> <span className="tabular-nums" style={{ color: cc(s.momPct, s.invert) }}>{fmtChange(s.momPct, s.changeUnit)}</span></span>}
       </div>
       <div className="mt-1.5 text-[10px] leading-snug text-[var(--text-4)]">
         {s.source}{s.note ? <span className="text-[#f59e0b]" title={s.note}> · {s.note}</span> : null}
