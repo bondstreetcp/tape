@@ -8,7 +8,11 @@ import Link from "next/link";
 // (localStorage); nothing leaves the device. Decision-support, not advice.
 
 type Leg = "idle" | "put" | "shares" | "call";
-interface WheelPos { id: string; symbol: string; leg: Leg; shares: number; costBasis: number | null; premium: number; note: string }
+interface WheelPos { id: string; symbol: string; leg: Leg; shares: number; costBasis: number | null; premium: number; note: string; callStrike?: number | null; callExpiry?: string }
+
+const DAY = 86_400_000;
+const dteOf = (expiry?: string) => (expiry ? Math.round((Date.parse(expiry + "T00:00:00Z") - Date.now()) / DAY) : null);
+const fmtDay = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 const KEY = "tape.wheels";
 const LEGS: { id: Leg; label: string; color: string }[] = [
@@ -41,6 +45,7 @@ export default function WheelTracker({ universe }: { universe: string }) {
   const adjBasis = (r: WheelPos) => (r.costBasis != null && r.shares > 0 ? r.costBasis - r.premium / r.shares : null);
   const totalPrem = rows.reduce((s, r) => s + (r.premium || 0), 0);
   const capital = rows.reduce((s, r) => s + ((r.leg === "shares" || r.leg === "call") && r.costBasis ? r.costBasis * r.shares : 0), 0);
+  const needRoll = rows.filter((r) => r.leg === "call" && (dteOf(r.callExpiry) ?? 99) <= 7).length;
   const nextAction = (r: WheelPos): { label: string; href: string } =>
     r.leg === "shares" ? { label: "Sell a call →", href: `/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel` }
       : r.leg === "call" ? { label: "Roll / manage →", href: `/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel` }
@@ -64,6 +69,7 @@ export default function WheelTracker({ universe }: { universe: string }) {
           <span className="text-[var(--text-3)]">Active wheels <b className="text-[var(--text)]">{rows.length}</b></span>
           <span className="text-[var(--text-3)]">Premium collected <b className="text-[#22c55e]">{money(totalPrem, 0)}</b></span>
           <span className="text-[var(--text-3)]">Capital in shares <b className="text-[var(--text)]">{money(capital, 0)}</b></span>
+          {needRoll > 0 && <span className="font-semibold text-[#f59e0b]">⏰ {needRoll} to roll</span>}
         </div>
       )}
 
@@ -77,6 +83,13 @@ export default function WheelTracker({ universe }: { universe: string }) {
             <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Premium collected $<input type="number" step={1} className={inp + " tabular-nums"} value={draft.premium} onChange={(e) => setDraft({ ...draft, premium: Math.max(0, Number(e.target.value) || 0) })} placeholder="total $" /></label>
             <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Note<input className={inp} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="optional" /></label>
           </div>
+          {draft.leg === "call" && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Open call strike<input type="number" step={0.5} className={inp + " tabular-nums"} value={draft.callStrike ?? ""} onChange={(e) => setDraft({ ...draft, callStrike: e.target.value ? Number(e.target.value) : null })} placeholder="strike you sold" /></label>
+              <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Call expiry<input type="date" className={inp} value={draft.callExpiry ?? ""} onChange={(e) => setDraft({ ...draft, callExpiry: e.target.value })} /></label>
+              <div className="flex items-end text-[11px] text-[var(--text-4)]">so the tracker can remind you to roll near expiry</div>
+            </div>
+          )}
           <div className="mt-2 flex gap-2">
             <button onClick={save} className="rounded-lg bg-[var(--accent-strong)] px-3 py-1 text-sm font-medium text-white hover:opacity-90">Save</button>
             <button onClick={() => setDraft(null)} className="rounded-lg border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-3)] hover:text-[var(--text)]">Cancel</button>
@@ -100,16 +113,25 @@ export default function WheelTracker({ universe }: { universe: string }) {
             <tbody>
               {rows.map((r) => {
                 const leg = legOf(r.leg); const ab = adjBasis(r); const act = nextAction(r);
+                const cdte = r.leg === "call" ? dteOf(r.callExpiry) : null;
+                const rollSoon = cdte != null && cdte <= 7;
                 return (
                   <tr key={r.id} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
                     <td className="px-3 py-2"><Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link></td>
-                    <td className="px-2 py-2"><span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${leg.color}22`, color: leg.color }}>{leg.label}</span></td>
+                    <td className="px-2 py-2">
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${leg.color}22`, color: leg.color }}>{leg.label}</span>
+                      {r.leg === "call" && r.callExpiry && (
+                        <div className="mt-0.5 text-[10px] text-[var(--text-4)]">
+                          {r.callStrike ? `$${r.callStrike} ` : ""}{fmtDay(r.callExpiry)}{cdte != null && (cdte < 0 ? <span className="ml-1 font-semibold text-[#ef4444]">expired</span> : rollSoon ? <span className="ml-1 font-semibold text-[#f59e0b]">⏰ {cdte}d — roll soon</span> : <span className="ml-1">{cdte}d</span>)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right tabular-nums text-[var(--text-2)]">{r.shares || "—"}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-[var(--text-2)]">{money(r.costBasis)}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-[#22c55e]">{money(r.premium, 0)}</td>
                     <td className="px-2 py-2 text-right tabular-nums font-medium text-[var(--text)]" title="Cost basis minus premium collected per share">{money(ab)}</td>
                     <td className="max-w-[12rem] truncate px-2 py-2 text-[var(--text-3)]">{r.note}</td>
-                    <td className="whitespace-nowrap px-2 py-2 text-right"><Link href={act.href} className="text-[11px] text-[var(--accent)] hover:underline">{act.label}</Link></td>
+                    <td className="whitespace-nowrap px-2 py-2 text-right"><Link href={act.href} className={"text-[11px] hover:underline " + (rollSoon ? "font-semibold text-[#f59e0b]" : "text-[var(--accent)]")}>{rollSoon ? "⏰ Roll now →" : act.label}</Link></td>
                     <td className="px-2 py-2 text-right"><button onClick={() => setDraft(r)} title="Edit" className="text-[var(--text-4)] hover:text-[var(--text)]">✎</button> <button onClick={() => remove(r.id)} title="Delete" className="text-[var(--text-4)] hover:text-[#ef4444]">✕</button></td>
                   </tr>
                 );
