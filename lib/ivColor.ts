@@ -18,3 +18,10 @@ export function ivColor(t: number): string {
     b = STOPS[seg + 1];
   return hex(a[0] + (b[0] - a[0]) * lt, a[1] + (b[1] - a[1]) * lt, a[2] + (b[2] - a[2]) * lt);
 }
+
+// ABSOLUTE-IV color scale over a fixed annualized-IV range, so a low-vol name (e.g. a staple ~15%)
+// reads cool/low and a high-vol name (~45%) reads warm/high — instead of each surface being normalized
+// to its OWN min/max, which made every stock's surface look identical. Values outside the band clamp.
+export const IV_ABS_LO = 10, IV_ABS_HI = 65; // % annualized
+export const ivAbsT = (ivPct: number) => (ivPct - IV_ABS_LO) / (IV_ABS_HI - IV_ABS_LO);
+export const ivColorAbs = (ivPct: number) => ivColor(ivAbsT(ivPct));

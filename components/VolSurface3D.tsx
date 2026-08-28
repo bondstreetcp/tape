@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { project, type P3 } from "@/lib/surface3d";
-import { ivColor } from "@/lib/ivColor";
+import { ivColor, ivColorAbs, IV_ABS_LO, IV_ABS_HI } from "@/lib/ivColor";
 
 // A rotatable 3D implied-vol surface: the same fitted-IV grid as the heatmap, drawn as a projected SVG
 // mesh you can drag to spin. Pure inline SVG (no chart-lib / WebGL) — the grid is small (≤8×11), so a
@@ -113,9 +113,14 @@ export default function VolSurface3D({ moneyness, expiries, grid }: Props) {
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-[10px] text-[var(--text-4)]">
-        <span>drag to rotate · height &amp; color = IV</span>
-        <button onClick={() => { setYaw(YAW0); setPitch(PITCH0); }} className="text-[var(--accent)] hover:underline">reset view</button>
+      <div className="mb-1 flex items-center justify-between gap-2 text-[10px] text-[var(--text-4)]">
+        <span>drag to rotate · height = skew/term shape · color = IV level</span>
+        <span className="flex items-center gap-1">
+          {IV_ABS_LO}%
+          <span className="inline-block h-2 w-20 rounded" style={{ background: `linear-gradient(to right, ${ivColor(0)}, ${ivColor(0.5)}, ${ivColor(1)})` }} title="Absolute IV color scale — fixed across stocks, so a low-vol name reads cool and a high-vol name warm" />
+          {IV_ABS_HI}%+
+          <button onClick={() => { setYaw(YAW0); setPitch(PITCH0); }} className="ml-2 text-[var(--accent)] hover:underline">reset</button>
+        </span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -132,7 +137,7 @@ export default function VolSurface3D({ moneyness, expiries, grid }: Props) {
           return <line key={`b${i}`} x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke="var(--text-4)" strokeOpacity={0.22} strokeWidth={0.6} />;
         })}
         {quads.map((q, i) => (
-          <polygon key={i} points={q.pts} fill={ivColor((q.iv - ivMin) / span)} fillOpacity={0.92} stroke="rgba(15,23,42,0.28)" strokeWidth={0.4} strokeLinejoin="round" />
+          <polygon key={i} points={q.pts} fill={ivColorAbs(q.iv)} fillOpacity={0.92} stroke="rgba(15,23,42,0.28)" strokeWidth={0.4} strokeLinejoin="round" />
         ))}
         {/* axis ticks + named titles (rotate with the box; haloed for legibility over the mesh) */}
         {mTicks.map((k, i) => (

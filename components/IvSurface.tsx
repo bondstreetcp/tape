@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import InfoDot from "./InfoDot";
 import ImpliedDistribution, { type DistExp } from "./ImpliedDistribution";
 import VolSurface3D from "./VolSurface3D";
-import { ivColor } from "@/lib/ivColor";
+import { ivColor, ivAbsT, IV_ABS_LO, IV_ABS_HI } from "@/lib/ivColor";
 
 interface SurfaceData {
   symbol: string;
@@ -41,7 +41,6 @@ export default function IvSurface({ symbol, currency }: { symbol: string; curren
   const flat = d.grid.flat().filter((v) => v > 0);
   const lo = flat.length ? Math.min(...flat) : 0,
     hi = flat.length ? Math.max(...flat) : 1;
-  const norm = (v: number) => (hi > lo ? (v - lo) / (hi - lo) : 0.5);
   const W = 680,
     ML = 44,
     MR = 8,
@@ -78,7 +77,7 @@ export default function IvSurface({ symbol, currency }: { symbol: string; curren
             rowVals.map((v, j) => {
               const x = ML + j * cw,
                 yTop = MT + i * cellH,
-                t = norm(v);
+                t = ivAbsT(v);
               return (
                 <g key={`${i}-${j}`}>
                   <rect x={x} y={yTop} width={cw - 0.5} height={cellH - 0.5} fill={v > 0 ? ivColor(t) : "var(--surface-2)"} />
@@ -106,10 +105,13 @@ export default function IvSurface({ symbol, currency }: { symbol: string; curren
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--text-4)]">
         <span>expiry (dte) ↕ · moneyness K/spot−1 (%) ↔ · dashed = ATM<InfoDot term="ATM" /></span>
-        <span className="flex items-center gap-1">
-          {lo.toFixed(0)}%
-          <span className="inline-block h-2 w-24 rounded" style={{ background: `linear-gradient(to right, ${ivColor(0)}, ${ivColor(0.5)}, ${ivColor(1)})` }} />
-          {hi.toFixed(0)}% IV
+        <span className="flex items-center gap-2">
+          <span title="This name's fitted IV range across the grid">this name {lo.toFixed(0)}–{hi.toFixed(0)}%</span>
+          <span className="flex items-center gap-1" title="Fixed absolute-IV color scale — the same across every stock, so a low-vol name reads cool and a high-vol name warm">
+            {IV_ABS_LO}%
+            <span className="inline-block h-2 w-20 rounded" style={{ background: `linear-gradient(to right, ${ivColor(0)}, ${ivColor(0.5)}, ${ivColor(1)})` }} />
+            {IV_ABS_HI}%+
+          </span>
         </span>
       </div>
         </>
