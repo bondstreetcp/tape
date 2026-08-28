@@ -124,6 +124,38 @@ function StatCard({ c, contracts, label, tone }: { c: Cand; contracts: number; l
   );
 }
 
+// Covered-call payoff at expiry (per share) vs stock price: you own the shares and are short the call,
+// so P/L = (min(price, strike) − reference) + premium — linear downside, capped above the strike.
+function PayoffChart({ spot, strike, premium, ref }: { spot: number; strike: number; premium: number; ref: number }) {
+  const W = 680, H = 168, ML = 46, MR = 14, MT = 12, MB = 24;
+  const lo = Math.min(spot, strike, ref) * 0.85, hi = Math.max(spot, strike, ref) * 1.12;
+  const pl = (price: number) => Math.min(price, strike) - ref + premium;
+  let yLo = Math.min(pl(lo), 0), yHi = Math.max(pl(hi), 0);
+  const pad = (yHi - yLo) * 0.15 || 1; yLo -= pad; yHi += pad;
+  const x = (p: number) => ML + ((p - lo) / (hi - lo)) * (W - ML - MR);
+  const y = (v: number) => MT + (1 - (v - yLo) / (yHi - yLo)) * (H - MT - MB);
+  const be = ref - premium, maxProfit = strike - ref + premium;
+  const line = [[lo, pl(lo)], [strike, pl(strike)], [hi, pl(hi)]].map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
+  const marks: { p: number; label: string; color: string }[] = [
+    { p: spot, label: `now $${spot.toFixed(0)}`, color: "var(--text-3)" },
+    { p: strike, label: `cap $${strike.toFixed(0)}`, color: "#f59e0b" },
+    { p: be, label: `B/E $${be.toFixed(0)}`, color: "#ef4444" },
+  ];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: "auto" }}>
+      {[yLo, 0, yHi].map((v, i) => (
+        <g key={i}><line x1={ML} x2={W - MR} y1={y(v)} y2={y(v)} stroke={v === 0 ? "var(--border-strong)" : "var(--surface-hover)"} strokeWidth={1} /><text x={ML - 5} y={y(v) + 3} textAnchor="end" fontSize={9} fill="var(--text-4)" className="tabular-nums">{v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(0)}</text></g>
+      ))}
+      {marks.map((m, i) => (
+        <g key={i}><line x1={x(m.p)} x2={x(m.p)} y1={MT} y2={H - MB} stroke={m.color} strokeWidth={1} strokeDasharray="3 3" opacity={0.7} /><text x={x(m.p)} y={H - 8} textAnchor="middle" fontSize={9} fill={m.color}>{m.label}</text></g>
+      ))}
+      <path d={`${line}L${x(hi).toFixed(1)} ${y(yLo).toFixed(1)}L${x(lo).toFixed(1)} ${y(yLo).toFixed(1)}Z`} fill="var(--accent)" fillOpacity={0.06} />
+      <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />
+      <text x={x(hi) - 2} y={y(maxProfit) - 5} textAnchor="end" fontSize={9} fill="#22c55e" className="tabular-nums">max +${maxProfit.toFixed(2)}/sh</text>
+    </svg>
+  );
+}
+
 export default function CoveredCallWheel({ symbol, earningsDate, universe, exDividend }: { symbol: string; currency?: string; earningsDate?: string | number | null; universe?: string; exDividend?: string | number | null }) {
   const [spot, setSpot] = useState<number | null>(null);
   const [expirations, setExpirations] = useState<string[]>([]);
@@ -320,6 +352,10 @@ export default function CoveredCallWheel({ symbol, earningsDate, universe, exDiv
                   <span><b style={{ color: yieldColor(balanced.annYield) }}>{pct(balanced.annYield, 0)}</b> annualized</span>
                   <span>~<b>{balanced.assignProb != null ? pct(balanced.assignProb * 100, 0) : "—"}</b> called away</span>
                   <span>if called: <b>{pct(balanced.ifCalledPct)}</b></span>
+                </div>
+                <div className="mt-3 border-t border-[var(--accent)]/20 pt-2">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Payoff at expiry (per share, vs {basis != null ? "your basis" : "today"})</div>
+                  <PayoffChart spot={spot} strike={balanced.strike} premium={balanced.mid} ref={basis ?? spot} />
                 </div>
               </div>
             )}
