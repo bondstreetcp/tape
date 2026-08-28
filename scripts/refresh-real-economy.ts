@@ -29,6 +29,7 @@ const FRED: FredCfg[] = [
   { key: "cfnai", id: "CFNAI", label: "Chicago Fed activity (CFNAI)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "85-indicator composite; >0 = above-trend growth" },
   { key: "wei", id: "WEI", label: "Weekly Economic Index", group: "Activity", unit: "% ann.", changeUnit: "pts", freq: "W", signLevel: true, source: "FRED · Dallas Fed (LMS)", note: "Weekly real-activity, scaled to GDP growth" },
   { key: "nfci", id: "NFCI", label: "Financial conditions (NFCI)", group: "Activity", unit: "index · 0=avg", changeUnit: "pts", freq: "W", invert: true, source: "FRED · Chicago Fed", note: "NEGATIVE = looser conditions" },
+  { key: "chicago-cfsec", id: "CFSBCACTIVITY", label: "Chicago Fed survey (CFSEC)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "District-7 business conditions; >0 = above-trend (free — not the licensed Chicago PMI)" },
   // Manufacturing / PMIs — regional Fed surveys are the FREE stand-in for the proprietary ISM PMI
   // (ISM had FRED discontinue its series). Diffusion indices: >0 = expansion, and a POINT move (not a
   // %) is the meaningful change. Plus hard output: industrial production, capacity use, core capex.
@@ -38,6 +39,12 @@ const FRED: FredCfg[] = [
   { key: "industrial-production", id: "INDPRO", label: "Industrial production", group: "Manufacturing", unit: "index 2017=100", source: "FRED · Federal Reserve" },
   { key: "capacity-util", id: "TCU", label: "Capacity utilization", group: "Manufacturing", unit: "%", source: "FRED · Federal Reserve" },
   { key: "core-capex", id: "NEWORDER", label: "Core capital-goods orders", group: "Manufacturing", unit: "$M SAAR", source: "FRED · Census", note: "Nondefense ex-aircraft — business investment demand" },
+
+  // Services / non-manufacturing — the FREE stand-in for the proprietary ISM Services (services are
+  // ~70% of the economy). Regional-Fed service-sector surveys; diffusion indices, >0 = expansion.
+  { key: "svc-ny", id: "BACDINA066MNFRBNY", label: "NY Fed services", group: "Services", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · NY Fed", note: "Business Leaders Survey; >0 = expansion (NSA)" },
+  { key: "svc-philly", id: "GABNDIF066MSFRBPHI", label: "Philadelphia Fed services", group: "Services", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · Philly Fed", note: "Nonmfg survey, firm activity; >0 = expansion" },
+  { key: "svc-dallas", id: "TSSOSBACTSAMFRBDAL", label: "Dallas Fed services", group: "Services", unit: "diffusion idx", changeUnit: "pts", signLevel: true, source: "FRED · Dallas Fed", note: "Texas Service Sector; >0 = expansion" },
   // Freight
   { key: "rail-carloads", id: "RAILFRTCARLOADSD11", label: "Rail carloads", group: "Freight", unit: "carloads/mo", source: "FRED · AAR (SA)" },
   { key: "rail-intermodal", id: "RAILFRTINTERMODALD11", label: "Rail intermodal", group: "Freight", unit: "units/mo", source: "FRED · AAR (SA)" },

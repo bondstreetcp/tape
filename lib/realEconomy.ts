@@ -8,7 +8,7 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Activity" | "Manufacturing" | "Freight" | "Consumer" | "Labor" | "Travel" | "Housing";
+export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Labor" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
@@ -64,7 +64,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Freight", "Consumer", "Labor", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Labor", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -103,6 +103,11 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   "pmi-dallas": "Dallas Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",
   "industrial-production": "Federal Reserve Industrial Production index (2017 = 100) — the real output of US factories, mines and utilities. The core HARD measure of manufacturing output.",
   "capacity-util": "Capacity utilization (%, Federal Reserve) — how much of the economy's productive capacity is actually in use. High = tight (potential price pressure); falling = slack building.",
+  // Services (the free stand-in for the licensed ISM Services — services are ~70% of the economy)
+  "svc-ny": "NY Fed Business Leaders Survey — current business activity for the New York region's SERVICE firms, a diffusion index (>0 = expanding). The services counterpart to the Empire manufacturing survey. Reported not-seasonally-adjusted.",
+  "svc-philly": "Philadelphia Fed Nonmanufacturing Survey — firms' own current general activity, a diffusion index (>0 = expanding). A free, timely read on services activity in the mid-Atlantic.",
+  "svc-dallas": "Dallas Fed Texas Service Sector Outlook Survey — current general business activity, a diffusion index (>0 = expanding). Texas services are a large, early-reporting slice of the sector.",
+  "chicago-cfsec": "Chicago Fed Survey of Economic Conditions (CFSEC) — a standardized activity index for the Chicago Fed's district (0 = trend growth; + above, − below). A FREE Chicago read — distinct from the licensed MNI/ISM-Chicago PMI, which isn't publicly redistributable.",
   // Freight
   "rail-carloads": "US rail carloads (AAR, seasonally adjusted) — bulk goods moved by rail: coal, chemicals, grain, autos, metals. A read on heavy-industry & commodity freight demand.",
   "rail-intermodal": "US rail intermodal units (AAR, SA) — containers & trailers on rail, mostly consumer & imported goods. Tracks the retail/import goods pipeline.",
