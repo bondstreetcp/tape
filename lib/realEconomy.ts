@@ -8,7 +8,7 @@
  * public checkpoint-throughput page for daily air-travel demand. Hotel is a lodging-CPI PROXY, NOT STR
  * RevPAR (which is licensed) — labeled as such everywhere it renders.
  */
-export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Labor" | "Travel" | "Housing";
+export type RealEcoGroup = "Activity" | "Manufacturing" | "Services" | "Freight" | "Consumer" | "Prices" | "Labor" | "Travel" | "Housing";
 
 export interface RealEcoSeries {
   key: string;
@@ -64,7 +64,7 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
   contracting: "#ef4444",
 };
 
-export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Labor", "Travel", "Housing"];
+export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Labor", "Travel", "Housing"];
 
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
@@ -87,6 +87,13 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   "cfnai": "Chicago Fed National Activity Index — a weighted average of 85 monthly indicators of US real activity. 0 = trend growth; positive = above-trend, negative = below-trend. The single best 'how's the real economy' number (the 3-month average smooths the noise).",
   "wei": "Weekly Economic Index (Lewis-Mertens-Stock, Dallas Fed) — a WEEKLY index of 10 daily/weekly real-activity series (retail, jobless claims, fuel, steel, electricity…), scaled to 4-quarter GDP growth. The timeliest broad read on the economy.",
   "nfci": "Chicago Fed National Financial Conditions Index — a weekly gauge of risk, credit and leverage across money, bond & equity markets. 0 = average; NEGATIVE = LOOSER (easier) conditions, positive = tighter. Financial-conditions context for the real economy.",
+  // Prices / inflation (each series' LEVEL is already an annual rate — falling = disinflation)
+  "core-sticky": "Sticky-Price Core CPI (Atlanta Fed) — year-over-year inflation in the prices that change infrequently (rents, services), excluding food & energy. Because sticky prices move slowly, this is a cleaner read on underlying inflation's TREND than the noisy headline. Falling = disinflation.",
+  "trimmed-pce": "Trimmed-Mean PCE (Dallas Fed) — year-over-year inflation after trimming the most extreme price moves each month. The Fed's preferred robust core gauge; strips out one-off spikes to show the persistent trend. Falling = disinflation toward the 2% goal.",
+  "infl-exp-1yr": "University of Michigan 1-year inflation expectations — what households expect inflation to be over the next year. Expectations are self-fulfilling (they feed wage and price setting), so the Fed watches them closely. Falling = better-anchored.",
+  "breakeven-5yr": "5-year breakeven inflation rate — the market's expected average inflation over 5 years, implied by the gap between nominal Treasuries and TIPS. A real-time, market-priced inflation expectation (month-end shown). Falling = the market sees cooler inflation ahead.",
+  "infl-exp-5y5y": "5-year, 5-year forward inflation rate — the market's expected inflation for the 5 years starting 5 years out. The Fed's favourite gauge of LONG-RUN inflation credibility, stripped of near-term noise (month-end shown). Well-anchored ≈ 2–2.5%.",
+  "wage-growth": "Atlanta Fed Wage Growth Tracker — median hourly pay growth for the same workers year-over-year (3-month average). The wage/cost-push side of inflation: strong for workers, but persistent >~3.5% growth is hard to square with 2% price inflation.",
   // Labor
   "initial-claims": "Initial jobless claims — weekly new filings for unemployment insurance (Dept. of Labor). The timeliest read on the labor market turning; LOWER = healthier. Watch the 4-week trend, not any single week.",
   "continued-claims": "Continued jobless claims — people still collecting unemployment (a week lagged vs initial claims). Rising continued claims = laid-off workers taking longer to find work. LOWER = healthier.",

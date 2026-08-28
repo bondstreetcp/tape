@@ -23,7 +23,7 @@ import type { RealEcoSeries, TsaThroughput, RealEconomyData, RealEcoGroup } from
 
 const COSD = new Date(Date.now() - 21 * 365 * 86_400_000).toISOString().slice(0, 10); // ~21yr — deep enough for the detail view's 1Y/3Y/5Y/10Y/Max windows
 
-type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number; freq?: "M" | "W"; signLevel?: boolean; invert?: boolean };
+type FredCfg = { key: string; id: string; label: string; group: RealEcoGroup; unit: string; source: string; note?: string; changeUnit?: "%" | "pts"; scale?: number; freq?: "M" | "W"; signLevel?: boolean; invert?: boolean; daily?: boolean };
 const FRED: FredCfg[] = [
   // Activity — the broad, timely "how's the real economy" pulse (CFNAI monthly, WEI/NFCI weekly).
   { key: "cfnai", id: "CFNAI", label: "Chicago Fed activity (CFNAI)", group: "Activity", unit: "index · 0=trend", changeUnit: "pts", signLevel: true, source: "FRED · Chicago Fed", note: "85-indicator composite; >0 = above-trend growth" },
@@ -59,6 +59,17 @@ const FRED: FredCfg[] = [
   // Labor — weekly, the timeliest read on the labor market turning (lower = healthier).
   { key: "initial-claims", id: "ICSA", label: "Initial jobless claims", group: "Labor", unit: "claims/wk", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Weekly UI filings — LOWER = healthier; watch the trend" },
   { key: "continued-claims", id: "CCSA", label: "Continued claims", group: "Labor", unit: "claims", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Still collecting UI — LOWER = healthier" },
+  // Prices / inflation — each series' LEVEL is already an annual rate (not an index), so the card
+  // reads as the inflation number itself. invert:true → falling = green (disinflation is the goal).
+  // The two market breakevens are DAILY on FRED; `daily` down-samples them to month-end so they get
+  // the full ~21yr history and a correct month-over-month change like the rest.
+  { key: "core-sticky", id: "CORESTICKM159SFRBATL", label: "Core inflation (sticky CPI)", group: "Prices", unit: "% YoY", changeUnit: "pts", invert: true, source: "FRED · Atlanta Fed", note: "Slow-moving prices ex food/energy — the underlying inflation trend" },
+  { key: "trimmed-pce", id: "PCETRIM12M159SFRBDAL", label: "Trimmed-mean PCE", group: "Prices", unit: "% YoY", changeUnit: "pts", invert: true, source: "FRED · Dallas Fed", note: "The Fed's robust core gauge — trims the extreme monthly price moves" },
+  { key: "infl-exp-1yr", id: "MICH", label: "Consumer inflation exp. (1yr)", group: "Prices", unit: "%", changeUnit: "pts", invert: true, source: "FRED · U. Michigan", note: "What households expect inflation to be next year" },
+  { key: "breakeven-5yr", id: "T5YIE", label: "5yr breakeven (market)", group: "Prices", unit: "%", changeUnit: "pts", invert: true, daily: true, source: "FRED · Treasury/FRB", note: "Market-implied 5-yr inflation from TIPS (month-end)" },
+  { key: "infl-exp-5y5y", id: "T5YIFR", label: "5y5y forward inflation", group: "Prices", unit: "%", changeUnit: "pts", invert: true, daily: true, source: "FRED · FRB", note: "Long-run market inflation expectation (month-end)" },
+  { key: "wage-growth", id: "FRBATLWGT3MMAUMHWGO", label: "Wage growth (Atlanta Fed)", group: "Prices", unit: "%", changeUnit: "pts", source: "FRED · Atlanta Fed", note: "Median hourly wage growth, 3-mo avg — the wage/cost side of inflation" },
+
   { key: "quits-rate", id: "JTSQUR", label: "Quits rate (JOLTS)", group: "Labor", unit: "%", changeUnit: "pts", source: "FRED · BLS", note: "Share of workers voluntarily quitting — worker confidence; rising = hot labor market" },
   { key: "temp-help", id: "TEMPHELPS", label: "Temp-help payrolls", group: "Labor", unit: "M", scale: 0.001, changeUnit: "%", source: "FRED · BLS", note: "Temporary-help employment — employers add/cut temps before permanent staff, so it turns first (leading)" },
   // Travel
@@ -73,6 +84,15 @@ const FRED: FredCfg[] = [
 
 const pct = (a: number | null, b: number | null): number | null =>
   a != null && b != null && b !== 0 ? (a / b - 1) * 100 : null;
+
+/** Reduce daily obs to one point per calendar month (the last = ~month-end), so a DAILY FRED series
+ *  (e.g. the market breakevens) behaves like the monthly ones: full history in slice(-252) and a
+ *  correct month-over-month change instead of day-over-day. */
+function monthEnd(obs: { date: string; value: number }[]): { date: string; value: number }[] {
+  const byMonth = new Map<string, { date: string; value: number }>();
+  for (const o of obs) byMonth.set(o.date.slice(0, 7), o); // obs are oldest→newest → keeps each month's last
+  return [...byMonth.values()];
+}
 
 function buildSeries(cfg: (typeof FRED)[number], obs: { date: string; value: number }[]): RealEcoSeries | null {
   if (!obs.length) return null;
@@ -137,6 +157,7 @@ async function main() {
   const series: RealEcoSeries[] = [];
   for (const cfg of FRED) {
     let obs = await fetchSeries(cfg.id, COSD).catch(() => []);
+    if (cfg.daily) obs = monthEnd(obs); // daily series (breakevens) → month-end, so history + MoM behave like monthly
     if (cfg.scale && cfg.scale !== 1) obs = obs.map((o) => ({ date: o.date, value: Math.round(o.value * cfg.scale! * 100) / 100 })); // re-base (e.g. Cass 1990=1.0 → =100)
     const s = buildSeries(cfg, obs);
     if (s) { series.push(s); console.log(`  ${cfg.key.padEnd(22)} ${s.latest} @ ${s.latestDate}  (YoY ${s.yoyPct?.toFixed(1) ?? "—"}${s.changeUnit === "pts" ? "pts" : "%"})`); }
