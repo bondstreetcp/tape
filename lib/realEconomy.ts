@@ -90,6 +90,8 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   // Labor
   "initial-claims": "Initial jobless claims — weekly new filings for unemployment insurance (Dept. of Labor). The timeliest read on the labor market turning; LOWER = healthier. Watch the 4-week trend, not any single week.",
   "continued-claims": "Continued jobless claims — people still collecting unemployment (a week lagged vs initial claims). Rising continued claims = laid-off workers taking longer to find work. LOWER = healthier.",
+  "quits-rate": "JOLTS quits rate (BLS) — the % of workers who voluntarily quit each month. People quit when they're confident they can find something better, so a RISING quits rate signals a hot, worker-favorable labor market; a falling one signals caution. A cleaner confidence read than the headline jobs number.",
+  "temp-help": "Temporary-help services payrolls (BLS) — the number of temp workers employed. Temps are the first hired into an upturn and the first cut ahead of a downturn, so this employment line typically TURNS BEFORE the broader payrolls number — a classic leading labor indicator. Rising = expansion ahead.",
   // Goods cycle (added into their natural groups)
   "core-capex": "Core capital-goods orders — new orders for nondefense capital goods EX-aircraft (Census). The cleanest read on business INVESTMENT demand; leads capex spending and equipment output.",
   "inventories-sales": "Total business inventories-to-sales ratio (Census) — months of inventory relative to sales. RISING = overhang (a headwind for production & freight as firms destock); falling = lean, demand outrunning stock.",

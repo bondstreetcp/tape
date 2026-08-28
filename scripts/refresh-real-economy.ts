@@ -59,6 +59,8 @@ const FRED: FredCfg[] = [
   // Labor — weekly, the timeliest read on the labor market turning (lower = healthier).
   { key: "initial-claims", id: "ICSA", label: "Initial jobless claims", group: "Labor", unit: "claims/wk", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Weekly UI filings — LOWER = healthier; watch the trend" },
   { key: "continued-claims", id: "CCSA", label: "Continued claims", group: "Labor", unit: "claims", freq: "W", invert: true, source: "FRED · Dept. of Labor", note: "Still collecting UI — LOWER = healthier" },
+  { key: "quits-rate", id: "JTSQUR", label: "Quits rate (JOLTS)", group: "Labor", unit: "%", changeUnit: "pts", source: "FRED · BLS", note: "Share of workers voluntarily quitting — worker confidence; rising = hot labor market" },
+  { key: "temp-help", id: "TEMPHELPS", label: "Temp-help payrolls", group: "Labor", unit: "M", scale: 0.001, changeUnit: "%", source: "FRED · BLS", note: "Temporary-help employment — employers add/cut temps before permanent staff, so it turns first (leading)" },
   // Travel
   { key: "hotel-lodging-cpi", id: "CUSR0000SEHB", label: "Lodging-away CPI", group: "Travel", unit: "CPI index", source: "FRED · BLS", note: "Hotel PRICE proxy — NOT STR RevPAR (no occupancy/revenue)" },
   // Housing
