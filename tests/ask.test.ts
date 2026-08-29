@@ -87,3 +87,38 @@ test("a 429 (Google overloaded) IS rescued", async () => {
   assert.equal(r?.answer, "rescued");
   assert.equal(urls.length, 2);
 });
+
+// ── Concurrency hardening: in-flight coalescing (per-request locking) ──
+// The "you both hit it, needed a second click" report: identical concurrent asks used to race two
+// 40s search-grounded calls. They must now share ONE upstream call and all resolve to its answer.
+test("identical concurrent asks coalesce onto ONE upstream call", async () => {
+  const { askGemini } = await import("../lib/ask");
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; await new Promise((r) => setTimeout(r, 30)); return okResponse("shared"); }) as typeof fetch;
+  const [a, b, c] = await Promise.all([
+    askGemini("same?", CTX),
+    askGemini("same?", CTX),
+    askGemini("same?", CTX),
+  ]);
+  assert.equal(calls, 1, "three identical concurrent asks → exactly one upstream call");
+  assert.equal(a?.answer, "shared");
+  assert.equal(b?.answer, "shared");
+  assert.equal(c?.answer, "shared");
+});
+
+test("distinct concurrent asks do NOT coalesce (different questions each run)", async () => {
+  const { askGemini } = await import("../lib/ask");
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; await new Promise((r) => setTimeout(r, 20)); return okResponse("x"); }) as typeof fetch;
+  await Promise.all([askGemini("q1?", CTX), askGemini("q2?", CTX)]);
+  assert.equal(calls, 2, "two different questions must each run");
+});
+
+test("a settled ask does not stick in the in-flight map (a later identical ask re-runs)", async () => {
+  const { askGemini } = await import("../lib/ask");
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; return okResponse("fresh"); }) as typeof fetch;
+  await askGemini("later?", CTX);
+  await askGemini("later?", CTX); // sequential, not concurrent → must NOT be coalesced onto the first
+  assert.equal(calls, 2, "coalescing dedups only CONCURRENT duplicates, never caches a settled answer");
+});

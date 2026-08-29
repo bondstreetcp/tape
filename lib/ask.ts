@@ -127,7 +127,38 @@ export async function financialSnapshot(symbol: string): Promise<string> {
 export interface AskSource { title: string; uri: string }
 export interface AskResult { answer: string; sources: AskSource[] }
 
+// ── Concurrency hardening ────────────────────────────────────────────────────────────────────────
+// In-flight COALESCING: identical concurrent asks — two viewers hitting the same company/deal at once,
+// or a double-click / double component-mount — share ONE upstream call instead of racing two. That race
+// was the "it didn't populate, needed a second click when you both hit it" report: two 40s search-
+// grounded calls competing on the same key, one 429-ing or having its result discarded. The map is keyed
+// by the full request identity and cleared when the call settles, so a later identical ask (or a retry
+// after an error) still runs fresh — this dedups CONCURRENT duplicates only, it never caches an answer.
+const inflight = new Map<string, Promise<AskResult | null>>();
+function askKey(model: string, question: string, ctxText: string, history: { q: string; a: string }[]): string {
+  const s = `${model} ${question} ${ctxText} ${history.map((h) => h.q + "" + h.a).join("")}`;
+  let hash = 0; // cheap 32-bit rolling hash — only needs to be stable and collide solely for identical requests
+  for (let i = 0; i < s.length; i++) hash = (Math.imul(hash, 31) + s.charCodeAt(i)) | 0;
+  return `${model}:${question.length}:${ctxText.length}:${hash >>> 0}`;
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function askGemini(
+  question: string,
+  ctx: { name: string; text: string },
+  history: { q: string; a: string }[] = [],
+  opts: { model?: string } = {},
+): Promise<AskResult | null> {
+  if (!KEY) return null;
+  const key = askKey(opts.model || MODEL, question, ctx.text, history);
+  const existing = inflight.get(key);
+  if (existing) return existing; // coalesce onto the identical call already in flight
+  const run = askGeminiInner(question, ctx, history, opts).finally(() => inflight.delete(key));
+  inflight.set(key, run);
+  return run;
+}
+
+async function askGeminiInner(
   question: string,
   ctx: { name: string; text: string },
   history: { q: string; a: string }[] = [],
@@ -200,24 +231,36 @@ export async function askGemini(
   // keep its per-run bill down; the live per-view Ask leaves it unset → the sharper default). The rescue
   // stays FALLBACK_MODEL either way.
   const primaryModel = opts.model || MODEL;
+  let firstErr: any;
   try {
     return await attempt(primaryModel, PRIMARY_MS, -1);
   } catch (e: any) {
-    // Rescue only what a different/faster model can actually cure: a deadline, a 429, a 5xx. A 400
-    // or 403 is OUR configuration (bad key, bad model name) — flash would fail identically, and the
-    // retry would bury the one message that says what to fix.
-    const cureable = isDeadline(e) || /Gemini (429|5\d\d)/.test(String(e?.message || e));
-    if (!cureable) throw e;
-    console.warn(`askGemini: ${primaryModel} ${isDeadline(e) ? `timed out at ${PRIMARY_MS}ms` : String(e?.message || e).slice(0, 80)} — rescuing with ${FALLBACK_MODEL}`);
-    try {
-      return await attempt(FALLBACK_MODEL, RESCUE_MS, 0);
-    } catch (e2: any) {
-      // Both attempts dead. Say so like a person — the raw DOMException text is what the user
-      // screenshot showed, and it reads like a stack trace, not an answer.
-      if (isDeadline(e2) || /Gemini (429|5\d\d)/.test(String(e2?.message || e2)))
-        throw new Error("The AI took too long to answer — Google's models are busy right now. Try again in a moment.");
-      throw e2;
+    firstErr = e;
+    // A pure rate-limit (429) is usually a momentary burst — often the very "you both hit it" case that
+    // coalescing can't catch (two DIFFERENT questions, or separate serverless instances). Give the SHARP
+    // model one quick second shot after a short jittered backoff before dropping to flash. A real
+    // quota/config error 429s again fast and falls through to the rescue; a deadline or 5xx skips the
+    // retry (re-running a slow/broken call just burns the route's 60s budget) and goes straight to it.
+    if (/Gemini 429/.test(String(e?.message || e))) {
+      await sleep(700 + Math.floor(Math.random() * 500));
+      try { return await attempt(primaryModel, Math.min(PRIMARY_MS, 22_000), -1); }
+      catch (eRetry: any) { firstErr = eRetry; }
     }
+  }
+  // Rescue only what a different/faster model can actually cure: a deadline, a 429, a 5xx. A 400 or 403
+  // is OUR configuration (bad key, bad model name) — flash would fail identically, and the retry would
+  // bury the one message that says what to fix.
+  const cureable = isDeadline(firstErr) || /Gemini (429|5\d\d)/.test(String(firstErr?.message || firstErr));
+  if (!cureable) throw firstErr;
+  console.warn(`askGemini: ${primaryModel} ${isDeadline(firstErr) ? `timed out at ${PRIMARY_MS}ms` : String(firstErr?.message || firstErr).slice(0, 80)} — rescuing with ${FALLBACK_MODEL}`);
+  try {
+    return await attempt(FALLBACK_MODEL, RESCUE_MS, 0);
+  } catch (e2: any) {
+    // Both attempts dead. Say so like a person — the raw DOMException text is what the user
+    // screenshot showed, and it reads like a stack trace, not an answer.
+    if (isDeadline(e2) || /Gemini (429|5\d\d)/.test(String(e2?.message || e2)))
+      throw new Error("The AI took too long to answer — Google's models are busy right now. Try again in a moment.");
+    throw e2;
   }
 }
 
