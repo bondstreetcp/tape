@@ -127,6 +127,57 @@ export function buildCompsRows(data: SssData, nameOf: (t: string) => string | un
   return rows.sort((a, b) => b.comp - a.comp);
 }
 
+/**
+ * The "comp bogey" — the 1-yr comparable-sales % the UPCOMING (about-to-report) quarter must post to
+ * hold the two-year stack flat vs the quarter just reported (the "Five Below 17% bogey" logic from the
+ * desk). Comps stack multiplicatively year on year, so the bogey exposes what a headline comp REALLY
+ * means: a number that clears the bogey is genuine 2-yr acceleration; one below it is deceleration even
+ * if it looks fine, because it's lapping a hard prior-year quarter. Computed in code (never by the LLM).
+ * Needs a clean ~quarterly cadence and ≥5 disclosed comps; returns null otherwise (conservative).
+ */
+export interface CompBogey {
+  bogey: number; // 1-yr comp the upcoming quarter needs to hold the 2-yr stack flat, %
+  priorStack: number; // the just-reported quarter's 2-yr stack (multiplicative), %
+  yearAgoNext: number; // the compare the upcoming quarter laps (its year-ago comp), %
+  yearAgoLatest: number; // the compare the just-reported quarter lapped, %
+  easierCompare: boolean; // upcoming laps a SOFTER prior-year comp than last quarter did → tailwind to the 1-yr comp
+  nextLabel?: string; // best-guess fiscal label for the upcoming quarter (display only)
+}
+// Bump the year in an issuer fiscal label ("Q2 FY25" → "Q2 FY26", "Q1 '25" → "Q1 '26"). undefined if none.
+function bumpFiscalYear(label?: string): string | undefined {
+  if (!label) return undefined;
+  const m = label.match(/(FY|')\s?(\d{2,4})/i);
+  if (!m) return undefined;
+  const yr = m[2];
+  const bumped = String(Number(yr) + 1).padStart(yr.length, "0");
+  return label.replace(m[0], m[0].replace(yr, bumped));
+}
+export function compBogey(periods: SssPeriod[]): CompBogey | null {
+  const ps = periods.filter((p) => p.comp != null);
+  if (ps.length < 5) return null;
+  const gapOk = (a: SssPeriod, b: SssPeriod) => {
+    const d = Math.abs(Date.parse(a.fpEnd) - Date.parse(b.fpEnd)) / DAY;
+    return d > 60 && d < 130; // ~one quarter apart (tolerant of 4-4-5 / 52-53wk calendars)
+  };
+  const latest = ps[0]; // most recent REPORTED quarter (Qn)
+  const nextYrAgo = ps[3]; // the upcoming quarter (Qn+1) one year earlier
+  const latestYrAgo = ps[4]; // Qn one year earlier
+  if (!gapOk(ps[0], ps[1]) || !gapOk(ps[3], ps[4])) return null;
+  const yrGap = (Date.parse(latest.fpEnd) - Date.parse(latestYrAgo.fpEnd)) / YR;
+  if (yrGap < 0.85 || yrGap > 1.2) return null; // Qn must be ~1yr after its lap, else the series is irregular
+  const c = (x: number) => 1 + x / 100;
+  const priorStackMul = c(latest.comp as number) * c(latestYrAgo.comp as number);
+  const bogeyMul = priorStackMul / c(nextYrAgo.comp as number); // hold stack ⇒ (1+comp) = stack / (1+lap)
+  return {
+    bogey: (bogeyMul - 1) * 100,
+    priorStack: (priorStackMul - 1) * 100,
+    yearAgoNext: nextYrAgo.comp as number,
+    yearAgoLatest: latestYrAgo.comp as number,
+    easierCompare: (nextYrAgo.comp as number) < (latestYrAgo.comp as number),
+    nextLabel: bumpFiscalYear(nextYrAgo.fiscalLabel),
+  };
+}
+
 export function compFinder(periods: SssPeriod[]): (p: FinPeriod) => SssPeriod | null {
   return (p: FinPeriod) => {
     const t = Date.parse(p.date);

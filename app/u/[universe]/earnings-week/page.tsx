@@ -20,11 +20,15 @@ export default async function EarningsWeekPage({ params }: { params: Promise<{ u
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   if (UNIVERSE_BY_ID[universe].international) return <UsOnlyNotice universe={universe} label="Earnings This Week" relPath="/earnings-week" />;
-  // The feed is one global US scan — filter it to the SELECTED universe's constituents so the
-  // universe switcher actually changes the list (it used to only change link prefixes).
+  // The feed is one global US scan, built over the Russell 3000. NARROW universes filter it to their
+  // constituents so the switcher actually changes the list; BROAD universes show the FULL feed. Filtering
+  // a broad universe to its snapshot silently dropped genuine small-cap / R3000-only reporters like OLLI
+  // (the 2026-08-29 miss) — and any snapshot bake-lag drops recent additions. So: to see EVERY reporter,
+  // pick Russell 1000 / Broad 1500 / Russell 3000 (narrow S&P 500 / Nasdaq 100 stay scoped by design).
+  const BROAD_US = new Set(["russell1000", "sp1500", "russell3000"]);
   const [data, snap] = await Promise.all([loadEm(), loadSnapshot(universe)]);
   const base = data ?? { generatedAt: new Date().toISOString(), windowDays: 16, rows: [] };
-  const syms = snap ? new Set(snap.stocks.map((s) => s.symbol)) : null;
+  const syms = !BROAD_US.has(universe) && snap ? new Set(snap.stocks.map((s) => s.symbol)) : null;
   const rows = syms ? base.rows.filter((r) => syms.has(r.symbol)) : base.rows;
   return <EarningsWeekView universe={universe} data={{ ...base, rows }} />;
 }

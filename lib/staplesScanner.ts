@@ -77,6 +77,13 @@ export const STAPLES_TICKERS: Record<string, string> = {
   beiersdorf: "BDRFY", campari: "DVCMY", pernod: "PDRDY", "pernod ricard": "PDRDY",
   kenvue: "KVUE", colgate: "CL", "kimberly-clark": "KMB", clorox: "CLX", "church & dwight": "CHD",
   "procter & gamble": "PG", "kraft heinz": "KHC", "general mills": "GIS", mondelez: "MDLZ", hershey: "HSY",
+  // Packaged food — the names the NielsenIQ staples scans routinely carry. Keys kept specific (the matcher
+  // falls back to substring) so a category label can't accidentally resolve to a ticker.
+  "campbell's": "CPB", campbell: "CPB", "the campbell's company": "CPB", "campbell soup": "CPB",
+  conagra: "CAG", "conagra brands": "CAG", smucker: "SJM", "j.m. smucker": "SJM", "jm smucker": "SJM",
+  mccormick: "MKC", kellanova: "K", "wk kellogg": "KLG", "w.k. kellogg": "KLG",
+  "post holdings": "POST", "lamb weston": "LW", "flowers foods": "FLO", "utz brands": "UTZ",
+  hormel: "HRL", "tyson foods": "TSN", "treehouse foods": "THS", "lancaster colony": "LANC", "j&j snack": "JJSF",
 };
 
 /** Map a company name to a US ticker (exact, then substring). Null for categories/brands/unknowns. */

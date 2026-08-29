@@ -23,6 +23,7 @@ import { getEarningsReactions } from "./earningsReaction";
 import { getFilings, getFilingText } from "./edgar";
 import { chatJSON, NO_ADVICE, PRO_MODEL, FLASH_MODEL } from "./llm";
 import { computeQuant, buildSig, loadGuidance, loadSss, loadScannerRead, type QuantResult } from "./earningsQuant";
+import { listDocs } from "./research/store";
 import type { CompanyStats } from "./companyStats";
 
 /** Race a live sub-fetch against a timeout so one slow source (the NAS home uplink) can't stall the
@@ -71,7 +72,7 @@ export interface PreviewContext {
 /** Assemble everything both model passes need — every live sub-fetch time-bound (the NAS has no
  *  platform function ceiling; see the route). One assembly, two prompts. */
 export async function assemblePreviewContext(sym: string, earningsISO: string | null): Promise<PreviewContext> {
-  const [stats, news, transcript, quant, priorRelease, peerSet] = await Promise.all([
+  const [stats, news, transcript, quant, priorRelease, peerSet, researchDocs] = await Promise.all([
     // Cache-first (local file for baked names); the live fallback on a cold/off-index name is one
     // Yahoo call — bound it like the rest.
     raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
@@ -98,6 +99,10 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     // THESE names only; it must never pick peers from its own association or from search-noise
     // headlines (the VSTS→Vistra incident).
     raceTimeout(resolvePeers(sym).catch(() => null), 8_000, null),
+    // Ingested broker/analyst research this desk holds on the name — the informed-investor view. The
+    // preview couldn't reference it before (only the separate part=preprint path loaded it); wire it in
+    // here so the narrative can synthesize it (the Campbell's gap). Empty for names with no notes.
+    raceTimeout(listDocs(sym).catch(() => []), 6_000, [] as Awaited<ReturnType<typeof listDocs>>),
   ]);
   const guid = loadGuidance(sym);
   const sss = loadSss(sym);
@@ -110,6 +115,26 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
       `${scan.row.volume != null ? `, volume ${pct(scan.row.volume)}` : ""}${scan.row.priceMix != null ? `, price/mix ${pct(scan.row.priceMix)}` : ""}` +
       `${scan.row.shareDeltaBps != null ? `, dollar share ${scan.row.shareDeltaBps >= 0 ? "+" : ""}${scan.row.shareDeltaBps}bps` : ""}${scan.row.category ? ` [${scan.row.category}]` : ""}${scan.row.note ? ` — ${scan.row.note}` : ""}. ` +
       `GROUND the demand / quarter read in this: accelerating scanner (L4wk > L12wk) + share gains into the print is a strong-quarter setup, decelerating + share loss is a soft-quarter / guide-down setup. Cite ONLY these scanner figures — never invent a number.`
+    : "";
+
+  // Ingested research desk — the broker/analyst notes this terminal holds on the name (structured
+  // fields only; the licensed full text is never dumped). Newest first, top few, length-capped.
+  const rdocs = (researchDocs || [])
+    .slice()
+    .sort((a, b) => Date.parse(b.publishDate || b.ingestedAt || "1970") - Date.parse(a.publishDate || a.ingestedAt || "1970"))
+    .slice(0, 4);
+  const researchCtx = rdocs.length
+    ? `\n\nINGESTED RESEARCH DESK (${rdocs.length} broker/analyst note${rdocs.length > 1 ? "s" : ""} this terminal holds on ${sym} — the informed-investor view; SYNTHESIZE and ATTRIBUTE to the firm, weigh against the sell-side consensus above, and FLAG where a note diverges. These are licensed — do NOT quote at length):\n` +
+      rdocs
+        .map((d) => {
+          const rat = d.rating ? `${d.rating}${d.ratingPrior && d.ratingPrior !== d.rating ? ` (was ${d.ratingPrior})` : ""}` : "";
+          const pt = d.priceTarget != null ? ` PT $${d.priceTarget}${d.priceTargetPrior != null && d.priceTargetPrior !== d.priceTarget ? ` (was $${d.priceTargetPrior})` : ""}` : "";
+          const thesis = (d.thesis || []).slice(0, 3).join("; ");
+          const mgmt = (d.managementInsights || []).slice(0, 2).join("; ");
+          return `• ${d.source}${d.publishDate ? ` ${d.publishDate}` : ""}${rat ? ` — ${rat}` : ""}${pt}${d.summary ? `: ${d.summary.slice(0, 300)}` : ""}${thesis ? ` | thesis: ${thesis.slice(0, 400)}` : ""}${mgmt ? ` | mgmt/channel checks: ${mgmt.slice(0, 300)}` : ""}`;
+        })
+        .join("\n")
+        .slice(0, 2600)
     : "";
 
   // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —
@@ -130,6 +155,7 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     (gQuoted ? `\n\nSTANDING GUIDANCE, in the company's OWN WORDS (${gQuoted.period}, ${gQuoted.action}): "${String(gQuoted.quote).slice(0, 500)}"` : "") +
     (sig ? `\n\nQUANT SIGNALS — this terminal's own options + reaction-history analysis (GROUND the preview in the notable ones; synthesize, don't just restate): ${sig.slice(0, 1400)}` : "") +
     scannerCtx +
+    researchCtx +
     (priorRelease?.text ? `\n\nPRIOR EARNINGS PRESS RELEASE (8-K filed ${priorRelease.date} — the company's own results + outlook language from LAST quarter):\n${priorRelease.text.slice(0, 6000)}` : "") +
     (transcript?.text && transcript.text.length > 1000 ? `\n\nMOST RECENT EARNINGS CALL (${transcript.date || "prior quarter"} — ${transcript.title}):\n${transcript.text.slice(0, 9000)}` : "");
   return { sym, stats, quant, sig, consEps: q0?.epsAvg ?? null, consRevB: q0?.revAvg != null ? q0.revAvg / 1e9 : null, ctx };
@@ -163,6 +189,7 @@ export async function buildAiPreview(c: PreviewContext, opts: { bounded?: boolea
     "'bull' = the bull case into the print; 'bear' = the bear case / what's priced in. " +
     "If QUANT SIGNALS are supplied below, GROUND moneyLine/overview/bull/bear in the notable ones — e.g. options pricing a rich vs cheap move, a sell-the-news reaction pattern, post-earnings drift, a sandbagging guidance history, vol-crush — woven naturally into the narrative, NOT as a bullet dump. " +
     "If a NIELSEN SCANNER read is supplied (staples names only), it is the ~2-week-lagged LEADING read on THIS quarter's demand & share — weave whether US scanner sales are ACCELERATING or DECELERATING vs the 12-week and any dollar-share gain/loss into the thesis/debate/bull/bear (decelerating + share loss = a soft-quarter / guide-down setup; accelerating + share gains = the opposite). Cite only the supplied scanner figures. " +
+    "If an INGESTED RESEARCH DESK section is supplied, it is broker/analyst research this desk holds on the name — the informed-investor view. Weave the most decision-relevant points into thesis/debate/bull/bear, ATTRIBUTE to the firm ('RBC argues…', 'Stifel's channel checks…'), and explicitly flag where a note DIVERGES from the sell-side consensus or the setup. Never quote it at length. " +
     "'fromLastCall' = if a MOST RECENT EARNINGS CALL transcript is supplied below, 1-2 sentences on what management SAID or COMMITTED to last call (guidance given, targets, tone, promises) + the ONE thing to check for follow-through THIS print; if no transcript is supplied, return ''. " +
     "Use specific NUMBERS only from the supplied data; name segment/guidance items without fabricating precise figures. " +
     NO_ADVICE;

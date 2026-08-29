@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-earnings",
+    date: "2026-08-29",
+    title: "Sharper earnings prep — a recommended play, the comp bogey & deeper AI context",
+    items: [
+      "Every earnings tab now opens with an “Into the print” call — sell a cash-secured put, sell a put spread, own it, or stand aside — synthesized in code from the rich/cheap vol read, the Nielsen scanner, the comparable-sales trend and the stock’s own reaction history. Decision-support, not advice.",
+      "New “Comp bogey” for restaurants & retailers: the exact comparable-sales number next quarter needs to hold the two-year stack flat — so a headline comp that looks fine but is really a 2-year deceleration gets caught (the Five Below tell). Computed from the disclosed comp history, never estimated.",
+      "The AI earnings preview now reads your ingested broker/analyst research too (not just the quant signals + scanner), attributes it by firm, and flags where a note diverges from the sell-side consensus.",
+      "Wider Staples Scanner coverage — Campbell’s, Conagra, Smucker, McCormick, Kellanova, Hormel, Post, Lamb Weston and more now resolve to their tickers, so their point-of-sale demand read shows up on the earnings tab and the research desk.",
+      "“Earnings This Week” on the broad universes (Russell 1000 / Broad 1500 / Russell 3000) now lists every US reporter — small-caps like Ollie’s are no longer dropped by the universe filter.",
+      "The earnings options-positioning card now labels the expiry its skew, max-pain and call/put walls are measured at.",
+    ],
+  },
+  {
     id: "2026-08-28-wheel-suite",
     date: "2026-08-28",
     title: "A full theta-wheel workbench",

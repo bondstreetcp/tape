@@ -14,7 +14,7 @@ import { detectPreannounce } from "./preannounce";
 import { resolvePeers } from "./industryPeers";
 import { yahoo } from "./yahooClient";
 import { beatGuide, type GuidanceData, type GuidanceTicker } from "./guidance";
-import type { SssData, SssTicker } from "./sameStoreSales";
+import { compBogey, type SssData, type SssTicker } from "./sameStoreSales";
 import { latestScannerFor, type StaplesScannerData, type ScannerRead } from "./staplesScanner";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -310,6 +310,9 @@ export function buildSig(q: QuantResult, guid: GuidanceTicker | null, sss: SssTi
   if (ps.length) {
     const seq = ps[1]?.comp != null ? (ps[0].comp as number) - (ps[1].comp as number) : null;
     o.push(`last comp ${(ps[0].comp as number) >= 0 ? "+" : ""}${(ps[0].comp as number).toFixed(1)}%${seq != null ? ` (${seq >= 0 ? "accelerating" : "decelerating"})` : ""}`);
+    // Comp "bogey" computed in code (never let the LLM do the two-year-stack arithmetic — the 2026-08-29 error).
+    const bogey = sss ? compBogey(sss.periods) : null;
+    if (bogey) o.push(`comp bogey to hold the 2yr stack flat next quarter ≈ ${bogey.bogey >= 0 ? "+" : ""}${bogey.bogey.toFixed(1)}% (laps ${bogey.yearAgoNext >= 0 ? "+" : ""}${bogey.yearAgoNext.toFixed(1)}% a year ago, ${bogey.easierCompare ? "easier" : "harder"} compare than last quarter) — a headline comp below this bogey is 2yr deceleration even if it looks fine`);
   }
   const g0 = (guid?.guides || []).find((g) => g.action !== "none");
   if (g0) o.push(`standing guidance ${g0.period} ${g0.action.toUpperCase()}`);

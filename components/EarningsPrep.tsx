@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
-import type { SssTicker } from "@/lib/sameStoreSales";
+import { compBogey, type SssTicker } from "@/lib/sameStoreSales";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
@@ -493,6 +493,43 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       traffic: latest.traffic ?? null, ticket: latest.ticket ?? null,
     };
   })();
+  // The comp needed to hold the 2-yr stack flat into the upcoming quarter (the "bogey"), computed in code.
+  const bogey = sss?.periods ? compBogey(sss.periods) : null;
+
+  // Synthesized "into the print" plan — a wheel-minded, CODE-DERIVED suggestion (sell a cash-secured put /
+  // put spread / own it / stand aside), NOT advice. Blends the vol read (rich/cheap), the fundamental setup
+  // (scanner inflection & share, comp trend, comp bogey), the historical reaction reliability and the
+  // momentum into the print. Distinct from the options "Play" above (that's the vol STRUCTURE; this is the
+  // positional call for someone who might want to own the name — the theta-wheel lens).
+  const printPlan = (() => {
+    if (!d || (d.impliedMove == null && !d.volRegime && !d.richness)) return null;
+    const premiumRich = d.richness?.verdict === "rich" || (d.volRegime != null && d.volRegime.ivHvRatio >= 1.3);
+    const premiumCheap = d.richness?.verdict === "cheap" || (d.volRegime != null && d.volRegime.ivHvRatio <= 1.0);
+    let tilt = 0;
+    const pros: string[] = [], cons: string[] = [];
+    if (scanner?.row.inflection === "accelerating") { tilt++; pros.push("scanner accelerating"); }
+    else if (scanner?.row.inflection === "decelerating") { tilt--; cons.push("scanner decelerating"); }
+    if (scanner?.row.shareDeltaBps != null) { if (scanner.row.shareDeltaBps > 0) { tilt++; pros.push("gaining share"); } else if (scanner.row.shareDeltaBps < 0) { tilt--; cons.push("losing share"); } }
+    if (sssRead?.seqDelta != null) { if (sssRead.seqDelta > 0.2) { tilt++; pros.push("comps accelerating"); } else if (sssRead.seqDelta < -0.2) { tilt--; cons.push("comps decelerating"); } }
+    if (bogey) { if (bogey.easierCompare) { tilt++; pros.push("easier compare ahead"); } else { cons.push("harder compare ahead"); } }
+    if (d.surpriseReaction?.beatUp != null && d.surpriseReaction.beatN >= 4) { if (d.surpriseReaction.beatUp >= 0.6) { tilt++; pros.push("beats reliably rally"); } else if (d.surpriseReaction.beatUp <= 0.4) { tilt--; cons.push("sell-the-news history"); } }
+    if (r3m != null) { if (r3m > 8) { tilt++; pros.push("strong 3m trend"); } else if (r3m < -8) { tilt--; cons.push("weak 3m trend"); } }
+    const bigMove = d.impliedMove != null && d.impliedMove >= 9; // binary-ish priced move
+    const sellNews = d.surpriseReaction?.beatUp != null && d.surpriseReaction.beatN >= 4 && d.surpriseReaction.beatUp <= 0.4;
+    const highDownside = sellNews || (d.options?.skew != null && d.options.skew > 0.04) || tilt <= -2;
+    const drivers = (xs: string[]) => xs.slice(0, 3).join(", ");
+    if (premiumRich && tilt >= 1 && !highDownside)
+      return { action: "Sell a cash-secured put", color: "#22c55e", rationale: `premium is rich and the setup leans constructive (${drivers(pros)}) — get paid to wait, and if assigned you enter below spot. The wheel's entry leg; size for assignment.` };
+    if (premiumRich && (highDownside || bigMove))
+      return { action: "Sell a put spread (defined risk)", color: "#f59e0b", rationale: `premium is rich${bigMove ? ` but the priced move is large (±${d.impliedMove!.toFixed(0)}%)` : ""}${cons.length ? `, and there's real downside risk (${drivers(cons)})` : ""} — collect the premium while capping the tail.` };
+    if (premiumRich)
+      return { action: "Sell a put spread", color: "#f59e0b", rationale: "premium is rich but the directional read is mixed — a defined-risk credit spread harvests the vol without a naked tail." };
+    if (premiumCheap && tilt >= 1)
+      return { action: "Own it into the print", color: "#22c55e", rationale: `the setup leans constructive (${drivers(pros)}) and premium isn't rich${d.longPremium?.verdict === "favorable" ? " — the move has tended to exceed what's priced" : ""} — express it long (stock or upside) rather than selling vol.` };
+    if (tilt <= -1)
+      return { action: "Stand aside / wait for the print", color: "#ef4444", rationale: `the setup leans soft (${drivers(cons)})${!premiumRich ? ", and premium isn't rich enough to be paid for the risk" : ""} — no edge in forcing a position ahead of the number.` };
+    return { action: "No clear edge — do nothing", color: "var(--text-2)", rationale: "the vol and directional reads don't line up into a paid-for structure — wait for the print or a cleaner entry." };
+  })();
   const mDay = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const sgn1 = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 
@@ -704,6 +741,19 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         </div>
       )}
 
+      {/* Synthesized "into the print" plan — the wheel-minded positional call (sell put / spread / own / wait),
+          computed in code from the vol + fundamental + reaction setup. Distinct from the vol "Play" above. */}
+      {printPlan && (
+        <div className="mb-3 flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5" style={{ borderColor: `color-mix(in oklab, ${printPlan.color} 40%, transparent)`, background: `color-mix(in oklab, ${printPlan.color} 8%, transparent)` }}>
+          <span className="mt-0.5 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Into the print</span>
+          <span className="text-[13px] leading-snug">
+            <b style={{ color: printPlan.color }}>{printPlan.action}</b>
+            <span className="text-[var(--text-3)]"> — {printPlan.rationale}</span>
+            <InfoDot text="A wheel-minded suggestion synthesized IN CODE from this terminal's signals — rich/cheap vol, scanner inflection & share, the comp trend & bogey, the historical reaction reliability, and momentum into the print. Decision-support, not advice." />
+          </span>
+        </div>
+      )}
+
       {/* Interactive IV-crush scenario — reprice a call/put/straddle across move × vol-crush (answers the
           "a right call still loses to the crush" trap directly, with a $ P&L box + slider + matrix). */}
       {d?.ivScenario && (
@@ -748,6 +798,15 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         {sssRead && (
           <div className="mt-2 border-t border-[var(--divider)] pt-2 text-[13px] text-[var(--text-3)]" title="Last reported comparable-sales / like-for-like — the bar for restaurant/retail names (historical, not a forward Street consensus).">
             <b className="text-[var(--text-2)]">{sssRead.label}</b> <b style={{ color: col(sssRead.comp) }}>{sgn1(sssRead.comp)}</b>{sssRead.fiscalLabel ? <span className="text-[var(--text-4)]"> {sssRead.fiscalLabel}</span> : null}{sssRead.seqDelta != null ? <span className="text-[var(--text-4)]"> · {sssRead.seqDelta >= 0 ? "accel." : "decel."} {sssRead.seqDelta >= 0 ? "+" : ""}{sssRead.seqDelta.toFixed(1)}pt</span> : null}{sssRead.twoYrStack != null ? <span className="text-[var(--text-4)]"> · 2yr stack {sgn1(sssRead.twoYrStack)}</span> : null}{sssRead.traffic != null ? <span className="text-[var(--text-4)]"> · traffic {sgn1(sssRead.traffic)}{sssRead.ticket != null ? ` / ticket ${sgn1(sssRead.ticket)}` : ""}</span> : null}
+          </div>
+        )}
+        {bogey && (
+          <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 text-[13px]" title="Comps stack multiplicatively year on year. This is the 1-yr comp the upcoming quarter must post to hold the 2-year stack flat vs the quarter just reported. Read it against Street/guidance: a headline comp BELOW the bogey is 2-yr deceleration even if the number looks fine (the Five Below tell); above it is genuine acceleration. Lapping a softer prior-year quarter (an easier compare) should lift the 1-yr comp on its own.">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Comp bogey<InfoDot text="The 1-yr comp needed next quarter to hold the 2-yr stack flat vs the quarter just reported — the real bar. Computed from the disclosed comp history, not estimated." /> · {bogey.nextLabel || "next quarter"}</div>
+            <div className="mt-0.5 text-[var(--text-2)]">
+              needs <b style={{ color: col(bogey.bogey) }}>{sgn1(bogey.bogey)}</b> to hold the 2-yr stack flat
+              <span className="text-[var(--text-4)]"> · laps {sgn1(bogey.yearAgoNext)} ({bogey.easierCompare ? "easier" : "harder"} vs {sgn1(bogey.yearAgoLatest)} last qtr)</span>
+            </div>
           </div>
         )}
       </Bento>
@@ -884,6 +943,12 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
         {/* Options & volatility */}
         {d?.options && (d.options.skew != null || d.options.maxPain != null || d.options.callWall != null || d.volRegime) && (
           <Bento title="Options & volatility">
+            {d.options.expiry && (() => {
+              const t = Date.parse(d.options.expiry);
+              if (Number.isNaN(t)) return null;
+              const dte = Math.round((t - Date.now()) / 86_400_000);
+              return <div className="-mt-1 mb-2 text-[11px] text-[var(--text-4)]" title="The option expiry these positioning stats — ATM IV, skew, max-pain and the call/put walls below — are measured at: the front expiry bracketing the print.">measured at the <b className="text-[var(--text-3)]">{mDay(t)}</b> expiry{dte >= 0 ? ` · ${dte}d out` : ""}</div>;
+            })()}
             {d.volRegime ? (
               <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
                 <Big value={`${(d.volRegime.atmIV * 100).toFixed(0)}%`} label="implied vol" info={<InfoDot term="Implied volatility" />} />
