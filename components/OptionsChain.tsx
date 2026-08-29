@@ -207,7 +207,28 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
 
       <GammaExposure symbol={symbol} />
 
-      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        {/* Chain header — the expiry selector + context sit RIGHT above the numbers. The page's top toolbar
+            is many sections up (charts, surface, cone, gamma), so by the time you reach the chain you
+            couldn't see which expiry was shown or change it without scrolling back. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--border)] px-3 py-2 text-[13px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Option chain</span>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[var(--text-3)]">Expiry</span>
+            <select
+              value={expiry ?? ""}
+              onChange={(e) => setExpiry(e.target.value)}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm outline-none focus:border-[var(--border-strong)]"
+            >
+              {data.expirations.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </label>
+          {dte != null && <span className="text-[var(--text-4)]">{dte}d to expiry</span>}
+          {data.underlying != null && <span className="text-[var(--text-2)]">Underlying <span className="font-mono font-semibold text-[var(--text)]">{fmtMoney(data.underlying, currency)}</span></span>}
+          {atmIv != null && <span className="text-[var(--text-2)]">ATM<InfoDot term="ATM" /> IV <span className="font-semibold text-[var(--text)]">{iv(atmIv)}</span></span>}
+          <span className="ml-auto text-[11px] text-[var(--text-4)]">rows around the <span className="font-semibold text-[#93c5fd]">ATM</span> strike</span>
+        </div>
+        <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-[13px]">
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-3)]">
@@ -248,6 +269,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
                 )}
                 <td className={"px-2 py-1 text-center font-mono font-semibold tabular-nums " + (r.isAtm ? "text-[#93c5fd]" : "text-[var(--text)]")}>
                   {r.strike}
+                  {r.isAtm && <span className="ml-1 rounded bg-[#93c5fd]/15 px-1 py-0.5 align-middle font-sans text-[9px] font-semibold uppercase tracking-wide text-[#93c5fd]" title="At-the-money — the listed strike closest to the underlying price.">ATM</span>}
                 </td>
                 {greekView ? (
                   <>
@@ -273,6 +295,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
             })}
           </tbody>
         </table>
+        </div>
       </div>
       <p className="text-[11px] text-[var(--text-4)]">
         {greekView ? (
