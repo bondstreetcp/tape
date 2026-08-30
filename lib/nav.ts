@@ -49,6 +49,7 @@ export const FEATURES: NavItem[] = [
   { label: "Covered-Call", path: "/covered-call", desc: "Covered-call income on stocks you'd hold", group: "Options", job: "Income strategies", kw: "options income sell calls" },
   { label: "Wheel Tracker", path: "/wheel", desc: "Track your active theta-wheels — which leg you're in, shares, cost basis, premium collected & adjusted basis — with the next move", group: "Options", job: "Income strategies", kw: "wheel tracker theta wheel covered call cash secured put cost basis premium collected adjusted basis position tracker income cycle assigned called away roll manage leg" },
   { label: "Credit Spreads", path: "/credit-spreads", desc: "Bull-put and iron-condor setups ranked by reward vs risk", group: "Options", job: "Income strategies", kw: "options spreads iron condor" },
+  { label: "Sell-Premium Board", path: "/sell-premium", desc: "The best names to sell option premium on right now — one composite score across variance premium, IV rank & peer-relative richness, haircut for earnings traps", group: "Options", job: "Income strategies", kw: "sell premium board leaderboard where to sell theta wheel cash secured put covered call variance premium iv rank rich vol sector relative composite score ranked best names income earnings trap clear overwrite decision" },
   { label: "Earnings Move", path: "/earnings-move", desc: "Where options over- or under-price an earnings event", group: "Earnings", job: "Find ideas", kw: "earnings straddle implied move volatility" },
   { label: "Earnings Odds", path: "/earnings-odds", desc: "Polymarket's P(beat) per reporter vs the frozen EPS bar, consensus drift, and the options-implied move", group: "Earnings", job: "Find ideas", kw: "earnings odds polymarket prediction market beat miss probability eps bar strike consensus drift crowd" },
   { label: "Earnings Setup Cards", path: "/earnings-setup", desc: "Glanceable cards of upcoming reporters — implied vs. historical move, rich/cheap", group: "Earnings", job: "Find ideas", kw: "earnings setup cards implied move straddle reporting this week" },
@@ -151,7 +152,7 @@ export const GROUP_HUBS: Partial<Record<NavGroup, NavHub[]>> = {
     // /vol-cone is FIRST so this hub lands on the one universe-agnostic tool — on an intl universe the
     // US-only members are hidden and clicking the hub still reaches a working page (the realized-vol cone).
     { label: "Vol & Positioning", blurb: "The realized-vol cone, where vol is rich/cheap, skew & term structure, dispersion, dealer gamma, the name-level positioning radar, coiled springs, and cheap options into a catalyst (incl. biotech binaries)", paths: ["/vol-cone", "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol"] },
-    { label: "Income", blurb: "Sell premium on quality names — cash-secured puts, covered calls, credit spreads, and a tracker for your active wheels", paths: ["/put-writing", "/covered-call", "/credit-spreads", "/wheel"] },
+    { label: "Income", blurb: "Sell premium on quality names — the ranked sell-premium board, cash-secured puts, covered calls, credit spreads, and a tracker for your active wheels", paths: ["/sell-premium", "/put-writing", "/covered-call", "/credit-spreads", "/wheel"] },
   ],
   // Event-Driven is FULLY hubbed (2026-08, Sam's IA pass): a group with any hubs shows ONLY hubs in
   // the dropdown, so every member needs one. Most are single-path hubs (render as plain entries — the
@@ -195,6 +196,7 @@ export const US_ONLY_PATHS: ReadonlySet<string> = new Set([
   "/earnings-desk", "/catalyst-calendar", "/binary-week", "/trade-desk", "/earnings-week", "/earnings-move",
   "/earnings-setup", "/track-record", "/preview-record", "/guidance", "/pead",
   "/vol-dislocation", "/skew", "/term-structure", "/dispersion", "/gamma-board", "/positioning", "/coiled", "/catalyst-vol", "/biotech-vol",
+  "/sell-premium", // composite sell-premium board over vol-dislocation.json (US single-stock options)
   "/wheel", // theta-wheel tracker — US options only
 
   // US-only non-options feeds

@@ -74,3 +74,41 @@ export function premColor(p: number): string {
   return "var(--text-2)";
 }
 export const premVerdict = (p: number): "rich" | "cheap" | "fair" => (p >= 1.4 ? "rich" : p <= 1.1 ? "cheap" : "fair");
+
+// ── Sell-Premium Board (the composite decision score) ──────────────────────────────────────────────
+// The vol-dislocation / skew / term-structure screens each show ONE lens on the same dataset. For a
+// premium SELLER the decision is a blend: is vol rich vs its own realized (the variance premium), rich
+// vs where it usually trades (IV rank), and rich vs its sector peers (vsSector) — AND is that richness a
+// genuine dislocation rather than just an imminent earnings event you'd be short into (the trap). This
+// folds those into one 0–100 "sell score", earnings-trap-haircut included, so the board ranks WHERE to
+// put premium-selling capital right now. Decision support, not advice.
+export interface SellScore {
+  score: number; // 0–100
+  earningsTrap: boolean; // rich vol is pricing an imminent earnings event inside the front expiry
+  side: "puts" | "calls" | "either"; // which side the skew says is the richer sell
+  drivers: string[]; // short human tags for the notable contributors
+}
+export function sellPremiumScore(r: VolDisRow): SellScore {
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+  const parts: { w: number; v: number }[] = [];
+  const drivers: string[] = [];
+  // Variance premium (absolute) — IV vs the name's OWN realized. The core edge; always present.
+  parts.push({ w: 0.45, v: clamp01((r.ivPremium - 1.0) / 0.9) }); // 1.0×→0, ≥1.9×→1
+  if (r.ivPremium >= 1.4) drivers.push(`IV ${r.ivPremium.toFixed(2)}× realized`);
+  // IV rank — rich vs where this name's vol usually sits (accrues over time; may be null).
+  if (r.ivRank != null) { parts.push({ w: 0.30, v: clamp01(r.ivRank / 100) }); if (r.ivRank >= 70) drivers.push(`IV rank ${Math.round(r.ivRank)}ᵗʰ`); }
+  // Peer-relative — richer variance premium than its sector median.
+  if (r.vsSector != null) { parts.push({ w: 0.25, v: clamp01(r.vsSector / 0.4) }); if (r.vsSector >= 0.15) drivers.push(`+${r.vsSector.toFixed(2)} vs sector`); }
+  const wSum = parts.reduce((a, p) => a + p.w, 0) || 1;
+  let score = (100 * parts.reduce((a, p) => a + p.w * p.v, 0)) / wSum; // re-normalized if IV-rank/sector missing
+  const earningsTrap = !!r.earningsDriven;
+  if (earningsTrap) { score *= 0.45; drivers.push("earnings inside front — event risk, not free premium"); }
+  const side: SellScore["side"] = r.skew == null ? "either" : r.skew >= 0.05 ? "puts" : r.skew <= -0.03 ? "calls" : "either";
+  return { score: Math.round(score), earningsTrap, side, drivers };
+}
+export function sellScoreColor(s: number): string {
+  if (s >= 70) return "#22c55e";
+  if (s >= 50) return "#84cc16";
+  if (s >= 30) return "var(--text-2)";
+  return "var(--text-4)";
+}

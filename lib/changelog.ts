@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-sell-premium",
+    date: "2026-08-29",
+    title: "A Sell-Premium Board — where to sell option premium now",
+    items: [
+      "New Options → Income → Sell-Premium Board: one ranked leaderboard of the best names to sell option premium on right now. It blends the three vol lenses you had scattered across separate screens — the variance premium (IV vs the name's own realized), IV rank (rich vs where its vol usually sits), and richness vs its sector — into a single 0–100 sell score.",
+      "Crucially, it haircuts names whose rich vol is just pricing an imminent earnings event inside the front expiry — so you're not lured into selling premium you'd be short an event against. Filter to \"🛡 clear of earnings\", or to the side the skew says is the richer sell (puts for a wheel entry, calls for an overwrite). Every row links straight to that name's Wheel tab to size the strike & expiry.",
+    ],
+  },
+  {
     id: "2026-08-29-earnings",
     date: "2026-08-29",
     title: "Sharper earnings prep — a recommended play, the comp bogey & deeper AI context",
