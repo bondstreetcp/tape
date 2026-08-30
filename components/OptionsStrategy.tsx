@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { currencyPrefix } from "@/lib/format";
 import { daysUntil } from "@/lib/calendar";
+import { lognormalPopEv } from "@/lib/optionPayoffMath";
 import InfoDot from "@/components/InfoDot";
 
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
@@ -183,17 +184,13 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
     return { label: cs.label, pay: cpay, maxP: cslope > 1e-6 ? null : Math.max(...ck), maxL: cslope < -1e-6 ? null : Math.min(...ck), net: cnet };
   })() : null;
 
-  // probability of profit at the near expiry: lognormal (median ≈ spot, risk-neutral r≈0), σ = ATM IV
-  const pop = useMemo(() => {
-    const T = stratDte / 365;
-    if (!atmIV || atmIV <= 0 || T <= 0) return null;
-    const sd = atmIV * Math.sqrt(T), mu = Math.log(u) - 0.5 * atmIV * atmIV * T;
-    const N = 600, Slo = u * 0.1, Shi = u * 5, dS = (Shi - Slo) / N;
-    let inP = 0, tot = 0;
-    for (let i = 0; i < N; i++) { const S = Slo + (i + 0.5) * dS; const z = (Math.log(S) - mu) / sd; const w = (Math.exp(-0.5 * z * z) / (S * sd * 2.5066282746310002)) * dS; tot += w; if (pay(S) > 0) inP += w; }
-    return tot > 0 ? inP / tot : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [legs, u, atmIV, stratDte]);
+  // Probability of profit AND expected value at the near expiry: lognormal at ATM IV, ~zero drift. EV
+  // integrates payoff·density (skew is the edge — legs are priced at each strike's own IV). See lib.
+  const { pop, ev } = useMemo(() => lognormalPopEv(pay, u, atmIV, stratDte), [legs, u, atmIV, stratDte]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Expected return on the capital genuinely at risk (defined-risk trades): EV ÷ |max loss|.
+  const evRiskCap = maxLoss != null ? Math.abs(maxLoss) : netCost > 0 ? netCost : null;
+  const evPct = ev != null && evRiskCap ? ev / evRiskCap : null;
+  const popEvTrap = pop != null && ev != null && pop >= 0.6 && ev < 0; // frequent small win, negative expectancy
 
   // chart grid + break-evens
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
@@ -270,13 +267,20 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
         {dte != null && <span className="ml-auto text-[11px] text-[var(--text-4)]">{expiry} · {dte}d{stratKey === "calendar" && nextExpiry ? ` → ${nextExpiry}` : ""}</span>}
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Metric label={netCost >= 0 ? "Net debit" : "Net credit"} value={dollars(Math.abs(netCost))} sub={netCost >= 0 ? "you pay" : "you collect"} info={<InfoDot text={netCost >= 0 ? "Net premium you pay upfront to open the position (per contract, ×100)." : "Net premium you collect upfront for opening the position (per contract, ×100)."} />} />
         <Metric label="Max profit" value={maxProfit == null ? "Unlimited" : dollars(maxProfit)} color="#22c55e" info={<InfoDot text="The most the position can make at expiry." />} />
         <Metric label="Max loss" value={maxLoss == null ? "Unlimited" : dollars(maxLoss)} color="#ef4444" info={<InfoDot text="The most the position can lose at expiry." />} />
         <Metric label="Break-even" value={breakevens.length ? breakevens.map(price2).join(" / ") : "—"} info={<InfoDot term="Breakeven" />} />
         <Metric label="Prob. of profit" value={pop == null ? "—" : `${Math.round(pop * 100)}%`} sub={pop == null ? undefined : "lognormal · ATM IV"} info={<InfoDot term="POP" />} />
+        <Metric label="Expected value" value={ev == null ? "—" : dollars(ev)} color={ev == null ? undefined : ev >= 0 ? "#22c55e" : "#ef4444"} sub={evPct != null ? `${evPct >= 0 ? "+" : ""}${(evPct * 100).toFixed(0)}% on risk` : ev == null ? undefined : "at ATM IV, no drift"} info={<InfoDot text="Probability-weighted P/L under a lognormal at ATM implied vol with no directional drift. The legs are priced at each strike's own IV, so EV isolates the vol-skew + structural edge — it's positive when you're being paid richer vol than ATM for the risk you take. Not a forecast; it assumes realized vol = ATM IV." />} />
       </div>
+
+      {popEvTrap && (
+        <div className="mb-3 rounded-lg border px-3 py-1.5 text-[11px]" style={{ borderColor: "color-mix(in oklab, #f59e0b 40%, transparent)", background: "color-mix(in oklab, #f59e0b 8%, transparent)", color: "#f59e0b" }}>
+          ⚠ High hit-rate ({Math.round((pop as number) * 100)}%) but <b>negative expected value</b> ({dollars(ev as number)}) — the rare big loss outweighs the frequent small win. The classic premium-selling trap: a comfortable win rate that still loses money over many repeats.
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
         <span className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Net Greeks</span>

@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-ev-analyzer",
+    date: "2026-08-29",
+    title: "Expected value in the strategy analyzer",
+    items: [
+      "Any stock → Options → the strategy payoff analyzer now shows Expected value alongside probability-of-profit — the probability-weighted P/L under a lognormal at ATM implied vol, plus its return on the capital at risk. Because each leg is priced at its own strike's IV, EV captures the vol-skew and structural edge, not just the odds.",
+      "It flags the classic premium-selling trap directly: when a trade has a comfortable hit-rate but negative expectancy (the rare tail loss outweighing the frequent small win), you now get a warning instead of a reassuring high POP.",
+    ],
+  },
+  {
     id: "2026-08-29-sell-premium",
     date: "2026-08-29",
     title: "A Sell-Premium Board — where to sell option premium now",
