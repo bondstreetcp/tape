@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-wheel-manage",
+    date: "2026-08-29",
+    title: "A “Manage now” queue on the Wheel Tracker",
+    items: [
+      "The Wheel Tracker now opens with a prioritized Manage-now queue across your whole book — every open short leg that needs attention, worst first: expired, in-the-money (assignment risk), inside the roll window, or pinned near the strike, each with the suggested move and a jump to that name's Wheel tab. It pulls one live-price batch so the flags reflect where the stock actually is, not just the calendar.",
+      "You can now track the short-put (wheel entry) leg too — its strike and expiry — so the queue manages puts and covered calls alike, not just calls.",
+    ],
+  },
+  {
     id: "2026-08-29-ev-analyzer",
     date: "2026-08-29",
     title: "Expected value in the strategy analyzer",

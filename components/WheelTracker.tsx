@@ -1,14 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { wheelAlert, shortLegOf, SEVERITY_META, type Leg, type WheelPos, type WheelAlert } from "@/lib/wheelManage";
 
 // A lightweight wheel tracker — the cycle is sell puts → get assigned → sell calls → get called → repeat.
 // This logs your active wheels (which leg you're in, shares, cost basis, premium collected to date) and
 // shows the adjusted basis (basis − premium/share) + the next action. Book stays in the browser
 // (localStorage); nothing leaves the device. Decision-support, not advice.
-
-type Leg = "idle" | "put" | "shares" | "call";
-interface WheelPos { id: string; symbol: string; leg: Leg; shares: number; costBasis: number | null; premium: number; note: string; callStrike?: number | null; callExpiry?: string }
 
 const DAY = 86_400_000;
 const dteOf = (expiry?: string) => (expiry ? Math.round((Date.parse(expiry + "T00:00:00Z") - Date.now()) / DAY) : null);
@@ -33,6 +31,28 @@ export default function WheelTracker({ universe }: { universe: string }) {
   useEffect(() => { try { const r = JSON.parse(localStorage.getItem(KEY) || "[]"); if (Array.isArray(r)) setRows(r); } catch { /* ignore */ } setLoaded(true); }, []);
   const persist = (r: WheelPos[]) => { setRows(r); try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
+  // Live prices for the "Manage now" queue — one batch /api/quote call for every tracked symbol.
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const symKey = useMemo(() => [...new Set(rows.map((r) => r.symbol).filter(Boolean))].sort().join(","), [rows]);
+  useEffect(() => {
+    if (!symKey) { setPrices({}); return; }
+    let alive = true;
+    fetch(`/api/quote?symbols=${encodeURIComponent(symKey)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!alive) return; const m: Record<string, number> = {}; for (const q of d.quotes || []) if (q?.symbol && typeof q.price === "number") m[String(q.symbol).toUpperCase()] = q.price; setPrices(m); })
+      .catch(() => { /* prices stay empty — the queue degrades to expiry-based flags */ });
+    return () => { alive = false; };
+  }, [symKey]);
+
+  // The prioritized management queue: every open short leg that needs attention, worst first.
+  const alerts = useMemo(() => {
+    const now = Date.now();
+    return rows
+      .map((r) => ({ r, a: wheelAlert(r, prices[r.symbol] ?? null, now) }))
+      .filter((x): x is { r: WheelPos; a: WheelAlert } => x.a != null && x.a.severity >= 1)
+      .sort((x, y) => y.a.severity - x.a.severity || x.a.dte - y.a.dte);
+  }, [rows, prices]);
+
   const blank = (): WheelPos => ({ id: uid(), symbol: "", leg: "shares", shares: 100, costBasis: null, premium: 0, note: "" });
   const save = () => {
     if (!draft || !draft.symbol.trim()) return;
@@ -45,7 +65,6 @@ export default function WheelTracker({ universe }: { universe: string }) {
   const adjBasis = (r: WheelPos) => (r.costBasis != null && r.shares > 0 ? r.costBasis - r.premium / r.shares : null);
   const totalPrem = rows.reduce((s, r) => s + (r.premium || 0), 0);
   const capital = rows.reduce((s, r) => s + ((r.leg === "shares" || r.leg === "call") && r.costBasis ? r.costBasis * r.shares : 0), 0);
-  const needRoll = rows.filter((r) => r.leg === "call" && (dteOf(r.callExpiry) ?? 99) <= 7).length;
   const nextAction = (r: WheelPos): { label: string; href: string } =>
     r.leg === "shares" ? { label: "Sell a call →", href: `/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel` }
       : r.leg === "call" ? { label: "Roll / manage →", href: `/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel` }
@@ -69,7 +88,33 @@ export default function WheelTracker({ universe }: { universe: string }) {
           <span className="text-[var(--text-3)]">Active wheels <b className="text-[var(--text)]">{rows.length}</b></span>
           <span className="text-[var(--text-3)]">Premium collected <b className="text-[#22c55e]">{money(totalPrem, 0)}</b></span>
           <span className="text-[var(--text-3)]">Capital in shares <b className="text-[var(--text)]">{money(capital, 0)}</b></span>
-          {needRoll > 0 && <span className="font-semibold text-[#f59e0b]">⏰ {needRoll} to roll</span>}
+          {alerts.length > 0 && <span className="font-semibold text-[#f59e0b]">⚠ {alerts.length} to manage</span>}
+        </div>
+      )}
+
+      {/* Manage-now queue — every open short leg needing attention, worst first, from the live price. */}
+      {alerts.length > 0 && (
+        <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">
+            Manage now <span className="rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--text-3)]">{alerts.length}</span>
+            {symKey && Object.keys(prices).length === 0 && <span className="font-normal normal-case text-[var(--text-4)]">· live prices unavailable — showing expiry-based flags only</span>}
+          </div>
+          <ul className="space-y-1.5">
+            {alerts.map(({ r, a }) => {
+              const m = SEVERITY_META[a.severity];
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[13px]">
+                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ background: `${m.color}22`, color: m.color }}>{m.label}</span>
+                  <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel`} className="font-mono font-semibold text-[var(--accent)] hover:underline">{r.symbol}</Link>
+                  <span className="text-[var(--text-3)]">short {a.side} ${a.strike} · {fmtDay(a.expiry)}</span>
+                  <span className="font-medium" style={{ color: m.color }}>{a.flag}</span>
+                  <span className="text-[var(--text-4)]">{a.detail}</span>
+                  <span className="ml-auto text-[12px] text-[var(--text-2)]">{a.action}</span>
+                  <Link href={`/u/${universe}/stock/${encodeURIComponent(r.symbol)}?tab=wheel`} className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--accent)] hover:border-[var(--border-strong)]">manage →</Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -88,6 +133,13 @@ export default function WheelTracker({ universe }: { universe: string }) {
               <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Open call strike<input type="number" step={0.5} className={inp + " tabular-nums"} value={draft.callStrike ?? ""} onChange={(e) => setDraft({ ...draft, callStrike: e.target.value ? Number(e.target.value) : null })} placeholder="strike you sold" /></label>
               <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Call expiry<input type="date" className={inp} value={draft.callExpiry ?? ""} onChange={(e) => setDraft({ ...draft, callExpiry: e.target.value })} /></label>
               <div className="flex items-end text-[11px] text-[var(--text-4)]">so the tracker can remind you to roll near expiry</div>
+            </div>
+          )}
+          {draft.leg === "put" && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Short put strike<input type="number" step={0.5} className={inp + " tabular-nums"} value={draft.putStrike ?? ""} onChange={(e) => setDraft({ ...draft, putStrike: e.target.value ? Number(e.target.value) : null })} placeholder="strike you sold" /></label>
+              <label className="flex flex-col gap-0.5 text-[11px] text-[var(--text-4)]">Put expiry<input type="date" className={inp} value={draft.putExpiry ?? ""} onChange={(e) => setDraft({ ...draft, putExpiry: e.target.value })} /></label>
+              <div className="flex items-end text-[11px] text-[var(--text-4)]">so the queue can flag assignment / roll as it nears your strike</div>
             </div>
           )}
           <div className="mt-2 flex gap-2">
@@ -114,6 +166,7 @@ export default function WheelTracker({ universe }: { universe: string }) {
               {rows.map((r) => {
                 const leg = legOf(r.leg); const ab = adjBasis(r); const act = nextAction(r);
                 const cdte = r.leg === "call" ? dteOf(r.callExpiry) : null;
+                const pdte = r.leg === "put" ? dteOf(r.putExpiry) : null;
                 const rollSoon = cdte != null && cdte <= 7;
                 return (
                   <tr key={r.id} className="border-b border-[var(--divider)] last:border-0 hover:bg-[var(--surface-hover)]">
@@ -123,6 +176,11 @@ export default function WheelTracker({ universe }: { universe: string }) {
                       {r.leg === "call" && r.callExpiry && (
                         <div className="mt-0.5 text-[10px] text-[var(--text-4)]">
                           {r.callStrike ? `$${r.callStrike} ` : ""}{fmtDay(r.callExpiry)}{cdte != null && (cdte < 0 ? <span className="ml-1 font-semibold text-[#ef4444]">expired</span> : rollSoon ? <span className="ml-1 font-semibold text-[#f59e0b]">⏰ {cdte}d — roll soon</span> : <span className="ml-1">{cdte}d</span>)}
+                        </div>
+                      )}
+                      {r.leg === "put" && r.putExpiry && (
+                        <div className="mt-0.5 text-[10px] text-[var(--text-4)]">
+                          {r.putStrike ? `$${r.putStrike} ` : ""}{fmtDay(r.putExpiry)}{pdte != null && (pdte < 0 ? <span className="ml-1 font-semibold text-[#ef4444]">expired</span> : pdte <= 7 ? <span className="ml-1 font-semibold text-[#f59e0b]">⏰ {pdte}d</span> : <span className="ml-1">{pdte}d</span>)}
                         </div>
                       )}
                     </td>
