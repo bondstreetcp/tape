@@ -31,16 +31,22 @@ export default function WheelTracker({ universe }: { universe: string }) {
   useEffect(() => { try { const r = JSON.parse(localStorage.getItem(KEY) || "[]"); if (Array.isArray(r)) setRows(r); } catch { /* ignore */ } setLoaded(true); }, []);
   const persist = (r: WheelPos[]) => { setRows(r); try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
-  // Live prices for the "Manage now" queue — one batch /api/quote call for every tracked symbol.
+  // Live prices + event dates for the "Manage now" queue — one /api/quote batch + one /api/wheel-events
+  // batch (earnings + ex-div, which the plain quote can't carry) for every tracked symbol.
   const [prices, setPrices] = useState<Record<string, number>>({});
+  const [events, setEvents] = useState<Record<string, { earningsDate: string | null; exDivDate: string | null }>>({});
   const symKey = useMemo(() => [...new Set(rows.map((r) => r.symbol).filter(Boolean))].sort().join(","), [rows]);
   useEffect(() => {
-    if (!symKey) { setPrices({}); return; }
+    if (!symKey) { setPrices({}); setEvents({}); return; }
     let alive = true;
     fetch(`/api/quote?symbols=${encodeURIComponent(symKey)}`)
       .then((r) => r.json())
       .then((d) => { if (!alive) return; const m: Record<string, number> = {}; for (const q of d.quotes || []) if (q?.symbol && typeof q.price === "number") m[String(q.symbol).toUpperCase()] = q.price; setPrices(m); })
       .catch(() => { /* prices stay empty — the queue degrades to expiry-based flags */ });
+    fetch(`/api/wheel-events?symbols=${encodeURIComponent(symKey)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!alive) return; const m: Record<string, { earningsDate: string | null; exDivDate: string | null }> = {}; for (const e of d.events || []) if (e?.symbol) m[String(e.symbol).toUpperCase()] = { earningsDate: e.earningsDate ?? null, exDivDate: e.exDivDate ?? null }; setEvents(m); })
+      .catch(() => { /* event dates are optional — the queue still flags on price + expiry */ });
     return () => { alive = false; };
   }, [symKey]);
 
@@ -48,10 +54,10 @@ export default function WheelTracker({ universe }: { universe: string }) {
   const alerts = useMemo(() => {
     const now = Date.now();
     return rows
-      .map((r) => ({ r, a: wheelAlert(r, prices[r.symbol] ?? null, now) }))
+      .map((r) => ({ r, a: wheelAlert(r, { price: prices[r.symbol] ?? null, earningsDate: events[r.symbol]?.earningsDate ?? null, exDivDate: events[r.symbol]?.exDivDate ?? null }, now) }))
       .filter((x): x is { r: WheelPos; a: WheelAlert } => x.a != null && x.a.severity >= 1)
       .sort((x, y) => y.a.severity - x.a.severity || x.a.dte - y.a.dte);
-  }, [rows, prices]);
+  }, [rows, prices, events]);
 
   const blank = (): WheelPos => ({ id: uid(), symbol: "", leg: "shares", shares: 100, costBasis: null, premium: 0, note: "" });
   const save = () => {

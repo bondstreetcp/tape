@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-options-risk",
+    date: "2026-08-29",
+    title: "Ex-div & earnings flags on the wheel queue + a vol P&L surface in Prism",
+    items: [
+      "The Wheel Tracker's Manage-now queue now flags two more risks per position: an ITM short call heading into an ex-dividend (early-assignment risk — roll or close to keep the shares & dividend), and any short leg whose expiry spans an earnings print. Dates come from the options calendar, so the queue sees the events, not just the strike and clock.",
+      "Prism (your book) gains a 2-D P&L surface — book P&L across an S&P move AND an independent implied-vol shift, options repriced. The old market-shock ladder coupled vol to the move; this frees vol as its own axis, so a long-vega book greens the IV-spike row while a short-vega book (short strangles, cash-secured puts) shows exactly where it bleeds.",
+    ],
+  },
+  {
     id: "2026-08-29-wheel-manage",
     date: "2026-08-29",
     title: "A “Manage now” queue on the Wheel Tracker",

@@ -435,6 +435,17 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
     }, volPts);
     return { pnl: r.pnl, convexity: r.convexity, volPts };
   }, [options, dataMap]);
+
+  // Same beta-propagated options repricing, but with vol as an INDEPENDENT axis (the 2-D P&L surface),
+  // rather than coupled to the move like optionConvexity above. Returns the convexity beyond delta.
+  const optionConvexityAt = useCallback((marketMovePct: number, volPts: number): number => {
+    if (!options?.legs.length) return 0;
+    const m = marketMovePct / 100;
+    return scenarioOptionsPnl(options.legs, (sym) => {
+      const b = dataMap.get(sym)?.beta;
+      return typeof b === "number" && Number.isFinite(b) ? b * m : NaN;
+    }, volPts).convexity;
+  }, [options, dataMap]);
   const themeExp = useMemo(() => { const tags = parseTags(themesText); return tags.size ? themeExposure(stats.holdings, tags) : null; }, [themesText, stats.holdings]);
   const today = useMemo(() => dayAttribution(stats.holdings.map((h) => ({ symbol: h.symbol, value: h.value, ret1d: h.ret1d, name: h.name })), riskBase), [stats.holdings, riskBase]);
   // Retail TL;DR — a plain-English read of the numbers below (deterministic, no LLM).
@@ -952,6 +963,47 @@ export default function PortfolioCockpit({ universe }: { universe: string }) {
                   );
                 })()}
               </div>
+
+              {/* 2-D P&L surface — market move × INDEPENDENT vol shift (options books only; equity is vol-flat) */}
+              {options?.legs.length ? (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold">P&amp;L surface — market move × vol shift</span>
+                    <span className="text-[11px] text-[var(--text-4)]">options repriced · vol as a free axis</span>
+                  </div>
+                  {(() => {
+                    const moves = [-10, -5, 0, 5, 10];
+                    const vols = [10, 5, 0, -5, -10]; // top row = IV spike, bottom = IV crush
+                    const cellPnl = (mv: number, vp: number) => scenarioPnL(stats, mv).dollar + optionConvexityAt(mv, vp);
+                    const cells = vols.map((vp) => moves.map((mv) => cellPnl(mv, vp)));
+                    const mag = Math.max(1, ...cells.flat().map((v) => Math.abs(v)));
+                    const bg = (v: number) => `rgba(${v >= 0 ? "34,197,94" : "239,68,68"},${Math.min(0.42, (Math.abs(v) / mag) * 0.42)})`;
+                    return (
+                      <>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[440px] text-right text-[11px] tabular-nums">
+                            <thead>
+                              <tr className="text-[var(--text-4)]">
+                                <th className="px-2 py-1 text-left font-medium">IV \ S&amp;P</th>
+                                {moves.map((mv) => <th key={mv} className="px-2 py-1 font-medium" style={{ color: mv === 0 ? "var(--text-3)" : pos(mv) ? "var(--pos)" : "var(--neg)" }}>{mv > 0 ? "+" : ""}{mv}%</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vols.map((vp, r) => (
+                                <tr key={vp} className={vp === 0 ? "font-semibold" : ""}>
+                                  <td className="px-2 py-1 text-left text-[var(--text-3)]">{vp > 0 ? "+" : ""}{vp}pt</td>
+                                  {cells[r].map((v, c) => <td key={c} className="px-2 py-1" style={{ backgroundColor: bg(v), color: v >= 0 ? "var(--pos)" : "var(--neg)" }}>{signMoney(v)}</td>)}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-4)]">Book P&amp;L if the S&amp;P moves (columns, beta-propagated) <b>and</b> implied vol shifts independently (rows) — the axis the 1-D ladder above couples to the move. The center is ~flat; a long-vega book greens the top (IV spike) row, a short-vega book (short strangles / CSPs) bleeds there. Options repriced Black-Scholes; equity is first-order via beta. Directional, not a forecast.</p>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : null}
 
               {/* Historical stress */}
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
