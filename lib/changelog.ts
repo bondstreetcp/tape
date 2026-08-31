@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-rank-structures",
+    date: "2026-08-29",
+    title: "The strategy analyzer now ranks structures, not just models one",
+    items: [
+      "Any stock → Options → the strategy payoff analyzer gains a “Rank structures” scan: it scores the premium / defined-risk structures — cash-secured put, bull-put & bear-call credit spreads, iron condor, covered call, short strangle — at sensible strikes and ranks them by expected return on capital-at-risk (skew-aware, from the market's implied distribution where available). ★ marks the best; click any row to load it in and tune the strikes. Instead of only modeling the structure you picked, it tells you which one fits the name right now.",
+    ],
+  },
+  {
     id: "2026-08-29-convertibles",
     date: "2026-08-29",
     title: "Convertible & Capped-Call Watch",

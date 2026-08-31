@@ -142,6 +142,7 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
   const [stratKey, setStratKey] = useState<StratKey>("long-call");
   const [ov, setOv] = useState<(number | null)[]>([]); // per-strike overrides; reset on strategy change
   const [showGrid, setShowGrid] = useState(true);
+  const [showRank, setShowRank] = useState(false); // the "rank structures" scan (collapsed by default)
   const [ivShift, setIvShift] = useState(0); // ± IV %, applied to the scenario-grid valuation only
   const [cmpKey, setCmpKey] = useState<StratKey | "">(""); // optional 2nd structure to overlay
   // The market's own risk-neutral density (fitted smile / Breeden–Litzenberger) — powers the skew-aware
@@ -217,6 +218,26 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
     return best;
   }, [dist, dte]);
   const market = useMemo(() => (mktDist?.pts?.length ? densityPopEv(pay, mktDist.pts) : { pop: null, ev: null }), [mktDist, legs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Rank structures" scan — each premium / defined-risk structure at its DEFAULT strikes, scored by
+  // expected return on capital-at-risk (skew-aware EV where the density exists). A plain const (cheap:
+  // ~6 structures) so it stays clear of the hook-order rules after the early return above.
+  const RANK_KEYS: StratKey[] = ["csp", "bull-put", "iron-condor", "covered-call", "bear-call", "short-strangle"];
+  const ranked = RANK_KEYS.map((key) => {
+    const cs = STRATS.find((s) => s.key === key)!;
+    const rl = buildLegs(key, cs.strikes.map((spec) => at(spec.off)), { u, callBy, putBy, stratDte, atmIV, nextDte, nextIV: nextIV ?? null });
+    const rp = valueAt(rl, stratDte, stratDte, atmIV);
+    const net = rl.reduce((s, l) => s + (l.side === "buy" ? 1 : -1) * l.premium * l.qty, 0) * 100;
+    const kv = [0, ...strikes, far].map(rp);
+    const slope = rp(far) - rp(far - Math.max(0.01, u * 0.002));
+    const maxL = slope < -1e-6 ? null : Math.min(...kv);
+    const ln = lognormalPopEv(rp, u, atmIV, stratDte);
+    const mk = mktDist?.pts?.length ? densityPopEv(rp, mktDist.pts) : { pop: null, ev: null };
+    const ev = mk.ev ?? ln.ev;
+    const pop = mk.pop ?? ln.pop;
+    const risk = maxL != null ? Math.abs(maxL) : net > 0 ? net : null;
+    return { key, label: cs.label, net, maxL, pop, ev, evRisk: ev != null && risk ? ev / risk : null };
+  }).sort((a, b) => (b.evRisk ?? -Infinity) - (a.evRisk ?? -Infinity));
 
   // chart grid + break-evens
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
@@ -426,6 +447,44 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
         ) : (
           <p className="text-xs text-[var(--text-4)]">Pick an expiry at least a few days out to model intermediate dates.</p>
         ))}
+      </div>
+
+      {/* Rank structures — the "which structure fits" scan, each at default strikes, by EV-on-risk. */}
+      <div className="mt-4 border-t border-[var(--divider)] pt-3">
+        <button onClick={() => setShowRank((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
+          <span className="text-[11px]">{showRank ? "▾" : "▸"}</span> Rank structures · best expected return on risk
+        </button>
+        {showRank && (
+          <>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[440px] text-right text-[11px] tabular-nums">
+                <thead>
+                  <tr className="text-[var(--text-4)]">
+                    <th className="px-2 py-1 text-left font-medium">Structure</th>
+                    <th className="px-2 py-1 font-medium">Credit</th>
+                    <th className="px-2 py-1 font-medium">POP</th>
+                    <th className="px-2 py-1 font-medium">EV</th>
+                    <th className="px-2 py-1 font-medium" title="Expected value ÷ capital at risk (max loss). Blank = undefined-risk.">EV/risk</th>
+                    <th className="px-2 py-1 font-medium">Max loss</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranked.map((x, i) => (
+                    <tr key={x.key} onClick={() => { setStratKey(x.key); setOv([]); }} className={"cursor-pointer border-t border-[var(--divider)] hover:bg-[var(--surface-2)] " + (x.key === stratKey ? "bg-[var(--surface-2)]" : "")} title="Load this structure into the analyzer above to tune its strikes">
+                      <td className="px-2 py-1 text-left">{i === 0 && <span className="mr-1 text-[#22c55e]" title="Best EV on risk">★</span>}<span className={x.key === stratKey ? "font-semibold text-[var(--text)]" : "text-[var(--text-2)]"}>{x.label}</span></td>
+                      <td className="px-2 py-1" style={{ color: x.net <= 0 ? "#22c55e" : "var(--text-3)" }}>{(x.net <= 0 ? "+" : "−") + sym + Math.abs(x.net).toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
+                      <td className="px-2 py-1 text-[var(--text-3)]">{x.pop != null ? Math.round(x.pop * 100) + "%" : "—"}</td>
+                      <td className="px-2 py-1" style={{ color: x.ev == null ? "var(--text-4)" : x.ev >= 0 ? "#22c55e" : "#ef4444" }}>{x.ev != null ? dollars(x.ev) : "—"}</td>
+                      <td className="px-2 py-1" style={{ color: x.evRisk == null ? "var(--text-4)" : x.evRisk >= 0 ? "#22c55e" : "#ef4444" }}>{x.evRisk != null ? (x.evRisk >= 0 ? "+" : "") + (x.evRisk * 100).toFixed(0) + "%" : "—"}</td>
+                      <td className="px-2 py-1 text-[#ef4444]">{x.maxL == null ? "Unlim" : dollars(x.maxL)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-4)]">Each structure at its DEFAULT strikes, ranked by EV ÷ capital-at-risk ({mktDist ? "skew-aware, from the market density" : "lognormal at ATM IV"}). ★ = best; click a row to load it above and tune the strikes. Defined-risk spreads are more capital-efficient by construction, so they rank above cash-secured single legs — read EV &amp; POP too. Decision support, not advice.</p>
+          </>
+        )}
       </div>
 
       {/* The market's implied price distribution at expiry (fitted smile / Breeden–Litzenberger) — the
