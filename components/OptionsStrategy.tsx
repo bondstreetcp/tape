@@ -18,6 +18,8 @@ const STRATS = [
   { key: "collar", label: "Collar", outlook: "Protect a holding", strikes: [{ label: "Put", off: -2 }, { label: "Call", off: 2 }] },
   { key: "bull-call", label: "Bull Call Spread", outlook: "Bullish · defined risk", strikes: [{ label: "Long", off: 0 }, { label: "Short", off: 3 }] },
   { key: "bear-put", label: "Bear Put Spread", outlook: "Bearish · defined risk", strikes: [{ label: "Short", off: -3 }, { label: "Long", off: 0 }] },
+  { key: "bull-put", label: "Bull Put Spread (sell)", outlook: "Neutral-bullish · credit", strikes: [{ label: "Long put", off: -4 }, { label: "Short put", off: -2 }] },
+  { key: "bear-call", label: "Bear Call Spread (sell)", outlook: "Neutral-bearish · credit", strikes: [{ label: "Short call", off: 2 }, { label: "Long call", off: 4 }] },
   { key: "call-ratio", label: "Call Ratio (1×2)", outlook: "Mildly bullish · skew", strikes: [{ label: "Long", off: 0 }, { label: "Short ×2", off: 3 }] },
   { key: "butterfly", label: "Long Butterfly", outlook: "Pinned · defined risk", strikes: [{ label: "Low", off: -2 }, { label: "Body", off: 0 }, { label: "High", off: 2 }] },
   { key: "straddle", label: "Long Straddle", outlook: "Big move either way", strikes: [{ label: "Strike", off: 0 }] },
@@ -93,6 +95,8 @@ function buildLegs(key: StratKey, ks: number[], ctx: Ctx): Leg[] {
     case "collar": return [{ kind: "stock", side: "buy", premium: u, qty: 1 }, P("buy", s[0]), C("sell", s[1])];
     case "bull-call": return [C("buy", s[0]), C("sell", s[1])];
     case "bear-put": return [P("buy", s[1]), P("sell", s[0])];
+    case "bull-put": return [P("sell", s[1]), P("buy", s[0])]; // sell the higher put, buy the lower → credit
+    case "bear-call": return [C("sell", s[0]), C("buy", s[1])]; // sell the lower call, buy the higher → credit
     case "call-ratio": return [C("buy", s[0]), C("sell", s[1], 2)];
     case "butterfly": return [C("buy", s[0]), C("sell", s[1], 2), C("buy", s[2])];
     case "straddle": return [C("buy", ks[0]), P("buy", ks[0])];
