@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-analyzer-sizing",
+    date: "2026-08-29",
+    title: "Breakevens on the distribution + position sizing in the analyzer",
+    items: [
+      "The strategy analyzer's implied-distribution chart now overlays your structure's breakevens — each with the market-implied probability the stock finishes below it — so you see how much probability mass actually sits beyond your break-even, not just where it is.",
+      "New Position sizing panel: enter your account size and risk %, and it returns a fixed-risk contract count (risk budget ÷ the trade's max loss) plus a Kelly / half-Kelly estimate from the structure's win probability and payoff ratio. Half-Kelly is the prudent default; a negative edge tells you to pass. Stays in your browser.",
+    ],
+  },
+  {
     id: "2026-08-29-rank-structures",
     date: "2026-08-29",
     title: "The strategy analyzer now ranks structures, not just models one",

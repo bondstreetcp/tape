@@ -25,7 +25,7 @@ const W = 680,
 // The market-implied probability distribution of the stock at expiry, extracted from the fitted smile via
 // Breeden–Litzenberger. The area is split at spot — red mass below, green above — so the asymmetry the
 // options market is pricing (fat downside tail, upside skew) is visible at a glance.
-export default function ImpliedDistribution({ dist, spot, currency = "USD" }: { dist: DistExp[]; spot: number; currency?: string }) {
+export default function ImpliedDistribution({ dist, spot, currency = "USD", markers }: { dist: DistExp[]; spot: number; currency?: string; markers?: { price: number; label: string }[] }) {
   const [idx, setIdx] = useState(0);
   if (!dist?.length) return null;
   const sel = dist[Math.min(idx, dist.length - 1)];
@@ -52,6 +52,22 @@ export default function ImpliedDistribution({ dist, spot, currency = "USD" }: { 
   };
   const sC = Math.max(xmin, Math.min(xmax, spot));
   const dSpot = densAt(sC);
+
+  // Market-implied P(S_T < price) at expiry — integrate the (normalized) density up to `price`. Used to
+  // show the probability mass beyond a structure's breakeven(s).
+  const cdfAt = (price: number): number => {
+    let tot = 0, below = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, d0] = pts[i - 1], [x1, d1] = pts[i];
+      const dx = x1 - x0;
+      if (dx <= 0) continue;
+      const area = ((d0 + d1) / 2) * dx;
+      tot += area;
+      if (x1 <= price) below += area;
+      else if (x0 < price) below += area * ((price - x0) / dx);
+    }
+    return tot > 0 ? below / tot : 0;
+  };
 
   const seg = (p: [number, number]) => `L ${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`;
   const downPath = `M ${x(xmin).toFixed(1)} ${baseY} ${pts.filter((p) => p[0] <= sC).map(seg).join(" ")} L ${x(sC).toFixed(1)} ${y(dSpot).toFixed(1)} L ${x(sC).toFixed(1)} ${baseY} Z`;
@@ -103,6 +119,12 @@ export default function ImpliedDistribution({ dist, spot, currency = "USD" }: { 
           {vline(sel.p84, "var(--text-4)", "2 2", 0.8)}
           {vline(sel.p50, "#60a5fa", "0", 0.9)}
           {spot >= xmin && spot <= xmax && vline(spot, "var(--text)", "4 2", 0.65)}
+          {(markers ?? []).filter((m) => m.price >= xmin && m.price <= xmax).map((m, i) => (
+            <g key={"be" + i}>
+              {vline(m.price, "#f59e0b", "3 2", 0.9)}
+              <text x={x(m.price)} y={MT + 8} textAnchor="middle" fontSize={8} fill="#f59e0b">BE</text>
+            </g>
+          ))}
           {/* axis labels */}
           <text x={x(sel.p16)} y={H - 6} fontSize={8.5} textAnchor="middle" fill="var(--text-4)" className="tabular-nums">{fmt(sel.p16)}</text>
           <text x={x(sel.p84)} y={H - 6} fontSize={8.5} textAnchor="middle" fill="var(--text-4)" className="tabular-nums">{fmt(sel.p84)}</text>
@@ -122,6 +144,11 @@ export default function ImpliedDistribution({ dist, spot, currency = "USD" }: { 
         <span style={{ color: skewTag.c }} title="Skewness of the implied distribution. Downside-skewed (fat left tail) is the equity norm — the options market pays up for crash protection.">
           skew {sel.skew > 0 ? "+" : ""}{sel.skew.toFixed(2)} · {skewTag.t}<InfoDot text="Asymmetry of the implied distribution: a fat left tail (downside-skewed) is the equity norm; a fat right tail flags priced-in upside (buyout, squeeze)." />
         </span>
+        {markers?.length ? (
+          <span className="text-[var(--text-3)]" title="Your structure's breakeven price(s), with the market-implied probability the stock finishes BELOW each at this expiry.">
+            breakeven{markers.length > 1 ? "s" : ""} <b style={{ color: "#f59e0b" }}>{markers.map((m) => `${fmt(m.price)} (${Math.round(cdfAt(m.price) * 100)}%↓)`).join(" · ")}</b>
+          </span>
+        ) : null}
       </div>
       <p className="mt-1 text-[10px] text-[var(--text-4)]">
         Extracted from the fitted smile (Breeden–Litzenberger): f(K) = e<sup>rT</sup>·∂²C/∂K². The body is anchored to live quotes; the far tails are the smile model&apos;s extrapolation.

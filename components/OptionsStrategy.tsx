@@ -157,6 +157,16 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
       .catch(() => { if (alive) setDist(null); });
     return () => { alive = false; };
   }, [symbol]);
+  // Position-sizing inputs, persisted across names in the browser.
+  const [acct, setAcct] = useState(100000);
+  const [riskPct, setRiskPct] = useState(2);
+  const [showSize, setShowSize] = useState(false);
+  useEffect(() => {
+    try {
+      const a = Number(localStorage.getItem("tape.acctSize")); if (a > 0) setAcct(a);
+      const r = Number(localStorage.getItem("tape.riskPct")); if (r > 0) setRiskPct(r);
+    } catch { /* ignore */ }
+  }, []);
   const strat = STRATS.find((s) => s.key === stratKey)!;
 
   const at = (off: number) => strikes[Math.min(strikes.length - 1, Math.max(0, atmIdx + off))];
@@ -238,6 +248,22 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
     const risk = maxL != null ? Math.abs(maxL) : net > 0 ? net : null;
     return { key, label: cs.label, net, maxL, pop, ev, evRisk: ev != null && risk ? ev / risk : null };
   }).sort((a, b) => (b.evRisk ?? -Infinity) - (a.evRisk ?? -Infinity));
+
+  // Position sizing from the current structure's per-contract risk + edge.
+  const sizing = (() => {
+    const p = market.pop ?? pop;
+    const ml = maxLoss != null ? Math.abs(maxLoss) : null; // per-contract capital at risk
+    if (ml == null || ml <= 0) return null;
+    const fixed = Math.floor((acct * (riskPct / 100)) / ml);
+    let kellyF: number | null = null;
+    if (p != null && maxProfit != null && maxProfit > 0) {
+      const b = maxProfit / ml; // win/loss payoff ratio
+      kellyF = p - (1 - p) / b; // Kelly fraction of bankroll to put at risk
+    }
+    const kellyC = kellyF != null && kellyF > 0 ? Math.floor((kellyF * acct) / ml) : 0;
+    const halfC = kellyF != null && kellyF > 0 ? Math.floor((0.5 * kellyF * acct) / ml) : 0;
+    return { ml, fixed, kellyF, kellyC, halfC };
+  })();
 
   // chart grid + break-evens
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
@@ -449,6 +475,30 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
         ))}
       </div>
 
+      {/* Position sizing — fixed-risk + Kelly from this structure's max loss + win probability. */}
+      <div className="mt-4 border-t border-[var(--divider)] pt-3">
+        <button onClick={() => setShowSize((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
+          <span className="text-[11px]">{showSize ? "▾" : "▸"}</span> Position sizing
+        </button>
+        {showSize && (
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
+              <label className="flex items-center gap-1.5 text-[var(--text-3)]">Account {sym}<input type="number" value={acct} onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setAcct(v); try { localStorage.setItem("tape.acctSize", String(v)); } catch { /* ignore */ } }} className="w-28 rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-right tabular-nums outline-none" /></label>
+              <label className="flex items-center gap-1.5 text-[var(--text-3)]">Risk %<input type="number" step={0.5} value={riskPct} onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setRiskPct(v); try { localStorage.setItem("tape.riskPct", String(v)); } catch { /* ignore */ } }} className="w-16 rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-right tabular-nums outline-none" /></label>
+            </div>
+            {sizing ? (
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+                <span className="text-[var(--text-2)]">Fixed-risk <b>{sizing.fixed}</b> contract{sizing.fixed === 1 ? "" : "s"} <span className="text-[var(--text-4)]">({riskPct}% = {dollars(acct * riskPct / 100)} ÷ {dollars(sizing.ml)} max loss)</span></span>
+                {sizing.kellyF != null ? (sizing.kellyF > 0
+                  ? <span className="text-[var(--text-2)]">Kelly ({(sizing.kellyF * 100).toFixed(0)}%) <b>{sizing.kellyC}</b> · half-Kelly <b>{sizing.halfC}</b></span>
+                  : <span className="font-medium text-[#ef4444]">Kelly: negative edge — it says pass</span>) : null}
+              </div>
+            ) : <p className="text-[12px] text-[var(--text-4)]">Undefined-risk structure — size by margin / assignment, not a fixed max loss.</p>}
+            <p className="text-[11px] leading-relaxed text-[var(--text-4)]">Fixed-risk = your risk budget ÷ the trade&apos;s max loss per contract. Kelly uses this structure&apos;s win probability and max-profit/max-loss as a binary proxy (an approximation for option payoffs) — <b>half-Kelly</b> is the prudent default; full Kelly is aggressive. Not advice.</p>
+          </div>
+        )}
+      </div>
+
       {/* Rank structures — the "which structure fits" scan, each at default strikes, by EV-on-risk. */}
       <div className="mt-4 border-t border-[var(--divider)] pt-3">
         <button onClick={() => setShowRank((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)]">
@@ -489,7 +539,7 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
 
       {/* The market's implied price distribution at expiry (fitted smile / Breeden–Litzenberger) — the
           picture behind the market-implied POP/EV above; red mass below spot, green above. */}
-      {dist?.length ? <ImpliedDistribution dist={dist} spot={u} currency={currency} /> : null}
+      {dist?.length ? <ImpliedDistribution dist={dist} spot={u} currency={currency} markers={breakevens.map((b) => ({ price: b, label: price2(b) }))} /> : null}
     </div>
   );
 }
