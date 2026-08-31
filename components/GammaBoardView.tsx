@@ -42,7 +42,7 @@ function MarketTile({ row }: { row: GammaBoardRow }) {
   );
 }
 
-function Row({ universe, r }: { universe: string; r: GammaBoardRow }) {
+function Row({ universe, r, cappedCap }: { universe: string; r: GammaBoardRow; cappedCap?: number | null }) {
   const c = r.regime === "short" ? SHORT : LONG;
   const nf = nearFlip(r);
   const isEtf = r.sector === "Index ETF";
@@ -66,14 +66,18 @@ function Row({ universe, r }: { universe: string; r: GammaBoardRow }) {
         {r.distToFlipPct == null ? "—" : `${r.distToFlipPct >= 0 ? "+" : ""}${r.distToFlipPct.toFixed(1)}%`}
       </td>
       <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.pcRatio == null ? "var(--text-4)" : r.pcRatio >= 1.3 ? SHORT : r.pcRatio <= 0.7 ? LONG : "var(--text-3)" }} title="Put ÷ call open interest — ≥1.3 put-heavy (amber), ≤0.7 call-heavy (green)">{r.pcRatio ?? "—"}</td>
-      <td className="px-2 py-2 text-right font-mono tabular-nums text-[#22c55e]">{r.callWall?.strike ?? "—"}</td>
+      <td className="px-2 py-2 text-right font-mono tabular-nums text-[#22c55e]">
+        {r.callWall?.strike ?? "—"}
+        {cappedCap != null && <div className="text-[10px] font-semibold text-[#a855f7]" title={`Convertible capped-call cap $${cappedCap} — the issuer bought a call spread, so its hedge dealers are SHORT gamma up here: an extra upside resistance / pin beyond the OI call wall. See Convertible Watch.`}>⌐ cap {cappedCap}</div>}
+      </td>
       <td className="px-3 py-2 text-right font-mono tabular-nums text-[#ef4444]">{r.putWall?.strike ?? "—"}</td>
     </tr>
   );
 }
 
-export default function GammaBoardView({ universe, data }: { universe: string; data: GammaBoardData }) {
+export default function GammaBoardView({ universe, data, cappedCaps }: { universe: string; data: GammaBoardData; cappedCaps?: Record<string, number> }) {
   const [sort, setSort] = useState<GammaSort>("gross");
+  const capN = useMemo(() => (data.rows ?? []).filter((r) => cappedCaps?.[r.symbol] != null).length, [data.rows, cappedCaps]);
   const [shortOnly, setShortOnly] = useState(false);
   const [flipOnly, setFlipOnly] = useState(false);
 
@@ -96,6 +100,7 @@ export default function GammaBoardView({ universe, data }: { universe: string; d
           <h1 className="mt-1 text-2xl font-bold">Dealer Gamma Board</h1>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
             Where options dealers are positioned across the most-optioned names. <b style={{ color: SHORT }}>Short gamma</b> <InfoDot term="Gamma exposure" /> = dealers chase price → moves <b>amplified</b> (trend/breakout risk); <b style={{ color: LONG }}>long gamma</b> = they fade price → moves <b>dampened / pinned</b>. Spot near the <b>flip</b> <InfoDot term="Gamma flip" /> = a small move flips the regime. {all.length} names · {fmtDateTime(data.generatedAt)}.
+            {capN > 0 && <> <span className="font-semibold" style={{ color: "#a855f7" }}>⌐</span> {capN} name{capN > 1 ? "s" : ""} carry a <Link href={`/u/${universe}/convertibles`} className="text-[var(--accent)] hover:underline">convertible capped-call cap</Link> — an extra dealer-short-gamma level, flagged on the call wall.</>}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
@@ -147,7 +152,7 @@ export default function GammaBoardView({ universe, data }: { universe: string; d
                 <th className="px-3 py-2 text-right font-medium">Put wall <InfoDot term="Put wall" /></th>
               </tr>
             </thead>
-            <tbody>{rows.map((r) => <Row key={r.symbol} universe={universe} r={r} />)}</tbody>
+            <tbody>{rows.map((r) => <Row key={r.symbol} universe={universe} r={r} cappedCap={cappedCaps?.[r.symbol] ?? null} />)}</tbody>
           </table>
         </div>
       )}
