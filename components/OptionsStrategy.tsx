@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { currencyPrefix } from "@/lib/format";
 import { daysUntil } from "@/lib/calendar";
-import { lognormalPopEv } from "@/lib/optionPayoffMath";
+import { lognormalPopEv, densityPopEv } from "@/lib/optionPayoffMath";
+import ImpliedDistribution, { type DistExp } from "@/components/ImpliedDistribution";
 import InfoDot from "@/components/InfoDot";
 
 interface Opt { strike: number; last: number | null; bid: number | null; ask: number | null; vol: number | null; oi: number | null; iv: number | null; itm: boolean }
@@ -125,7 +126,7 @@ const valueAt = (legs: Leg[], tDays: number, stratDte: number, atmIV: number, iv
 
 const CW = 520, CH = 200, ML = 44, MR = 12, MT = 12, MB = 22;
 
-export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, currency, nextExpiry, nextIV }: { calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null; currency?: string; nextExpiry?: string | null; nextIV?: number | null }) {
+export default function OptionsStrategy({ symbol, calls, puts, underlying, expiry, dte, currency, nextExpiry, nextIV }: { symbol?: string; calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null; currency?: string; nextExpiry?: string | null; nextIV?: number | null }) {
   const u = underlying ?? 0;
   const sym = currencyPrefix(currency);
   const dollars = (v: number) => fmtDollars(v, sym);
@@ -143,6 +144,18 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const [showGrid, setShowGrid] = useState(true);
   const [ivShift, setIvShift] = useState(0); // ± IV %, applied to the scenario-grid valuation only
   const [cmpKey, setCmpKey] = useState<StratKey | "">(""); // optional 2nd structure to overlay
+  // The market's own risk-neutral density (fitted smile / Breeden–Litzenberger) — powers the skew-aware
+  // POP/EV + the distribution chart. One fetch per symbol; degrades silently if the surface isn't built.
+  const [dist, setDist] = useState<DistExp[] | null>(null);
+  useEffect(() => {
+    if (!symbol) return;
+    let alive = true;
+    fetch(`/api/iv-surface/${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => { if (alive) setDist(Array.isArray(d?.dist) ? d.dist : null); })
+      .catch(() => { if (alive) setDist(null); });
+    return () => { alive = false; };
+  }, [symbol]);
   const strat = STRATS.find((s) => s.key === stratKey)!;
 
   const at = (off: number) => strikes[Math.min(strikes.length - 1, Math.max(0, atmIdx + off))];
@@ -195,6 +208,15 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
   const evRiskCap = maxLoss != null ? Math.abs(maxLoss) : netCost > 0 ? netCost : null;
   const evPct = ev != null && evRiskCap ? ev / evRiskCap : null;
   const popEvTrap = pop != null && ev != null && pop >= 0.6 && ev < 0; // frequent small win, negative expectancy
+  // Market-implied (skew-aware) POP/EV — the same payoff integrated against the market's own risk-neutral
+  // density (from the fitted smile), for the expiry nearest this trade's DTE.
+  const mktDist = useMemo(() => {
+    if (!dist?.length || dte == null) return null;
+    let best = dist[0], bd = Infinity;
+    for (const e of dist) { const g = Math.abs((e.dte ?? 0) - dte); if (g < bd) { bd = g; best = e; } }
+    return best;
+  }, [dist, dte]);
+  const market = useMemo(() => (mktDist?.pts?.length ? densityPopEv(pay, mktDist.pts) : { pop: null, ev: null }), [mktDist, legs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // chart grid + break-evens
   const lo = Math.max(0, u * 0.55), hi = u * 1.5;
@@ -283,6 +305,16 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
       {popEvTrap && (
         <div className="mb-3 rounded-lg border px-3 py-1.5 text-[11px]" style={{ borderColor: "color-mix(in oklab, #f59e0b 40%, transparent)", background: "color-mix(in oklab, #f59e0b 8%, transparent)", color: "#f59e0b" }}>
           ⚠ High hit-rate ({Math.round((pop as number) * 100)}%) but <b>negative expected value</b> ({dollars(ev as number)}) — the rare big loss outweighs the frequent small win. The classic premium-selling trap: a comfortable win rate that still loses money over many repeats.
+        </div>
+      )}
+
+      {market.pop != null && market.ev != null && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px]">
+          <span className="text-[11px] uppercase tracking-wide text-[var(--text-4)]">Market-implied<InfoDot text="POP & EV re-computed against the market's OWN risk-neutral density (fitted smile / Breeden–Litzenberger), not a symmetric ATM-IV lognormal — so it prices in skew. Equities' fat left tail typically trims a downside seller's EV vs the lognormal read; rich put skew can add to a put-spread's edge." /></span>
+          <span className="text-[var(--text-3)]">POP <b className="font-mono tabular-nums text-[var(--text-2)]">{Math.round(market.pop * 100)}%</b></span>
+          <span className="text-[var(--text-3)]">EV <b className="font-mono tabular-nums" style={{ color: market.ev >= 0 ? "#22c55e" : "#ef4444" }}>{dollars(market.ev)}</b></span>
+          {pop != null && ev != null && <span className="text-[var(--text-4)]">vs lognormal {Math.round(pop * 100)}% / {dollars(ev)} — the gap is skew</span>}
+          {mktDist?.dte != null && <span className="ml-auto text-[var(--text-4)]">{mktDist.dte}d density</span>}
         </div>
       )}
 
@@ -395,6 +427,10 @@ export default function OptionsStrategy({ calls, puts, underlying, expiry, dte, 
           <p className="text-xs text-[var(--text-4)]">Pick an expiry at least a few days out to model intermediate dates.</p>
         ))}
       </div>
+
+      {/* The market's implied price distribution at expiry (fitted smile / Breeden–Litzenberger) — the
+          picture behind the market-implied POP/EV above; red mass below spot, green above. */}
+      {dist?.length ? <ImpliedDistribution dist={dist} spot={u} currency={currency} /> : null}
     </div>
   );
 }

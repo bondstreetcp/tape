@@ -32,3 +32,27 @@ export function lognormalPopEv(
   }
   return tot > 0 ? { pop: inP / tot, ev: evAcc / tot } : { pop: null, ev: null };
 }
+
+/**
+ * POP + EV of a payoff against the MARKET's own risk-neutral density (from the fitted smile /
+ * Breeden–Litzenberger, `/api/iv-surface`) rather than a symmetric lognormal — so it's SKEW-AWARE: the
+ * fat left tail equities price in lowers a put-seller's EV, richer put skew raises the credit's edge.
+ * `density` is [price, density] points ascending in price (a DistExp.pts). Trapezoid-integrated and
+ * normalized (the tails are truncated), so it needs no separate normalization from the caller.
+ */
+export function densityPopEv(payoff: (S: number) => number, density: [number, number][]): { pop: number | null; ev: number | null } {
+  if (!density || density.length < 3) return { pop: null, ev: null };
+  let tot = 0, evAcc = 0, profitMass = 0;
+  for (let i = 1; i < density.length; i++) {
+    const [x0, d0] = density[i - 1];
+    const [x1, d1] = density[i];
+    const dx = x1 - x0;
+    if (!(dx > 0)) continue;
+    const area = ((d0 + d1) / 2) * dx; // trapezoid mass on the segment
+    const p = payoff((x0 + x1) / 2); // payoff at the segment midpoint
+    tot += area;
+    evAcc += p * area;
+    if (p > 0) profitMass += area;
+  }
+  return tot > 0 ? { pop: profitMass / tot, ev: evAcc / tot } : { pop: null, ev: null };
+}

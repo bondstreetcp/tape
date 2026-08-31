@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-skew-ev",
+    date: "2026-08-29",
+    title: "Skew-aware POP & EV in the strategy analyzer",
+    items: [
+      "The per-name strategy payoff analyzer (any stock → Options) now shows a Market-implied POP and expected value beside the lognormal ones — the same structure scored against the options market's OWN risk-neutral distribution (the fitted smile via Breeden–Litzenberger) instead of a symmetric ATM-vol bell curve. The gap between the two is the skew: equities' fat left tail trims a downside seller's EV, while rich put skew can add to a put-spread's edge — and it now says so.",
+      "It also drops in the implied price distribution at expiry — red mass below today's price, green above — so you can see the asymmetry the market is pricing behind the numbers, right where you're building the trade.",
+    ],
+  },
+  {
     id: "2026-08-29-options-risk",
     date: "2026-08-29",
     title: "Ex-div & earnings flags on the wheel queue + a vol P&L surface in Prism",

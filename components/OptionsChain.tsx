@@ -182,7 +182,7 @@ export default function OptionsChain({ symbol, currency }: { symbol: string; cur
 
       <VolGammaSetup symbol={symbol} />
 
-      <OptionsStrategy calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} nextExpiry={nextExpiry} nextIV={nextIV} />
+      <OptionsStrategy symbol={symbol} calls={data.calls} puts={data.puts} underlying={data.underlying} expiry={expiry} dte={dte} currency={currency} nextExpiry={nextExpiry} nextIV={nextIV} />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
