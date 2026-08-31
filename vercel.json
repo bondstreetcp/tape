@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run vercel-build",
-  "installCommand": "ONNXRUNTIME_NODE_INSTALL=skip npm install"
+  "installCommand": "ONNXRUNTIME_NODE_INSTALL=skip npm install",
+  "build": {
+    "env": {
+      "VERCEL_SUPPORT_LARGE_FUNCTIONS": "1"
+    }
+  }
 }
