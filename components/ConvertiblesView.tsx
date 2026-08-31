@@ -1,0 +1,143 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { convertibleValue, volEdge, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
+import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { fmtDateTime } from "@/lib/format";
+import UniverseSwitcher from "./UniverseSwitcher";
+import InfoDot from "./InfoDot";
+
+const R = 0.04;
+const DAY = 86_400_000;
+type Sort = "filed" | "edge" | "size";
+
+// Convertible & Capped-Call Watch — recent convertible-note issuance with the vol-desk read: the implied
+// ISSUE vol vs the stock's listed IV (the long-convert / short-stock cheapness signal), live moneyness,
+// and the conversion-price + capped-call-cap dilution levels. Built on lib/convertible (component model).
+export default function ConvertiblesView({ universe, data }: { universe: string; data: ConvertiblesData }) {
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [sort, setSort] = useState<Sort>("filed");
+  const [cheapOnly, setCheapOnly] = useState(false);
+  const [q, setQ] = useState("");
+
+  const symKey = useMemo(() => [...new Set(data.rows.map((r) => r.ticker).filter(Boolean))].sort().join(","), [data.rows]);
+  useEffect(() => {
+    if (!symKey) return;
+    let alive = true;
+    fetch(`/api/quote?symbols=${encodeURIComponent(symKey)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!alive) return; const m: Record<string, number> = {}; for (const qq of d.quotes || []) if (qq?.symbol && typeof qq.price === "number") m[String(qq.symbol).toUpperCase()] = qq.price; setPrices(m); })
+      .catch(() => { /* live parity degrades to the issue reference price */ });
+    return () => { alive = false; };
+  }, [symKey]);
+
+  const now = Date.now();
+  const rows = useMemo(() => {
+    const enriched = data.rows.map((r) => {
+      const S = (r.ticker && prices[r.ticker]) || r.refPrice || null;
+      const my = r.maturity ? Math.max(0.05, (Date.parse(r.maturity) - now) / (365.25 * DAY)) : r.maturityYears;
+      const vol = r.listedIV ?? r.issueVol ?? 0.5; // value/delta at the more current listed IV where we have it
+      const terms: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my, par: r.par, refPrice: r.refPrice, premium: r.premium };
+      const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread) : null;
+      const edge = r.issueVol != null && r.listedIV != null ? volEdge(r.issueVol, r.listedIV) : null;
+      return { r, S, live, edge };
+    });
+    const ql = q.trim().toLowerCase();
+    const out = enriched.filter((x) => {
+      if (cheapOnly && x.edge?.verdict !== "cheap") return false;
+      if (ql && !x.r.ticker.toLowerCase().includes(ql) && !x.r.issuer.toLowerCase().includes(ql)) return false;
+      return true;
+    });
+    out.sort((a, b) => {
+      if (sort === "edge") return (a.edge?.ratio ?? 99) - (b.edge?.ratio ?? 99); // cheapest issue-vol/listed first
+      if (sort === "size") return (b.r.sizeMM ?? 0) - (a.r.sizeMM ?? 0);
+      return b.r.filedDate.localeCompare(a.r.filedDate);
+    });
+    return out;
+  }, [data.rows, prices, sort, cheapOnly, q, now]);
+
+  const cheapN = data.rows.filter((r) => r.issueVol != null && r.listedIV != null && volEdge(r.issueVol, r.listedIV).verdict === "cheap").length;
+  const cappedN = data.rows.filter((r) => r.cappedCallCap != null).length;
+  const pct = (x: number | null | undefined, d = 0) => (x == null ? "—" : `${(x * 100).toFixed(d)}%`);
+  const usd = (x: number | null | undefined, d = 0) => (x == null ? "—" : `$${x.toLocaleString("en-US", { maximumFractionDigits: d })}`);
+  const edgeColor = (v: "cheap" | "fair" | "rich") => (v === "cheap" ? "#22c55e" : v === "rich" ? "#ef4444" : "var(--text-3)");
+  const SortTh = ({ k, children, cls = "" }: { k: Sort; children: React.ReactNode; cls?: string }) => (
+    <th className={"px-2 py-2 font-medium " + cls}><button onClick={() => setSort(k)} className={"hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>{children}{sort === k ? " ↓" : ""}</button></th>
+  );
+
+  return (
+    <main className="mx-auto max-w-[92rem] px-4 py-6 sm:px-6">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
+          <h1 className="mt-1 text-2xl font-bold">Convertible &amp; Capped-Call Watch</h1>
+          <p className="mt-1 max-w-4xl text-[13px] text-[var(--text-3)]">
+            Recent convertible-note issuance — the AI/tech capex is being funded here. The vol read: the <b>implied issue vol</b> <InfoDot text="The vol the convertible priced its embedded equity call at — backed out from the note pricing at par at issue, using a component model (bond floor + call) with an ESTIMATED credit spread. The cheap/rich-vs-listed read is far more robust than the absolute level." /> the note priced at vs the stock&apos;s <b>listed option IV</b> — converts issued <b style={{ color: "#22c55e" }}>below</b> listed vol are the classic long-convert / short-stock edge. Plus the conversion-price &amp; <b>capped-call cap</b> <InfoDot text="Many issuers buy a capped call / call spread alongside the notes to raise the effective conversion price and cap dilution. The cap is a real level — the dealers who sold it sit short gamma up there." /> dilution levels. {cheapN} cheap-vs-listed · {cappedN} with a capped call · {fmtDateTime(data.generatedAt)}
+          </p>
+        </div>
+        <UniverseSwitcher current={universe} />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs text-[var(--text-2)]" title="Only notes whose implied issue vol is below the stock's listed option vol">
+          <input type="checkbox" checked={cheapOnly} onChange={(e) => setCheapOnly(e.target.checked)} /> cheap vs listed only
+        </label>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or issuer…" className="w-48 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
+        {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
+        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} notes</span>
+      </div>
+
+      <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
+        Terms are LLM-extracted from the offering 8-K/424B; the issue vol is a component-model back-out with an <b>estimated</b> credit spread (softest input — the cheap/rich signal is more robust than the level). There is no live convertible price feed, so this is the issue-vol read, <b>not</b> a live arb spread. Decision support, not advice.
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+        <table className="w-full min-w-[1040px] text-left text-[13px]">
+          <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
+            <tr>
+              <th className="px-3 py-2 font-medium">Issuer</th>
+              <SortTh k="filed">Priced</SortTh>
+              <SortTh k="size" cls="text-right">Size</SortTh>
+              <th className="px-2 py-2 text-right font-medium">Coupon</th>
+              <th className="px-2 py-2 text-right font-medium">Conv. price</th>
+              <th className="px-2 py-2 text-right font-medium" title="Conversion premium above the reference price at issue">Prem.</th>
+              <th className="px-2 py-2 text-right font-medium" title="Implied vol the note priced at (component-model back-out)">Issue vol</th>
+              <th className="px-2 py-2 text-right font-medium" title="Stock's current listed ATM option IV">Listed IV</th>
+              <SortTh k="edge">Edge</SortTh>
+              <th className="px-2 py-2 text-right font-medium" title="Conversion value (ratio × current price) as % of par — where the note sits now">Parity</th>
+              <th className="px-2 py-2 text-right font-medium" title="How equity-like the note trades now (delta × price / value)">Equity</th>
+              <th className="px-2 py-2 text-right font-medium" title="Capped-call cap — the effective dilution ceiling the issuer bought">Capped cap</th>
+              <th className="px-2 py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ r, S, live, edge }) => (
+              <tr key={r.filingUrl + r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+                <td className="px-3 py-2">
+                  {r.ticker ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link> : <span className="font-semibold text-[var(--text-2)]">{r.issuer.slice(0, 18)}</span>}
+                  <div className="max-w-[190px] truncate text-[11px] text-[var(--text-4)]">{r.issuer}</div>
+                </td>
+                <td className="px-2 py-2 whitespace-nowrap text-[12px] text-[var(--text-3)]">{r.filedDate}<div className="text-[10px] text-[var(--text-4)]">{r.maturity ? `→ ${r.maturity.slice(0, 7)}` : `${r.maturityYears.toFixed(1)}y`}</div></td>
+                <td className="px-2 py-2 text-right tabular-nums text-[var(--text-2)]">{r.sizeMM != null ? (r.sizeMM >= 1000 ? `$${(r.sizeMM / 1000).toFixed(2)}B` : `$${r.sizeMM.toFixed(0)}M`) : "—"}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-[var(--text-3)]">{pct(r.coupon, 2)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]">{usd(r.conversionPrice, 2)}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-[var(--text-3)]">{r.premium != null ? pct(r.premium, 0) : "—"}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold text-[var(--text-2)]">{pct(r.issueVol)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{pct(r.listedIV)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: edge ? edgeColor(edge.verdict) : "var(--text-4)" }} title={edge ? `issue vol ${(edge.ratio).toFixed(2)}× listed` : "listed IV not available for this name"}>{edge ? edge.verdict : "—"}</td>
+                <td className="px-2 py-2 text-right tabular-nums" style={{ color: live ? (live.moneyness === "in-the-money" ? "#22c55e" : live.moneyness === "busted" ? "#60a5fa" : "var(--text-2)") : "var(--text-4)" }} title={live ? `${live.moneyness}${S ? ` · at $${S.toFixed(2)}` : ""}` : undefined}>{live ? `${Math.round((live.parity / r.par) * 100)}%` : "—"}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-[var(--text-3)]">{live ? Math.round(live.equitySensitivity * 100) + "%" : "—"}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.cappedCallCap != null ? "#a855f7" : "var(--text-4)" }} title={r.cappedCallCap != null ? "Effective dilution ceiling from the issuer's capped call — dealers who sold it are short gamma here" : "no capped call disclosed"}>{r.cappedCallCap != null ? usd(r.cappedCallCap, 0) : "—"}</td>
+                <td className="px-2 py-2 whitespace-nowrap text-right text-[11px]">
+                  {r.ticker && <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}?tab=options`} className="text-[var(--accent)] hover:underline" title="Options & gamma on the underlying">options</Link>}
+                  <a href={r.filingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-[var(--text-4)] hover:text-[var(--text-2)]" title="The offering filing">8-K</a>
+                </td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={13} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  );
+}

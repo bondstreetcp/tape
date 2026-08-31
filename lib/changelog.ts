@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convertibles",
+    date: "2026-08-29",
+    title: "Convertible & Capped-Call Watch",
+    items: [
+      "New Options → Convertible Watch: recent convertible-note issuance — the trade financing the AI / data-center capex — read through a vol lens. It backs out the implied vol each note was ISSUED at and compares it to the stock's listed option IV; converts priced BELOW listed vol are the classic long-convert / short-stock cheapness. Terms are auto-extracted from the offering filings; the issue vol uses a component model with an estimated credit spread — so the cheap/rich signal is more robust than the absolute level, and note there's no live convert price, so this isn't a live arb spread.",
+      "It also surfaces the dilution levels that matter: the conversion price and, where the issuer bought a capped call / call spread, the cap strike — the effective dilution ceiling, and a level where the dealers who sold it sit short gamma. Live moneyness/parity per name, sortable by the cheap-vs-listed edge.",
+    ],
+  },
+  {
     id: "2026-08-29-skew-ev",
     date: "2026-08-29",
     title: "Skew-aware POP & EV in the strategy analyzer",

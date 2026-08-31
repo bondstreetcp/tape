@@ -103,6 +103,7 @@ const FEEDS: FeedSpec[] = [
   { file: "options-flow.json", affects: ["/flow", "/positioning", "/confluence", "/signal-record"], label: "Options flow", tier: "core", maxAgeHours: CORE },
   { file: "gamma-board.json", affects: ["/gamma-board", "/coiled", "/signal-record", "/morning-desk"], label: "Dealer gamma board", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 10 },
   { file: "vol-cone.json", affects: ["/vol-cone", "/coiled", "/signal-record", "/portfolio"], label: "Realized-vol cone", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
+  { file: "convertibles.json", affects: ["/convertibles"], label: "Convertible issuance", tier: "event", maxAgeHours: EVENT, countPath: "rows", minCount: 1 },
   { file: "macro.json", affects: ["/macro", "/rates", "/breadth", "/dispersion", "/morning-desk"], label: "Macro (FRED)", tier: "core", maxAgeHours: CORE, stampKeys: ["asOf", "generatedAt"] },
   { file: "cef.json", affects: ["/cef", "/cef-hunter"], label: "Closed-end funds", tier: "core", maxAgeHours: CORE },
   { file: "holdco-nav.json", affects: ["/holdco-nav"], label: "Holdco NAV", tier: "core", maxAgeHours: CORE },
