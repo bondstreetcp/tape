@@ -111,3 +111,37 @@ export function volEdge(issueVol: number, listedIV: number): { ratio: number; ve
   const ratio = listedIV > 0 ? issueVol / listedIV : NaN;
   return { ratio, verdict: ratio <= 0.9 ? "cheap" : ratio >= 1.1 ? "rich" : "fair" };
 }
+
+/** A rough credit-spread estimate for an unrated issuer from its convert coupon — low-coupon converts
+ *  tend to come from higher-quality names. THE MODEL'S SOFTEST INPUT: a wrong spread shifts the bond
+ *  floor and thus the backed-out vol, so the cheap/rich-vs-listed READ is far more robust than the level. */
+export function estimateCreditSpread(coupon: number): number {
+  return Math.max(0.015, Math.min(0.09, 0.02 + Math.max(0, coupon)));
+}
+
+/** A convertible as stored/served: extracted terms + the code-computed issue vol + provenance. */
+export interface ConvertibleRow {
+  ticker: string;
+  issuer: string;
+  coupon: number;
+  maturity: string | null; // ISO date
+  maturityYears: number;
+  conversionPrice: number;
+  premium: number | null; // conversion premium at issue
+  refPrice: number | null; // stock price at pricing
+  sizeMM: number | null;
+  cappedCallCap: number | null; // capped-call upper strike (dilution cap), if the issuer bought one
+  par: number;
+  creditSpread: number; // the estimate used
+  issueVol: number | null; // impliedIssueVol under that estimate
+  listedIV: number | null; // stock's current ATM listed IV, if resolvable (for the vol edge)
+  realizedVol: number | null;
+  filedDate: string; // offering filing date
+  filingUrl: string;
+  form: string;
+  extractedAt: string;
+}
+export interface ConvertiblesData {
+  generatedAt: string;
+  rows: ConvertibleRow[];
+}

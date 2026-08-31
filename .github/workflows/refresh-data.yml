@@ -684,6 +684,13 @@ jobs:
         run: npm run refresh-biotech-vol
         continue-on-error: true
 
+      # Convertibles — EDGAR full-text search for convertible-note offerings → GLM extracts the terms;
+      # code backs out the implied ISSUE vol (the arb signal). Free EDGAR; needs OPENROUTER_API_KEY.
+      - name: Refresh convertibles (issuance + issue-vol)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-convertibles
+        continue-on-error: true
+
       # Policy & Contracts — Federal Register rules + USAspending contract awards → GLM maps to tickers.
       # Free APIs; needs OPENROUTER_API_KEY; forward-accumulating.
       - name: Refresh policy & contracts

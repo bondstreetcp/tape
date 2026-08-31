@@ -144,6 +144,7 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   { name: "Refresh campaigns (activist/short)", cmd: "npm run refresh-campaigns", when: "full" },
   { name: "Refresh biotech catalysts", cmd: "npm run refresh-biotech", when: "full" },
   { name: "Refresh biotech event vol", cmd: "npm run refresh-biotech-vol", when: "full" },
+  { name: "Refresh convertibles (issuance + issue-vol)", cmd: "npm run refresh-convertibles", when: "full" },
   { name: "Refresh policy & contracts", cmd: "npm run refresh-policy", when: "full" },
   { name: "Refresh catalyst vol", cmd: "npm run refresh-catalyst-vol", when: "full" },
   { name: "Refresh trade desk", cmd: "npm run refresh-trade-ideas", when: "full", narr: true },

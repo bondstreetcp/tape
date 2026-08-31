@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, type ConvertibleTerms } from "../lib/convertible";
+import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, type ConvertibleTerms } from "../lib/convertible";
 
 // A representative AI-name convert: $150 conversion price on a $100 stock (50% premium), 0.5% coupon,
 // 5-year, $1000 par. r = 4%, credit spread 3% (unrated growth).
@@ -50,4 +50,11 @@ test("vol edge: convert issued below listed vol reads cheap (the arb signal)", (
   assert.equal(volEdge(0.4, 0.6).verdict, "cheap");
   assert.equal(volEdge(0.6, 0.6).verdict, "fair");
   assert.equal(volEdge(0.72, 0.6).verdict, "rich");
+});
+
+test("credit-spread estimate rises with coupon and is clamped", () => {
+  assert.ok(Math.abs(estimateCreditSpread(0) - 0.02) < 1e-9);
+  assert.ok(estimateCreditSpread(0.05) > estimateCreditSpread(0.005));
+  assert.ok(estimateCreditSpread(0.2) <= 0.09); // capped
+  assert.ok(estimateCreditSpread(-1) >= 0.015); // floored
 });
