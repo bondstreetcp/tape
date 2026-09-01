@@ -52,6 +52,7 @@ async function main() {
       rows.push({
         ticker: h.ticker || "",
         issuer: h.issuer,
+        cusip: t.cusip,
         coupon,
         maturity: t.maturity,
         maturityYears: +maturityYears.toFixed(2),

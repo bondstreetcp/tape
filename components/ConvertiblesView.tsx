@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { convertibleValue, volEdge, convertCarry, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
+import { convertibleValue, volEdge, convertCarry, convertVolFromPrice, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -21,7 +21,14 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
   const [q, setQ] = useState("");
   const [face, setFace] = useState(100000); // convertible position (face $) — sizes the short-stock hedge
   const [expanded, setExpanded] = useState<string | null>(null);
-  useEffect(() => { try { const f = Number(localStorage.getItem("tape.convFace")); if (f > 0) setFace(f); } catch { /* ignore */ } }, []);
+  const [marks, setMarks] = useState<Record<string, string>>({}); // observed convert prices you enter (per 100), by CUSIP/ticker
+  useEffect(() => {
+    try {
+      const f = Number(localStorage.getItem("tape.convFace")); if (f > 0) setFace(f);
+      const m = JSON.parse(localStorage.getItem("tape.convMarks") || "{}"); if (m && typeof m === "object") setMarks(m);
+    } catch { /* ignore */ }
+  }, []);
+  const setMark = (k: string, v: string) => setMarks((prev) => { const n = { ...prev, [k]: v }; try { localStorage.setItem("tape.convMarks", JSON.stringify(n)); } catch { /* ignore */ } return n; });
 
   const symKey = useMemo(() => [...new Set(data.rows.map((r) => r.ticker).filter(Boolean))].sort().join(","), [data.rows]);
   useEffect(() => {
@@ -163,6 +170,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                 <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
                   <td colSpan={17} className="px-4 py-3">
                     {live && S ? (
+                      <>
                       <div className="grid gap-x-8 gap-y-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
                         <div>
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">The delta hedge</div>
@@ -203,6 +211,32 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                           })() : <div className="mt-1 text-[11px] text-[var(--text-4)]">No issuer credit data yet (populates nightly).</div>}
                         </div>
                       </div>
+                      <div className="mt-3 border-t border-[var(--divider)] pt-2" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const markKey = r.cusip || r.ticker || key;
+                          const markStr = marks[markKey] ?? "";
+                          const obsPct = markStr && Number(markStr) > 0 ? Number(markStr) : null;
+                          const modelPct = (live.value / r.par) * 100;
+                          const richCheap = obsPct != null ? obsPct - modelPct : null;
+                          const my2 = r.maturity ? Math.max(0.05, (Date.parse(r.maturity) - now) / (365.25 * DAY)) : r.maturityYears;
+                          const terms2: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my2, par: r.par, refPrice: r.refPrice, premium: r.premium };
+                          const mktVol = obsPct != null ? convertVolFromPrice(terms2, S as number, (obsPct / 100) * r.par, R, r.creditSpread) : null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Live mark</span>
+                              {r.cusip ? <span className="font-mono text-[11px] text-[var(--text-3)]">CUSIP {r.cusip} <a href={`https://www.google.com/search?q=${encodeURIComponent(r.cusip + " bond price trace")}`} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">look up ↗</a></span> : <span className="text-[11px] text-[var(--text-4)]">CUSIP not disclosed — look it up by issuer + coupon</span>}
+                              <label className="flex items-center gap-1 text-[var(--text-3)]">price <input type="number" step={0.5} value={markStr} onChange={(e) => setMark(markKey, e.target.value)} placeholder={modelPct.toFixed(1)} className="w-20 rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-right tabular-nums outline-none" /><span className="text-[10px] text-[var(--text-4)]">/100</span></label>
+                              {obsPct != null ? (
+                                <>
+                                  <span style={{ color: (richCheap as number) <= 0 ? "#22c55e" : "#ef4444" }}><b>{(richCheap as number) >= 0 ? "+" : ""}{(richCheap as number).toFixed(1)} pts</b> vs model ({modelPct.toFixed(1)}) — {(richCheap as number) <= 0 ? "cheap (the arb)" : "rich"}</span>
+                                  {mktVol != null && r.listedIV != null && <span className="text-[var(--text-3)]">market vol <b style={{ color: mktVol < r.listedIV ? "#22c55e" : "var(--text-2)" }}>{(mktVol * 100).toFixed(0)}%</b> vs listed {(r.listedIV * 100).toFixed(0)}%</span>}
+                                </>
+                              ) : <span className="text-[11px] text-[var(--text-4)]">enter the observed price for the live rich/cheap + market-implied vol</span>}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      </>
                     ) : <div className="text-[12px] text-[var(--text-4)]">No live price for {r.ticker || r.issuer} — can&apos;t size the hedge (conversion price ${r.conversionPrice}, {r.maturity ?? `${r.maturityYears.toFixed(1)}y`}).</div>}
                   </td>
                 </tr>

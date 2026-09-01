@@ -16,6 +16,7 @@ export interface RawConvTerms {
   sizeMM: number | null; // aggregate principal, $ millions
   cappedCallCap: number | null; // capped-call / call-spread CAP price (upper strike), $, if any
   par: number | null; // denomination, usually 1000
+  cusip: string | null; // the notes' 9-char CUSIP, for the FINRA TRACE lookup
 }
 
 const SYSTEM =
@@ -29,9 +30,10 @@ const SYSTEM =
   "'maturity' = the maturity date as ISO YYYY-MM-DD. " +
   "'sizeMM' = aggregate principal in $ MILLIONS (1500 for $1.5 billion; use the total including any greenshoe that the filing states was exercised). " +
   "'cappedCallCap' = if the company entered CAPPED CALL or call-spread / bond-hedge transactions alongside the notes, the CAP price (the upper strike) per share in $; otherwise null. " +
-  "'par' = the note denomination, usually 1000.";
+  "'par' = the note denomination, usually 1000. " +
+  "'cusip' = the notes' CUSIP (a 9-character alphanumeric identifier for the notes themselves, often near 'CUSIP No.') if the filing states it, else null.";
 const SCHEMA =
-  '\n\nReturn ONLY JSON: {"isConvertible": boolean, "coupon": number|null, "conversionPrice": number|null, "premium": number|null, "refPrice": number|null, "maturity": string|null, "sizeMM": number|null, "cappedCallCap": number|null, "par": number|null}';
+  '\n\nReturn ONLY JSON: {"isConvertible": boolean, "coupon": number|null, "conversionPrice": number|null, "premium": number|null, "refPrice": number|null, "maturity": string|null, "sizeMM": number|null, "cappedCallCap": number|null, "par": number|null, "cusip": string|null}';
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -51,6 +53,7 @@ export async function extractConvertibleTerms(text: string): Promise<RawConvTerm
     sizeMM: num(out.sizeMM),
     cappedCallCap: num(out.cappedCallCap),
     par: num(out.par),
+    cusip: typeof out.cusip === "string" && /^[0-9A-Z]{9}$/i.test(out.cusip.trim()) ? out.cusip.trim().toUpperCase() : null,
   };
 }
 

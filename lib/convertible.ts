@@ -115,6 +115,23 @@ export function impliedIssueVol(t: ConvertibleTerms, r: number, creditSpread: nu
   return (lo + hi) / 2;
 }
 
+/** The vol the convert is trading at RIGHT NOW, solved from an observed market price (per bond, same
+ *  units as convertibleValue.value) at the current spot — the LIVE version of impliedIssueVol. Compare
+ *  to listed IV for the current cheap/rich (a feed would give the price; you supply it). null if the
+ *  price sits at/under the bond floor (all bond, no embedded-vol signal) or can't be solved. */
+export function convertVolFromPrice(t: ConvertibleTerms, S: number, price: number, r: number, creditSpread: number, q = 0): number | null {
+  if (!(S > 0) || !(price > 0)) return null;
+  const targetCall = price - bondFloor(t, r, creditSpread);
+  if (targetCall <= 0) return null; // at/below the floor — no embedded-call value to imply a vol from
+  const ratio = conversionRatio(t);
+  const f = (sig: number) => ratio * bsCall(S, t.conversionPrice, t.maturityYears, sig, r, q) - targetCall;
+  let lo = 0.01, hi = 3;
+  if (f(lo) >= 0) return lo;
+  if (f(hi) < 0) return null;
+  for (let i = 0; i < 64; i++) { const mid = (lo + hi) / 2; if (f(mid) >= 0) hi = mid; else lo = mid; }
+  return (lo + hi) / 2;
+}
+
 /** Issue vol vs the stock's listed option vol — the arb read. ratio < 1 = the convert's embedded vol was
  *  cheap vs listed options (the classic long-convert / short-stock edge). */
 export function volEdge(issueVol: number, listedIV: number): { ratio: number; verdict: "cheap" | "fair" | "rich" } {
@@ -178,6 +195,7 @@ export function creditQuality(c: CreditInputs): CreditQuality {
 export interface ConvertibleRow {
   ticker: string;
   issuer: string;
+  cusip: string | null; // the note's CUSIP (from the offering filing) — for the FINRA TRACE lookup
   coupon: number;
   maturity: string | null; // ISO date
   maturityYears: number;

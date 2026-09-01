@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convert-mark",
+    date: "2026-08-29",
+    title: "Live convert mark — CUSIP + a rich/cheap read from any price",
+    items: [
+      "There's no free real-time TRACE feed, but the offering filing discloses the note's CUSIP — so Convertible Watch now extracts it and, when you expand a row, gives you a one-click lookup plus a Live-mark input. Enter the observed convert price (per 100, from FINRA or your broker) and it computes the live rich/cheap vs the model AND the vol the market is actually pricing the convert at, vs listed IV — turning the issue-vol proxy into the real, current arb read. You supply the one number a paid feed would.",
+    ],
+  },
+  {
     id: "2026-08-29-convert-credit",
     date: "2026-08-29",
     title: "Bond-floor credit quality on the Convertible Watch",

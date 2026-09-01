@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, creditQuality, type ConvertibleTerms } from "../lib/convertible";
+import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, creditQuality, convertVolFromPrice, type ConvertibleTerms } from "../lib/convertible";
 
 // A representative AI-name convert: $150 conversion price on a $100 stock (50% premium), 0.5% coupon,
 // 5-year, $1000 par. r = 4%, credit spread 3% (unrated growth).
@@ -61,6 +61,14 @@ test("carry: coupon minus borrow + dividend drag on the short; HTB flips it nega
   assert.ok(Math.abs(htb.borrowDrag - 0.09) < 1e-9); // 0.45 × 0.20
   const div = convertCarry(0.005, 0.45, 0.0025, 0.02); // + a 2% dividend the short pays
   assert.ok(div.net < easy.net, "a dividend the short pays lowers carry");
+});
+
+test("convertVolFromPrice recovers the vol from a priced convert (round-trip), null under the floor", () => {
+  const S = 120;
+  const priced = convertibleValue(T, S, 0.55, R, CS).value; // price this convert at 55% vol
+  const v = convertVolFromPrice(T, S, priced, R, CS);
+  assert.ok(v != null && Math.abs((v as number) - 0.55) < 0.01, `recovered ${v}, want ~0.55`);
+  assert.equal(convertVolFromPrice(T, S, 1, R, CS), null); // a price under the bond floor → no vol
 });
 
 test("credit quality: net-cash & FCF-positive = solid; cash-burner short runway = distressed", () => {
