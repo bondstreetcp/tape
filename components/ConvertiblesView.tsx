@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { convertibleValue, volEdge, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
@@ -19,6 +19,9 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
   const [sort, setSort] = useState<Sort>("filed");
   const [cheapOnly, setCheapOnly] = useState(false);
   const [q, setQ] = useState("");
+  const [face, setFace] = useState(100000); // convertible position (face $) — sizes the short-stock hedge
+  const [expanded, setExpanded] = useState<string | null>(null);
+  useEffect(() => { try { const f = Number(localStorage.getItem("tape.convFace")); if (f > 0) setFace(f); } catch { /* ignore */ } }, []);
 
   const symKey = useMemo(() => [...new Set(data.rows.map((r) => r.ticker).filter(Boolean))].sort().join(","), [data.rows]);
   useEffect(() => {
@@ -84,7 +87,8 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
         </label>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ticker or issuer…" className="w-48 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none placeholder:text-[var(--text-4)]" />
         {q && <button onClick={() => setQ("")} className="text-xs text-[var(--text-3)] hover:text-[var(--text)]">clear</button>}
-        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} notes</span>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--text-3)]" title="Your convertible position in face value — sizes the short-stock hedge in the table and per-row detail">Position $<input type="number" step={10000} value={face} onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setFace(v); try { localStorage.setItem("tape.convFace", String(v)); } catch { /* ignore */ } }} className="w-28 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-right tabular-nums outline-none" /></label>
+        <span className="ml-auto text-xs text-[var(--text-4)]">{rows.length} notes · click a row for the hedge</span>
       </div>
 
       <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-[11px] text-[var(--text-4)]">
@@ -92,7 +96,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <table className="w-full min-w-[1040px] text-left text-[13px]">
+        <table className="w-full min-w-[1160px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
             <tr>
               <th className="px-3 py-2 font-medium">Issuer</th>
@@ -105,16 +109,25 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               <th className="px-2 py-2 text-right font-medium" title="Stock's current listed ATM option IV">Listed IV</th>
               <SortTh k="edge">Edge</SortTh>
               <th className="px-2 py-2 text-right font-medium" title="Conversion value (ratio × current price) as % of par — where the note sits now">Parity</th>
-              <th className="px-2 py-2 text-right font-medium" title="How equity-like the note trades now (delta × price / value)">Equity</th>
+              <th className="px-2 py-2 text-right font-medium" title="Delta — shares to short per $1,000 bond to stay delta-neutral (hover a row for equity-sensitivity)">Δ /bond</th>
+              <th className="px-2 py-2 text-right font-medium" title="Shares to short for your position (face ÷ par × delta), and the dollar short">Short hedge</th>
               <th className="px-2 py-2 text-right font-medium" title="Capped-call cap — the effective dilution ceiling the issuer bought">Capped cap</th>
               <th className="px-2 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ r, S, live, edge }) => (
-              <tr key={r.filingUrl + r.ticker} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
+            {rows.map(({ r, S, live, edge }) => {
+              const key = r.filingUrl + r.ticker;
+              const open = expanded === key;
+              const bonds = r.par > 0 ? face / r.par : 0;
+              const shortSh = live && S ? bonds * live.delta : null;
+              const shortUsd = shortSh != null && S ? shortSh * S : null;
+              return (
+              <Fragment key={key}>
+              <tr onClick={() => setExpanded(open ? null : key)} className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]">
                 <td className="px-3 py-2">
-                  {r.ticker ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} className="font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link> : <span className="font-semibold text-[var(--text-2)]">{r.issuer.slice(0, 18)}</span>}
+                  <span className="mr-1 inline-block w-2 text-[10px] text-[var(--text-4)]">{open ? "▾" : "▸"}</span>
+                  {r.ticker ? <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-[var(--accent)] hover:underline">{r.ticker}</Link> : <span className="font-semibold text-[var(--text-2)]">{r.issuer.slice(0, 18)}</span>}
                   <div className="max-w-[190px] truncate text-[11px] text-[var(--text-4)]">{r.issuer}</div>
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap text-[12px] text-[var(--text-3)]">{r.filedDate}<div className="text-[10px] text-[var(--text-4)]">{r.maturity ? `→ ${r.maturity.slice(0, 7)}` : `${r.maturityYears.toFixed(1)}y`}</div></td>
@@ -126,15 +139,43 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-3)]">{pct(r.listedIV)}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: edge ? edgeColor(edge.verdict) : "var(--text-4)" }} title={edge ? `issue vol ${(edge.ratio).toFixed(2)}× listed` : "listed IV not available for this name"}>{edge ? edge.verdict : "—"}</td>
                 <td className="px-2 py-2 text-right tabular-nums" style={{ color: live ? (live.moneyness === "in-the-money" ? "#22c55e" : live.moneyness === "busted" ? "#60a5fa" : "var(--text-2)") : "var(--text-4)" }} title={live ? `${live.moneyness}${S ? ` · at $${S.toFixed(2)}` : ""}` : undefined}>{live ? `${Math.round((live.parity / r.par) * 100)}%` : "—"}</td>
-                <td className="px-2 py-2 text-right tabular-nums text-[var(--text-3)]">{live ? Math.round(live.equitySensitivity * 100) + "%" : "—"}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]" title={live ? `~${Math.round(live.equitySensitivity * 100)}% equity-like · Γ ${live.gamma.toFixed(2)} sh/bond per $1` : undefined}>{live ? live.delta.toFixed(2) : "—"}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-[#ef4444]">{shortSh != null ? <span title={`short ${Math.round(shortSh).toLocaleString()} sh @ $${(S as number).toFixed(2)}`}>{Math.round(shortSh).toLocaleString()}<div className="text-[10px] text-[var(--text-4)]">{usd(shortUsd)}</div></span> : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.cappedCallCap != null ? "#a855f7" : "var(--text-4)" }} title={r.cappedCallCap != null ? "Effective dilution ceiling from the issuer's capped call — dealers who sold it are short gamma here" : "no capped call disclosed"}>{r.cappedCallCap != null ? usd(r.cappedCallCap, 0) : "—"}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-right text-[11px]">
-                  {r.ticker && <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}?tab=options`} className="text-[var(--accent)] hover:underline" title="Options & gamma on the underlying">options</Link>}
-                  <a href={r.filingUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-[var(--text-4)] hover:text-[var(--text-2)]" title="The offering filing">8-K</a>
+                  {r.ticker && <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}?tab=options`} onClick={(e) => e.stopPropagation()} className="text-[var(--accent)] hover:underline" title="Options & gamma on the underlying">options</Link>}
+                  <a href={r.filingUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="ml-2 text-[var(--text-4)] hover:text-[var(--text-2)]" title="The offering filing">8-K</a>
                 </td>
               </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={13} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
+              {open && (
+                <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
+                  <td colSpan={14} className="px-4 py-3">
+                    {live && S ? (
+                      <div className="grid gap-x-8 gap-y-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">The delta hedge</div>
+                          <div className="mt-1 text-[13px] text-[var(--text-2)]">Long <b>{Math.round(bonds).toLocaleString()}</b> bonds ({usd(face)} face) → short <b className="text-[#ef4444]">{Math.round(shortSh as number).toLocaleString()} shares</b> ({usd(shortUsd)}).</div>
+                          <div className="mt-1 text-[11px] text-[var(--text-4)]">Δ <b>{live.delta.toFixed(2)}</b> sh/bond neutralizes the convert&apos;s equity sensitivity (~{Math.round(live.equitySensitivity * 100)}% at ${(S as number).toFixed(2)}). Rebalance the short as the stock moves.</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Gamma — the engine</div>
+                          <div className="mt-1 text-[13px] text-[var(--text-2)]">Γ <b>{(bonds * live.gamma).toFixed(1)}</b> sh per $1 move · a ±1% move shifts the hedge ~<b>{Math.round(bonds * live.gamma * (S as number) * 0.01).toLocaleString()}</b> sh (buy low / sell high).</div>
+                          <div className="mt-1 text-[11px] text-[var(--text-4)]">You&apos;re long that gamma; the vol edge pays for it — issue {pct(r.issueVol)} vs listed {pct(r.listedIV)}{edge ? ` (${edge.verdict})` : ""}.</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">The note</div>
+                          <div className="mt-1 text-[13px] text-[var(--text-3)]">Bond floor ~{Math.round((live.bondFloor / r.par) * 100)}% of par · parity {Math.round((live.parity / r.par) * 100)}% · {live.moneyness}. Conv ${r.conversionPrice}{r.cappedCallCap != null ? ` · capped to $${r.cappedCallCap}` : ""}.</div>
+                          <div className="mt-1 text-[11px] text-[var(--text-4)]">Credit spread est. {pct(r.creditSpread, 1)} (softest input). No live convert price — the hedge is model-based, so treat share counts as a guide.</div>
+                        </div>
+                      </div>
+                    ) : <div className="text-[12px] text-[var(--text-4)]">No live price for {r.ticker || r.issuer} — can&apos;t size the hedge (conversion price ${r.conversionPrice}, {r.maturity ?? `${r.maturityYears.toFixed(1)}y`}).</div>}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
+            {!rows.length && <tr><td colSpan={14} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
           </tbody>
         </table>
       </div>

@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convert-hedge",
+    date: "2026-08-29",
+    title: "The convert hedge — delta, shares to short, and gamma",
+    items: [
+      "Convertible Watch now shows the arb hedge, not just the vol read. A Δ /bond column gives the delta (shares to short per $1,000 bond to stay delta-neutral), and a Short-hedge column — driven by a position-size input — tells you for YOUR position exactly how many shares to short and the dollar amount. Click any row for the full breakdown: the delta hedge, the gamma you harvest by rebalancing (how many shares a 1% move shifts the hedge), and the note's bond floor / parity / moneyness. Model-based (there's no live convert price), so treat the share counts as a guide.",
+    ],
+  },
+  {
     id: "2026-08-29-analyzer-sizing",
     date: "2026-08-29",
     title: "Breakevens on the distribution + position sizing in the analyzer",

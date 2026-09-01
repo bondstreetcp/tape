@@ -29,6 +29,13 @@ function bsCallDelta(S: number, K: number, T: number, sigma: number, r: number, 
   const d1 = (Math.log(S / K) + (r - q + (sigma * sigma) / 2) * T) / v;
   return Math.exp(-q * T) * normCdf(d1);
 }
+const normPdf = (x: number): number => Math.exp((-x * x) / 2) / SQRT2PI;
+function bsCallGamma(S: number, K: number, T: number, sigma: number, r: number, q = 0): number {
+  if (T <= 0 || sigma <= 0 || S <= 0) return 0;
+  const v = sigma * Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r - q + (sigma * sigma) / 2) * T) / v;
+  return (Math.exp(-q * T) * normPdf(d1)) / (S * v);
+}
 
 export interface ConvertibleTerms {
   ticker: string;
@@ -62,6 +69,7 @@ export interface ConvertValue {
   investmentPremium: number; // (value − bondFloor)/bondFloor — how far above the bond floor
   conversionPremium: number; // (value − parity)/parity — how far above conversion value
   delta: number; // ∂value/∂S in SHARES per bond — the short-stock hedge ratio
+  gamma: number; // ∂delta/∂S in shares per bond per $1 move — the gamma you harvest by rehedging
   equitySensitivity: number; // delta·S / value — 0 = trades like a bond, ~1 = trades like the stock
   moneyness: "busted" | "balanced" | "in-the-money";
 }
@@ -74,6 +82,7 @@ export function convertibleValue(t: ConvertibleTerms, S: number, sigma: number, 
   const value = floor + callValue;
   const parity = ratio * S;
   const delta = ratio * bsCallDelta(S, t.conversionPrice, T, sigma, r, q);
+  const gamma = ratio * bsCallGamma(S, t.conversionPrice, T, sigma, r, q);
   const parPct = parity / par;
   return {
     value,
@@ -83,6 +92,7 @@ export function convertibleValue(t: ConvertibleTerms, S: number, sigma: number, 
     investmentPremium: floor > 0 ? (value - floor) / floor : 0,
     conversionPremium: parity > 0 ? (value - parity) / parity : 0,
     delta,
+    gamma,
     equitySensitivity: value > 0 ? (delta * S) / value : 0,
     moneyness: parPct < 0.6 ? "busted" : parPct > 1.15 ? "in-the-money" : "balanced",
   };
