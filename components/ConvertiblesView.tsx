@@ -23,12 +23,23 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
   const [expanded, setExpanded] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({}); // observed convert prices you enter (per 100), by CUSIP/ticker
   const [book, setBook] = useState<Record<string, number>>({}); // sleeve: held converts (key → face $)
+  const [now] = useState(() => Date.now()); // mount-stable clock — keeps the rows/sleeve memos from recomputing every render (time-to-maturity doesn't meaningfully move within a session)
   useEffect(() => {
     try {
       const f = Number(localStorage.getItem("tape.convFace")); if (f > 0) setFace(f);
       const m = JSON.parse(localStorage.getItem("tape.convMarks") || "{}"); if (m && typeof m === "object") setMarks(m);
-      const b = JSON.parse(localStorage.getItem("tape.convBook") || "{}"); if (b && typeof b === "object") setBook(b);
+      const b = JSON.parse(localStorage.getItem("tape.convBook") || "{}");
+      if (b && typeof b === "object") {
+        // Prune holds for converts no longer in the scan (aged past the 180d window) so a stale key can't
+        // linger un-removable in localStorage or silently drop from the sleeve. Skip when rows are empty
+        // (a failed / cache-miss load) so we never wipe a book we simply couldn't match. Mirrors holdKeyOf.
+        const valid = new Set(data.rows.map((r) => r.cusip || r.ticker || r.filingUrl + r.ticker));
+        const clean = data.rows.length ? (Object.fromEntries(Object.entries(b).filter(([k]) => valid.has(k))) as Record<string, number>) : (b as Record<string, number>);
+        setBook(clean);
+        if (data.rows.length && Object.keys(clean).length !== Object.keys(b).length) { try { localStorage.setItem("tape.convBook", JSON.stringify(clean)); } catch { /* ignore */ } }
+      }
     } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: reconcile against the initially-loaded rows; re-running on data changes would clobber in-session face/marks edits
   }, []);
   const setMark = (k: string, v: string) => setMarks((prev) => { const n = { ...prev, [k]: v }; try { localStorage.setItem("tape.convMarks", JSON.stringify(n)); } catch { /* ignore */ } return n; });
   const persistBook = (n: Record<string, number>) => { setBook(n); try { localStorage.setItem("tape.convBook", JSON.stringify(n)); } catch { /* ignore */ } };
@@ -45,7 +56,6 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
     return () => { alive = false; };
   }, [symKey]);
 
-  const now = Date.now();
   const rows = useMemo(() => {
     const enriched = data.rows.map((r) => {
       const S = (r.ticker && prices[r.ticker]) || r.refPrice || null;
