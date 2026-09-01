@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convert-sleeve",
+    date: "2026-08-29",
+    title: "A sleeve view for the convert book — book greeks + the drawdown stress",
+    items: [
+      "Hold a set of converts (the ＋ on any row) and Convertible Watch rolls them into a sleeve: total notional, the total short-stock hedge, net vega (you're long the embedded calls' vol), net carry, and the share of notional sitting on soft/distressed credit. Plus the classic convert-arb stress — vol −5 points and credit +100bp, the scenario that hits the long leg while the delta hedge does nothing — so you see the drawdown before it happens. Delta-hedged means net equity delta ≈ 0; what remains is vega, credit, and correlation (a sector selloff hits them together). Stays in your browser.",
+    ],
+  },
+  {
     id: "2026-08-29-convert-mark",
     date: "2026-08-29",
     title: "Live convert mark — CUSIP + a rich/cheap read from any price",

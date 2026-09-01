@@ -23,6 +23,7 @@ test("value ≥ bond floor; delta within (0, ratio); moneyness classified", () =
   assert.ok(v.value >= v.bondFloor);
   assert.ok(v.delta > 0 && v.delta < conversionRatio(T));
   assert.ok(v.gamma > 0, "a live convert has positive gamma (the arb engine)");
+  assert.ok(v.vega > 0, "a live convert is long vega (the embedded call)");
   assert.ok(v.equitySensitivity >= 0 && v.equitySensitivity <= 1.2);
   assert.equal(convertibleValue(T, 50, 0.5, R, CS).moneyness, "busted"); // parity ~33% of par
   assert.equal(convertibleValue(T, 150, 0.5, R, CS).moneyness, "balanced"); // parity = par
