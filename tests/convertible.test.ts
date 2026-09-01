@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, type ConvertibleTerms } from "../lib/convertible";
+import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, creditQuality, type ConvertibleTerms } from "../lib/convertible";
 
 // A representative AI-name convert: $150 conversion price on a $100 stock (50% premium), 0.5% coupon,
 // 5-year, $1000 par. r = 4%, credit spread 3% (unrated growth).
@@ -61,6 +61,17 @@ test("carry: coupon minus borrow + dividend drag on the short; HTB flips it nega
   assert.ok(Math.abs(htb.borrowDrag - 0.09) < 1e-9); // 0.45 × 0.20
   const div = convertCarry(0.005, 0.45, 0.0025, 0.02); // + a 2% dividend the short pays
   assert.ok(div.net < easy.net, "a dividend the short pays lowers carry");
+});
+
+test("credit quality: net-cash & FCF-positive = solid; cash-burner short runway = distressed", () => {
+  const solid = creditQuality({ totalCash: 5e9, freeCashflow: 1e9, marketCap: 5e10, enterpriseValue: 4.6e10 }); // EV < mkt cap → net cash
+  assert.equal(solid.tier, "solid");
+  assert.ok((solid.netDebt as number) < 0);
+  const distressed = creditQuality({ totalCash: 1e9, freeCashflow: -1e9, marketCap: 5e9, enterpriseValue: 5e9 }); // burning, ~1y runway
+  assert.equal(distressed.tier, "distressed");
+  assert.ok(Math.abs((distressed.runwayYears as number) - 1) < 1e-9);
+  const soft = creditQuality({ totalCash: 2e9, freeCashflow: -1e9, marketCap: 5e9, enterpriseValue: 5e9 }); // ~2y runway
+  assert.equal(soft.tier, "soft");
 });
 
 test("credit-spread estimate rises with coupon and is clamped", () => {

@@ -141,6 +141,39 @@ export function convertCarry(coupon: number, hedgeNotionalFrac: number, borrowFe
   return { net: coupon - borrowDrag - divDrag, couponYield: coupon, borrowDrag, divDrag };
 }
 
+/** CREDIT-QUALITY proxy — how solid is the bond FLOOR the convert-arb long leans on. For a cash-burning
+ *  issuer (many AI names) the floor is soft: distress/default and a bond that trades down on credit, not
+ *  just the stock. Uses net debt (EV − market cap; <0 = net cash), the cash runway (cash ÷ annual burn),
+ *  and net-debt-to-market-cap as a leverage read. Compare runwayYears to the convert's maturity: runway <
+ *  maturity = refinancing risk. Rough (market-based, no rating/CDS) — a screen, not a credit opinion. */
+export interface CreditInputs {
+  totalCash: number | null;
+  freeCashflow: number | null; // annual FCF ($); < 0 = burning
+  marketCap: number | null;
+  enterpriseValue: number | null;
+}
+export interface CreditQuality {
+  netDebt: number | null; // EV − market cap ($); < 0 = net cash
+  ndToMcap: number | null; // net debt ÷ market cap — leverage vs the equity cushion
+  runwayYears: number | null; // cash ÷ annual burn, only when FCF < 0
+  burning: boolean;
+  tier: "solid" | "adequate" | "soft" | "distressed";
+}
+export function creditQuality(c: CreditInputs): CreditQuality {
+  const netDebt = c.enterpriseValue != null && c.marketCap != null ? c.enterpriseValue - c.marketCap : null;
+  const ndToMcap = netDebt != null && c.marketCap != null && c.marketCap > 0 ? netDebt / c.marketCap : null;
+  const burning = c.freeCashflow != null && c.freeCashflow < 0;
+  const runwayYears = burning && c.totalCash != null && c.totalCash > 0 ? c.totalCash / Math.abs(c.freeCashflow as number) : null;
+  const netCash = netDebt != null && netDebt < 0;
+  let tier: CreditQuality["tier"];
+  if (burning && runwayYears != null && runwayYears < 1.5) tier = "distressed";
+  else if ((burning && runwayYears != null && runwayYears < 3) || (ndToMcap != null && ndToMcap > 1)) tier = "soft";
+  else if (netCash && !burning) tier = "solid";
+  else if (netCash && runwayYears != null && runwayYears > 5) tier = "solid";
+  else tier = "adequate";
+  return { netDebt, ndToMcap, runwayYears, burning, tier };
+}
+
 /** A convertible as stored/served: extracted terms + the code-computed issue vol + provenance. */
 export interface ConvertibleRow {
   ticker: string;
@@ -162,6 +195,7 @@ export interface ConvertibleRow {
   borrowAvailable: number | null; // shares available to borrow
   borrowStale: boolean; // borrow feed flagged the availability stale
   dividendYield: number | null; // the short pays this (decimal); ~0 for most convert issuers
+  credit: CreditQuality | null; // issuer credit-quality proxy — how solid the bond floor is
   filedDate: string; // offering filing date
   filingUrl: string;
   form: string;

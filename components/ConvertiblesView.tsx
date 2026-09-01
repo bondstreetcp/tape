@@ -69,6 +69,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
   const edgeColor = (v: "cheap" | "fair" | "rich") => (v === "cheap" ? "#22c55e" : v === "rich" ? "#ef4444" : "var(--text-3)");
   // Borrow tightness from the annualized fee (%). IB floor ~0.25% = general collateral (easy).
   const borrowTier = (feePct: number) => (feePct >= 20 ? { label: "very HTB", color: "#ef4444" } : feePct >= 5 ? { label: "HTB", color: "#f59e0b" } : feePct >= 1 ? { label: "moderate", color: "var(--text-2)" } : { label: "easy", color: "#22c55e" });
+  const creditMeta = (t: "solid" | "adequate" | "soft" | "distressed") => (t === "solid" ? { c: "#22c55e" } : t === "adequate" ? { c: "var(--text-2)" } : t === "soft" ? { c: "#f59e0b" } : { c: "#ef4444" });
   const SortTh = ({ k, children, cls = "" }: { k: Sort; children: React.ReactNode; cls?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}><button onClick={() => setSort(k)} className={"hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>{children}{sort === k ? " ↓" : ""}</button></th>
   );
@@ -101,7 +102,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <table className="w-full min-w-[1360px] text-left text-[13px]">
+        <table className="w-full min-w-[1480px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
             <tr>
               <th className="px-3 py-2 font-medium">Issuer</th>
@@ -118,6 +119,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               <th className="px-2 py-2 text-right font-medium" title="Shares to short for your position (face ÷ par × delta), and the dollar short">Short hedge</th>
               <th className="px-2 py-2 text-right font-medium" title="Annualized stock-borrow fee on the short leg — HTB names cost a lot to short and can be recalled">Borrow</th>
               <th className="px-2 py-2 text-right font-medium" title="Net carry % of notional: coupon − (borrow fee + dividend) × hedge fraction. Negative = the position bleeds while you wait">Carry</th>
+              <th className="px-2 py-2 text-right font-medium" title="Issuer credit-quality proxy — how solid the bond floor is (net cash/debt, cash runway, leverage). Soft/distressed = the floor can fall on credit, not just the stock">Credit</th>
               <th className="px-2 py-2 text-right font-medium" title="Capped-call cap — the effective dilution ceiling the issuer bought">Capped cap</th>
               <th className="px-2 py-2 font-medium"></th>
             </tr>
@@ -150,6 +152,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                 <td className="px-2 py-2 text-right tabular-nums text-[#ef4444]">{shortSh != null ? <span title={`short ${Math.round(shortSh).toLocaleString()} sh @ $${(S as number).toFixed(2)}`}>{Math.round(shortSh).toLocaleString()}<div className="text-[10px] text-[var(--text-4)]">{usd(shortUsd)}</div></span> : "—"}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.borrowFee != null ? (() => { const feePct = r.borrowFee * 100; const t = borrowTier(feePct); return <span style={{ color: t.color }} title={`${t.label}${r.borrowAvailable != null ? ` · ${r.borrowAvailable.toLocaleString()} sh available` : ""}${r.borrowStale ? " · stale" : ""}`}>{feePct < 1 ? feePct.toFixed(2) : feePct.toFixed(1)}%</span>; })() : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: carry == null ? "var(--text-4)" : carry.net >= 0 ? "#22c55e" : "#ef4444" }} title={carry ? `coupon +${(carry.couponYield * 100).toFixed(1)}% − borrow ${(carry.borrowDrag * 100).toFixed(1)}%${carry.divDrag > 0 ? ` − div ${(carry.divDrag * 100).toFixed(1)}%` : ""}` : "needs borrow + a live price"}>{carry ? `${carry.net >= 0 ? "+" : ""}${(carry.net * 100).toFixed(1)}%` : "—"}</td>
+                <td className="px-2 py-2 text-right text-[12px] font-medium">{r.credit ? <span style={{ color: creditMeta(r.credit.tier).c }} title={`${r.credit.netDebt != null ? (r.credit.netDebt < 0 ? "net cash" : "net debt $" + (r.credit.netDebt / 1e9).toFixed(1) + "B") : "debt n/a"}${r.credit.runwayYears != null ? ` · ${r.credit.runwayYears.toFixed(1)}y runway` : r.credit.burning ? " · burning" : " · FCF+"}`}>{r.credit.tier}</span> : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.cappedCallCap != null ? "#a855f7" : "var(--text-4)" }} title={r.cappedCallCap != null ? "Effective dilution ceiling from the issuer's capped call — dealers who sold it are short gamma here" : "no capped call disclosed"}>{r.cappedCallCap != null ? usd(r.cappedCallCap, 0) : "—"}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-right text-[11px]">
                   {r.ticker && <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}?tab=options`} onClick={(e) => e.stopPropagation()} className="text-[var(--accent)] hover:underline" title="Options & gamma on the underlying">options</Link>}
@@ -158,7 +161,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               </tr>
               {open && (
                 <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                  <td colSpan={16} className="px-4 py-3">
+                  <td colSpan={17} className="px-4 py-3">
                     {live && S ? (
                       <div className="grid gap-x-8 gap-y-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
                         <div>
@@ -185,6 +188,20 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                             </>
                           ) : <div className="mt-1 text-[11px] text-[var(--text-4)]">No borrow data for this name yet (populates nightly); carry needs the borrow fee + a live price.</div>}
                         </div>
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Bond-floor credit</div>
+                          {r.credit ? (() => {
+                            const cr = r.credit;
+                            const my = r.maturity ? (Date.parse(r.maturity) - now) / (365.25 * DAY) : r.maturityYears;
+                            const refiRisk = cr.runwayYears != null && cr.runwayYears < my;
+                            return (
+                              <>
+                                <div className="mt-1 text-[13px]"><b style={{ color: creditMeta(cr.tier).c }}>{cr.tier}</b> <span className="text-[11px] text-[var(--text-4)]">{cr.netDebt != null ? (cr.netDebt < 0 ? `net cash $${(Math.abs(cr.netDebt) / 1e9).toFixed(1)}B` : `net debt $${(cr.netDebt / 1e9).toFixed(1)}B`) : "debt n/a"}{cr.ndToMcap != null ? ` · ${cr.ndToMcap.toFixed(2)}× mkt cap` : ""}{cr.burning ? (cr.runwayYears != null ? ` · ${cr.runwayYears.toFixed(1)}y cash runway` : " · burning cash") : " · FCF-positive"}</span></div>
+                                <div className="mt-1 text-[11px] text-[var(--text-4)]">{refiRisk ? <b className="text-[#f59e0b]">Runway ({(cr.runwayYears as number).toFixed(1)}y) &lt; maturity ({my.toFixed(1)}y) — refinancing risk; the floor leans on capital-markets access.</b> : "The bond floor is your downside protection — a weaker credit lets it fall on credit, not just the stock."}</div>
+                              </>
+                            );
+                          })() : <div className="mt-1 text-[11px] text-[var(--text-4)]">No issuer credit data yet (populates nightly).</div>}
+                        </div>
                       </div>
                     ) : <div className="text-[12px] text-[var(--text-4)]">No live price for {r.ticker || r.issuer} — can&apos;t size the hedge (conversion price ${r.conversionPrice}, {r.maturity ?? `${r.maturityYears.toFixed(1)}y`}).</div>}
                   </td>
@@ -193,7 +210,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               </Fragment>
               );
             })}
-            {!rows.length && <tr><td colSpan={16} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
+            {!rows.length && <tr><td colSpan={17} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
           </tbody>
         </table>
       </div>

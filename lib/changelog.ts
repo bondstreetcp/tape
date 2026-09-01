@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convert-credit",
+    date: "2026-08-29",
+    title: "Bond-floor credit quality on the Convertible Watch",
+    items: [
+      "Convertible Watch now rates how SOLID the bond floor is — a Credit column (solid / adequate / soft / distressed) from the issuer's net cash/debt, cash runway (cash ÷ burn) and leverage. It matters most for the cash-burning AI names: the bond floor is your downside protection on the long leg, but a weak credit lets it fall on credit — not just the stock — and can trade toward distress. Expand a row for net debt, runway, and a flag when the runway is shorter than the note's maturity (refinancing risk). A market-based proxy (net debt = enterprise value − market cap), not a rating.",
+    ],
+  },
+  {
     id: "2026-08-29-convert-carry",
     date: "2026-08-29",
     title: "Borrow & carry on the Convertible Watch — the short leg's economics",
