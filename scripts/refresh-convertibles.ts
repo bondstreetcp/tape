@@ -9,21 +9,24 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { discoverConvertibleFilings, extractConvertibleTerms } from "../lib/convertibleExtract";
 import { fetchFilingBodyText, edgarDocUrl } from "../lib/edgarSearch";
-import { impliedIssueVol, estimateCreditSpread, creditQuality, type ConvertibleRow, type ConvertiblesData, type ConvertibleTerms, type CreditQuality } from "../lib/convertible";
+import { impliedIssueVol, estimateCreditSpread, creditQuality, dedupeConvertibleRows, type ConvertibleRow, type ConvertiblesData, type ConvertibleTerms, type CreditQuality } from "../lib/convertible";
 import { getBorrow } from "../lib/borrow";
 import { cachedStats } from "../lib/companyCache";
+import { getTermStructure } from "../lib/options";
 
 const DAYS = 180; // look-back window for offerings
+const MAX_FILINGS = 200; // cap the extraction fan-out (newest-first); a busy window won't blow up the nightly LLM spend
 const R = 0.04; // risk-free
 const DAY = 86_400_000;
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 async function main() {
   const now = Date.now();
-  const hits = await discoverConvertibleFilings(iso(now - DAYS * DAY), iso(now));
-  console.log(`convertibles: ${hits.length} candidate issuers over the last ${DAYS}d`);
+  const allHits = await discoverConvertibleFilings(iso(now - DAYS * DAY), iso(now));
+  const hits = allHits.slice(0, MAX_FILINGS);
+  console.log(`convertibles: ${allHits.length} candidate filings over the last ${DAYS}d${allHits.length > hits.length ? ` (extracting the newest ${hits.length})` : ""}`);
 
-  const rows: ConvertibleRow[] = [];
+  let rows: ConvertibleRow[] = [];
   for (const h of hits) {
     try {
       const text = await fetchFilingBodyText(h);
@@ -37,7 +40,10 @@ async function main() {
       const par = t.par && t.par > 0 ? t.par : 1000;
       const creditSpread = estimateCreditSpread(coupon);
       const terms: ConvertibleTerms = { ticker: h.ticker || h.issuer, conversionPrice: t.conversionPrice as number, coupon, maturityYears, par, refPrice: t.refPrice, premium };
-      const issueVol = impliedIssueVol(terms, R, creditSpread);
+      // Issue vol from the tenor AT ISSUE (maturity − filing date), not the shrinking remaining maturity —
+      // so it's a fixed issue-time quantity, stable across nightly refreshes.
+      const issueYears = t.maturity && h.date ? Math.max(0.1, (Date.parse(t.maturity) - Date.parse(h.date)) / (365.25 * DAY)) : maturityYears;
+      const issueVol = impliedIssueVol(terms, R, creditSpread, 0, issueYears);
       // Short-leg economics: stock-borrow fee/availability (IBorrowDesk) + the dividend the short pays.
       let borrowFee: number | null = null, borrowAvailable: number | null = null, borrowStale = false, dividendYield: number | null = null;
       let credit: CreditQuality | null = null;
@@ -82,6 +88,11 @@ async function main() {
     }
   }
 
+  // Collapse each deal's launch/upsize/pricing filings to one row (newest terms), keeping distinct deals.
+  const beforeDedup = rows.length;
+  rows = dedupeConvertibleRows(rows);
+  if (beforeDedup !== rows.length) console.log(`convertibles: deduped ${beforeDedup} filings → ${rows.length} distinct deals`);
+
   // Attach the stock's listed ATM IV + realized vol from the nightly vol-dislocation feed where covered.
   try {
     const vd = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "vol-dislocation.json"), "utf8"));
@@ -90,7 +101,21 @@ async function main() {
       const v = row.ticker ? byT.get(row.ticker) : null;
       if (v) { row.listedIV = v.atmIV ?? null; row.realizedVol = v.rvol ?? null; }
     }
-  } catch { /* no vol feed → listed IV stays null, the view can fetch it live */ }
+  } catch { /* no vol feed → fall through to the live per-name IV pull below */ }
+
+  // Fill any still-missing listed IV live (best-effort) so names OUTSIDE the vol-dislocation universe still
+  // get a cheap/rich edge — the ~1M ATM IV off the live options chain. The view has no IV feed of its own.
+  for (const row of rows) {
+    if (row.listedIV != null || !row.ticker) continue;
+    try {
+      const ts = await getTermStructure(row.ticker, 6);
+      const cand = ts.points.filter((p) => p.atmIV != null && p.atmIV > 0.05 && p.atmIV < 3);
+      if (cand.length) {
+        const pick = cand.reduce((a, b) => (Math.abs(b.dte - 30) < Math.abs(a.dte - 30) ? b : a)); // nearest ~30 DTE
+        row.listedIV = +(pick.atmIV as number).toFixed(4);
+      }
+    } catch { /* no chain → listed IV stays null, the Edge column shows n/a for this name */ }
+  }
 
   rows.sort((a, b) => b.filedDate.localeCompare(a.filedDate));
   const data: ConvertiblesData = { generatedAt: new Date(now).toISOString(), rows };

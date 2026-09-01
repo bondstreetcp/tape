@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, creditQuality, convertVolFromPrice, type ConvertibleTerms } from "../lib/convertible";
+import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, creditQuality, convertVolFromPrice, dedupeConvertibleRows, type ConvertibleTerms, type ConvertibleRow } from "../lib/convertible";
 
 // A representative AI-name convert: $150 conversion price on a $100 stock (50% premium), 0.5% coupon,
 // 5-year, $1000 par. r = 4%, credit spread 3% (unrated growth).
@@ -35,6 +35,35 @@ test("implied issue vol round-trips: plug it back → the convert prices at par"
   assert.ok(iv != null && (iv as number) > 0.1 && (iv as number) < 2, `iv ${iv}`);
   const val = convertibleValue(T, T.refPrice as number, iv as number, R, CS).value;
   assert.ok(Math.abs(val - 1000) < 1, `re-priced to ${val}, want ~1000`);
+});
+
+test("issue vol is pinned to the ISSUE tenor, not the shrinking remaining maturity", () => {
+  // Same deal seen at issue (5y left) and a year on (4y left). Passing the issue tenor (5) explicitly,
+  // the number is identical — a fixed issue-time quantity; the remaining-maturity field doesn't leak in.
+  const atIssue = impliedIssueVol({ ...T, maturityYears: 5 }, R, CS, 0, 5) as number;
+  const aYearLater = impliedIssueVol({ ...T, maturityYears: 4 }, R, CS, 0, 5) as number;
+  assert.ok(Math.abs(atIssue - aYearLater) < 1e-9, `issue vol drifted with the field: ${atIssue} vs ${aYearLater}`);
+  // Defaulting T to the remaining maturity (the old behavior) moves it — the drift the fix removes.
+  const drifted = impliedIssueVol({ ...T, maturityYears: 4 }, R, CS) as number;
+  assert.ok(Math.abs(drifted - atIssue) > 1e-3, `expected drift on remaining maturity, got ${drifted} vs ${atIssue}`);
+});
+
+test("dedupeConvertibleRows: a deal's filings collapse to newest; distinct deals per issuer survive", () => {
+  const mk = (ticker: string, maturity: string, filedDate: string, conversionPrice: number): ConvertibleRow => ({
+    ticker, issuer: ticker + " Inc", cusip: null, coupon: 0, maturity, maturityYears: 5, conversionPrice,
+    premium: null, refPrice: null, sizeMM: null, cappedCallCap: null, par: 1000, creditSpread: 0.03,
+    issueVol: null, listedIV: null, realizedVol: null, borrowFee: null, borrowAvailable: null, borrowStale: false,
+    dividendYield: null, credit: null, filedDate, filingUrl: "u" + filedDate, form: "8-K", extractedAt: "",
+  });
+  const out = dedupeConvertibleRows([
+    mk("MSTR", "2030-06-01", "2025-03-01", 150), // deal A launch (preliminary conv price)
+    mk("MSTR", "2030-06-01", "2025-03-05", 155), // deal A pricing (final terms) — newest, wins
+    mk("MSTR", "2032-09-01", "2025-08-01", 400), // deal B — distinct maturity, must survive
+  ]);
+  assert.equal(out.length, 2, "two distinct MSTR deals kept");
+  const dealA = out.find((r) => r.maturity === "2030-06-01");
+  assert.equal(dealA?.filedDate, "2025-03-05", "newest filing wins within a deal");
+  assert.equal(dealA?.conversionPrice, 155, "final-terms conversion price kept, not the preliminary one");
 });
 
 test("a fatter conversion premium requires a higher issue vol (more OTM embedded call)", () => {

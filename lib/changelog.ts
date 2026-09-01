@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-09-01-convert-hardening",
+    date: "2026-09-01",
+    title: "Convertible Watch — serial issuers, a stable issue vol, and wider IV coverage",
+    items: [
+      "Serial issuers now show their whole stack. The scan used to keep only the newest convert per issuer, so a name like MSTR with several outstanding deals showed just one — and a stray recent filing could hide the real offering. It now extracts every filing and collapses only a single deal's launch/upsize/pricing paperwork, keeping distinct deals (by maturity) apart.",
+      "The implied issue vol is now pinned to the tenor at issue instead of the shrinking time-to-maturity, so it stops drifting night to night (and no longer flips a name cheap↔rich just from the calendar).",
+      "Names outside the vol universe now get a listed-IV read — the watch pulls a live ~1-month ATM IV off the options chain when the nightly feed doesn't cover the ticker, so more rows show a real cheap/rich edge. Plus dividend-paying issuers now price their embedded call with the dividend, and the sleeve's notional counts only positions it can actually price.",
+    ],
+  },
+  {
     id: "2026-08-29-convert-sleeve",
     date: "2026-08-29",
     title: "A sleeve view for the convert book — book greeks + the drawdown stress",

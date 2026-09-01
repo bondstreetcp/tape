@@ -109,15 +109,18 @@ export function convertibleValue(t: ConvertibleTerms, S: number, sigma: number, 
 }
 
 /** The vol that makes the convert worth PAR at issue (S = the reference price) — the "issue vol", i.e.
- *  the implied vol the market paid for the embedded optionality. null if the terms can't price to par. */
-export function impliedIssueVol(t: ConvertibleTerms, r: number, creditSpread: number, q = 0): number | null {
+ *  the implied vol the market paid for the embedded optionality. null if the terms can't price to par.
+ *  Pass `T` = the tenor AT ISSUE (maturity − pricing date) so the number is a fixed issue-time quantity;
+ *  it defaults to `t.maturityYears`, but feeding the shrinking remaining maturity would make the "issue
+ *  vol" drift as the note ages (and flip the cheap/rich verdict near the boundary purely from the calendar). */
+export function impliedIssueVol(t: ConvertibleTerms, r: number, creditSpread: number, q = 0, T: number = t.maturityYears): number | null {
   const par = t.par ?? 1000;
   const S = t.refPrice ?? (t.premium != null ? t.conversionPrice / (1 + t.premium) : null);
   if (S == null || !(S > 0)) return null;
-  const targetCall = par - bondFloor(t, r, creditSpread); // the embedded call must be worth this to price at par
+  const targetCall = par - bondFloor(t, r, creditSpread, T); // the embedded call must be worth this to price at par
   if (targetCall <= 0) return null; // bond floor already ≥ par → no equity option needed / inconsistent
   const ratio = conversionRatio(t);
-  const f = (sig: number) => ratio * bsCall(S, t.conversionPrice, t.maturityYears, sig, r, q) - targetCall;
+  const f = (sig: number) => ratio * bsCall(S, t.conversionPrice, T, sig, r, q) - targetCall;
   let lo = 0.01, hi = 3;
   if (f(lo) >= 0) return lo; // even ~0 vol overshoots par (deep ITM at issue) — floor it
   if (f(hi) < 0) return null; // even 300% vol can't reach par — terms inconsistent
@@ -232,4 +235,19 @@ export interface ConvertibleRow {
 export interface ConvertiblesData {
   generatedAt: string;
   rows: ConvertibleRow[];
+}
+
+/** Collapse an issuer's convert rows to ONE per DEAL — keyed on (ticker/issuer, maturity), newest filing
+ *  wins. A single offering files several times (launch 8-K → upsize → pricing 424B); those share a maturity
+ *  and collapse to the final-terms filing. DISTINCT deals from the same issuer (different maturities — the
+ *  MSTR/COIN serial-issuance case) have different keys and are kept. Run AFTER extraction, since the deal's
+ *  identity (its maturity) isn't known until the terms are pulled. Pure — safe to unit-test. */
+export function dedupeConvertibleRows(rows: ConvertibleRow[]): ConvertibleRow[] {
+  const byDeal = new Map<string, ConvertibleRow>();
+  for (const r of rows) {
+    const key = `${(r.ticker || r.issuer || "").toUpperCase()}|${r.maturity ?? ""}`;
+    const prev = byDeal.get(key);
+    if (!prev || r.filedDate > prev.filedDate) byDeal.set(key, r);
+  }
+  return [...byDeal.values()];
 }

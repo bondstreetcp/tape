@@ -57,15 +57,15 @@ export async function extractConvertibleTerms(text: string): Promise<RawConvTerm
   };
 }
 
-/** Recent convertible-note offerings via EDGAR full-text search, one (newest) filing per issuer. The
- *  424B* pricing prospectus carries the final terms; the 8-K catches issuers who only press-release. */
+/** Recent convertible-note offerings via EDGAR full-text search — every distinct filing (deduped only on
+ *  accession), newest first. We deliberately DON'T collapse per issuer here: a serial issuer (MSTR/COIN)
+ *  has several separate deals, and their identity (the maturity) isn't known until the terms are extracted.
+ *  refresh-convertibles extracts each, then `dedupeConvertibleRows` collapses a single deal's launch/upsize/
+ *  pricing filings by (ticker, maturity). The 424B* pricing prospectus carries the final terms; the 8-K
+ *  catches issuers who only press-release. */
 export async function discoverConvertibleFilings(startdt: string, enddt: string): Promise<EftsHit[]> {
   const hits = await eftsSearch({ q: '"convertible senior notes"', forms: "424B5,424B2,424B3,8-K", startdt, enddt });
-  const byIssuer = new Map<string, EftsHit>();
-  for (const h of hits) {
-    const key = (h.ticker || h.issuer || h.accession).toUpperCase();
-    const prev = byIssuer.get(key);
-    if (!prev || h.date > prev.date) byIssuer.set(key, h); // newest per issuer (pricing supersedes launch/upsize)
-  }
-  return [...byIssuer.values()];
+  const byAccession = new Map<string, EftsHit>();
+  for (const h of hits) if (!byAccession.has(h.accession)) byAccession.set(h.accession, h);
+  return [...byAccession.values()].sort((a, b) => b.date.localeCompare(a.date)); // newest first (so a cap keeps the freshest)
 }

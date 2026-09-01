@@ -52,7 +52,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
       const my = r.maturity ? Math.max(0.05, (Date.parse(r.maturity) - now) / (365.25 * DAY)) : r.maturityYears;
       const vol = r.listedIV ?? r.issueVol ?? 0.5; // value/delta at the more current listed IV where we have it
       const terms: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my, par: r.par, refPrice: r.refPrice, premium: r.premium };
-      const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread) : null;
+      const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread, r.dividendYield ?? 0) : null;
       const edge = r.issueVol != null && r.listedIV != null ? volEdge(r.issueVol, r.listedIV) : null;
       // Carry: coupon collected − (borrow fee + dividend) on the short, scaled by the hedge notional.
       const hedgeFrac = live && S ? (live.delta * S) / r.par : null;
@@ -81,15 +81,15 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
     let notional = 0, shortUsd = 0, shortShares = 0, vega = 0, carry = 0, softNotional = 0, creditPnl = 0, priced = 0;
     for (const r of held) {
       const face = book[holdKeyOf(r)];
-      notional += face;
-      if (r.credit && (r.credit.tier === "soft" || r.credit.tier === "distressed")) softNotional += face;
       const S = (r.ticker && prices[r.ticker]) || r.refPrice || null;
       const my = r.maturity ? Math.max(0.05, (Date.parse(r.maturity) - now) / (365.25 * DAY)) : r.maturityYears;
       const vol = r.listedIV ?? r.issueVol ?? 0.5;
       const terms: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my, par: r.par, refPrice: r.refPrice, premium: r.premium };
-      const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread) : null;
-      if (!live || !S) continue;
+      const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread, r.dividendYield ?? 0) : null;
+      if (!live || !S) continue; // can't price → excluded from every book figure below (the "N priced" caption flags the gap)
       priced++;
+      notional += face;
+      if (r.credit && (r.credit.tier === "soft" || r.credit.tier === "distressed")) softNotional += face;
       const bonds = r.par > 0 ? face / r.par : 0;
       shortShares += bonds * live.delta;
       shortUsd += bonds * live.delta * S;
@@ -276,7 +276,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                           const richCheap = obsPct != null ? obsPct - modelPct : null;
                           const my2 = r.maturity ? Math.max(0.05, (Date.parse(r.maturity) - now) / (365.25 * DAY)) : r.maturityYears;
                           const terms2: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my2, par: r.par, refPrice: r.refPrice, premium: r.premium };
-                          const mktVol = obsPct != null ? convertVolFromPrice(terms2, S as number, (obsPct / 100) * r.par, R, r.creditSpread) : null;
+                          const mktVol = obsPct != null ? convertVolFromPrice(terms2, S as number, (obsPct / 100) * r.par, R, r.creditSpread, r.dividendYield ?? 0) : null;
                           return (
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
                               <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Live mark</span>
