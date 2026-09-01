@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-09-01-ism-proxy",
+    date: "2026-09-01",
+    title: "Real economy — an ISM PMI proxy you can actually scan for",
+    items: [
+      "ISM's PMI is proprietary (ISM had FRED discontinue the free series), so the Macro → Real economy panel has always used the regional-Fed surveys as the free stand-in — but the word 'ISM' was buried in tooltips. Now the Manufacturing and Services group headers say 'ISM-PMI proxy' outright, and each leads with a single composite headline card — an equal-weight average of the Empire/Philly/Dallas manufacturing surveys (and the NY/Philly/Dallas service surveys) — so there's one PMI-style number to read. It's on the surveys' native scale (>0 = expansion), not ISM's 50-centred basis, and it's labeled as the free proxy it is.",
+    ],
+  },
+  {
     id: "2026-09-01-convert-hardening",
     date: "2026-09-01",
     title: "Convertible Watch — serial issuers, a stable issue vol, and wider IV coverage",

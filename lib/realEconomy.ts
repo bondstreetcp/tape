@@ -66,6 +66,49 @@ export const REGIME_COLOR: Record<RealEconomyRead["regime"], string> = {
 
 export const GROUP_ORDER: RealEcoGroup[] = ["Activity", "Recession watch", "Manufacturing", "Services", "Freight", "Consumer", "Prices", "Money & Credit", "Labor", "Travel", "Housing"];
 
+/** Sub-labels that name the licensed print each survey group is the free stand-in for — so a reader
+ *  scanning for "ISM" finds it on the header, not just buried in a tooltip. */
+export const GROUP_SUBTITLE: Partial<Record<RealEcoGroup, string>> = {
+  Manufacturing: "ISM-PMI proxy · regional-Fed surveys + hard output",
+  Services: "ISM-Services proxy · regional-Fed surveys",
+};
+
+/** The regional-Fed survey members that compose each sector's single ISM-style proxy headline. */
+export const SURVEY_COMPOSITES: { group: RealEcoGroup; key: string; label: string; note: string; members: string[] }[] = [
+  { group: "Manufacturing", key: "pmi-composite", label: "Mfg composite — ISM-PMI proxy", members: ["pmi-empire", "pmi-philly", "pmi-dallas"],
+    note: "Equal-weight Empire/Philly/Dallas diffusion indices — the free stand-in for the licensed ISM Manufacturing PMI. On the surveys' native scale (>0 = expansion), NOT ISM's 50-centred basis." },
+  { group: "Services", key: "svc-composite", label: "Services composite — ISM proxy", members: ["svc-ny", "svc-philly", "svc-dallas"],
+    note: "Equal-weight NY/Philly/Dallas Fed service-sector surveys — free stand-in for the licensed ISM Services PMI. Native survey scale (>0 = expansion)." },
+];
+
+/** Average a set of diffusion-index survey series into ONE composite (the free ISM-PMI proxy). Per date,
+ *  averages the members that reported that month, requiring at least half so a late survey doesn't skew
+ *  the level; latest / prev / YoY and the history spark are derived from that averaged path. Kept on the
+ *  members' native 0-centred diffusion scale (>0 = expansion), NOT rescaled to ISM's 50 basis. Pure. */
+export function diffusionComposite(members: RealEcoSeries[], meta: { key: string; label: string; group: RealEcoGroup; note: string }): RealEcoSeries | null {
+  const usable = members.filter((m) => m.history && m.history.length);
+  if (usable.length < 2) return null; // one survey isn't a composite
+  const byDate = new Map<string, number[]>();
+  for (const m of usable) for (const [d, v] of m.history) { const a = byDate.get(d) ?? []; a.push(v); byDate.set(d, a); }
+  const need = Math.ceil(usable.length / 2);
+  const hist = [...byDate.entries()]
+    .filter(([, vs]) => vs.length >= need)
+    .map(([d, vs]) => [d, Math.round((vs.reduce((s, x) => s + x, 0) / vs.length) * 10) / 10] as [string, number])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  if (hist.length < 2) return null;
+  const latest = hist[hist.length - 1], prev = hist[hist.length - 2];
+  const yearTargetMs = Date.parse(latest[0]) - 365 * 86_400_000;
+  let yearAgo: [string, number] | null = null;
+  for (const h of hist) { if (Date.parse(h[0]) <= yearTargetMs) yearAgo = h; else break; }
+  return {
+    key: meta.key, label: meta.label, group: meta.group, unit: "diffusion · avg", changeUnit: "pts", signLevel: true,
+    seriesId: "", source: `Composite · equal-weight of ${usable.length} regional-Fed surveys`, note: meta.note,
+    latest: latest[1], latestDate: latest[0], prev: prev[1], yearAgo: yearAgo ? yearAgo[1] : null,
+    momPct: latest[1] - prev[1], yoyPct: yearAgo ? latest[1] - yearAgo[1] : null,
+    history: hist.slice(-252),
+  };
+}
+
 /** Compact number for display: 1,006,056 → "1.01M", 2,166,539 → "2.17M", 1239 → "1,239". */
 export function fmtVal(v: number | null, unit: string): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -122,12 +165,14 @@ export const SERIES_TOOLTIPS: Record<string, string> = {
   "pmi-empire": "Empire State Manufacturing Survey (NY Fed) — a diffusion index: the net % of factories reporting expansion vs contraction. >0 = expanding, <0 = contracting; the month-to-month POINT move is the signal. A free, timely stand-in for the licensed ISM PMI.",
   "pmi-philly": "Philadelphia Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",
   "pmi-dallas": "Dallas Fed Manufacturing Survey — a diffusion index (net % of firms expanding). >0 = expanding; watch the point move. Free ISM-PMI stand-in.",
+  "pmi-composite": "Manufacturing composite — the equal-weight average of the Empire (NY), Philadelphia and Dallas Fed manufacturing diffusion indices, one free stand-in for the licensed ISM Manufacturing PMI. >0 = the surveys net-expanding; watch the point move. On the surveys' own 0-centred scale, not ISM's 50 basis.",
   "industrial-production": "Federal Reserve Industrial Production index (2017 = 100) — the real output of US factories, mines and utilities. The core HARD measure of manufacturing output.",
   "capacity-util": "Capacity utilization (%, Federal Reserve) — how much of the economy's productive capacity is actually in use. High = tight (potential price pressure); falling = slack building.",
   // Services (the free stand-in for the licensed ISM Services — services are ~70% of the economy)
   "svc-ny": "NY Fed Business Leaders Survey — current business activity for the New York region's SERVICE firms, a diffusion index (>0 = expanding). The services counterpart to the Empire manufacturing survey. Reported not-seasonally-adjusted.",
   "svc-philly": "Philadelphia Fed Nonmanufacturing Survey — firms' own current general activity, a diffusion index (>0 = expanding). A free, timely read on services activity in the mid-Atlantic.",
   "svc-dallas": "Dallas Fed Texas Service Sector Outlook Survey — current general business activity, a diffusion index (>0 = expanding). Texas services are a large, early-reporting slice of the sector.",
+  "svc-composite": "Services composite — the equal-weight average of the NY, Philadelphia and Dallas Fed service-sector surveys, one free stand-in for the licensed ISM Services PMI. >0 = net-expanding. Services are ~70% of the economy; on the surveys' native scale, not ISM's 50 basis.",
   "chicago-cfsec": "Chicago Fed Survey of Economic Conditions (CFSEC) — a standardized activity index for the Chicago Fed's district (0 = trend growth; + above, − below). A FREE Chicago read — distinct from the licensed MNI/ISM-Chicago PMI, which isn't publicly redistributable.",
   // Freight
   "rail-carloads": "US rail carloads (AAR, seasonally adjusted) — bulk goods moved by rail: coal, chemicals, grain, autos, metals. A read on heavy-industry & commodity freight demand.",

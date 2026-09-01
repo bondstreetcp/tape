@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, REGIME_COLOR, SERIES_TOOLTIPS, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
+import { type RealEconomyData, type RealEcoSeries, type TsaThroughput, GROUP_ORDER, GROUP_SUBTITLE, SURVEY_COMPOSITES, diffusionComposite, REGIME_COLOR, SERIES_TOOLTIPS, fmtVal, fmtPct, fmtChange, pctColor } from "@/lib/realEconomy";
 
 // change colour, inverted for lower-is-better series (falling jobless claims / mortgage rates = green).
 const cc = (v: number | null, invert?: boolean) => pctColor(v == null ? null : invert ? -v : v);
@@ -157,17 +157,17 @@ const asOfLabel = (iso: string | null) => {
   return Number.isNaN(t) ? "" : new Date(t).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 };
 
-function Card({ onOpen, children }: { onOpen: () => void; children: React.ReactNode }) {
+function Card({ onOpen, highlight, children }: { onOpen: () => void; highlight?: boolean; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onOpen} title="Click for the full history + timeframes" className="group w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--accent)]">
+    <button type="button" onClick={onOpen} title="Click for the full history + timeframes" className={"group w-full rounded-xl border p-3 text-left transition-colors hover:border-[var(--accent)] " + (highlight ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--border)] bg-[var(--surface)]")}>
       {children}
     </button>
   );
 }
 
-function SeriesCard({ s, onOpen }: { s: RealEcoSeries; onOpen: () => void }) {
+function SeriesCard({ s, onOpen, highlight }: { s: RealEcoSeries; onOpen: () => void; highlight?: boolean }) {
   return (
-    <Card onOpen={onOpen}>
+    <Card onOpen={onOpen} highlight={highlight}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1">
@@ -249,11 +249,20 @@ export default function RealEconomyPanel({ data }: { data: RealEconomyData | nul
           const items = data.series.filter((s) => s.group === group);
           const showTsa = group === "Travel" && !!data.tsa;
           if (!items.length && !showTsa) return null;
+          // Synthesize the ISM-style composite headline from this group's regional-Fed survey members
+          // (client-side, so it appears the moment the code deploys — no data refresh needed) and lead with it.
+          const spec = SURVEY_COMPOSITES.find((c) => c.group === group);
+          const composite = spec ? diffusionComposite(items.filter((s) => spec.members.includes(s.key)), spec) : null;
+          const cards = composite ? [composite, ...items] : items;
+          const subtitle = GROUP_SUBTITLE[group];
           return (
             <div key={group}>
-              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{group}</div>
+              <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{group}</span>
+                {subtitle && <span className="text-[10px] font-medium text-[var(--accent)]" title="A free regional-Fed stand-in for the licensed ISM survey — ISM's own PMI is proprietary and isn't freely redistributable">{subtitle}</span>}
+              </div>
               <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((s) => <SeriesCard key={s.key} s={s} onOpen={() => setDetail(seriesDetail(s))} />)}
+                {cards.map((s) => <SeriesCard key={s.key} s={s} onOpen={() => setDetail(seriesDetail(s))} highlight={s.key === composite?.key} />)}
                 {showTsa && data.tsa && <TsaCard tsa={data.tsa} onOpen={() => setDetail(tsaDetail(data.tsa!))} />}
               </div>
             </div>
