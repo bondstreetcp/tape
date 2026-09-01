@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, type ConvertibleTerms } from "../lib/convertible";
+import { conversionRatio, bondFloor, convertibleValue, impliedIssueVol, volEdge, estimateCreditSpread, convertCarry, type ConvertibleTerms } from "../lib/convertible";
 
 // A representative AI-name convert: $150 conversion price on a $100 stock (50% premium), 0.5% coupon,
 // 5-year, $1000 par. r = 4%, credit spread 3% (unrated growth).
@@ -51,6 +51,16 @@ test("vol edge: convert issued below listed vol reads cheap (the arb signal)", (
   assert.equal(volEdge(0.4, 0.6).verdict, "cheap");
   assert.equal(volEdge(0.6, 0.6).verdict, "fair");
   assert.equal(volEdge(0.72, 0.6).verdict, "rich");
+});
+
+test("carry: coupon minus borrow + dividend drag on the short; HTB flips it negative", () => {
+  const easy = convertCarry(0.005, 0.45, 0.0025, 0); // 0.25% (general collateral) borrow
+  assert.ok(easy.net > 0, `easy borrow → positive carry, got ${easy.net}`);
+  const htb = convertCarry(0.005, 0.45, 0.2, 0); // 20% (hard-to-borrow) borrow
+  assert.ok(htb.net < -0.05, `HTB borrow → deeply negative carry, got ${htb.net}`);
+  assert.ok(Math.abs(htb.borrowDrag - 0.09) < 1e-9); // 0.45 × 0.20
+  const div = convertCarry(0.005, 0.45, 0.0025, 0.02); // + a 2% dividend the short pays
+  assert.ok(div.net < easy.net, "a dividend the short pays lowers carry");
 });
 
 test("credit-spread estimate rises with coupon and is clamped", () => {

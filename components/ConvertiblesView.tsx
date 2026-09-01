@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { convertibleValue, volEdge, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
+import { convertibleValue, volEdge, convertCarry, type ConvertiblesData, type ConvertibleTerms } from "@/lib/convertible";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
@@ -43,7 +43,10 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
       const terms: ConvertibleTerms = { ticker: r.ticker, conversionPrice: r.conversionPrice, coupon: r.coupon, maturityYears: my, par: r.par, refPrice: r.refPrice, premium: r.premium };
       const live = S && my > 0 ? convertibleValue(terms, S, vol, R, r.creditSpread) : null;
       const edge = r.issueVol != null && r.listedIV != null ? volEdge(r.issueVol, r.listedIV) : null;
-      return { r, S, live, edge };
+      // Carry: coupon collected − (borrow fee + dividend) on the short, scaled by the hedge notional.
+      const hedgeFrac = live && S ? (live.delta * S) / r.par : null;
+      const carry = r.borrowFee != null && hedgeFrac != null ? convertCarry(r.coupon, hedgeFrac, r.borrowFee, r.dividendYield ?? 0) : null;
+      return { r, S, live, edge, carry };
     });
     const ql = q.trim().toLowerCase();
     const out = enriched.filter((x) => {
@@ -64,6 +67,8 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
   const pct = (x: number | null | undefined, d = 0) => (x == null ? "—" : `${(x * 100).toFixed(d)}%`);
   const usd = (x: number | null | undefined, d = 0) => (x == null ? "—" : `$${x.toLocaleString("en-US", { maximumFractionDigits: d })}`);
   const edgeColor = (v: "cheap" | "fair" | "rich") => (v === "cheap" ? "#22c55e" : v === "rich" ? "#ef4444" : "var(--text-3)");
+  // Borrow tightness from the annualized fee (%). IB floor ~0.25% = general collateral (easy).
+  const borrowTier = (feePct: number) => (feePct >= 20 ? { label: "very HTB", color: "#ef4444" } : feePct >= 5 ? { label: "HTB", color: "#f59e0b" } : feePct >= 1 ? { label: "moderate", color: "var(--text-2)" } : { label: "easy", color: "#22c55e" });
   const SortTh = ({ k, children, cls = "" }: { k: Sort; children: React.ReactNode; cls?: string }) => (
     <th className={"px-2 py-2 font-medium " + cls}><button onClick={() => setSort(k)} className={"hover:text-[var(--text)] " + (sort === k ? "text-[var(--text)]" : "")}>{children}{sort === k ? " ↓" : ""}</button></th>
   );
@@ -96,7 +101,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <table className="w-full min-w-[1160px] text-left text-[13px]">
+        <table className="w-full min-w-[1360px] text-left text-[13px]">
           <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--text-4)]">
             <tr>
               <th className="px-3 py-2 font-medium">Issuer</th>
@@ -111,12 +116,14 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               <th className="px-2 py-2 text-right font-medium" title="Conversion value (ratio × current price) as % of par — where the note sits now">Parity</th>
               <th className="px-2 py-2 text-right font-medium" title="Delta — shares to short per $1,000 bond to stay delta-neutral (hover a row for equity-sensitivity)">Δ /bond</th>
               <th className="px-2 py-2 text-right font-medium" title="Shares to short for your position (face ÷ par × delta), and the dollar short">Short hedge</th>
+              <th className="px-2 py-2 text-right font-medium" title="Annualized stock-borrow fee on the short leg — HTB names cost a lot to short and can be recalled">Borrow</th>
+              <th className="px-2 py-2 text-right font-medium" title="Net carry % of notional: coupon − (borrow fee + dividend) × hedge fraction. Negative = the position bleeds while you wait">Carry</th>
               <th className="px-2 py-2 text-right font-medium" title="Capped-call cap — the effective dilution ceiling the issuer bought">Capped cap</th>
               <th className="px-2 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ r, S, live, edge }) => {
+            {rows.map(({ r, S, live, edge, carry }) => {
               const key = r.filingUrl + r.ticker;
               const open = expanded === key;
               const bonds = r.par > 0 ? face / r.par : 0;
@@ -141,6 +148,8 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                 <td className="px-2 py-2 text-right tabular-nums" style={{ color: live ? (live.moneyness === "in-the-money" ? "#22c55e" : live.moneyness === "busted" ? "#60a5fa" : "var(--text-2)") : "var(--text-4)" }} title={live ? `${live.moneyness}${S ? ` · at $${S.toFixed(2)}` : ""}` : undefined}>{live ? `${Math.round((live.parity / r.par) * 100)}%` : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-2)]" title={live ? `~${Math.round(live.equitySensitivity * 100)}% equity-like · Γ ${live.gamma.toFixed(2)} sh/bond per $1` : undefined}>{live ? live.delta.toFixed(2) : "—"}</td>
                 <td className="px-2 py-2 text-right tabular-nums text-[#ef4444]">{shortSh != null ? <span title={`short ${Math.round(shortSh).toLocaleString()} sh @ $${(S as number).toFixed(2)}`}>{Math.round(shortSh).toLocaleString()}<div className="text-[10px] text-[var(--text-4)]">{usd(shortUsd)}</div></span> : "—"}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{r.borrowFee != null ? (() => { const feePct = r.borrowFee * 100; const t = borrowTier(feePct); return <span style={{ color: t.color }} title={`${t.label}${r.borrowAvailable != null ? ` · ${r.borrowAvailable.toLocaleString()} sh available` : ""}${r.borrowStale ? " · stale" : ""}`}>{feePct < 1 ? feePct.toFixed(2) : feePct.toFixed(1)}%</span>; })() : "—"}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold" style={{ color: carry == null ? "var(--text-4)" : carry.net >= 0 ? "#22c55e" : "#ef4444" }} title={carry ? `coupon +${(carry.couponYield * 100).toFixed(1)}% − borrow ${(carry.borrowDrag * 100).toFixed(1)}%${carry.divDrag > 0 ? ` − div ${(carry.divDrag * 100).toFixed(1)}%` : ""}` : "needs borrow + a live price"}>{carry ? `${carry.net >= 0 ? "+" : ""}${(carry.net * 100).toFixed(1)}%` : "—"}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums" style={{ color: r.cappedCallCap != null ? "#a855f7" : "var(--text-4)" }} title={r.cappedCallCap != null ? "Effective dilution ceiling from the issuer's capped call — dealers who sold it are short gamma here" : "no capped call disclosed"}>{r.cappedCallCap != null ? usd(r.cappedCallCap, 0) : "—"}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-right text-[11px]">
                   {r.ticker && <Link href={`/u/${universe}/stock/${encodeURIComponent(r.ticker)}?tab=options`} onClick={(e) => e.stopPropagation()} className="text-[var(--accent)] hover:underline" title="Options & gamma on the underlying">options</Link>}
@@ -149,7 +158,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               </tr>
               {open && (
                 <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                  <td colSpan={14} className="px-4 py-3">
+                  <td colSpan={16} className="px-4 py-3">
                     {live && S ? (
                       <div className="grid gap-x-8 gap-y-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
                         <div>
@@ -167,6 +176,15 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
                           <div className="mt-1 text-[13px] text-[var(--text-3)]">Bond floor ~{Math.round((live.bondFloor / r.par) * 100)}% of par · parity {Math.round((live.parity / r.par) * 100)}% · {live.moneyness}. Conv ${r.conversionPrice}{r.cappedCallCap != null ? ` · capped to $${r.cappedCallCap}` : ""}.</div>
                           <div className="mt-1 text-[11px] text-[var(--text-4)]">Credit spread est. {pct(r.creditSpread, 1)} (softest input). No live convert price — the hedge is model-based, so treat share counts as a guide.</div>
                         </div>
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">Carry &amp; borrow</div>
+                          {carry ? (
+                            <>
+                              <div className="mt-1 text-[13px]" style={{ color: carry.net >= 0 ? "#22c55e" : "#ef4444" }}>Net carry <b>{carry.net >= 0 ? "+" : ""}{(carry.net * 100).toFixed(1)}%</b>/yr <span className="text-[11px] text-[var(--text-4)]">= coupon +{(carry.couponYield * 100).toFixed(1)}% − borrow {(carry.borrowDrag * 100).toFixed(1)}%{carry.divDrag > 0 ? ` − div ${(carry.divDrag * 100).toFixed(1)}%` : ""}</span></div>
+                              <div className="mt-1 text-[11px] text-[var(--text-4)]">Borrow fee {r.borrowFee != null ? (r.borrowFee * 100).toFixed(2) + "%" : "—"}{r.borrowFee != null && r.borrowFee * 100 >= 5 ? <b className="text-[#f59e0b]"> — hard to borrow; confirm the locate &amp; recall risk before shorting</b> : ""}{r.borrowAvailable != null ? ` · ${r.borrowAvailable.toLocaleString()} sh available` : ""}.{carry.net < 0 ? " Negative carry — you bleed waiting for convergence." : ""}</div>
+                            </>
+                          ) : <div className="mt-1 text-[11px] text-[var(--text-4)]">No borrow data for this name yet (populates nightly); carry needs the borrow fee + a live price.</div>}
+                        </div>
                       </div>
                     ) : <div className="text-[12px] text-[var(--text-4)]">No live price for {r.ticker || r.issuer} — can&apos;t size the hedge (conversion price ${r.conversionPrice}, {r.maturity ?? `${r.maturityYears.toFixed(1)}y`}).</div>}
                   </td>
@@ -175,7 +193,7 @@ export default function ConvertiblesView({ universe, data }: { universe: string;
               </Fragment>
               );
             })}
-            {!rows.length && <tr><td colSpan={14} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
+            {!rows.length && <tr><td colSpan={16} className="px-3 py-8 text-center text-[var(--text-4)]">{data.rows.length ? "No notes match." : "No convertible issuance ingested yet — the nightly scan populates this."}</td></tr>}
           </tbody>
         </table>
       </div>

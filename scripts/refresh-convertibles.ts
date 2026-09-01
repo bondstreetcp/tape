@@ -10,6 +10,8 @@ import path from "path";
 import { discoverConvertibleFilings, extractConvertibleTerms } from "../lib/convertibleExtract";
 import { fetchFilingBodyText, edgarDocUrl } from "../lib/edgarSearch";
 import { impliedIssueVol, estimateCreditSpread, type ConvertibleRow, type ConvertiblesData, type ConvertibleTerms } from "../lib/convertible";
+import { getBorrow } from "../lib/borrow";
+import { cachedStats } from "../lib/companyCache";
 
 const DAYS = 180; // look-back window for offerings
 const R = 0.04; // risk-free
@@ -36,6 +38,13 @@ async function main() {
       const creditSpread = estimateCreditSpread(coupon);
       const terms: ConvertibleTerms = { ticker: h.ticker || h.issuer, conversionPrice: t.conversionPrice as number, coupon, maturityYears, par, refPrice: t.refPrice, premium };
       const issueVol = impliedIssueVol(terms, R, creditSpread);
+      // Short-leg economics: stock-borrow fee/availability (IBorrowDesk) + the dividend the short pays.
+      let borrowFee: number | null = null, borrowAvailable: number | null = null, borrowStale = false, dividendYield: number | null = null;
+      if (h.ticker) {
+        const [bi, st] = await Promise.all([getBorrow(h.ticker).catch(() => null), cachedStats(h.ticker).catch(() => null)]);
+        if (bi) { borrowFee = bi.fee != null ? bi.fee / 100 : null; borrowAvailable = bi.available ?? null; borrowStale = !!bi.stale; }
+        if (st) dividendYield = st.dividendYield ?? null;
+      }
       rows.push({
         ticker: h.ticker || "",
         issuer: h.issuer,
@@ -52,6 +61,10 @@ async function main() {
         issueVol: issueVol != null ? +issueVol.toFixed(4) : null,
         listedIV: null,
         realizedVol: null,
+        borrowFee,
+        borrowAvailable,
+        borrowStale,
+        dividendYield,
         filedDate: h.date,
         filingUrl: edgarDocUrl(h.ciks[0] || "", h.accession, h.doc),
         form: h.form,

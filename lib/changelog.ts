@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "2026-08-29-convert-carry",
+    date: "2026-08-29",
+    title: "Borrow & carry on the Convertible Watch — the short leg's economics",
+    items: [
+      "Convertible Watch now shows what makes or breaks the short leg: a Borrow column (annualized stock-borrow fee + a hard-to-borrow tier) and a net Carry column — coupon collected minus the borrow fee and any dividend you pay on the short, scaled by the hedge. Many AI/growth convert names are hard-to-borrow, so a fat borrow fee can flip the carry deeply negative and quietly kill the trade — now you see it before you put it on. Expand a row for the full carry breakdown and a hard-to-borrow / recall-risk warning. Borrow data from IBorrowDesk (Interactive Brokers securities-lending), baked nightly.",
+    ],
+  },
+  {
     id: "2026-08-29-convert-hedge",
     date: "2026-08-29",
     title: "The convert hedge — delta, shares to short, and gamma",

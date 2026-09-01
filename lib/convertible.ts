@@ -129,6 +129,18 @@ export function estimateCreditSpread(coupon: number): number {
   return Math.max(0.015, Math.min(0.09, 0.02 + Math.max(0, coupon)));
 }
 
+/** Convert-arb CARRY, annualized as a % of the convert's notional. You collect the coupon and pay — on
+ *  the short-stock hedge — the borrow fee + any dividend, both scaled by how much stock you're short.
+ *  `hedgeNotionalFrac` = delta·S/par (the $ of stock shorted per $1 of convert face). net < 0 means the
+ *  position BLEEDS while you wait for convergence (a fat borrow on an HTB name flips it deeply negative).
+ *  All rates decimal. Short-proceeds interest ≈ your funding cost, so it's left out (roughly a wash). */
+export function convertCarry(coupon: number, hedgeNotionalFrac: number, borrowFee: number, dividendYield: number): { net: number; couponYield: number; borrowDrag: number; divDrag: number } {
+  const h = Math.max(0, hedgeNotionalFrac);
+  const borrowDrag = h * Math.max(0, borrowFee);
+  const divDrag = h * Math.max(0, dividendYield);
+  return { net: coupon - borrowDrag - divDrag, couponYield: coupon, borrowDrag, divDrag };
+}
+
 /** A convertible as stored/served: extracted terms + the code-computed issue vol + provenance. */
 export interface ConvertibleRow {
   ticker: string;
@@ -146,6 +158,10 @@ export interface ConvertibleRow {
   issueVol: number | null; // impliedIssueVol under that estimate
   listedIV: number | null; // stock's current ATM listed IV, if resolvable (for the vol edge)
   realizedVol: number | null;
+  borrowFee: number | null; // annualized stock-borrow fee, decimal (the short leg's cost); IB floor ~0.0025
+  borrowAvailable: number | null; // shares available to borrow
+  borrowStale: boolean; // borrow feed flagged the availability stale
+  dividendYield: number | null; // the short pays this (decimal); ~0 for most convert issuers
   filedDate: string; // offering filing date
   filingUrl: string;
   form: string;
