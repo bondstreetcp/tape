@@ -18,6 +18,7 @@ import { UNIVERSES } from "../lib/universes";
 import { loadSnapshot } from "../lib/data";
 import { getNewsChecked, pickHeadlines, NEWS_JUNK, CAUSAL_WINDOW_DAYS } from "../lib/news";
 import { buildMoveEvidence } from "../lib/moveEvidence";
+import { detectRecentReport, movePreDatesReport } from "../lib/preannounce";
 import type { CatalystMap } from "../lib/catalysts";
 
 const DATA = path.join(process.cwd(), "data");
@@ -44,7 +45,8 @@ const SYSTEM =
   "You are a markets desk writing the one-line reason a stock moved. Output a single terse fragment of at most 12 words naming the SPECIFIC catalyst — e.g. 'Q3 earnings beat, raised FY guidance', 'agreed to be acquired by Synopsys', 'FDA approval for its lead drug', 'guidance cut on soft demand', 'added to the S&P 500'. Base it ONLY on the provided dated headlines — never invent. " +
   "CRUCIAL recency rule: the catalyst must be recent enough to plausibly CAUSE a move over the stated window. For a move 'today', only an event from the last day or two qualifies — ignore older items (last quarter's earnings, a board change from weeks ago, an old partnership) even if important; they do NOT explain today's move. " +
   "No company name or ticker (already shown), no hype adjectives, no 'the company', no trailing period. Ignore promotional, legal, and analyst-rating-only items. " +
-  "MECHANISM FALLBACK: when no recent headline explains the move but a MOVE EVIDENCE line is supplied (sector residual, same-industry peer moves, elevated short volume — all computed from market data), state THAT mechanism as the reason, citing only its numbers — e.g. 'sector-wide semis move (+2.9%)', 'asset-manager group rally, peers +4-7%', 'squeeze-flavored: short volume 61% of tape', 'idiosyncratic de-grossing, sector flat'. Never invent a mechanism the evidence line doesn't show. If headlines and evidence both explain nothing, output exactly: NONE.";
+  "MECHANISM FALLBACK: when no recent headline explains the move but a MOVE EVIDENCE line is supplied (sector residual, same-industry peer moves, elevated short volume — all computed from market data), state THAT mechanism as the reason, citing only its numbers — e.g. 'sector-wide semis move (+2.9%)', 'asset-manager group rally, peers +4-7%', 'squeeze-flavored: short volume 61% of tape', 'idiosyncratic de-grossing, sector flat'. Never invent a mechanism the evidence line doesn't show. If headlines and evidence both explain nothing, output exactly: NONE. " +
+  "SESSION CLOCK: a company reports either before the open or after the close. When the context flags 'reported AFTER today's close', those results were released after this session ended, so they did NOT cause a 'today' move — never name that earnings report as the catalyst for a today move; use the MOVE EVIDENCE mechanism instead, or NONE.";
 
 async function geminiKey(): Promise<string> {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -52,9 +54,11 @@ async function geminiKey(): Promise<string> {
   return (env.match(/^GEMINI_API_KEY=(.*)$/m) || [])[1]?.trim() || "";
 }
 
-async function ask(key: string, today: string, name: string, symbol: string, dir: string, pct: string, tfLabel: string, heads: { title: string; date: string }[], evidence?: string): Promise<string> {
+async function ask(key: string, today: string, name: string, symbol: string, dir: string, pct: string, tfLabel: string, heads: { title: string; date: string }[], evidence?: string, preEarnings?: boolean): Promise<string> {
   const list = heads.length ? heads.map((h) => `- ${h.date ? `[${h.date}] ` : ""}${h.title}`).join("\n") : "(none found in the causal window)";
-  const prompt = `Today is ${today}.\nCompany: ${name} (${symbol}).\nMove: ${dir} ${pct}% ${tfLabel}.\nRecent news headlines (with dates):\n${list}\n${evidence ? `\n${evidence}\n` : ""}\nWhy did it move ${tfLabel}? Cite only an event recent enough to plausibly cause this move; if no headline explains it, fall back to the MOVE EVIDENCE mechanism per your instructions; if neither explains it, output NONE.`;
+  // Session-clock caveat: an after-close print landed after this session, so a same-day move pre-dates it.
+  const caveat = preEarnings ? `⚠ ${symbol} reported earnings AFTER today's close — the results were released after this session ended, so they did NOT cause today's ${dir} move; do NOT cite the earnings, use the move-evidence mechanism or NONE.\n` : "";
+  const prompt = `Today is ${today}.\nCompany: ${name} (${symbol}).\nMove: ${dir} ${pct}% ${tfLabel}.\n${caveat}Recent news headlines (with dates):\n${list}\n${evidence ? `\n${evidence}\n` : ""}\nWhy did it move ${tfLabel}? Cite only an event recent enough to plausibly cause this move; if no headline explains it, fall back to the MOVE EVIDENCE mechanism per your instructions; if neither explains it, output NONE.`;
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -76,7 +80,9 @@ async function main() {
   const key = await geminiKey();
   if (!key) { console.error("No GEMINI_API_KEY (env or .env.local) — cannot generate catalysts."); process.exit(1); }
   const now = Date.now();
-  const today = new Date(now).toISOString().slice(0, 10);
+  // ET market day — refresh-catalysts runs in the post-close FULL tick, so this is also the last COMPLETED
+  // session, against which an after-close (AMC) print's date is compared to know a today-move pre-dates it.
+  const today = new Date(now).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
   // Collect movers, keeping each symbol's SHORTEST timeframe (most-recent move) as the context.
   // 1-DAY movers also get a MOVE EVIDENCE line (lib/moveEvidence: sector residual + peer tape +
@@ -145,9 +151,17 @@ async function main() {
           const { items: news, fetchFailed } = await getNewsChecked(m.name || sym, 30);
           if (fetchFailed) throw new Error("news fetch unavailable (transport) — keeping the prior catalyst");
           const heads = pickHeadlines(news, { nowMs: now, windowDays: CAUSAL_WINDOW_DAYS[m.tf] ?? 100, limit: 8 });
+          // Session-clock guard (1-day movers only): if this name reported AFTER today's close, today's
+          // move pre-dates the print — flag it so the model doesn't credit the earnings for a pre-earnings
+          // move (the DELL case). Memoized SEC-submissions read; degrades to no-flag on any failure.
+          let preEarnings = false;
+          if (m.tf === "1d") {
+            const rep = await detectRecentReport(sym, now).catch(() => null);
+            if (rep) preEarnings = movePreDatesReport(rep.timing, rep.date, today);
+          }
           // Evidence-only movers (no headlines, but a computed mechanism) still get asked — the
           // MECHANISM FALLBACK rule lets the model state the group-move/squeeze read, never invent.
-          const why = heads.length || m.evidence ? await ask(key, today, m.name, sym, m.dir, m.pct, TF_LABEL[m.tf], heads, m.evidence) : "";
+          const why = heads.length || m.evidence ? await ask(key, today, m.name, sym, m.dir, m.pct, TF_LABEL[m.tf], heads, m.evidence, preEarnings) : "";
           out[sym] = { why, ts: new Date().toISOString(), tf: m.tf };
           if (why) withWhy++;
         } catch (e: any) {
