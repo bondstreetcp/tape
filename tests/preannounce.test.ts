@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isPreannouncement8K, isRecentReport8K, daysBefore } from "../lib/preannounce";
+import { isPreannouncement8K, isRecentReport8K, daysBefore, classifyReportTiming } from "../lib/preannounce";
 
 // A preannouncement is an 8-K Item 2.02 filed AHEAD of the scheduled print — ≥2d before (the release
 // itself files ON the print date; day-before is timing noise around it) and ≤35d (the PRIOR quarter's
@@ -52,4 +52,31 @@ test("non-results 8-Ks and future-dated filings never mark a report", () => {
   assert.equal(isRecentReport8K("8-K", "5.02", "2026-08-08", T, 7), false); // leadership item
   assert.equal(isRecentReport8K("10-Q", "2.02", "2026-08-08", T, 7), false);
   assert.equal(isRecentReport8K("8-K", "2.02", "2026-08-09", T, 7), false); // future-dated
+});
+
+// ── classifyReportTiming — BMO vs AMC from EDGAR's acceptanceDateTime (genuine UTC) ──
+// The fix for the DELL case: an after-close print's regular-session move pre-dates the earnings.
+
+test("after-close (AMC) prints classify as afterhours in both DST regimes", () => {
+  assert.equal(classifyReportTiming("2026-09-01T20:10:14.000Z"), "afterhours"); // DELL's real 8-K: 16:10 ET (EDT)
+  assert.equal(classifyReportTiming("2026-02-26T21:08:45.000Z"), "afterhours"); // DELL winter: 16:08 ET (EST)
+  assert.equal(classifyReportTiming("2026-09-01T20:00:00.000Z"), "afterhours"); // exactly 16:00 ET = the close
+});
+
+test("before-open (BMO) prints classify as premarket in both DST regimes", () => {
+  assert.equal(classifyReportTiming("2026-09-01T12:30:00.000Z"), "premarket"); // 08:30 ET (EDT)
+  assert.equal(classifyReportTiming("2026-02-26T12:30:00.000Z"), "premarket"); // 07:30 ET (EST)
+  assert.equal(classifyReportTiming("2026-09-01T13:29:00.000Z"), "premarket"); // 09:29 ET — just before the open
+});
+
+test("mid-session accepts are intraday; the open/close are the boundaries", () => {
+  assert.equal(classifyReportTiming("2026-09-01T18:00:00.000Z"), "intraday"); // 14:00 ET
+  assert.equal(classifyReportTiming("2026-09-01T13:31:00.000Z"), "intraday"); // 09:31 ET — just after the open
+});
+
+test("classifyReportTiming returns null on a missing or unparseable timestamp", () => {
+  assert.equal(classifyReportTiming(undefined), null);
+  assert.equal(classifyReportTiming(null), null);
+  assert.equal(classifyReportTiming(""), null);
+  assert.equal(classifyReportTiming("not-a-timestamp"), null);
 });

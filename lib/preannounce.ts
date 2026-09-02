@@ -20,6 +20,29 @@ import type { CatalystFlag } from "@/lib/catalystOverlay";
 
 const DAY = 86_400_000;
 
+export type ReportTiming = "premarket" | "afterhours" | "intraday";
+
+/** Classify an earnings 8-K's release vs the trading session from its EDGAR acceptance timestamp.
+ *  EDGAR's `acceptanceDateTime` is genuine UTC (verified against after-close reporters like DELL, whose
+ *  ~4:05pm ET print accepts ~20:10Z = 16:10 ET) — so convert to ET and split on the 9:30 open / 16:00
+ *  close. "afterhours" (AMC) is the one that matters for move attribution: an after-close print comes out
+ *  AFTER the regular session, so THAT session's move PRE-DATES it (not the earnings reaction). null when
+ *  there's no timestamp — callers must then not assert a timing. Pure. */
+export function classifyReportTiming(acceptanceUtc: string | undefined | null): ReportTiming | null {
+  if (!acceptanceUtc) return null;
+  const t = Date.parse(acceptanceUtc);
+  if (!Number.isFinite(t)) return null;
+  const et = new Date(t).toLocaleString("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit", minute: "2-digit" });
+  const m = et.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let h = Number(m[1]);
+  if (h >= 24) h -= 24; // some Intl builds emit "24:xx" at midnight ET
+  const hm = h + Number(m[2]) / 60;
+  if (hm < 9.5) return "premarket";  // before the 9:30 ET open (BMO)
+  if (hm >= 16) return "afterhours"; // at/after the 16:00 ET close (AMC)
+  return "intraday";                 // rare — released mid-session
+}
+
 /** Calendar-square day difference: earnings day minus filing day, both YYYY-MM-DD (UTC squares). */
 export function daysBefore(filedDay: string, earningsDay: string): number | null {
   const f = Date.parse(filedDay);
@@ -47,18 +70,18 @@ export function isRecentReport8K(form: string, items: string | undefined, filedD
   return d != null && d >= 0 && d <= maxDays;
 }
 
-const repMemo = new Map<string, { date: string; daysAgo: number } | null>();
+const repMemo = new Map<string, { date: string; daysAgo: number; timing: ReportTiming | null } | null>();
 
 /** Checked variant: `checked` is TRUE only when the submissions index was actually READ — a null
  *  `rep` then means "verified: did not report". checked=false means the CHECK DIDN'T RUN (SEC
  *  unreachable / CIK unresolvable) and callers persisting decisions must not record a clean result.
  *  Failures are NEVER memoized (the 2026-08-15 sweep: a 6s SEC blip became a cached same-day
  *  "did not report", flipping the desk's earnings-outrank-everything rule for the whole run). */
-export async function detectRecentReportChecked(sym: string, nowMs: number, maxDays = 7): Promise<{ rep: { date: string; daysAgo: number } | null; checked: boolean }> {
+export async function detectRecentReportChecked(sym: string, nowMs: number, maxDays = 7): Promise<{ rep: { date: string; daysAgo: number; timing: ReportTiming | null } | null; checked: boolean }> {
   const todayDay = new Date(nowMs).toISOString().slice(0, 10);
   const key = `${sym.toUpperCase()}|${todayDay}|${maxDays}`;
   if (repMemo.has(key)) return { rep: repMemo.get(key)!, checked: true }; // memo holds CHECKED results only
-  let out: { date: string; daysAgo: number } | null = null;
+  let out: { date: string; daysAgo: number; timing: ReportTiming | null } | null = null;
   try {
     const bounded = <T>(p: Promise<T>): Promise<T | null> =>
       Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), 6_000))]);
@@ -69,11 +92,12 @@ export async function detectRecentReportChecked(sym: string, nowMs: number, maxD
     const forms: string[] = recent.form ?? [];
     const dates: string[] = recent.filingDate ?? [];
     const items: string[] = recent.items ?? [];
+    const accept: string[] = recent.acceptanceDateTime ?? []; // parallel array — the release timestamp (UTC), for BMO/AMC
     for (let i = 0; i < forms.length; i++) {
       const d = daysBefore(dates[i], todayDay);
       if (d != null && d > maxDays) break; // newest-first — nothing older can qualify
       if (isRecentReport8K(forms[i], items[i], dates[i], todayDay, maxDays)) {
-        out = { date: dates[i], daysAgo: d! };
+        out = { date: dates[i], daysAgo: d!, timing: classifyReportTiming(accept[i]) };
         break;
       }
     }
@@ -87,7 +111,7 @@ export async function detectRecentReportChecked(sym: string, nowMs: number, maxD
 /** Did `sym` file an earnings 8-K (Item 2.02) in the last `maxDays` days? Best-effort convenience —
  *  a null can mean EITHER "didn't report" or "couldn't check"; persistence callers must use the
  *  Checked variant. */
-export async function detectRecentReport(sym: string, nowMs: number, maxDays = 7): Promise<{ date: string; daysAgo: number } | null> {
+export async function detectRecentReport(sym: string, nowMs: number, maxDays = 7): Promise<{ date: string; daysAgo: number; timing: ReportTiming | null } | null> {
   return (await detectRecentReportChecked(sym, nowMs, maxDays)).rep;
 }
 
