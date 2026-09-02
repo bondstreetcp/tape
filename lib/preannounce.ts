@@ -43,6 +43,16 @@ export function classifyReportTiming(acceptanceUtc: string | undefined | null): 
   return "intraday";                 // rare — released mid-session
 }
 
+/** Does an after-close print's shown close-to-close move PRE-DATE the earnings? True only when the report
+ *  is AMC (afterhours) AND its day IS the last completed session — then that session's move ended before
+ *  the print was released, so it's pre-earnings positioning, not the reaction. Holds for both desk runs:
+ *  pass the last completed session (today in the post-close evening run, the prior trading day pre-open).
+ *  A BMO print, an intraday one, or an AMC print from an EARLIER session (its reaction already traded) all
+ *  return false. Pure — the session-clock decision behind the desk brief's earnings attribution. */
+export function movePreDatesReport(timing: ReportTiming | null, reportDate: string, lastSessionDay: string): boolean {
+  return timing === "afterhours" && !!reportDate && reportDate === lastSessionDay;
+}
+
 /** Calendar-square day difference: earnings day minus filing day, both YYYY-MM-DD (UTC squares). */
 export function daysBefore(filedDay: string, earningsDay: string): number | null {
   const f = Date.parse(filedDay);

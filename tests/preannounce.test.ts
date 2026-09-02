@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isPreannouncement8K, isRecentReport8K, daysBefore, classifyReportTiming } from "../lib/preannounce";
+import { isPreannouncement8K, isRecentReport8K, daysBefore, classifyReportTiming, movePreDatesReport } from "../lib/preannounce";
 
 // A preannouncement is an 8-K Item 2.02 filed AHEAD of the scheduled print — ≥2d before (the release
 // itself files ON the print date; day-before is timing noise around it) and ≤35d (the PRIOR quarter's
@@ -79,4 +79,25 @@ test("classifyReportTiming returns null on a missing or unparseable timestamp", 
   assert.equal(classifyReportTiming(null), null);
   assert.equal(classifyReportTiming(""), null);
   assert.equal(classifyReportTiming("not-a-timestamp"), null);
+});
+
+// ── movePreDatesReport — the session-clock decision behind the DELL fix ──
+// True only when an after-close print's day IS the last completed session (its move ended pre-print).
+
+test("an AMC print on the last completed session → the shown move pre-dates it (both desk runs)", () => {
+  // Evening (post-close) run: the last session is today; DELL reported after today's close.
+  assert.equal(movePreDatesReport("afterhours", "2026-09-02", "2026-09-02"), true);
+  // Pre-open morning run: the last session is YESTERDAY; a print after yesterday's close still pre-dates
+  // the shown (yesterday's close-to-close) move the pre-open tape hasn't reacted to.
+  assert.equal(movePreDatesReport("afterhours", "2026-09-01", "2026-09-01"), true);
+});
+
+test("an AMC print from an EARLIER session is NOT pre-earnings (its reaction already traded)", () => {
+  assert.equal(movePreDatesReport("afterhours", "2026-08-29", "2026-09-02"), false); // reported Fri, last session is Wed
+});
+
+test("BMO / intraday / unknown-timing prints never trip the pre-earnings caveat", () => {
+  assert.equal(movePreDatesReport("premarket", "2026-09-02", "2026-09-02"), false); // before-open drove today's session
+  assert.equal(movePreDatesReport("intraday", "2026-09-02", "2026-09-02"), false);
+  assert.equal(movePreDatesReport(null, "2026-09-02", "2026-09-02"), false); // no timestamp → assert nothing
 });

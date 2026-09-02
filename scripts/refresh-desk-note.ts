@@ -27,7 +27,7 @@ import { latestScannerFor, type StaplesScannerData } from "../lib/staplesScanner
 import { fetchLiveMarketHeadlines } from "../lib/marketHeadlinesFetch";
 import { askConfigured, gatherContext, askGemini } from "../lib/ask";
 import type { ApeWisdomData } from "../lib/apewisdom";
-import { detectRecentReport } from "../lib/preannounce";
+import { detectRecentReport, movePreDatesReport } from "../lib/preannounce";
 import { buildBinaryWeek } from "../lib/binaryWeek";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch, DeskTape, DeskCalendar, DeskSource } from "../lib/deskNote";
@@ -226,7 +226,7 @@ async function main() {
         // whose after-close print the pre-open tape hasn't reacted to yet. The DELL 2026-09-01 case: blowout
         // print AFTER the close, yet the -6.8% regular-session drop was the risk-off tape + pre-earnings
         // de-risking, not a 'sell-the-news'.
-        const preEarnings = rep.timing === "afterhours" && rep.date === lastSessionDay;
+        const preEarnings = movePreDatesReport(rep.timing, rep.date, lastSessionDay);
         driver =
           `REPORTED EARNINGS ${when}${tlabel} — 8-K results filing on record` +
           (preEarnings
