@@ -237,6 +237,9 @@ function Card({ it, tlink, related, windowAcc }: { it: OvernightItem; tlink: (t:
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-4)]">
           <span title={it.filedAt}>{fmtTime(it.filedAt)}</span>
+          {(it.reportTiming === "afterhours" || it.reportTiming === "premarket") && (
+            <span className="rounded bg-[var(--surface-2)] px-1 text-[10px] font-medium tracking-wide text-[var(--text-3)]" title={it.reportTiming === "afterhours" ? "Released after the 4:00pm ET close — the regular session had ended, so any reaction is after-hours / next session" : "Released before the 9:30am ET open (pre-market)"}>{it.reportTiming === "afterhours" ? "AMC" : "BMO"}</span>
+          )}
           <a href={it.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">EDGAR →</a>
         </div>
       </div>

@@ -14,6 +14,10 @@ export type Sentiment = "bullish" | "neutral" | "bearish";
 export type Surprise = "beat" | "inline" | "miss" | "na";
 /** How market-moving the model judges the filing to be (drives the red/green flag + Movers filter). */
 export type Impact = "high" | "medium" | "low";
+/** When the filing was disseminated vs the trading session, from its EDGAR acceptance time. AMC =
+ *  after the 16:00 ET close (no regular-hours reaction yet), BMO = before the 9:30 open. (Type-only
+ *  union — kept in sync with lib/preannounce's ReportTiming; not imported, to keep this module client-safe.) */
+export type ReportTiming = "premarket" | "afterhours" | "intraday";
 
 /** The model's per-filing digest (see the SYSTEM/SCHEMA in the refresh script). */
 export interface OvernightDigest {
@@ -30,7 +34,8 @@ export interface OvernightItem extends OvernightDigest {
   ticker: string;
   name: string;
   form: string; // 8-K, 10-Q, 10-K (or an /A amendment)
-  filedAt: string; // EDGAR acceptanceDateTime (ET)
+  filedAt: string; // EDGAR acceptanceDateTime (a true UTC instant; rendered pinned to ET)
+  reportTiming?: ReportTiming | null; // BMO/AMC/intraday from the acceptance time (absent on pre-2026-09 carried items)
   riskFactorsAdded: number | null; // 10-K/Q only — machine-diffed risk-factor delta
   riskFactorsRemoved: number | null;
   accession: string;

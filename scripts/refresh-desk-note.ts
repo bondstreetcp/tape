@@ -310,7 +310,10 @@ async function main() {
     .slice(0, 22)
     .map((f) => {
       const wc = (f.whatChanged || []).slice(0, 2).join("; ");
-      return `${f.ticker} ${f.form} [${f.impact}/${f.sentiment}]: ${f.headline}${wc ? ` | ${wc}` : ""}${f.decisionTakeaway ? ` | takeaway: ${f.decisionTakeaway}` : ""}`;
+      // Release timing so the model applies the session-clock rule here too (an after-close results 8-K
+      // means the day's regular-session move pre-dates it — not a verdict on the print).
+      const t = f.reportTiming === "afterhours" ? " · released AFTER the close (AMC)" : f.reportTiming === "premarket" ? " · released BEFORE the open (BMO)" : "";
+      return `${f.ticker} ${f.form}${t} [${f.impact}/${f.sentiment}]: ${f.headline}${wc ? ` | ${wc}` : ""}${f.decisionTakeaway ? ` | takeaway: ${f.decisionTakeaway}` : ""}`;
     });
 
   // --- Options flow aggregated per name → call/put skew + total premium ---

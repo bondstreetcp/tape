@@ -33,7 +33,8 @@ import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
 import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
-import { mergeCarryForward, isMassLlmFailure } from "../lib/overnightFilings";
+import { mergeCarryForward, isMassLlmFailure, type ReportTiming } from "../lib/overnightFilings";
+import { classifyReportTiming } from "../lib/preannounce";
 
 const DATA = path.join(process.cwd(), "data");
 const OUT = path.join(DATA, "overnight-filings.json");
@@ -92,7 +93,8 @@ const SYSTEM =
   "Identify ONLY what materially changed or what the filing announces: revenue/margin/EPS vs the prior period, guidance, segment trends, new/dropped risk factors, buybacks/dividends, M&A (parties/price/structure), capital raises (size/coupon/use of proceeds), management changes, accounting/restatements. Ground every claim in the FILING text — never invent or infer a number that isn't stated there. Ignore boilerplate and unchanged repeated language. " +
   "FIELD RUBRICS — surprise: 'beat'/'miss' ONLY vs an analyst consensus/estimate explicitly stated in the filing (e.g. an EPS-surprise line), else 'na'; never infer beat/miss from a year-over-year change. sentiment: the filing's effect on the forward outlook / intrinsic value (bullish/neutral/bearish) — judge substance, not tone. decisionTakeaway: one falsifiable sentence on what changed and why it matters; never a buy/sell/hold call. impact (how market-moving for THIS stock): 'high' requires BOTH a high-impact event type (guidance change, M&A, a surprise/forced CEO-CFO-auditor exit, a restatement that changes reported earnings, a major contract/litigation/regulatory outcome, or a buyback/raise/charge large relative to the company — use the background snapshot for scale, roughly >=5% of market cap) AND material magnitude; a high-impact type at immaterial scale (a small shelf on a mega-cap, a planned retirement, an in-line quarter) is 'medium'; routine/administrative is 'low'. Be selective — most filings are low or medium; when between tiers, choose the lower. " +
   "NONE-GATE (distinct from low impact): return headline exactly 'NONE' with empty whatChanged ONLY for a genuinely empty/administrative filing — a routine committee appointment, an annual-meeting date/result, an administrative exhibit. A real-but-minor disclosure (a small contract, a minor officer change, an in-line quarter, a priced offering, a deal with terms) is NOT 'NONE' — keep it and rate impact 'low' or 'medium'. " +
-  "AGE OF THE EVENT (critical — the headline is read as NEWS): the FILING is new, but the EVENT it discusses may be OLD. If this filing is an AMENDMENT (form ends in /A), an UPDATE, or a follow-on to a previously-announced event (a merger announced months ago, a quarter already reported via 8-K, a deal already public), the headline must describe THE UPDATE, not restate the original event as if it just happened — write '<Company> amends merger terms / files S-4 for the pending X deal / updates …', NEVER '<Company> to acquire X' when the acquisition was announced weeks/months earlier. The filing text states the original announcement date and 'previously announced' language — use it: if the core event predates this filing, lead with what THIS filing adds (a new price, a closing condition met, a vote date, a proxy detail) and, when the event is materially old, drop impact by a tier (a re-announcement is not a fresh catalyst). Return ONLY JSON.";
+  "AGE OF THE EVENT (critical — the headline is read as NEWS): the FILING is new, but the EVENT it discusses may be OLD. If this filing is an AMENDMENT (form ends in /A), an UPDATE, or a follow-on to a previously-announced event (a merger announced months ago, a quarter already reported via 8-K, a deal already public), the headline must describe THE UPDATE, not restate the original event as if it just happened — write '<Company> amends merger terms / files S-4 for the pending X deal / updates …', NEVER '<Company> to acquire X' when the acquisition was announced weeks/months earlier. The filing text states the original announcement date and 'previously announced' language — use it: if the core event predates this filing, lead with what THIS filing adds (a new price, a closing condition met, a vote date, a proxy detail) and, when the event is materially old, drop impact by a tier (a re-announcement is not a fresh catalyst). " +
+  "MARKET-TIMING RULE: you are NOT given the stock's price reaction — never state, describe, or infer how the market or the shares responded to this filing ('the market rewarded/refused to reward it', 'shares rose/fell/sold off', 'the sell-off shows …'); that is a separate signal you do not have, and a strong print can trade down (or a weak one up) for unrelated reasons. Use the release timing only as context: an AFTER-THE-CLOSE (AMC) results 8-K is disseminated after the regular session ends, a BEFORE-THE-OPEN (BMO) one ahead of it — frame the note around what the filing CHANGES and what it SETS UP for the next session, never a market verdict. Return ONLY JSON.";
 
 const SCHEMA_HINT =
   'Return ONLY a JSON object with this exact shape: {"headline": string (<=12 words, or exactly "NONE"), "whatChanged": string[] (3-5 concise items grounded in the filing; empty if NONE), "decisionTakeaway": string (one decision-relevant sentence, no buy/sell/hold), "sentiment": "bullish"|"neutral"|"bearish", "surprise": "beat"|"inline"|"miss"|"na", "impact": "high"|"medium"|"low", "keyMetrics": object — only figures EXPLICITLY stated in THIS filing, each with its unit and the filing\'s own comparison (YoY/QoQ/vs guidance/vs consensus); never pull from the background snapshot and never compute a figure; use {} when the filing states no clean figures (common for 8.01 / S-4 / 425). Examples — earnings: {"revenue":"$1.2B (+8% YoY)","EPS":"$2.10 vs $1.95 cons"}; non-earnings with no clean figure: {}}';
@@ -154,7 +156,8 @@ interface OvernightItem extends Digest {
   ticker: string;
   name: string;
   form: string;
-  filedAt: string; // acceptanceDateTime (ET)
+  filedAt: string; // acceptanceDateTime (a true UTC instant)
+  reportTiming?: ReportTiming | null; // BMO/AMC/intraday — market-timing context for the reader + the desk note (optional to match lib's OvernightItem)
   riskFactorsAdded: number | null;
   riskFactorsRemoved: number | null;
   accession: string;
@@ -171,6 +174,7 @@ interface NewFiling {
   formClean: TrackedForm; // form normalized (amendments stripped, 424B* collapsed)
   newIdx: number;
   acceptance: string;
+  reportTiming: ReportTiming | null; // BMO/AMC/intraday from the raw acceptance timestamp
   filingDate: string;
   items: string;
   accession: string;
@@ -246,6 +250,7 @@ async function detectForSymbol(symbol: string, name: string, windowStart: number
       formClean: kind,
       newIdx: i,
       acceptance: accept,
+      reportTiming: classifyReportTiming(r.acceptanceDateTime?.[i]), // raw acceptance (not the midnight fallback) → BMO/AMC
       filingDate: r.filingDate[i],
       items,
       accession: r.accessionNumber[i],
@@ -334,7 +339,7 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
 
   const user =
     `${SCHEMA_HINT}\n\n` +
-    `Company: ${nf.name} (${nf.symbol}). NEW filing: ${nf.form}${nf.items ? ` · items ${nf.items}` : ""} · accepted ${nf.acceptance}.` +
+    `Company: ${nf.name} (${nf.symbol}). NEW filing: ${nf.form}${nf.items ? ` · items ${nf.items}` : ""} · accepted ${nf.acceptance}${nf.reportTiming === "afterhours" ? " (released AFTER the close — AMC)" : nf.reportTiming === "premarket" ? " (released BEFORE the open — BMO)" : ""}.` +
     (/\/A$/.test(nf.form) ? " ⚠ THIS IS AN AMENDMENT (/A) — describe what it AMENDS/UPDATES, not the original event as fresh news." : "") +
     `\n` +
     `\n=== BACKGROUND CONTEXT (market data — NOT from this filing; for scale/context only) ===\n${snapshot || "(unavailable)"}\n` +
@@ -365,6 +370,7 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
     name: nf.name,
     form: nf.form,
     filedAt: nf.acceptance,
+    reportTiming: nf.reportTiming,
     headline,
     whatChanged: Array.isArray(digest.whatChanged) ? digest.whatChanged.filter((x) => typeof x === "string" && x.trim()).slice(0, 5) : [],
     decisionTakeaway: typeof digest.decisionTakeaway === "string" ? digest.decisionTakeaway.trim() : "",
