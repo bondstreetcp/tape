@@ -10,7 +10,7 @@ import path from "path";
 import { loadCongress } from "../lib/congress";
 import { loadSnapshot } from "../lib/data";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
-import { whitelistTickers } from "../lib/llmValidate";
+import { whitelistTickers, isPlaceholderText } from "../lib/llmValidate";
 import type { CongressSummary, CongressHighlight } from "../lib/congressSummary";
 
 const DATA = path.join(process.cwd(), "data");
@@ -76,12 +76,8 @@ async function main() {
     block("MOST ACTIVE MEMBERS (last 75d)", activeMembers);
 
   const out = await chatJSON<{ tldr: string; highlights: CongressHighlight[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL, reasoningEffort: "high" });
-  if (!out || !out.tldr) {
-    console.warn("congress-summary: LLM returned no usable summary — skipping write.");
-    return;
-  }
-  const highlights = (Array.isArray(out.highlights) ? out.highlights : [])
-    .filter((h) => h && h.headline && h.detail)
+  const highlights = (Array.isArray(out?.highlights) ? out!.highlights : [])
+    .filter((h) => h && !isPlaceholderText(h.headline) && !isPlaceholderText(h.detail))
     .map((h) => ({
       headline: String(h.headline).trim(),
       detail: String(h.detail).trim(),
@@ -91,6 +87,12 @@ async function main() {
       tickers: whitelistTickers(h.tickers, tradedSyms).slice(0, 8),
     }))
     .slice(0, 7);
+  // Reject the content-empty shell (the Sep-3 desk-note trap): the old `!out.tldr` guard passed an all-"…"
+  // summary — tldr truthy but empty. Require a real tldr AND ≥1 real highlight. (isPlaceholderText: lib/llmValidate)
+  if (!out || isPlaceholderText(out.tldr) || !highlights.length) {
+    console.warn("congress-summary: LLM returned no usable summary (empty/placeholder) — skipping write.");
+    return;
+  }
 
   const summary: CongressSummary = { generatedAt: new Date().toISOString(), since: cong.since || null, tldr: String(out.tldr).trim(), highlights };
   await fs.writeFile(path.join(DATA, "congress-summary.json"), JSON.stringify(summary));

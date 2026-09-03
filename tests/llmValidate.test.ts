@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normText, groundedQuote, boundedNumber, numberGroundedIn, isoDateOnly, coerceEnum, cleanTicker, whitelistTickers, str } from "../lib/llmValidate";
+import { normText, groundedQuote, boundedNumber, numberGroundedIn, isoDateOnly, coerceEnum, cleanTicker, whitelistTickers, str, isPlaceholderText } from "../lib/llmValidate";
 
 test("numberGroundedIn: grounds numbers that appear (any common filing form), drops fabricated ones", () => {
   const eps = "GAAP and Adjusted EPS in the range of $7.50 to $8.50.";
@@ -91,4 +91,20 @@ test("str: trims strings, empties everything else (no throw)", () => {
   assert.equal(str(5), "");
   assert.equal(str(null), "");
   assert.equal(str({}), "");
+});
+
+// The content-empty shell trap (Sep-3 desk note): a valid structure whose text fields are all "…".
+test("isPlaceholderText: flags degenerate punctuation/empty/non-string shells", () => {
+  for (const s of ["...", "…", "—", "-", "..", ". . .", "…—", "  ", "", " – "]) {
+    assert.equal(isPlaceholderText(s), true, `"${s}" should read as a placeholder`);
+  }
+  for (const v of [null, undefined, 42, {}, []]) {
+    assert.equal(isPlaceholderText(v), true, `${JSON.stringify(v)} should read as a placeholder`);
+  }
+});
+
+test("isPlaceholderText: accepts real text, incl. short-but-real (≥3 non-punctuation chars)", () => {
+  for (const s of ["Fed", "DELL fell 6.8% into the print", "NVDA guided Q3 above the Street", "up 3%"]) {
+    assert.equal(isPlaceholderText(s), false, `"${s}" is real content`);
+  }
 });

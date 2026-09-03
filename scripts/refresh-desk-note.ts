@@ -31,6 +31,7 @@ import { detectRecentReport, movePreDatesReport } from "../lib/preannounce";
 import { buildBinaryWeek } from "../lib/binaryWeek";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch, DeskTape, DeskCalendar, DeskSource } from "../lib/deskNote";
+import { deskBriefHasContent } from "../lib/deskNote";
 
 const DATA = path.join(process.cwd(), "data");
 const BASE = "sp500"; // headline US universe the brief is keyed to
@@ -509,19 +510,11 @@ async function main() {
   //
   // ⚠ The shell has a CONTENT-EMPTY variant too: structurally-valid sections whose tldr + every bullet
   // are just "..." placeholders (Sep-3 morning shipped an all-ellipses note — the old guard only checked
-  // sections.length>0, so the shell passed). `usable` now also requires real CONTENT — a non-placeholder
-  // tldr AND ≥3 non-placeholder bullet facts — so the rescue ladder fires on an ellipsis-shell instead of
-  // publishing it; if every rung is a shell, skip-write keeps the prior (real) note rather than a wall of dots.
+  // sections.length>0, so the shell passed). `deskBriefHasContent` (lib/deskNote, pure + tested) now gates
+  // on real CONTENT — a non-placeholder tldr AND ≥3 non-placeholder bullet facts — so the rescue ladder
+  // fires on an ellipsis-shell instead of publishing it; if every rung shells, skip-write keeps the prior note.
   type DeskOut = { tldr: string; sections: DeskNoteSection[]; watchToday: DeskNoteWatch[] };
-  // strips dots/ellipsis/dashes/space — "...", "…", "—", "-" all collapse to "" → placeholder
-  const placeholder = (s: unknown) => typeof s !== "string" || s.replace(/[.…\s–—-]/g, "").length < 3;
-  const usable = (o: DeskOut | null): o is DeskOut => {
-    if (!o || !Array.isArray(o.sections) || o.sections.length === 0) return false;
-    const realBullets = o.sections
-      .flatMap((s) => (Array.isArray(s?.bullets) ? s.bullets : []))
-      .filter((b) => b && !placeholder((b as { fact?: unknown }).fact)).length;
-    return !placeholder(o.tldr) && realBullets >= 3; // a real brief always clears this; an ellipsis-shell never does
-  };
+  const usable = (o: DeskOut | null): o is DeskOut => deskBriefHasContent(o);
   const attempt = (model: string) =>
     chatJSON<DeskOut>(SYSTEM, user, { maxTokens: 16000, model, reasoningEffort: "medium" }).catch(() => null);
   let out = await attempt(PRO_MODEL);

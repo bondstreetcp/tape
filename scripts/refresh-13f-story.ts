@@ -8,6 +8,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { loadSuperInvestors } from "../lib/superinvestors";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { isPlaceholderText } from "../lib/llmValidate";
 import type { ThirteenFStory, StoryTheme } from "../lib/thirteenFStory";
 
 const DATA = path.join(process.cwd(), "data");
@@ -75,14 +76,16 @@ async function main() {
     `\n=== MOST-OWNED ACROSS THE ROSTER ===\n${mostOwned}`;
 
   const out = await chatJSON<{ tldr: string; themes: StoryTheme[] }>(SYSTEM, user, { maxTokens: 6000, model: PRO_MODEL, reasoningEffort: "high" });
-  if (!out || !out.tldr) {
-    console.warn("13f-story: LLM returned no usable story — skipping write.");
-    return;
-  }
-  const themes = (Array.isArray(out.themes) ? out.themes : [])
-    .filter((t) => t && t.heading && t.detail)
+  const themes = (Array.isArray(out?.themes) ? out!.themes : [])
+    .filter((t) => t && !isPlaceholderText(t.heading) && !isPlaceholderText(t.detail))
     .map((t) => ({ heading: String(t.heading).trim(), detail: String(t.detail).trim(), tickers: (Array.isArray(t.tickers) ? t.tickers : []).filter((x) => typeof x === "string" && names.has(x.toUpperCase())).map((x) => x.toUpperCase()).slice(0, 8) /* only tickers the roster actually traded — hallucinated symbols must not render as links */ }))
     .slice(0, 4);
+  // Reject the content-empty shell (the Sep-3 desk-note trap): the old `!out.tldr` guard passed an all-"…"
+  // story — tldr truthy but empty. Require a real tldr AND ≥1 real theme. (isPlaceholderText: lib/llmValidate)
+  if (!out || isPlaceholderText(out.tldr) || !themes.length) {
+    console.warn("13f-story: LLM returned no usable story (empty/placeholder) — skipping write.");
+    return;
+  }
 
   const story: ThirteenFStory = { generatedAt: new Date().toISOString(), asOf, tldr: String(out.tldr).trim(), themes };
   await fs.writeFile(path.join(DATA, "13f-story.json"), JSON.stringify(story));

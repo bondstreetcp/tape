@@ -111,3 +111,15 @@ export function whitelistTickers(tickers: unknown, known: Set<string> | string[]
 export function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
+
+/**
+ * True if a text field is a PLACEHOLDER — empty, non-string, or degenerate punctuation (after stripping
+ * dots, ellipsis, dashes and whitespace, fewer than 3 characters remain). Catches the model's content-empty
+ * "..." / "…" / "—" shell: a STRUCTURALLY-valid response whose text fields carry no information. This shipped
+ * to production once — the Sep-3 all-ellipses desk note — because the write guard only checked that the
+ * sections array had length, not that any field held real text. Use it on every LLM-authored narrative field
+ * before persisting or rendering: a guard that a shell can satisfy with punctuation is not a content guard.
+ */
+export function isPlaceholderText(s: unknown): boolean {
+  return typeof s !== "string" || s.replace(/[.…\s–—-]/g, "").length < 3;
+}

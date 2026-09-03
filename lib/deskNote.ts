@@ -13,6 +13,7 @@
  */
 import path from "path";
 import { cachedFile } from "./jsonCache";
+import { isPlaceholderText } from "./llmValidate";
 
 export interface DeskNoteBullet {
   fact: string; // what happened (concise)
@@ -66,6 +67,22 @@ export interface DeskNote {
    *  as chips under the matching bullets (mirrors the stock-page ExplainMove UX). Absent on old notes. */
   moveSources?: { ticker: string; sources: DeskSource[] }[];
   counts: { movers: number; filings: number; flow: number; analyst: number };
+}
+
+/** Does a generated brief carry REAL content, or is it a degenerate shell? A shell (valid structure but
+ *  a tldr + bullets that are just "..." placeholders) passed the old sections.length>0 guard and shipped
+ *  to production (Sep-3). Require a non-placeholder tldr AND ≥ `minBullets` non-placeholder bullet facts.
+ *  Pure — the desk-note refresh's write guard. This shape is desk-note-specific; a differently-shaped LLM
+ *  feed should compose the generic `isPlaceholderText` (lib/llmValidate) over its own fields instead. */
+export function deskBriefHasContent(
+  o: { tldr?: unknown; sections?: { bullets?: { fact?: unknown }[] }[] } | null | undefined,
+  minBullets = 3,
+): boolean {
+  if (!o || !Array.isArray(o.sections) || o.sections.length === 0) return false;
+  const realBullets = o.sections
+    .flatMap((s) => (Array.isArray(s?.bullets) ? s.bullets : []))
+    .filter((b) => b && !isPlaceholderText((b as { fact?: unknown }).fact)).length;
+  return !isPlaceholderText(o.tldr) && realBullets >= minBullets;
 }
 
 // mtime+size-keyed (lib/jsonCache), NOT a permanent module cache: the NAS refreshes data/ IN PLACE
