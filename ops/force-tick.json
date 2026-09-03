@@ -1,7 +1,7 @@
 {
-  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-08-27 (eia-live): EIA_API_KEY was merged into R2 site-data/runner.env; after the tape-runner container is restarted (so tape-entrypoint sources the refreshed .alert-env), this forced FULL runs refresh-energy WITH the key and back-fills the EIA inventory/production/demand rows, then data-to-r2 ships them. Backstop is the 23:00 UTC scheduled FULL.",
-  "mode": "full",
-  "notBeforeUtc": "2026-08-27T21:05:00Z",
-  "expiresUtc": "2026-08-28T12:00:00Z",
-  "key": "2026-08-27-eia-live"
+  "_comment": "One-shot forced tick — read by run-tick.ts `auto` on the NAS (which git-pulls main each tick). Fires ONCE inside [notBeforeUtc, expiresUtc) at the next IDLE hour (a scheduled tick wins its own hour); the done-stamp lives in the container's data/.tmp. To arm a new one: change `key` + the window + mode, commit. An expired file is inert — safe to leave in the repo. 2026-09-03 (deskfix-shell): the Sep-3 MORNING desk note published as an all-'...' shell (the PRO model's content-empty-shell trap; usable() only checked sections.length>0). Guard hardened in 6cf28dac to reject the ellipsis-shell so the rescue ladder (PRO retry -> gemini) fires. This forced DESK tick pulls that fix and regenerates the note now (prior shell is >150min old, so skip-if-fresh won't block it), then data-to-r2 ships it + the Vercel deploy hook fires. Backstop is the 21:00 UTC (5pm ET) scheduled evening desk run.",
+  "mode": "desk",
+  "notBeforeUtc": "2026-09-03T15:45:00Z",
+  "expiresUtc": "2026-09-03T22:30:00Z",
+  "key": "2026-09-03-deskfix-shell"
 }
