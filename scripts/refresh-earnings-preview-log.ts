@@ -22,7 +22,7 @@ import { cachedStats } from "../lib/companyCache";
 import { getEarningsReactions } from "../lib/earningsReaction";
 import { assemblePreviewContext, predictPrint } from "../lib/earningsPreview";
 import { llmConfigured } from "../lib/llm";
-import { gradeEps, actualDirection, gradeReaction, type PreviewLogData, type PreviewRec } from "../lib/earningsPreviewLog";
+import { gradeEps, actualDirection, gradeReaction, regradeLegacyEps, type PreviewLogData, type PreviewRec } from "../lib/earningsPreviewLog";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "earnings-preview-log.json");
@@ -200,6 +200,13 @@ async function main() {
     settled++;
   });
   console.log(`settled ${settled} forecasts against actuals${invalidated ? ` · INVALIDATED ${invalidated} (print predated the forecast — stale snapshot date)` : ""}`);
+
+  // Recs settled BEFORE the consensus-basis fix still carry a stats-basis (possibly GAAP) EPS grade —
+  // settled recs are never revisited, so re-grade them once in place from the stored surprise. No-op
+  // once every settled rec is basis-stamped.
+  let regraded = 0;
+  for (const [id, rec] of byId) { const r = regradeLegacyEps(rec); if (r) { byId.set(id, r); regraded++; } }
+  if (regraded) console.log(`re-graded ${regraded} legacy settled rec(s) on the consensus basis`);
 
   // ── prune + write (read-merge-write: the log never loses prior recs on a partial run) ──
   const all = [...byId.values()].sort((a, b) => Date.parse(b.earningsDate) - Date.parse(a.earningsDate));

@@ -175,7 +175,12 @@ export default function DebateLedgerView({ universe, data }: { universe: string;
 
       {shown.length ? (
         <ul className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
-          {shown.map((e) => <LedgerRow key={`${e.source}|${e.url}|${e.ticker}`} e={e} universe={universe} />)}
+          {/* Keyed on the entry's natural identity (the same key the ledger dedups on). The old
+              source|url|ticker key COLLIDED for every analyst target revision on one ticker (Yahoo gives a
+              single URL per ticker), and colliding React keys reuse stale rows across a re-render — so
+              switching debates or the bull/bear filter showed the previous list (the 2026-08-16 "same rows
+              under every debate / filter does nothing" report). */}
+          {shown.map((e) => <LedgerRow key={`${e.key || `${e.source}|${e.url}`}|${e.ticker}|${e.at}`} e={e} universe={universe} />)}
         </ul>
       ) : (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center">

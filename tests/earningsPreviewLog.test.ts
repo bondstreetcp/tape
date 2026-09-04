@@ -1,6 +1,36 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gradeEps, actualDirection, gradeReaction, summarizePreviews, EPS_HIT_ABS, type PreviewRec } from "../lib/earningsPreviewLog";
+import { gradeEps, actualDirection, gradeReaction, summarizePreviews, regradeLegacyEps, EPS_HIT_ABS, type PreviewRec } from "../lib/earningsPreviewLog";
+
+// regradeLegacyEps: recs settled BEFORE the consensus-basis fix (no epsBasis) were graded against a
+// stats-file actual that can be GAAP while the forecast was adjusted — the AMAT row: model 3.45 vs a 3.39
+// consensus, adjusted actual 3.50, yet graded ✗ against a GAAP 2.86. The stored surprise lets the adjusted
+// actual be rebuilt (3.39 × (1 + 3.24%) ≈ 3.50) and the grade recomputed in place.
+test("regradeLegacyEps: the AMAT case flips to a hit on the consensus basis and stamps epsBasis", () => {
+  const legacy: PreviewRec = {
+    id: "AMAT-2026-08-14", symbol: "AMAT", name: "", loggedAt: "2026-08-10T00:00:00Z", earningsDate: "2026-08-14",
+    consEps: 3.39, consRevB: null, predEps: 3.45, predRevB: null, vsConsensus: "beat", reactionDir: "up", confidence: "medium", calls: [],
+    status: "settled", actualEps: 2.86, actualSurprise: 0.0324, epsHit: false, epsErrPct: 20.6, dirHit: true, reactionHit: true,
+  };
+  const r = regradeLegacyEps(legacy);
+  assert.ok(r);
+  assert.equal(r.actualEps, 3.5);
+  assert.equal(r.epsBasis, "consensus-implied");
+  assert.equal(r.epsHit, true); // 3.45 vs 3.50 is within the 5% band
+  assert.ok(Math.abs((r.epsErrPct as number) - 1.4) < 1e-9);
+  assert.equal(r.dirHit, true); // untouched — direction was always graded on the surprise
+});
+
+test("regradeLegacyEps: nothing to do for basis-stamped, unsettled, or surprise-less recs", () => {
+  const base: PreviewRec = {
+    id: "X-1", symbol: "X", name: "", loggedAt: "", earningsDate: "", consEps: 1, consRevB: null, predEps: 1, predRevB: null,
+    vsConsensus: "beat", reactionDir: "up", confidence: "low", calls: [], status: "settled", actualSurprise: 0.05,
+  };
+  assert.equal(regradeLegacyEps({ ...base, epsBasis: "stats" }), null); // already graded post-fix (stats fallback is deliberate)
+  assert.equal(regradeLegacyEps({ ...base, status: "awaiting_print" }), null);
+  assert.equal(regradeLegacyEps({ ...base, actualSurprise: null }), null);
+  assert.equal(regradeLegacyEps({ ...base, consEps: null }), null);
+});
 
 // The grading bands ARE the definition of "accurate" — pin them so the scorecard's meaning can't
 // silently drift ("code verifies, models propose").

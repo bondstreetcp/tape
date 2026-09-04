@@ -69,6 +69,21 @@ export function gradeEps(predEps: number | null, actualEps: number | null): { hi
   return { hit: err <= band, errPct: actualEps !== 0 ? (err / Math.abs(actualEps)) * 100 : null };
 }
 
+/**
+ * Re-grade a rec settled BEFORE the consensus-basis fix (no epsBasis stamped): its epsHit was scored against
+ * the stats-file actual, which can be GAAP while the forecast was adjusted (the AMAT "✗ and beat" row from
+ * the 2026-08-16 call). Every settled rec stored the surprise vs consensus, so the adjusted-basis actual
+ * (consEps × (1 + surprise)) and its grade can be recomputed deterministically. Returns the patched rec, or
+ * null when there is nothing to re-grade (already basis-stamped, not settled, or no consensus/surprise).
+ */
+export function regradeLegacyEps(rec: PreviewRec): PreviewRec | null {
+  if (rec.status !== "settled" || rec.epsBasis != null) return null;
+  if (rec.consEps == null || rec.actualSurprise == null) return null;
+  const actualEps = +(rec.consEps * (1 + rec.actualSurprise)).toFixed(2);
+  const eps = gradeEps(rec.predEps, actualEps);
+  return { ...rec, actualEps, epsBasis: "consensus-implied", epsHit: eps?.hit ?? null, epsErrPct: eps?.errPct != null ? +eps.errPct.toFixed(1) : null };
+}
+
 /** What the print actually did vs consensus, from the reaction feed's surprise (decimal). */
 export function actualDirection(surprise: number | null): "beat" | "miss" | "inline" | null {
   if (surprise == null) return null;
