@@ -229,6 +229,32 @@ export function mergeDigests(prior: CallDigest[], fresh: CallDigest[], keep: num
   return keep > 0 ? all.slice(0, keep) : all;
 }
 
+/**
+ * SCOPED ROUTING: CALL_DIGEST_LOCAL_URL/MODEL(/API_KEY) send ONLY the call-digest job to the local box, by
+ * becoming the LLM_LOCAL_* vars lib/llm reads (per call, so assigning them at the top of the script is
+ * enough). The rest of the extraction fleet keeps the process-wide LLM_LOCAL_* (unset on the NAS = cloud).
+ * Why scoped: the rig's vLLM serves a 32B model with --max-num-seqs 1 — fine for a dozen transcripts a
+ * tick, hopeless for overnight-filings' ~4.5M tokens/night inside the step timeouts. Pure; null = unset.
+ */
+export function scopedLocalEnv(env: Record<string, string | undefined>): Record<string, string> | null {
+  const url = (env.CALL_DIGEST_LOCAL_URL || "").trim();
+  const model = (env.CALL_DIGEST_LOCAL_MODEL || "").trim();
+  if (!url || !model) return null;
+  const key = (env.CALL_DIGEST_LOCAL_API_KEY || "").trim();
+  return { LLM_LOCAL_BASE_URL: url, LLM_LOCAL_MODEL: model, ...(key ? { LLM_LOCAL_API_KEY: key } : {}) };
+}
+
+/**
+ * Wall-clock budget by tick: the 08:00 ET desk tick must not push the desk note past the open (12 min); the
+ * nightly FULL tick can take the long read (40); anything else (a manual run, the GitHub fallback) 30. An
+ * explicit CALL_DIGEST_BUDGET_MIN wins. Pure.
+ */
+export function budgetMinutes(mode: string | undefined, override: string | undefined): number {
+  const o = Number(override);
+  if (override && Number.isFinite(o) && o > 0) return o;
+  return mode === "desk" ? 12 : mode === "full" ? 40 : 30;
+}
+
 /** The digests that belong to the file's last session (call date on/after the run's session day). */
 export function sessionDigests(data: Pick<CallDigestsData, "digests" | "lastRun">): CallDigest[] {
   const floor = data.lastRun?.sessionDay ?? "";

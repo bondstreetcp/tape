@@ -147,3 +147,22 @@ LLM_LOCAL_API_KEY=<TOKEN>
 The code routes the eligible jobs local automatically and falls back to OpenRouter on any local failure,
 so the box being offline never drops a feed. Confirm with the first nightly log (no `local …` fallback
 warnings) and `npm run llm-costs` (those jobs metering near $0).
+
+## Scoped routing — just the earnings-call digests (2026-09)
+
+The Daily Desk's earnings-call digests (`scripts/refresh-call-digests.ts`) can use the box WITHOUT
+switching the whole fleet: set **`CALL_DIGEST_LOCAL_URL`** + **`CALL_DIGEST_LOCAL_MODEL`**
+(+ `CALL_DIGEST_LOCAL_API_KEY` if the server wants one) and that step alone maps them onto
+`LLM_LOCAL_*` for its own process (`lib/llm` reads the local config per call). Everything else keeps
+the process-wide `LLM_LOCAL_*` — unset on the NAS today, i.e. cloud.
+
+Why scoped: the rig's `argus-vllm.service` (LXC 102, `Qwen3-VL-32B-Instruct-AWQ`, TP=2,
+`--max-model-len 16384`, `--max-num-seqs 1`) is a one-sequence server. That is fine for a dozen
+transcripts a tick (a 2-segment call ≈ 3 requests ≈ 5 min) and hopeless for overnight-filings' ~4.5M
+tokens a night inside run-tick's 45-min step timeout. The digest job cuts transcripts into ≤34k-character
+segments (~9k tokens + a 2.2k-token reply), which fits the 16k window.
+
+NAS wiring (from the NAS's LAN): `CALL_DIGEST_LOCAL_URL=http://192.168.1.76:8000/v1`,
+`CALL_DIGEST_LOCAL_MODEL=argus-vlm` (no key — the server runs without `--api-key`). Deliver via
+`tape.env` + a container recreate, or via the R2 runner-env channel (`npm run push-runner-env`).
+The tab's footer and the `call-digests:` log line say which model served the run.

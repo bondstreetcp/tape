@@ -1,6 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chunkTranscript, isRecentCallDate, kpiGrounded, mergeDigests, sanitizeDigest, sanitizeSynthesis, sessionWindow, sessionDigests, type CallDigest } from "../lib/callDigests";
+import { budgetMinutes, chunkTranscript, isRecentCallDate, kpiGrounded, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow, sessionDigests, type CallDigest } from "../lib/callDigests";
+
+test("scopedLocalEnv: CALL_DIGEST_LOCAL_* become LLM_LOCAL_* for this job only; unset = null (fleet untouched)", () => {
+  assert.equal(scopedLocalEnv({}), null);
+  assert.equal(scopedLocalEnv({ CALL_DIGEST_LOCAL_URL: "http://192.168.1.76:8000/v1" }), null); // both required
+  assert.deepEqual(scopedLocalEnv({ CALL_DIGEST_LOCAL_URL: " http://192.168.1.76:8000/v1 ", CALL_DIGEST_LOCAL_MODEL: "argus-vlm" }), {
+    LLM_LOCAL_BASE_URL: "http://192.168.1.76:8000/v1",
+    LLM_LOCAL_MODEL: "argus-vlm",
+  }); // no key → lib/llm's default bearer, for a server run without --api-key
+  assert.deepEqual(scopedLocalEnv({ CALL_DIGEST_LOCAL_URL: "http://x/v1", CALL_DIGEST_LOCAL_MODEL: "m", CALL_DIGEST_LOCAL_API_KEY: "tok" }), {
+    LLM_LOCAL_BASE_URL: "http://x/v1", LLM_LOCAL_MODEL: "m", LLM_LOCAL_API_KEY: "tok",
+  });
+});
+
+test("budgetMinutes: 12 on a desk tick (the note must not slip past the open), 40 on FULL, 30 elsewhere; override wins", () => {
+  assert.equal(budgetMinutes("desk", undefined), 12);
+  assert.equal(budgetMinutes("full", undefined), 40);
+  assert.equal(budgetMinutes(undefined, undefined), 30); // a manual run or the GitHub fallback
+  assert.equal(budgetMinutes("desk", "25"), 25);
+  assert.equal(budgetMinutes("full", "0"), 40); // a nonsense override is ignored
+  assert.equal(budgetMinutes("full", "abc"), 40);
+});
 
 // The earnings-call digests read every transcript from the last session on the local box. These pin the
 // parts code owns: which session a run covers, how a transcript is cut for the box's context window, and

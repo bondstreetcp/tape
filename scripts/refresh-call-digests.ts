@@ -15,8 +15,13 @@
  * results 8-Ks from the overnight-filings feed. Each candidate is VERIFIED against The Motley Fool's
  * transcript listing (a transcript dated in the window) before a single fetch or model call is spent.
  *
- * Knobs: CALL_DIGEST_BUDGET_MIN (30) · CALL_DIGEST_CAP (30 transcripts/run, largest caps first) ·
- * CALL_DIGEST_CONCURRENCY (3 — vLLM batches; the box is the ceiling, not the wire) ·
+ * SCOPED ROUTING: CALL_DIGEST_LOCAL_URL + CALL_DIGEST_LOCAL_MODEL (+ _API_KEY) send THIS job alone to the
+ * box — they become LLM_LOCAL_* for this process (lib/llm reads them per call), so the rest of the fleet
+ * keeps its own setting. On the NAS: the rig's argus-vllm in LXC 102 (a one-sequence 32B server, 16k window).
+ *
+ * Knobs: CALL_DIGEST_BUDGET_MIN (default by tick: 12 on a desk tick, 40 on FULL, else 30 — the morning
+ * desk note must not slip past the open) · CALL_DIGEST_CAP (30 transcripts/run, largest caps first) ·
+ * CALL_DIGEST_CONCURRENCY (2 — a one-sequence vLLM queues the second; the box is the ceiling, not the wire) ·
  * CALL_DIGEST_LOCAL_ONLY=1 (skip when the box isn't configured, and never fall back to cloud) ·
  * TEST_SYMBOLS="AAPL MSFT" · FORCE=1 (re-digest calls already stored).
  */
@@ -28,16 +33,23 @@ import { listTranscriptCandidates, fetchTranscriptAt, type FullTranscript } from
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import {
-  CHUNK_CHARS, MAX_CHUNKS, chunkTranscript, isRecentCallDate, mergeDigests, sanitizeDigest, sanitizeSynthesis, sessionWindow,
+  CHUNK_CHARS, MAX_CHUNKS, budgetMinutes, chunkTranscript, isRecentCallDate, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow,
   type CallDigest, type CallDigestsData, type CallSynthesis,
 } from "../lib/callDigests";
+
+// SCOPED ROUTING — CALL_DIGEST_LOCAL_* become LLM_LOCAL_* for THIS process only (lib/llm reads the local
+// config per call, so this assignment is all it takes). Must precede every env read below.
+const SCOPED = scopedLocalEnv(process.env);
+if (SCOPED) Object.assign(process.env, SCOPED);
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "call-digests.json");
 const US_UNIVERSES = ["sp500", "nasdaq100", "russell1000"];
-const BUDGET_MIN = Number(process.env.CALL_DIGEST_BUDGET_MIN || 30);
+const BUDGET_MIN = budgetMinutes(process.env.TAPE_TICK_MODE, process.env.CALL_DIGEST_BUDGET_MIN); // run-tick sets TAPE_TICK_MODE
 const CAP = Number(process.env.CALL_DIGEST_CAP || 30);
-const CONC = Math.max(1, Number(process.env.CALL_DIGEST_CONCURRENCY || 3));
+// A one-sequence vLLM (--max-num-seqs 1) serves the second request only after the first completes, so 2 keeps
+// one request queued and ready without stacking a third behind a ~100s generation.
+const CONC = Math.max(1, Number(process.env.CALL_DIGEST_CONCURRENCY || 2));
 const LOCAL_CONFIGURED = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
 const LOCAL_ONLY = process.env.CALL_DIGEST_LOCAL_ONLY === "1";
 const FORCE = process.env.FORCE === "1";
@@ -48,10 +60,11 @@ const HOUR = 3_600_000;
 // The label stored on each digest. chatJSON serves attempt 0 locally when the box is configured and falls
 // through to the cloud default tier on a failure — the response doesn't say which, so the label is honest
 // about the arrangement rather than claiming a model per row.
-const MODEL_LABEL = LOCAL_CONFIGURED ? `local:${process.env.LLM_LOCAL_MODEL}${LOCAL_ONLY ? "" : " (cloud fallback)"}` : "cloud default tier (LLM_LOCAL_* unset)";
+const MODEL_LABEL = LOCAL_CONFIGURED ? `local:${process.env.LLM_LOCAL_MODEL}${SCOPED ? " [scoped]" : ""}${LOCAL_ONLY ? "" : " (cloud fallback)"}` : "cloud default tier (LLM_LOCAL_* unset)";
 // LOCAL_ONLY: attempt 0 is the local box; with retries=1 there is no attempt 1, so no cloud spend — a
-// transient box error just leaves that call for the next tick.
-const LLM = { local: true as const, timeoutMs: 300_000, retries: LOCAL_ONLY ? 1 : 3 };
+// transient box error just leaves that call for the next tick. The per-attempt timeout allows for a request
+// queued behind another on a one-sequence server (~100s each way); the tick budget is the outer ceiling.
+const LLM = { local: true as const, timeoutMs: 600_000, retries: LOCAL_ONLY ? 1 : 3 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {

@@ -136,9 +136,14 @@ interface ChatMessage {
 // and the Flash-pinned extractors (guidance, overnight-filings) via {local:true}. PRO_MODEL
 // judgment and LIVE /api routes stay on OpenRouter. Any local failure falls through to OpenRouter on
 // the next attempt, so the home box being offline never kills a feed. See docs/SETUP-local-llm.md.
-const LOCAL_URL = (process.env.LLM_LOCAL_BASE_URL || "").replace(/\/+$/, "");
-const LOCAL_MODEL = process.env.LLM_LOCAL_MODEL || "";
-const LOCAL_KEY = process.env.LLM_LOCAL_API_KEY || "local";
+// Read PER CALL, not at module load: a script can then scope the box to ITSELF by setting LLM_LOCAL_* after
+// import (refresh-call-digests maps CALL_DIGEST_LOCAL_* onto them — lib/callDigests.scopedLocalEnv), while
+// every other process keeps the process-wide setting (unset on the NAS = cloud).
+const localCfg = () => ({
+  url: (process.env.LLM_LOCAL_BASE_URL || "").replace(/\/+$/, ""),
+  model: process.env.LLM_LOCAL_MODEL || "",
+  key: process.env.LLM_LOCAL_API_KEY || "local",
+});
 
 /** Whether a chat call may be served by the local overnight box (subject to LLM_LOCAL_* being set).
  *  Explicit opts.local wins; otherwise the legacy heuristic — the bare-default tier is batch
@@ -165,7 +170,8 @@ async function callChat(
   jsonMode: boolean,
 ): Promise<string | null> {
   const key = await apiKey();
-  const wantLocal = !!LOCAL_URL && !!LOCAL_MODEL && localEligible(opts); // nightly extraction only — see localEligible()
+  const L = localCfg(); // per call — see localCfg()
+  const wantLocal = !!L.url && !!L.model && localEligible(opts); // nightly extraction only — see localEligible()
   if (!key && !wantLocal) {
     console.warn("lib/llm: OPENROUTER_API_KEY not set (env or .env.local) — skipping LLM call.");
     return null;
@@ -183,7 +189,7 @@ async function callChat(
     // Attempt 0 goes local when configured; failures fall through to OpenRouter.
     const useLocal = wantLocal && attempt === 0;
     if (!useLocal && !key) { lastInfo = "local failed and no OPENROUTER_API_KEY for cloud fallback"; break; }
-    const targetModel = useLocal ? LOCAL_MODEL : opts.model || model();
+    const targetModel = useLocal ? L.model : opts.model || model();
     const body: Record<string, unknown> = {
       model: targetModel,
       temperature: opts.temperature ?? 0.1,
@@ -205,10 +211,10 @@ async function callChat(
     const abortMs = opts.timeoutMs ?? 120_000; // a big 10-K/Q prompt can be slow; don't hang forever (LIVE routes pass a short bound)
     const timer = setTimeout(() => ctrl.abort(), abortMs);
     try {
-      const res = await fetch(`${useLocal ? LOCAL_URL : baseUrl()}/chat/completions`, {
+      const res = await fetch(`${useLocal ? L.url : baseUrl()}/chat/completions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${useLocal ? LOCAL_KEY : key}`,
+          Authorization: `Bearer ${useLocal ? L.key : key}`,
           "Content-Type": "application/json",
           "X-Title": "Tape",
         },
