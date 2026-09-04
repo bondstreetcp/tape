@@ -12,6 +12,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, llmConfigured } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import { deadline, withDeadline } from "../lib/deadline";
 import { daysUntil } from "../lib/calendar";
 import { isSpac, priceInText, spreadMath, dedupeTargets, DEFAULT_CLOSE_DAYS, type MergerArbRow, type MergerArbFile, type DealTarget } from "../lib/mergerArb";
@@ -138,7 +139,7 @@ async function main() {
         cashPerShare: cash, verified: true,
         expectedClose: typeof out.expectedClose === "string" && /^\d{4}-\d{2}-\d{2}$/.test(out.expectedClose) ? out.expectedClose : null,
         filedAt: src.file_date || "", spot: null, spreadPct: null, annualizedPct: null,
-        note: typeof out.note === "string" ? out.note.slice(0, 120) : null, url,
+        note: narrative(out.note, 120) || null, url,
       };
       seen[adsh] = "row";
     }

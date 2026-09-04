@@ -17,6 +17,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import type { Perf, Stance, TickerCall, TrumpStockPost, TrumpStocksData } from "../lib/trumpStocks";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -109,7 +110,7 @@ async function classifyBatch(posts: RawPost[]): Promise<Record<string, Extracted
       }))
       .filter((t: TickerCall) => t.ticker.length >= 1 && t.ticker.length <= 6);
     if (!tickers.length) continue;
-    map[p.id] = { tickers, quote: String(it.quote || "").slice(0, 180), rationale: String(it.rationale || "").slice(0, 200) };
+    map[p.id] = { tickers, quote: narrative(it.quote, 180), rationale: narrative(it.rationale, 200) }; // '' for a "…" shell
   }
   return map;
 }

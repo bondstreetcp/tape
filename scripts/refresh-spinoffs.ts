@@ -11,6 +11,7 @@ import YahooFinance from "yahoo-finance2";
 import { computeForcedFlow, SPINOFF_ROSTER, type SpinoffRow, type SpinoffsData, type SpinPipelineRow } from "../lib/spinoffs";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
@@ -194,9 +195,9 @@ async function discoverPipeline(prior: SpinPipelineRow[]): Promise<SpinPipelineR
       ...base,
       parent,
       parentTicker: parent && typeof o.parentTicker === "string" && /^[A-Z][A-Z0-9.\-]{0,5}$/.test(o.parentTicker.trim()) ? o.parentTicker.trim().toUpperCase() : null,
-      business: typeof o.business === "string" && o.business.trim() ? o.business.trim().slice(0, 140) : null,
+      business: narrative(o.business, 140) || null, // '' for a "…" shell → null (lib/llmValidate)
       expectedTiming: typeof o.expectedTiming === "string" && phraseGrounded(o.expectedTiming, tl) ? o.expectedTiming.trim().slice(0, 60) : null,
-      ratio: typeof o.ratio === "string" && o.ratio.trim() ? o.ratio.trim().slice(0, 80) : null,
+      ratio: narrative(o.ratio, 80) || null,
     });
     await new Promise((r) => setTimeout(r, 200));
   }

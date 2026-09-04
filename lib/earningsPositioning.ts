@@ -9,6 +9,7 @@
  * there is no unit ambiguity here.
  */
 import { chatJSON, NO_ADVICE } from "./llm";
+import { narrative, narrativeList } from "./llmValidate";
 
 export interface PositioningFacts {
   company: string;
@@ -88,14 +89,16 @@ export async function buildPositioningRead(f: PositioningFacts): Promise<Positio
     `Company: ${f.company}\n\nOPTIONS POSITIONING FACTS:\n${sheet}\n\n${SCHEMA}`,
     { maxTokens: 700, reasoningEffort: "low" },
   );
-  if (!out || !out.tldr || !Array.isArray(out.points)) return null;
+  // narrative(): a "…" shell in the tldr or the points is no read at all (lib/llmValidate)
+  const tldr = narrative(out?.tldr, 320);
+  if (!out || !tldr || !Array.isArray(out.points)) return null;
   const lean = ["bullish", "bearish", "two-sided", "neutral"].includes(String(out.lean)) ? (out.lean as PositioningRead["lean"]) : "neutral";
-  const points = (out.points as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 280)).slice(0, 4);
+  const points = narrativeList(out.points, 4, 280);
   if (!points.length) return null;
   return {
-    tldr: String(out.tldr).slice(0, 320),
+    tldr,
     lean,
     points,
-    caveat: String(out.caveat || "Options positioning reflects hedging and flow, not a forecast of the result.").slice(0, 260),
+    caveat: narrative(out.caveat, 260) || "Options positioning reflects hedging and flow, not a forecast of the result.",
   };
 }

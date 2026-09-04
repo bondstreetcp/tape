@@ -11,7 +11,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { getNewsChecked, pickHeadlines } from "../lib/news";
-import { cleanTicker } from "../lib/llmValidate";
+import { cleanTicker, narrative } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
 
 const TOP = Number(process.env.LIMIT || 24); // budget cap: only the top rich non-earnings names get an LLM read
@@ -77,8 +77,9 @@ Return JSON: { "tags": [ { "symbol": "TICKER", "kind": "event" | "none" | "uncle
   let tagged = 0, preserved = 0;
   for (const r of data.rows) {
     const t = allowed.has(r.symbol) ? bySym.get(r.symbol) : undefined;
-    if (t && t.kind && t.kind !== "none" && typeof t.catalyst === "string" && t.catalyst.trim()) {
-      r.catalyst = { text: t.catalyst.trim().slice(0, 80), kind: t.kind === "event" ? "event" : "unclear", confidence: Math.max(0, Math.min(1, Number(t.confidence) || 0)) };
+    const catalystText = t ? narrative(t.catalyst, 80) : ""; // '' for a "…" shell (lib/llmValidate)
+    if (t && t.kind && t.kind !== "none" && catalystText) {
+      r.catalyst = { text: catalystText, kind: t.kind === "event" ? "event" : "unclear", confidence: Math.max(0, Math.min(1, Number(t.confidence) || 0)) };
       tagged++;
     } else if (fetchDied.has(r.symbol) && r.catalyst) {
       preserved++; // the news fetch DIED for this name — keep the prior tag rather than erase it on a blip

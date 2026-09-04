@@ -5,6 +5,7 @@
  * from ./realEconomy). Decision-support, not advice.
  */
 import { chatJSON, NO_ADVICE } from "./llm";
+import { narrative, narrativeList } from "./llmValidate";
 import type { RealEconomyData, RealEconomyRead } from "./realEconomy";
 
 const sp = (v: number | null): string => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
@@ -39,13 +40,15 @@ export async function buildRealEconomyRead(data: RealEconomyData): Promise<RealE
     `Real-economy data (most recent values):\n${sheet}\n\n${SCHEMA}`,
     { maxTokens: 800, reasoningEffort: "low" },
   );
-  if (!out || !out.tldr || !Array.isArray(out.points)) return null;
-  const strs = (v: unknown, n: number) => (Array.isArray(v) ? v.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 260)).slice(0, n) : []);
+  // narrative(): a "…" shell in the tldr or the points is no read at all (lib/llmValidate)
+  const tldr = narrative(out?.tldr, 320);
+  if (!out || !tldr || !Array.isArray(out.points)) return null;
+  const strs = (v: unknown, n: number) => narrativeList(v, n, 260);
   const points = strs(out.points, 4);
   if (!points.length) return null;
   const regime = ["expanding", "cooling", "mixed", "contracting"].includes(String(out.regime)) ? (out.regime as RealEconomyRead["regime"]) : "mixed";
   return {
-    tldr: String(out.tldr).slice(0, 320),
+    tldr,
     regime,
     points,
     readThrough: strs(out.readThrough, 3),

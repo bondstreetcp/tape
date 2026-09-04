@@ -6,6 +6,7 @@
  * to squeeze). Served by ?part=techread. Decision-support, not advice.
  */
 import { chatJSON, NO_ADVICE } from "./llm";
+import { narrative, narrativeList } from "./llmValidate";
 
 export interface TechnicalFacts {
   company: string;
@@ -132,17 +133,19 @@ export async function buildTechnicalRead(f: TechnicalFacts): Promise<TechnicalRe
     `Company: ${f.company}\n\nTECHNICAL FACTS (into the earnings print):\n${sheet}\n\n${SCHEMA}`,
     { maxTokens: 700, reasoningEffort: "low" },
   );
-  if (!out || !out.tldr || !Array.isArray(out.points)) return null;
+  // narrative(): a "…" shell in the tldr or the points is no read at all (lib/llmValidate)
+  const tldr = narrative(out?.tldr, 320);
+  if (!out || !tldr || !Array.isArray(out.points)) return null;
   const trend = ["uptrend", "downtrend", "range"].includes(String(out.trend)) ? (out.trend as TechnicalRead["trend"]) : "range";
-  const points = (out.points as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 280)).slice(0, 4);
+  const points = narrativeList(out.points, 4, 280);
   if (!points.length) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   return {
-    tldr: String(out.tldr).slice(0, 320),
+    tldr,
     trend,
     points,
     support: num(out.support),
     resistance: num(out.resistance),
-    caveat: String(out.caveat || "Technicals describe positioning into the print, not a forecast of the result.").slice(0, 240),
+    caveat: narrative(out.caveat, 240) || "Technicals describe positioning into the print, not a forecast of the result.",
   };
 }

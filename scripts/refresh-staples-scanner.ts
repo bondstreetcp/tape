@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { narrative, narrativeList } from "../lib/llmValidate";
 import { tickerFor, inflectionOf, type ScanLevel, type ScanRow, type ScanReport, type ScanSummary, type StaplesScannerData } from "../lib/staplesScanner";
 
 // Load .env.local into process.env for local tsx runs (CI injects the vars directly).
@@ -134,10 +135,12 @@ async function buildSummary(reports: ScanReport[]): Promise<ScanSummary | null> 
     `Data thru ${periodEnd}. ${rows.length} company/category reads (most salient first):\n${rows.map(line).join("\n")}\n\n${SCHEMA}`,
     { maxTokens: 900, reasoningEffort: "low" },
   );
-  if (!out || !out.headline || !Array.isArray(out.points)) return null;
-  const points = (out.points as unknown[]).filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim().slice(0, 280)).slice(0, 6);
+  // narrative(): a "…" shell in the headline or the points is no summary at all (lib/llmValidate)
+  const headline = narrative(out?.headline, 320);
+  if (!out || !headline || !Array.isArray(out.points)) return null;
+  const points = narrativeList(out.points, 6, 280);
   if (!points.length) return null;
-  return { headline: String(out.headline).slice(0, 320), points, periodEnd, generatedAt: new Date().toISOString() };
+  return { headline, points, periodEnd, generatedAt: new Date().toISOString() };
 }
 
 async function main() {

@@ -9,7 +9,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { cleanTicker } from "../lib/llmValidate";
+import { cleanTicker, narrative } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
 import { sideLabel, type TradeIdea, type TradeDeskData, type Conviction } from "../lib/tradeIdeas";
 
@@ -109,7 +109,8 @@ function topPool(cands: TradeIdea[], n = POOL): TradeIdea[] {
   return pool;
 }
 
-const clamp = (s: any, n: number): string => (typeof s === "string" ? s.trim().replace(/\s+/g, " ").slice(0, n) : "");
+// '' for a non-string AND for a "…" placeholder shell (lib/llmValidate) — a shell thesis must not select a pick.
+const clamp = (s: any, n: number): string => narrative(s, n).replace(/\s+/g, " ");
 const normConv = (c: any): Conviction => (c === "high" ? "high" : c === "low" ? "low" : "medium");
 const convRank: Record<Conviction, number> = { high: 0, medium: 1, low: 2 };
 

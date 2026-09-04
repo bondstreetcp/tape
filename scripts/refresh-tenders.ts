@@ -16,6 +16,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, llmConfigured } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import { deadline, withDeadline } from "../lib/deadline";
 import { dedupeOffers, detectOddLotPriority, oddLotMath, priceInText, tickersFromDisplayName, type TenderRow, type TendersFile } from "../lib/tenders";
 
@@ -132,7 +133,7 @@ async function main() {
       oddLotPriority: oddLot,
       verified: priceOk,
       spot: null, premiumPct: null, oddLotValueUsd: null,
-      conditions: typeof out?.conditions === "string" ? out.conditions.slice(0, 160) : null,
+      conditions: narrative(out?.conditions, 160) || null,
       url,
     };
     if (row.priceUsd == null && !row.oddLotPriority) { seen[adsh] = "no-listed-price"; continue; } // notes/NAV repurchases etc.

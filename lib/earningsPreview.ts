@@ -22,6 +22,7 @@ import { getLatestTranscript } from "./transcripts";
 import { getEarningsReactions } from "./earningsReaction";
 import { getFilings, getFilingText } from "./edgar";
 import { chatJSON, NO_ADVICE, PRO_MODEL, FLASH_MODEL } from "./llm";
+import { isPlaceholderText, narrative, narrativeList } from "./llmValidate";
 import { computeQuant, buildSig, loadGuidance, loadSss, loadScannerRead, type QuantResult } from "./earningsQuant";
 import { listDocs } from "./research/store";
 import type { CompanyStats } from "./companyStats";
@@ -197,8 +198,10 @@ export async function buildAiPreview(c: PreviewContext, opts: { bounded?: boolea
   // model pick its own keys/nesting, which parses fine but fails our field validation → a silent null
   // (observed on the thesis/debate upgrade). Belt and braces with chatJSON's json_object mode.
   const SCHEMA = '\n\nReturn ONLY JSON with EXACTLY these keys: {"moneyLine": string, "overview": string, "thesis": string, "debate": string, "watch": string[], "guidance": string, "peerReads": string[], "bull": string, "bear": string, "fromLastCall": string}';
-  const arr = (a: unknown) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && (x as string).trim()).map((x) => (x as string).trim()).slice(0, 6) : []);
-  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  // narrative()/narrativeList(): a "…" shell field is '' — so the parsed-but-EMPTY shell below fails
+  // shape() and falls through to FLASH instead of rendering a preview of ellipses (lib/llmValidate).
+  const arr = (a: unknown) => narrativeList(a, 6, 600);
+  const s = (v: unknown) => narrative(v, 2000);
   const shape = (out: any): AiPreview | null =>
     out && (s(out.overview) || s(out.moneyLine) || arr(out.watch).length)
       ? { moneyLine: s(out.moneyLine), overview: s(out.overview), thesis: s(out.thesis), debate: s(out.debate), watch: arr(out.watch), guidance: s(out.guidance), peerReads: arr(out.peerReads), bull: s(out.bull), bear: s(out.bear), fromLastCall: s(out.fromLastCall) }
@@ -250,8 +253,8 @@ export async function predictPrint(c: PreviewContext): Promise<PredictedPrint | 
   const dir = ["up", "down"].includes(out.reactionDir) ? (out.reactionDir as PredictedPrint["reactionDir"]) : null;
   if (!vs || !dir) return null; // the two graded calls are mandatory — without them there's nothing to score
   const calls = (Array.isArray(out.calls) ? out.calls : [])
-    .filter((x: any) => x && typeof x.claim === "string" && x.claim.trim())
-    .map((x: any) => ({ claim: String(x.claim).trim().slice(0, 160), rationale: String(x.rationale || "").trim().slice(0, 240) }))
+    .filter((x: any) => x && !isPlaceholderText(x.claim)) // a "…" claim is not a checkable call
+    .map((x: any) => ({ claim: narrative(x.claim, 160), rationale: narrative(x.rationale, 240) }))
     .slice(0, 4);
   return {
     predEps: num(out.predEps),
@@ -259,7 +262,7 @@ export async function predictPrint(c: PreviewContext): Promise<PredictedPrint | 
     vsConsensus: vs,
     reactionDir: dir,
     confidence: ["high", "medium", "low"].includes(out.confidence) ? out.confidence : "medium",
-    epsMethod: typeof out.epsMethod === "string" && out.epsMethod.trim() ? out.epsMethod.trim().slice(0, 200) : null,
+    epsMethod: narrative(out.epsMethod, 200) || null,
     calls,
   };
 }

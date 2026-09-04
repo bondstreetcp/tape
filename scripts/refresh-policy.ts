@@ -13,7 +13,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
-import { cleanTicker, coerceEnum } from "../lib/llmValidate";
+import { cleanTicker, coerceEnum, narrative } from "../lib/llmValidate";
 import type { AffectedTicker, Impact, PolicyData, PolicyItem } from "../lib/policy";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
@@ -56,7 +56,7 @@ async function classifyRules(rows: RawRule[]): Promise<Record<string, { tickers:
   const SCHEMA = 'Return ONLY JSON: {"items":[{"index":number,"tickers":[{"ticker":string,"impact":"positive"|"negative"|"mixed"}],"summary":string}]}';
   const out = await chatJSON<{ items: any[] }>(SYSTEM, numbered + "\n\n" + SCHEMA, { maxTokens: 2000 });
   const map: Record<string, { tickers: AffectedTicker[]; summary: string }> = {};
-  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const tickers = cleanTickers(it.tickers); if (!tickers.length) continue; map[r.id] = { tickers, summary: String(it.summary || "").slice(0, 300) }; }
+  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const tickers = cleanTickers(it.tickers); if (!tickers.length) continue; map[r.id] = { tickers, summary: narrative(it.summary, 300) }; }
   return map;
 }
 async function classifyContracts(rows: RawContract[]): Promise<Record<string, { ticker: string; summary: string }>> {
@@ -67,7 +67,7 @@ async function classifyContracts(rows: RawContract[]): Promise<Record<string, { 
   const SCHEMA = 'Return ONLY JSON: {"items":[{"index":number,"ticker":string,"summary":string}]}';
   const out = await chatJSON<{ items: any[] }>(SYSTEM, numbered + "\n\n" + SCHEMA, { maxTokens: 1600 });
   const map: Record<string, { ticker: string; summary: string }> = {};
-  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const ticker = cleanTicker(it.ticker); if (ticker.length < 1) continue; map[r.id] = { ticker, summary: String(it.summary || "").slice(0, 300) }; }
+  for (const it of out?.items || []) { const r = rows[it?.index]; if (!r) continue; const ticker = cleanTicker(it.ticker); if (ticker.length < 1) continue; map[r.id] = { ticker, summary: narrative(it.summary, 300) }; }
   return map;
 }
 

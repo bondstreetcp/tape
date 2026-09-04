@@ -123,3 +123,18 @@ export function str(v: unknown): string {
 export function isPlaceholderText(s: unknown): boolean {
   return typeof s !== "string" || s.replace(/[.…\s–—-]/g, "").length < 3;
 }
+
+/**
+ * Coerce an LLM-authored NARRATIVE field to a trimmed, length-capped string — '' when it is missing,
+ * non-string, or a placeholder shell (isPlaceholderText). The one call every persisted narrative field
+ * should go through: `String(out.summary || "").slice(0, n)` stored the "…" shell because the string was
+ * truthy. A feed whose row is ONLY narrative should also refuse the row (or retry) when this comes back ''.
+ */
+export function narrative(v: unknown, max = 400): string {
+  return isPlaceholderText(v) ? "" : (v as string).trim().slice(0, max);
+}
+
+/** narrative() over an array: drops non-strings and placeholder shells, trims + caps each, keeps at most `n`. */
+export function narrativeList(v: unknown, n: number, max = 280): string[] {
+  return (Array.isArray(v) ? v : []).map((x) => narrative(x, max)).filter(Boolean).slice(0, n);
+}

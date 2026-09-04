@@ -16,6 +16,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import { daysToReadout, dateNearAnchor, phraseNearAnchor, type BioCatalyst, type BiotechData } from "../lib/biotech";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
 
@@ -82,7 +83,7 @@ async function classifyBatch(rows: Raw[]): Promise<Record<string, { ticker: stri
     const r = rows[it?.index]; if (!r) continue;
     const ticker = String(it.ticker || "").toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
     if (ticker.length < 1 || ticker.length > 6) continue;
-    map[r.id] = { ticker, catalyst: String(it.catalyst || "").slice(0, 240) };
+    map[r.id] = { ticker, catalyst: narrative(it.catalyst, 240) }; // '' for a "…" shell (lib/llmValidate)
   }
   return map;
 }

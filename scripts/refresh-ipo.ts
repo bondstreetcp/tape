@@ -11,7 +11,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
-import { cleanTicker } from "../lib/llmValidate";
+import { cleanTicker, narrative, narrativeList } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
 import { deriveIpoMetrics, type IpoFinancials, type IpoFiscalYear } from "../lib/ipoFinancials";
@@ -76,16 +76,16 @@ async function summarizeFiling(hit: EftsHit, text: string): Promise<IpoSummary |
   // Ample token room + low reasoning so GLM-5.2 doesn't burn the whole budget reasoning and return
   // empty content (which drops the summary — leaving a row with no business recap / underwriters).
   const out = await chatJSON<any>(SYSTEM, `${hit.issuer}. Prospectus excerpt:\n\n${text.slice(0, 15000)}\n\n${SCHEMA}`, { maxTokens: 2200, reasoningEffort: "low" });
-  if (!out || !out.business) return null;
-  const cleanList = (v: any, max: number, len: number): string[] =>
-    Array.isArray(v) ? v.filter((r: any) => typeof r === "string" && r.trim()).map((r: string) => r.trim().slice(0, len)).slice(0, max) : [];
+  // narrative(): a "…" shell in `business` is no summary at all (lib/llmValidate)
+  const business = narrative(out?.business, 600);
+  if (!out || !business) return null;
   return {
-    business: String(out.business).slice(0, 600),
-    sector: String(out.sector || "").slice(0, 60),
-    financials: String(out.financials || "").slice(0, 400),
-    useOfProceeds: String(out.useOfProceeds || "").slice(0, 400),
-    risks: cleanList(out.risks, 4, 160),
-    underwriters: cleanList(out.underwriters, 6, 40),
+    business,
+    sector: narrative(out.sector, 60),
+    financials: narrative(out.financials, 400),
+    useOfProceeds: narrative(out.useOfProceeds, 400),
+    risks: narrativeList(out.risks, 4, 160),
+    underwriters: narrativeList(out.underwriters, 6, 40),
   };
 }
 
@@ -338,7 +338,7 @@ async function fetchIpoFinancials(cik: string, ticker: string): Promise<IpoFinan
     const out = await chatJSON<{ tag: string; read: string }>(SYSTEM, `${ticker}: ${facts_str}\n\n${SCHEMA}`, { maxTokens: 160 }).catch(() => null);
     if (out) {
       valueTag = (["cheap", "fair", "rich", "unclear"].includes(out.tag) ? out.tag : "unclear") as IpoFinancials["valueTag"];
-      valueRead = String(out.read || "").slice(0, 240);
+      valueRead = narrative(out.read, 240);
     }
   }
   return { ...m, valueTag, valueRead, asOf: iso(Date.now()) };

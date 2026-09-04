@@ -11,6 +11,7 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadValuationHistory, type MultipleStat, type MultipleKey } from "../lib/valuationHistory";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import type { ValuationExplainMap, Verdict } from "../lib/valuationExplain";
 
 const DATA = path.join(process.cwd(), "data");
@@ -83,7 +84,8 @@ async function main() {
     // to match another table row would pin a "value trap" badge on the wrong company.
     if (!inCand.has(sym)) continue;
     const verdict = String(v?.verdict || "").toLowerCase() as Verdict;
-    if (sym && valid.has(verdict) && v?.reason) map[sym] = { verdict, reason: String(v.reason).trim().slice(0, 240) };
+    const reason = narrative(v?.reason, 240); // a verdict with a "…" reason is a shell, not an explanation
+    if (sym && valid.has(verdict) && reason) map[sym] = { verdict, reason };
   }
   if (!Object.keys(map).length) {
     console.warn("valuation-explain: LLM returned no usable verdicts — skipping write.");

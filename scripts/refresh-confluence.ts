@@ -19,6 +19,7 @@ import { loadCatalysts } from "../lib/catalysts";
 import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import type { ConfluenceData, ConfluenceName, ConfluenceSignal, ConfluenceRead, SignalKind } from "../lib/confluence";
 import { SIGNAL_ORDER } from "../lib/confluence";
 
@@ -324,10 +325,13 @@ async function main() {
     const bySym = new Map((out?.reads || []).filter((r) => r?.symbol).map((r) => [String(r.symbol).toUpperCase(), r] as const));
     // typeof guard: a non-string truthy value from the model would throw on .trim() and kill the
     // ENTIRE board write, including the deterministic LLM-free part.
-    const str = (x: unknown) => (typeof x === "string" ? x.trim() : "");
+    // narrative(): '' for a non-string AND for a "…" placeholder shell — a write-up of three shells is no write-up.
+    const str = (x: unknown) => narrative(x, 1200);
     for (const n of board) {
       const r = bySym.get(n.symbol.toUpperCase());
-      if (r && (r.thesis || r.risk || r.watch)) n.read = { thesis: str(r.thesis), risk: str(r.risk), watch: str(r.watch) };
+      if (!r) continue;
+      const read = { thesis: str(r.thesis), risk: str(r.risk), watch: str(r.watch) };
+      if (read.thesis || read.risk || read.watch) n.read = read;
     }
   } else {
     console.warn("confluence: OPENROUTER_API_KEY not set — writing board without write-ups.");

@@ -15,6 +15,7 @@ import { buildSmartMoneySell } from "../lib/smartMoneySell";
 import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
+import { narrative } from "../lib/llmValidate";
 import type { WarningsData, WarningName, WarningSignal, WarningRead, WarningKind } from "../lib/warnings";
 import { WARNING_ORDER } from "../lib/warnings";
 
@@ -144,8 +145,14 @@ async function main() {
     });
     const out = await chatJSON<{ reads: (WarningRead & { symbol: string })[] }>(SYSTEM, `${SCHEMA}\n\nNAMES (each with its stacked bear signals + context):\n${lines.join("\n")}`, { maxTokens: 16000, model: PRO_MODEL, reasoningEffort: "low" });
     const bySym = new Map((out?.reads || []).filter((r) => r?.symbol).map((r) => [String(r.symbol).toUpperCase(), r] as const));
-    const str = (x: unknown) => (typeof x === "string" ? x.trim() : "");
-    for (const n of board) { const r = bySym.get(n.symbol.toUpperCase()); if (r && (r.thesis || r.risk || r.watch)) n.read = { thesis: str(r.thesis), risk: str(r.risk), watch: str(r.watch) }; }
+    // narrative(): '' for a non-string AND for a "…" placeholder shell — a write-up of three shells is no write-up.
+    const str = (x: unknown) => narrative(x, 1200);
+    for (const n of board) {
+      const r = bySym.get(n.symbol.toUpperCase());
+      if (!r) continue;
+      const read = { thesis: str(r.thesis), risk: str(r.risk), watch: str(r.watch) };
+      if (read.thesis || read.risk || read.watch) n.read = read;
+    }
   } else {
     console.warn("warnings: OPENROUTER_API_KEY not set — writing board without write-ups.");
   }

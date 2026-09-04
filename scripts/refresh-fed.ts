@@ -12,6 +12,7 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { narrative, narrativeList } from "../lib/llmValidate";
 import type { Bias, FedItem, FedKind, FedWatchData } from "../lib/fedWatch";
 
 const DATA = path.join(process.cwd(), "data");
@@ -70,11 +71,13 @@ async function classify(item: RawItem, body: string): Promise<{ bias: Bias; head
   const ctx = `Type: ${item.kind}. Title: ${item.title}. ${item.speaker ? `Speaker: ${item.speaker}. ` : ""}${item.date.slice(0, 10)}\n\n${(body || item.desc).slice(0, 7000)}`;
   const out = await chatJSON<any>(SYSTEM, ctx + "\n\n" + SCHEMA, { maxTokens: 900 });
   if (!out || !["hawkish", "dovish", "neutral"].includes(out.bias)) return null;
+  const headline = narrative(out.headline, 240);
+  if (!headline) return null; // a bias with a "…" headline is a content-empty shell, not a digest
   return {
     bias: out.bias,
-    headline: String(out.headline || "").slice(0, 240),
-    whatChanged: String(out.whatChanged || "").slice(0, 400),
-    points: Array.isArray(out.points) ? out.points.filter((p: any) => typeof p === "string" && p.trim()).map((p: string) => p.trim().slice(0, 220)).slice(0, 4) : [],
+    headline,
+    whatChanged: narrative(out.whatChanged, 400),
+    points: narrativeList(out.points, 4, 220),
   };
 }
 

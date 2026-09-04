@@ -33,6 +33,7 @@ import { getFilingDoc } from "../lib/filingDoc";
 import { findPriorComparable, getRedline } from "../lib/redline";
 import { financialSnapshot } from "../lib/ask";
 import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
+import { isPlaceholderText, narrative, narrativeList } from "../lib/llmValidate";
 import { mergeCarryForward, isMassLlmFailure, type ReportTiming } from "../lib/overnightFilings";
 import { classifyReportTiming } from "../lib/preannounce";
 
@@ -363,6 +364,9 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
   if (typeof digest.headline !== "string") return "llmfail"; // malformed digest — transient, don't drop the prior
   const headline = digest.headline.trim();
   if (!headline || /^none$/i.test(headline)) return "none"; // NONE-gate — definitively immaterial
+  // A "…" headline is the content-empty shell (the Sep-3 desk-note trap), not a digest and not a NONE
+  // verdict — treat it as transient so the filing is re-offered next run rather than shipped blank.
+  if (isPlaceholderText(headline)) return "llmfail";
   const focusedOk = focused != null && ["bullish", "neutral", "bearish"].includes(focused.sentiment);
 
   return {
@@ -372,8 +376,8 @@ async function summarize(nf: NewFiling): Promise<SummaryResult> {
     filedAt: nf.acceptance,
     reportTiming: nf.reportTiming,
     headline,
-    whatChanged: Array.isArray(digest.whatChanged) ? digest.whatChanged.filter((x) => typeof x === "string" && x.trim()).slice(0, 5) : [],
-    decisionTakeaway: typeof digest.decisionTakeaway === "string" ? digest.decisionTakeaway.trim() : "",
+    whatChanged: narrativeList(digest.whatChanged, 5, 600), // shells dropped (lib/llmValidate)
+    decisionTakeaway: narrative(digest.decisionTakeaway, 1200),
     sentiment: focusedOk ? focused.sentiment : ["bullish", "neutral", "bearish"].includes(digest.sentiment) ? digest.sentiment : "neutral",
     sentimentSource: focusedOk ? ("focused" as const) : ("digest" as const),
     surprise: ["beat", "inline", "miss", "na"].includes(digest.surprise) ? digest.surprise : "na",
