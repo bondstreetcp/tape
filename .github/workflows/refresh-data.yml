@@ -812,9 +812,9 @@ jobs:
         continue-on-error: true
 
       # Earnings-call digests — every earnings-call transcript from the last session, read in full and
-      # digested (on the NAS this routes to the local EPYC box via LLM_LOCAL_*; here it is the cloud
-      # default tier). BEFORE the desk note so the brief can cite what management said. Wall-clock
-      # budgeted; names not reached carry to the next tick. Skips cleanly without an LLM key.
+      # digested on the cloud FLASH tier (the SEC-filings model; a local server is an opt-in via
+      # CALL_DIGEST_LOCAL_*). BEFORE the desk note so the brief can cite what management said.
+      # Wall-clock budgeted; names not reached carry to the next tick. Skips cleanly without an LLM key.
       - name: Refresh earnings-call digests
         if: ${{ env.FULL == 'true' || env.DESK == 'true' }}
         run: npm run refresh-call-digests

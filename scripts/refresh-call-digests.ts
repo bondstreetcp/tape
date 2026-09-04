@@ -1,8 +1,8 @@
 /**
  * Builds data/call-digests.json — a digest of EVERY earnings-call transcript from the last session, read in
- * full on the desk's LOCAL box (the EPYC/3090 server behind LLM_LOCAL_*; the cloud default tier is the
- * fallback when the box is offline), plus the cross-call synthesis the Daily Desk and the desk brief use.
- * Data model + the pure helpers: lib/callDigests.ts.
+ * full on the cloud FLASH tier (gemini-2.5-flash-lite — the model the overnight SEC-filings digests already
+ * trust; ~$0.40 on a 100-call peak day), plus the cross-call synthesis (PRO tier — judgment work, one call a
+ * run) the Daily Desk and the desk brief use. Data model + the pure helpers: lib/callDigests.ts.
  *
  *   npm run refresh-call-digests
  *
@@ -15,13 +15,18 @@
  * results 8-Ks from the overnight-filings feed. Each candidate is VERIFIED against The Motley Fool's
  * transcript listing (a transcript dated in the window) before a single fetch or model call is spent.
  *
- * SCOPED ROUTING: CALL_DIGEST_LOCAL_URL + CALL_DIGEST_LOCAL_MODEL (+ _API_KEY) send THIS job alone to the
- * box — they become LLM_LOCAL_* for this process (lib/llm reads them per call), so the rest of the fleet
- * keeps its own setting. On the NAS: the rig's argus-vllm in LXC 102 (a one-sequence 32B server, 16k window).
+ * WHY CLOUD (decided 2026-09-04): each transcript is ~20k tokens IN — a prompt-processing workload — and a
+ * peak day brings 60-150 of them. The rig's only GPU server (argus-vllm in LXC 102, one sequence at a time)
+ * manages ~13 a day inside the tick budgets and blocks the argus judge while it reads; Apple-silicon minis
+ * prefill at a few hundred tokens/s. Flash-lite reads one in under a minute, six at a time.
+ *
+ * OPT-IN LOCAL: CALL_DIGEST_LOCAL_URL + CALL_DIGEST_LOCAL_MODEL (+ _API_KEY) send THIS job alone to a local
+ * OpenAI-compatible server — they become LLM_LOCAL_* for this process (lib/llm reads them per call), so the
+ * rest of the fleet keeps its own setting. Left unset on the NAS.
  *
  * Knobs: CALL_DIGEST_BUDGET_MIN (default by tick: 12 on a desk tick, 40 on FULL, else 30 — the morning
  * desk note must not slip past the open) · CALL_DIGEST_CAP (30 transcripts/run, largest caps first) ·
- * CALL_DIGEST_CONCURRENCY (2 — a one-sequence vLLM queues the second; the box is the ceiling, not the wire) ·
+ * CALL_DIGEST_CONCURRENCY (6 on cloud; 2 when scoped to a local one-sequence server) ·
  * CALL_DIGEST_LOCAL_ONLY=1 (skip when the box isn't configured, and never fall back to cloud) ·
  * TEST_SYMBOLS="AAPL MSFT" · FORCE=1 (re-digest calls already stored).
  */
@@ -30,7 +35,7 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadOvernightFilings, isMassLlmFailure } from "../lib/overnightFilings";
 import { listTranscriptCandidates, fetchTranscriptAt, type FullTranscript } from "../lib/transcripts";
-import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, FLASH_MODEL, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import {
   CHUNK_CHARS, MAX_CHUNKS, budgetMinutes, chunkTranscript, isRecentCallDate, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow,
@@ -47,10 +52,10 @@ const FILE = path.join(DATA, "call-digests.json");
 const US_UNIVERSES = ["sp500", "nasdaq100", "russell1000"];
 const BUDGET_MIN = budgetMinutes(process.env.TAPE_TICK_MODE, process.env.CALL_DIGEST_BUDGET_MIN); // run-tick sets TAPE_TICK_MODE
 const CAP = Number(process.env.CALL_DIGEST_CAP || 30);
-// A one-sequence vLLM (--max-num-seqs 1) serves the second request only after the first completes, so 2 keeps
-// one request queued and ready without stacking a third behind a ~100s generation.
-const CONC = Math.max(1, Number(process.env.CALL_DIGEST_CONCURRENCY || 2));
 const LOCAL_CONFIGURED = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
+// Cloud flash runs six wide. A one-sequence local vLLM (--max-num-seqs 1) serves the second request only after
+// the first completes, so 2 keeps one queued and ready without stacking a third behind a ~100s generation.
+const CONC = Math.max(1, Number(process.env.CALL_DIGEST_CONCURRENCY || (LOCAL_CONFIGURED ? 2 : 6)));
 const LOCAL_ONLY = process.env.CALL_DIGEST_LOCAL_ONLY === "1";
 const FORCE = process.env.FORCE === "1";
 const TEST = (process.env.TEST_SYMBOLS || "").split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase());
@@ -60,11 +65,16 @@ const HOUR = 3_600_000;
 // The label stored on each digest. chatJSON serves attempt 0 locally when the box is configured and falls
 // through to the cloud default tier on a failure — the response doesn't say which, so the label is honest
 // about the arrangement rather than claiming a model per row.
-const MODEL_LABEL = LOCAL_CONFIGURED ? `local:${process.env.LLM_LOCAL_MODEL}${SCOPED ? " [scoped]" : ""}${LOCAL_ONLY ? "" : " (cloud fallback)"}` : "cloud default tier (LLM_LOCAL_* unset)";
-// LOCAL_ONLY: attempt 0 is the local box; with retries=1 there is no attempt 1, so no cloud spend — a
-// transient box error just leaves that call for the next tick. The per-attempt timeout allows for a request
-// queued behind another on a one-sequence server (~100s each way); the tick budget is the outer ceiling.
-const LLM = { local: true as const, timeoutMs: 600_000, retries: LOCAL_ONLY ? 1 : 3 };
+const MODEL_LABEL = LOCAL_CONFIGURED
+  ? `local:${process.env.LLM_LOCAL_MODEL}${SCOPED ? " [scoped]" : ""}${LOCAL_ONLY ? "" : ` (cloud fallback ${FLASH_MODEL})`}`
+  : `cloud:${FLASH_MODEL}`;
+const SYNTH_MODEL_LABEL = `cloud:${PRO_MODEL}`;
+// The per-transcript reads: FLASH on cloud. `local: true` is what lets CALL_DIGEST_LOCAL_* opt in (attempt 0
+// goes to the box only when LLM_LOCAL_* is set — inert otherwise); LOCAL_ONLY's retries=1 means no cloud
+// attempt. The local timeout allows a request queued behind another on a one-sequence server.
+const LLM = { model: FLASH_MODEL, local: true as const, reasoningEffort: "low" as const, timeoutMs: LOCAL_CONFIGURED ? 600_000 : 180_000, retries: LOCAL_ONLY ? 1 : 3 };
+// The cross-call synthesis is judgment work — one call a run, PRO tier, always cloud (~half a cent).
+const SYNTH_LLM = { model: PRO_MODEL, local: false as const, reasoningEffort: "low" as const, timeoutMs: 180_000, retries: 3 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
@@ -141,9 +151,9 @@ async function synthesize(rows: CallDigest[], sessionDay: string): Promise<CallS
   const raw = await chatJSON<unknown>(
     SYNTH_SYSTEM,
     `${SYNTH_SCHEMA}\n\nSESSION: ${sessionDay}. ${rows.length} calls digested. TICKERS YOU MAY CITE: ${rows.map((d) => d.symbol).join(", ")}\n\n=== DIGESTS ===\n${lines.join("\n")}`,
-    { ...LLM, maxTokens: 1800 },
+    { ...SYNTH_LLM, maxTokens: 1800 },
   );
-  return sanitizeSynthesis(raw, rows.map((d) => d.symbol), { sessionDay, n: rows.length, model: MODEL_LABEL, generatedAt: new Date().toISOString() });
+  return sanitizeSynthesis(raw, rows.map((d) => d.symbol), { sessionDay, n: rows.length, model: SYNTH_MODEL_LABEL, generatedAt: new Date().toISOString() });
 }
 
 const emptyFile = (nowISO: string): CallDigestsData => ({

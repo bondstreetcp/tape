@@ -150,6 +150,13 @@ warnings) and `npm run llm-costs` (those jobs metering near $0).
 
 ## Scoped routing — just the earnings-call digests (2026-09)
 
+**Default is the cloud flash tier, not the box** (decided 2026-09-04). Each transcript is ~20k tokens
+IN — a prompt-processing workload — and a peak day brings 60-150 of them. The rig's one-sequence
+`argus-vllm` reads ~13 a day inside the tick budgets and blocks the argus judge while it reads; a Mac
+mini prefills at a few hundred tokens/s; `gemini-2.5-flash-lite` reads one in under a minute, six at a
+time, for ~$0.40 on a 100-call day. The synthesis (one call a run) stays on the PRO tier. The scoped
+knob below remains as the opt-in.
+
 The Daily Desk's earnings-call digests (`scripts/refresh-call-digests.ts`) can use the box WITHOUT
 switching the whole fleet: set **`CALL_DIGEST_LOCAL_URL`** + **`CALL_DIGEST_LOCAL_MODEL`**
 (+ `CALL_DIGEST_LOCAL_API_KEY` if the server wants one) and that step alone maps them onto

@@ -1,14 +1,15 @@
 /**
  * Earnings-call digests — every earnings-call transcript from the LAST SESSION, read in full and
- * summarized by the desk's LOCAL model (the EPYC/3090 box via LLM_LOCAL_*; cloud default-tier fallback),
- * plus a cross-call synthesis for the Daily Desk. Built by scripts/refresh-call-digests.ts on the desk
- * and full ticks; rendered by components/CallDigestsView.tsx (the Daily Desk "Earnings Calls" tab) and fed
- * to the desk brief (scripts/refresh-desk-note.ts) as the "what management actually said" layer.
+ * summarized on the cloud flash tier (the model the overnight SEC-filings digests use; a local server is an
+ * opt-in via CALL_DIGEST_LOCAL_* — see scopedLocalEnv), plus a cross-call synthesis for the Daily Desk. Built
+ * by scripts/refresh-call-digests.ts on the desk and full ticks; rendered by components/CallDigestsView.tsx
+ * (the Daily Desk "Earnings Calls" tab) and fed to the desk brief (scripts/refresh-desk-note.ts) as the
+ * "what management actually said" layer.
  *
- * WHY THE LOCAL BOX: a full transcript is 50-90k characters (12-22k tokens). Reading every reporter's call
- * is the highest-input-token job on the desk and the one that is nearly free on the box. Each transcript is
- * split at paragraph boundaries into ≤ CHUNK_CHARS pieces (the box serves --max-model-len 20000), each piece
- * is note-taken, and the notes are reduced to ONE digest — a single-chunk call skips the map step.
+ * WHY CHUNKS: a full transcript is 50-90k characters (12-22k tokens). Each one is split at paragraph
+ * boundaries into ≤ CHUNK_CHARS pieces, each piece is note-taken, and the notes are reduced to ONE digest —
+ * a single-chunk call skips the map step. That keeps every read inside a 16k-token window (so an opt-in local
+ * server works unchanged) and keeps each flash read short enough to stay grounded.
  *
  * CODE VERIFIES: quotes must be verbatim (grounded against the transcript), every figure in a KPI must
  * appear in the transcript, tone/guidance are closed enums, tickers in the synthesis are whitelisted to the

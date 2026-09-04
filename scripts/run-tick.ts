@@ -162,14 +162,15 @@ const STEPS: { name: string; cmd: string; when: When; env?: Record<string, strin
   // feeds. TAPE_WRITER=nas makes THIS runner the single sender; the GitHub mirror step evaluates
   // and logs but never sends (a standdown fail-open must not double-notify phones).
   { name: "Push alerts (My Names)", cmd: "npm run push-alerts", when: "full", env: { TAPE_WRITER: "nas" } },
-  // Earnings-call digests — every transcript from the last session, read in full on the LOCAL box:
-  // CALL_DIGEST_LOCAL_URL/MODEL route THIS step alone to the rig (they become LLM_LOCAL_* for its process;
-  // the rest of the fleet keeps its own setting), with the cloud default tier as the fallback. Runs on the
-  // desk ticks too (the 08:00 ET run is the one that catches last night's after-close calls) and BEFORE
-  // the desk note so the brief can cite what management said. Wall-clock budgeted BY TICK (12 min on a
-  // desk tick so the note isn't pushed past the open, 40 on FULL; CALL_DIGEST_BUDGET_MIN overrides);
-  // names not reached carry to the next tick.
-  { name: "Refresh earnings-call digests (local box)", cmd: "npm run refresh-call-digests", when: "full-or-desk" },
+  // Earnings-call digests — every transcript from the last session, read in full on the cloud FLASH tier
+  // (the SEC-filings model; decided 2026-09-04 — ~20k tokens IN per transcript is a prompt-processing job
+  // the rig's one-sequence vLLM and Apple-silicon boxes handle at ~13/day; flash does a peak day in one
+  // tick for ~$0.40). A local server is an OPT-IN via CALL_DIGEST_LOCAL_URL/MODEL, scoped to this step.
+  // Runs on the desk ticks too (the 08:00 ET run is the one that catches last night's after-close calls)
+  // and BEFORE the desk note so the brief can cite what management said. Wall-clock budgeted BY TICK
+  // (12 min on a desk tick so the note isn't pushed past the open, 40 on FULL; CALL_DIGEST_BUDGET_MIN
+  // overrides); names not reached carry to the next tick.
+  { name: "Refresh earnings-call digests", cmd: "npm run refresh-call-digests", when: "full-or-desk" },
   { name: "Refresh Daily Desk Note", cmd: "npm run refresh-desk-note", when: "full-or-desk", narr: true },
   { name: "Refresh Confluence Engine", cmd: "npm run refresh-confluence", when: "full", narr: true },
   { name: "Refresh Warning Signs", cmd: "npm run refresh-warnings", when: "full" },

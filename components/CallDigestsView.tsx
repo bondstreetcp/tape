@@ -182,7 +182,7 @@ export default function CallDigestsView({ universe, data }: { universe: string; 
       )}
 
       <p className="mt-3 text-[11px] text-[var(--text-4)]">
-        Every transcript is read in full ({lr.local ? "on the desk's local model" : "cloud default tier — LLM_LOCAL_* is not set"}), in ≤34k-character segments, then reduced to one digest; quotes are verbatim and every stated number is checked against the transcript. Last run: session {lr.sessionDay ? fmtDay(lr.sessionDay) : "—"} · {lr.candidates} reporters · {lr.withTranscript} transcripts posted · {lr.digested} read this run{lr.deferred ? ` · ${lr.deferred} deferred to the next tick` : ""}{lr.llmFails ? ` · ${lr.llmFails} failed` : ""} · built {fmtDateTime(data.generatedAt)}. Transcripts: The Motley Fool. Decision-support, not advice.
+        Every transcript is read in full ({lr.local ? "on the desk's local model" : "on the cloud flash tier, the same model the overnight SEC-filings digests use"}), in ≤34k-character segments, then reduced to one digest; quotes are verbatim and every stated number is checked against the transcript. Last run: session {lr.sessionDay ? fmtDay(lr.sessionDay) : "—"} · {lr.candidates} reporters · {lr.withTranscript} transcripts posted · {lr.digested} read this run{lr.deferred ? ` · ${lr.deferred} deferred to the next tick` : ""}{lr.llmFails ? ` · ${lr.llmFails} failed` : ""} · built {fmtDateTime(data.generatedAt)}. Transcripts: The Motley Fool. Decision-support, not advice.
       </p>
     </div>
   );
