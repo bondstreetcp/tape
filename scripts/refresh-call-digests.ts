@@ -101,8 +101,9 @@ async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): P
 
 // ── prompts ─────────────────────────────────────────────────────────────────────────────────────
 const NOTES_SYSTEM =
-  "You are an equity-research associate taking STRUCTURED NOTES on one SEGMENT of an earnings-call transcript (the segment may begin or end mid-call). Record ONLY what this segment states: the key points; every explicitly quantified figure WITH its context, copied exactly (never compute, annualize or infer a number); guidance statements verbatim; and each analyst Q&A exchange (analyst and firm if named, the gist of the question, the gist of the answer, and directness = direct | partial | evasive). One line on management's tone. Up to 3 SHORT verbatim quotes. Return ONLY JSON. " +
+  "You are an equity-research associate taking STRUCTURED NOTES on one SEGMENT of an earnings-call transcript (the segment may begin or end mid-call). Record ONLY what this segment states: the key points; the explicitly quantified figures WITH their context, copied exactly (never compute, annualize or infer a number); guidance statements verbatim; and each analyst Q&A exchange (analyst and firm if named, the gist of the question, the gist of the answer, and directness = direct | partial | evasive). One line on management's tone. Up to 3 SHORT verbatim quotes. Keep it TIGHT — at most 10 key points, 14 figures, 6 guidance lines, 6 exchanges, each item one sentence — the reply must be complete JSON. Return ONLY JSON. " +
   NO_ADVICE;
+const DEBUG = process.env.CALL_DIGEST_DEBUG === "1"; // log each stage's raw reply shape and why a digest was rejected
 const NOTES_SCHEMA =
   'Return ONLY JSON: {"keyPoints": string[], "numbers": string[], "guidance": string[], "qa": [{"analyst": string, "question": string, "answer": string, "directness": "direct"|"partial"|"evasive"}], "tone": string, "quotes": [{"speaker": string, "text": string}]}';
 
@@ -133,27 +134,37 @@ interface Cand { symbol: string; name: string; sector: string | null; marketCap:
 async function digestOne(c: Cand, tr: FullTranscript, sessionDay: string): Promise<CallDigest | null> {
   const chunks = chunkTranscript(tr.text, CHUNK_CHARS).slice(0, MAX_CHUNKS);
   const head = `${c.name} (${c.symbol}) — ${tr.title} (${tr.date || sessionDay})`;
+  // Output budgets: the notes for a 34k-char segment ran to ~1.8k tokens and truncated at the old 1,800 cap
+  // (invalid JSON → a null segment → the whole digest dropped, 2026-09-04). Generous caps; the prompts bound
+  // the list lengths so a complete reply stays well inside them.
   let raw: unknown;
   if (chunks.length === 1) {
-    raw = await chatJSON<unknown>(DIGEST_SYSTEM, `${DIGEST_SCHEMA}\n\n=== TRANSCRIPT: ${head} ===\n${chunks[0]}`, { ...LLM, maxTokens: 2200 });
+    raw = await chatJSON<unknown>(DIGEST_SYSTEM, `${DIGEST_SCHEMA}\n\n=== TRANSCRIPT: ${head} ===\n${chunks[0]}`, { ...LLM, maxTokens: 3200 });
   } else {
     const notes: unknown[] = [];
     for (let i = 0; i < chunks.length; i++) {
-      const n = await chatJSON<unknown>(NOTES_SYSTEM, `${NOTES_SCHEMA}\n\n=== ${head} — SEGMENT ${i + 1} of ${chunks.length} ===\n${chunks[i]}`, { ...LLM, maxTokens: 1800 });
-      if (!n) return null; // a missing segment is an incomplete read — retry next tick rather than digest half a call
+      const n = await chatJSON<unknown>(NOTES_SYSTEM, `${NOTES_SCHEMA}\n\n=== ${head} — SEGMENT ${i + 1} of ${chunks.length} ===\n${chunks[i]}`, { ...LLM, maxTokens: 3500 });
+      if (!n) { if (DEBUG) console.log(`    ${c.symbol}: notes segment ${i + 1}/${chunks.length} came back null (transport or invalid JSON)`); return null; } // an incomplete read — retry next tick rather than digest half a call
+      if (DEBUG) console.log(`    ${c.symbol}: notes ${i + 1}/${chunks.length} keys=${Object.keys(n as object).join(",")} · ${JSON.stringify(n).length} chars`);
       notes.push(n);
     }
     raw = await chatJSON<unknown>(
       DIGEST_SYSTEM,
       `${DIGEST_SCHEMA}\n\n=== ${head} — STRUCTURED NOTES FROM ${chunks.length} SEGMENTS (in call order) ===\n${notes.map((n, i) => `--- segment ${i + 1} ---\n${JSON.stringify(n)}`).join("\n")}`,
-      { ...LLM, maxTokens: 2200 },
+      { ...LLM, maxTokens: 3200 },
     );
   }
-  return sanitizeDigest(raw, tr.text, {
+  if (DEBUG) {
+    const r = raw as Record<string, any> | null;
+    console.log(`    ${c.symbol}: digest raw ${r ? `keys=${Object.keys(r).join(",")} · tldr=${JSON.stringify(r.tldr ?? null).slice(0, 90)} · kpis=${r.kpis?.length ?? "-"} drivers=${r.drivers?.length ?? "-"} qa=${r.qa?.length ?? "-"} quotes=${r.quotes?.length ?? "-"}` : "null (transport or invalid JSON)"}`);
+  }
+  const d = sanitizeDigest(raw, tr.text, {
     symbol: c.symbol, name: c.name, sector: c.sector, marketCap: c.marketCap,
     callDate: tr.date || sessionDay, title: tr.title, url: tr.url, source: tr.source,
     chars: tr.text.length, chunks: chunks.length, model: MODEL_LABEL, digestedAt: new Date().toISOString(),
   });
+  if (DEBUG && raw && !d) console.log(`    ${c.symbol}: sanitize rejected the reply — tldr was a shell, or fewer than 2 of kpis/drivers/qa survived grounding`);
+  return d;
 }
 
 async function synthesize(rows: CallDigest[], sessionDay: string): Promise<CallSynthesis | null> {
