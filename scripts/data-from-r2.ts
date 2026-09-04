@@ -18,15 +18,17 @@
  * and re-upload a stale tree (the 07-04 clobber lesson), and CI surfaces it as a red run.
  */
 import { execFileSync } from "child_process";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
 import { gunzipSync } from "zlib";
 import path from "path";
 import { getObject, r2Configured } from "../lib/r2";
+import { mergeCallDigestFiles } from "../lib/callDigests";
 import { extractAtomic } from "../lib/atomicExtract";
 
 const KEY_TAR = "site-data/data.tar.gz";
 const KEY_COMPANY = "site-data/company.tar.gz";
 const KEY_NEWS_TAPE = "site-data/news-tape.json.gz"; // must match scripts/news-tape-sync.ts
+const KEY_CALL_DIGESTS = "site-data/call-digests.json"; // must match scripts/refresh-call-digests.ts (CALL_DIGEST_PUBLISH)
 const haveCommitted = () => existsSync(path.join("data", "russell3000", "snapshot.json"));
 
 /** Untar into a staging dir, then rename each file into place — see lib/atomicExtract for why. The
@@ -119,6 +121,23 @@ async function main() {
     console.log(`data-from-r2: hydrated news-tape.json (${parsed.items.length} rows, ${(gz.length / 1024).toFixed(0)} KB gz)`);
   } catch (e: any) {
     console.warn(`data-from-r2: news tape not hydrated (${String(e?.message || e).slice(0, 100)}) — /news shows its empty state.`);
+  }
+
+  // Earnings-call digests: its OWN object too — written by a clean-IP box's `refresh-call-digests` with
+  // CALL_DIGEST_PUBLISH=1 (the same-day transcript source refuses the NAS's home IP). MERGED with the local
+  // copy, never clobbered, so the runner's own Fool-sourced rows and the box's Investing.com rows both
+  // survive. Best-effort: no object = nothing published yet.
+  try {
+    const raw = await getObject(KEY_CALL_DIGESTS);
+    const remote = JSON.parse(raw.toString("utf8"));
+    if (!Array.isArray(remote?.digests)) throw new Error("object has no digests array");
+    const localPath = path.join("data", "call-digests.json");
+    let merged = remote;
+    try { merged = mergeCallDigestFiles(JSON.parse(readFileSync(localPath, "utf8")), remote); } catch { /* no local copy yet */ }
+    writeFileSync(localPath, JSON.stringify(merged));
+    console.log(`data-from-r2: hydrated call-digests.json (${merged.digests.length} digests; ${remote.digests.length} in R2)`);
+  } catch (e: any) {
+    console.warn(`data-from-r2: call digests not hydrated (${String(e?.message || e).slice(0, 100)}) — the runner's own copy stands.`);
   }
 }
 

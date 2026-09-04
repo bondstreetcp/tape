@@ -11,9 +11,16 @@
  * next tick — every digest is keyed by (symbol, call date), so nothing is read twice. The 08:00 ET run is
  * the one that catches last night's after-close calls (transcripts post within a few hours).
  *
- * WHO REPORTED: US names (S&P 500 ∪ Nasdaq 100 ∪ Russell 1000) whose earnings date falls in the window, ∪
- * results 8-Ks from the overnight-filings feed. Each candidate is VERIFIED against The Motley Fool's
- * transcript listing (a transcript dated in the window) before a single fetch or model call is spent.
+ * WHO REPORTED: US names (S&P 500 ∪ Nasdaq 100 ∪ Russell 1000) whose earnings date falls in the last
+ * CALL_DIGEST_LOOKBACK_DAYS (7), ∪ results 8-Ks from the overnight-filings feed — a week, because the
+ * transcript SOURCES lag the call by hours to days (lib/transcriptSources: Investing.com same-day but
+ * IP-blocked on some boxes; The Motley Fool ~a week late and thin since June 2026). A name is retried every
+ * tick until a transcript appears, then digested once per call date.
+ *
+ * WHERE IT RUNS: on the NAS the fresh source is blocked, so a NAS run mostly logs "blocked" and digests what
+ * Fool has. A clean-IP box (an office PC with .env.local) runs the same command with CALL_DIGEST_PUBLISH=1,
+ * which merges its output into R2 site-data/call-digests.json; every NAS/web tick's data-from-r2 hydrates
+ * that object (merged, never clobbered), so the Daily Desk shows the union.
  *
  * WHY CLOUD (decided 2026-09-04): each transcript is ~20k tokens IN — a prompt-processing workload — and a
  * peak day brings 60-150 of them. The rig's only GPU server (argus-vllm in LXC 102, one sequence at a time)
@@ -28,17 +35,20 @@
  * desk note must not slip past the open) · CALL_DIGEST_CAP (30 transcripts/run, largest caps first) ·
  * CALL_DIGEST_CONCURRENCY (6 on cloud; 2 when scoped to a local one-sequence server) ·
  * CALL_DIGEST_LOCAL_ONLY=1 (skip when the box isn't configured, and never fall back to cloud) ·
+ * CALL_DIGEST_LOOKBACK_DAYS (7) · CALL_DIGEST_PUBLISH=1 (merge + ship the file to R2) ·
  * TEST_SYMBOLS="AAPL MSFT" · FORCE=1 (re-digest calls already stored).
  */
 import { promises as fsp } from "fs";
 import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadOvernightFilings, isMassLlmFailure } from "../lib/overnightFilings";
-import { listTranscriptCandidates, fetchTranscriptAt, type FullTranscript } from "../lib/transcripts";
+import type { FullTranscript } from "../lib/transcripts";
+import { findRecentTranscript, investingReachable } from "../lib/transcriptSources";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
 import { writeFeedGuarded } from "../lib/feedGuard";
+import { getObject, putObject, r2Configured } from "../lib/r2";
 import {
-  CHUNK_CHARS, MAX_CHUNKS, budgetMinutes, chunkTranscript, isRecentCallDate, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow,
+  CHUNK_CHARS, MAX_CHUNKS, budgetMinutes, chunkTranscript, lookbackSince, mergeCallDigestFiles, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow,
   type CallDigest, type CallDigestsData, type CallSynthesis,
 } from "../lib/callDigests";
 
@@ -52,6 +62,9 @@ const FILE = path.join(DATA, "call-digests.json");
 const US_UNIVERSES = ["sp500", "nasdaq100", "russell1000"];
 const BUDGET_MIN = budgetMinutes(process.env.TAPE_TICK_MODE, process.env.CALL_DIGEST_BUDGET_MIN); // run-tick sets TAPE_TICK_MODE
 const CAP = Number(process.env.CALL_DIGEST_CAP || 30);
+const LOOKBACK_DAYS = Math.max(1, Number(process.env.CALL_DIGEST_LOOKBACK_DAYS || 7)); // the sources lag the call by hours to days
+const PUBLISH = process.env.CALL_DIGEST_PUBLISH === "1"; // a clean-IP box ships its output to R2 for the NAS/site to hydrate
+const R2_KEY = "site-data/call-digests.json"; // must match scripts/data-from-r2.ts
 const LOCAL_CONFIGURED = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
 // Cloud flash runs six wide. A one-sequence local vLLM (--max-num-seqs 1) serves the second request only after
 // the first completes, so 2 keeps one queued and ready without stacking a third behind a ~100s generation.
@@ -184,9 +197,9 @@ async function main() {
     return;
   }
   const w = sessionWindow(t0);
+  const since = lookbackSince(t0, LOOKBACK_DAYS); // sources post hours-to-days after the call: keep asking for a week
   const prior = await readPrior(nowISO);
-  const have = new Set(prior.digests.map((d) => `${d.symbol}|${d.callDate}`));
-  const doneSyms = new Set(prior.digests.filter((d) => d.callDate >= w.sessionDay).map((d) => d.symbol));
+  const doneSyms = new Set(prior.digests.filter((d) => d.callDate >= since).map((d) => d.symbol)); // digested within the lookback
 
   // ── candidates: the calendar (snapshot earnings dates) ∪ results 8-Ks (overnight filings) ──
   const cand = new Map<string, Cand>();
@@ -197,7 +210,7 @@ async function main() {
       if (!stockBySym.has(s.symbol)) stockBySym.set(s.symbol, { name: s.name, sector: s.sector || null, marketCap: s.marketCap ?? null });
       if (TEST.length && !TEST.includes(s.symbol)) continue;
       const e = s.earningsDate ? Date.parse(s.earningsDate) : NaN;
-      if (!Number.isFinite(e) || e < w.since - 6 * HOUR || e > t0 + 3 * HOUR) continue;
+      if (!Number.isFinite(e) || e < Date.parse(since) - 6 * HOUR || e > t0 + 3 * HOUR) continue;
       if (!cand.has(s.symbol)) cand.set(s.symbol, { symbol: s.symbol, name: s.name, sector: s.sector || null, marketCap: s.marketCap ?? null, why: "calendar" });
     }
   }
@@ -205,7 +218,7 @@ async function main() {
   for (const it of overnight?.items ?? []) {
     if (!it?.ticker || (TEST.length && !TEST.includes(it.ticker))) continue;
     const f = Date.parse(it.filedAt);
-    if (!Number.isFinite(f) || f < w.since) continue;
+    if (!Number.isFinite(f) || f < Date.parse(since)) continue;
     const results = it.surprise !== "na" || (/^8-K/.test(it.form) && /\b(results|quarter|earnings|fiscal)\b/i.test(it.headline || ""));
     if (!results || cand.has(it.ticker)) continue;
     const st = stockBySym.get(it.ticker);
@@ -214,58 +227,70 @@ async function main() {
   for (const s of TEST) if (!cand.has(s)) { const st = stockBySym.get(s); cand.set(s, { symbol: s, name: st?.name || s, sector: st?.sector ?? null, marketCap: st?.marketCap ?? null, why: "test" }); }
 
   const pending = [...cand.values()].filter((c) => FORCE || !doneSyms.has(c.symbol)).sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0));
-  console.log(`call-digests: session ${w.sessionDay} (window since ${new Date(w.since).toISOString()}) · ${cand.size} reporters (${doneSyms.size} already digested) → ${pending.length} to verify · ${MODEL_LABEL}`);
+  const investingOk = await investingReachable();
+  console.log(`call-digests: session ${w.sessionDay} · reporters since ${since}: ${cand.size} (${doneSyms.size} already digested) → ${pending.length} to look up · sources: Investing.com ${investingOk ? "ok" : "BLOCKED from this IP"} → The Motley Fool · ${MODEL_LABEL}`);
 
-  // ── verify: a transcript dated in the window, before any fetch/model spend ──
-  let notPosted = 0;
-  const verified = (await mapPool(pending, 4, async (c) => {
-    const list = await listTranscriptCandidates(c.symbol, c.name).catch(() => []);
-    const hit = list.find((t) => isRecentCallDate(t.date, w));
-    await sleep(150);
-    if (!hit) { notPosted++; return null; }
-    if (!FORCE && have.has(`${c.symbol}|${hit.date}`)) return null;
-    return { ...c, hit };
-  })).filter((x): x is Cand & { hit: { url: string; date: string } } => !!x);
-  console.log(`  ${verified.length} with a transcript dated ${w.sessionDay}..${w.today} (${notPosted} not posted yet — retried next tick)`);
-
-  // ── digest under the wall-clock budget, largest caps first ──
-  const work = verified.slice(0, CAP);
-  let attempted = 0, llmFails = 0, unreadable = 0, deferred = verified.length - work.length;
+  // ── look up + digest under the wall-clock budget, largest caps first. The lookup IS the fetch (one article
+  //    read per reporter), so it lives inside the budget too. ──
+  const work = pending.slice(0, CAP);
+  let attempted = 0, llmFails = 0, unreadable = 0, notPosted = 0, deferred = pending.length - work.length;
+  const sources: Record<string, number> = {};
   const fresh: CallDigest[] = [];
   const budgetMs = BUDGET_MIN * 60_000;
+  const lookup = { since, today: w.today };
   await mapPool(work, CONC, async (c) => {
     if (Date.now() - t0 > budgetMs) { deferred++; return; }
-    const tr = await fetchTranscriptAt(c.symbol, c.hit).catch(() => null);
-    if (!tr || tr.text.length < MIN_CHARS) { unreadable++; console.log(`  ${c.symbol}: transcript unreadable (${tr?.text.length ?? 0} chars)`); return; }
+    const found = await findRecentTranscript(c.symbol, c.name, lookup).catch(() => null);
+    await sleep(150);
+    if (!found) { notPosted++; return; }
+    const tr: FullTranscript = { ...found.transcript, date: found.date };
+    if (tr.text.length < MIN_CHARS) { unreadable++; console.log(`  ${c.symbol}: transcript unreadable (${tr.text.length} chars, ${tr.source})`); return; }
     attempted++;
     const d = await digestOne(c, tr, w.sessionDay).catch(() => null);
     if (!d) { llmFails++; console.log(`  ${c.symbol}: digest failed/empty — will retry next tick`); return; }
+    sources[found.source] = (sources[found.source] ?? 0) + 1;
     fresh.push(d);
-    console.log(`  ${c.symbol.padEnd(6)} ${d.callDate} · ${Math.round(tr.text.length / 1000)}k chars / ${d.chunks} chunk(s) · ${d.tone} · guidance ${d.guidance.action} · ${d.tldr.slice(0, 100)}`);
+    console.log(`  ${c.symbol.padEnd(6)} ${d.callDate} · ${tr.source} · ${Math.round(tr.text.length / 1000)}k chars / ${d.chunks} chunk(s) · ${d.tone} · guidance ${d.guidance.action} · ${d.tldr.slice(0, 100)}`);
   });
+  console.log(`  ${fresh.length} digested (${Object.entries(sources).map(([k, v]) => `${k} ${v}`).join(", ") || "—"}) · ${notPosted} with no transcript posted yet${investingOk ? "" : " (Investing.com is blocked here — a clean-IP box with CALL_DIGEST_PUBLISH=1 fills these)"} · ${deferred} deferred`);
   if (isMassLlmFailure(attempted, llmFails, deferred)) {
     console.error(`call-digests: ${llmFails}/${attempted} digests failed (${deferred} deferred) — mass LLM failure; keeping last run's file.`);
     process.exit(1);
   }
 
   const digests = mergeDigests(prior.digests, fresh, KEEP);
-  const sessionRows = digests.filter((d) => d.callDate >= w.sessionDay);
+  // The cross-call read covers the last three call dates (a weekend spans two sessions; the sources lag a day)
+  // and is labelled by the newest call it covers.
+  const synthSince = lookbackSince(t0, 3);
+  const sessionRows = digests.filter((d) => d.callDate >= synthSince);
+  const synthDay = sessionRows[0]?.callDate ?? w.sessionDay;
   let synthesis = prior.synthesis;
-  if (sessionRows.length >= 2 && (fresh.length > 0 || !synthesis || synthesis.sessionDay !== w.sessionDay)) {
-    const s = await synthesize(sessionRows, w.sessionDay).catch(() => null);
+  if (sessionRows.length >= 2 && (fresh.length > 0 || !synthesis || synthesis.sessionDay !== synthDay)) {
+    const s = await synthesize(sessionRows, synthDay).catch(() => null);
     if (s) synthesis = s;
     else console.warn("  synthesis failed/empty — prior synthesis stands");
   }
 
-  const payload: CallDigestsData = {
+  let payload: CallDigestsData = {
     generatedAt: nowISO,
     digests,
     synthesis,
-    lastRun: { sessionDay: w.sessionDay, candidates: cand.size, withTranscript: verified.length, digested: fresh.length, deferred, llmFails, budgetMin: BUDGET_MIN, local: LOCAL_CONFIGURED },
+    lastRun: {
+      sessionDay: w.sessionDay, candidates: cand.size, withTranscript: attempted + unreadable, digested: fresh.length, deferred, llmFails, budgetMin: BUDGET_MIN, local: LOCAL_CONFIGURED,
+      lookbackDays: LOOKBACK_DAYS, notPosted, sources, blocked: investingOk ? [] : ["investing.com"],
+    },
   };
+  // PUBLISH (a clean-IP box's run): merge with whatever is already in R2 so two runners never clobber each
+  // other, ship the merged file, and keep the merged copy locally too.
+  if (PUBLISH && r2Configured()) {
+    const remote = await getObject(R2_KEY).then((b) => JSON.parse(b.toString("utf8")) as CallDigestsData).catch(() => null);
+    if (remote?.digests) payload = mergeCallDigestFiles(payload, remote, KEEP);
+    await putObject(R2_KEY, Buffer.from(JSON.stringify(payload)), "application/json");
+    console.log(`  published ${payload.digests.length} digests → R2 ${R2_KEY}`);
+  } else if (PUBLISH) console.warn("  CALL_DIGEST_PUBLISH=1 but R2 is not configured (LAKE_S3_*) — not published");
   const wr = await writeFeedGuarded("call-digests.json", payload);
   console.log(
-    `call-digests: ${wr.written ? "wrote" : "SKIPPED"} ${digests.length} digests (${sessionRows.length} this session; +${fresh.length} new, ${deferred} deferred, ${unreadable} unreadable, ${llmFails} failed) · synthesis ${synthesis ? `${synthesis.sessionDay} · ${synthesis.themes.length} themes` : "none"} · ${Math.round((Date.now() - t0) / 60_000)} min${wr.written ? "" : ` — ${wr.reason}`}`,
+    `call-digests: ${wr.written ? "wrote" : "SKIPPED"} ${payload.digests.length} digests (${sessionRows.length} in the synthesis window; +${fresh.length} new, ${deferred} deferred, ${unreadable} unreadable, ${llmFails} failed) · synthesis ${payload.synthesis ? `${payload.synthesis.sessionDay} · ${payload.synthesis.themes.length} themes` : "none"} · ${Math.round((Date.now() - t0) / 60_000)} min${wr.written ? "" : ` — ${wr.reason}`}`,
   );
 }
 

@@ -82,8 +82,18 @@ export interface CallDigestsData {
     llmFails: number;
     budgetMin: number;
     local: boolean;
+    /** Reporter lookback in days (sources lag the call by hours to days). */
+    lookbackDays?: number;
+    /** Reporters looked up this run with no transcript posted anywhere yet. */
+    notPosted?: number;
+    /** Digests produced this run, by source ("investing" | "fool"). */
+    sources?: Record<string, number>;
+    /** Sources that refused this runner's IP (e.g. "investing.com") — a clean-IP box fills the gap. */
+    blocked?: string[];
   };
 }
+
+const DAY = 86_400_000;
 
 export const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
@@ -254,6 +264,30 @@ export function budgetMinutes(mode: string | undefined, override: string | undef
   const o = Number(override);
   if (override && Number.isFinite(o) && o > 0) return o;
   return mode === "desk" ? 12 : mode === "full" ? 40 : 30;
+}
+
+/** The calendar day `days` back from now (YYYY-MM-DD) — the reporter lookback / synthesis window floor. */
+export function lookbackSince(nowMs: number, days: number): string {
+  return dayOf(nowMs - days * DAY);
+}
+
+/**
+ * Union of two copies of the feed — a clean-IP box's PUBLISHED file and a runner's own — so two writers never
+ * clobber each other: digests keyed by (symbol, call date) with the more recently digested row winning, the
+ * newer synthesis, the newer run's stats and stamp. Pure — used by the publish step and by data-from-r2.
+ */
+export function mergeCallDigestFiles(a: CallDigestsData, b: CallDigestsData, keep = 160): CallDigestsData {
+  const newer = Date.parse(b.generatedAt) > Date.parse(a.generatedAt) ? b : a;
+  const older = newer === a ? b : a;
+  const by = new Map<string, CallDigest>();
+  for (const d of [...(older.digests ?? []), ...(newer.digests ?? [])]) {
+    if (!d?.symbol || !d?.callDate) continue;
+    const k = `${d.symbol}|${d.callDate}`;
+    const cur = by.get(k);
+    if (!cur || Date.parse(d.digestedAt || "") >= Date.parse(cur.digestedAt || "")) by.set(k, d);
+  }
+  const synths = [a.synthesis, b.synthesis].filter((s): s is CallSynthesis => !!s).sort((x, y) => Date.parse(y.generatedAt) - Date.parse(x.generatedAt));
+  return { generatedAt: newer.generatedAt, digests: mergeDigests([], [...by.values()], keep), synthesis: synths[0] ?? null, lastRun: newer.lastRun };
 }
 
 /** The digests that belong to the file's last session (call date on/after the run's session day). */

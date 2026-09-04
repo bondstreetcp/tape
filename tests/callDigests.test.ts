@@ -1,6 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetMinutes, chunkTranscript, isRecentCallDate, kpiGrounded, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow, sessionDigests, type CallDigest } from "../lib/callDigests";
+import { budgetMinutes, chunkTranscript, isRecentCallDate, kpiGrounded, lookbackSince, mergeCallDigestFiles, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow, sessionDigests, type CallDigest, type CallDigestsData } from "../lib/callDigests";
+
+test("lookbackSince: the calendar day N days back — the reporter lookback the lagging sources need", () => {
+  assert.equal(lookbackSince(Date.parse("2026-09-04T23:00:00Z"), 7), "2026-08-28");
+  assert.equal(lookbackSince(Date.parse("2026-09-04T23:00:00Z"), 3), "2026-09-01");
+});
+
+test("mergeCallDigestFiles: union by (symbol, call date), the more recently digested row wins, newer synthesis + stats", () => {
+  const row = (symbol: string, callDate: string, digestedAt: string, tldr: string): CallDigest => ({
+    symbol, name: symbol, sector: null, marketCap: 1, callDate, title: "", url: "", source: "", tldr, tone: "measured",
+    guidance: { action: "none", detail: "" }, kpis: [], drivers: [], qa: [], readThrough: [], watch: [], quotes: [], chars: 0, chunks: 1, model: "", digestedAt,
+  });
+  const lastRun = { sessionDay: "", candidates: 0, withTranscript: 0, digested: 0, deferred: 0, llmFails: 0, budgetMin: 0, local: false };
+  const nas: CallDigestsData = {
+    generatedAt: "2026-09-05T00:00:00Z",
+    digests: [row("FIVE", "2026-09-03", "2026-09-04T10:00:00Z", "fool version"), row("SMTC", "2026-09-01", "2026-09-02T00:00:00Z", "nas only")],
+    synthesis: { sessionDay: "2026-09-03", n: 2, tldr: "older", themes: [{ heading: "h", detail: "d", tickers: [] }], model: "", generatedAt: "2026-09-04T10:00:00Z" },
+    lastRun: { ...lastRun, digested: 1 },
+  };
+  const pc: CallDigestsData = {
+    generatedAt: "2026-09-05T12:00:00Z", // the newer file
+    digests: [row("FIVE", "2026-09-03", "2026-09-05T11:00:00Z", "investing version"), row("AVGO", "2026-09-04", "2026-09-05T11:00:00Z", "pc only")],
+    synthesis: { sessionDay: "2026-09-04", n: 2, tldr: "newer", themes: [{ heading: "h", detail: "d", tickers: [] }], model: "", generatedAt: "2026-09-05T11:30:00Z" },
+    lastRun: { ...lastRun, digested: 2, sources: { investing: 2 } },
+  };
+  const m = mergeCallDigestFiles(nas, pc);
+  assert.deepEqual(m.digests.map((d) => `${d.symbol}|${d.callDate}`), ["AVGO|2026-09-04", "FIVE|2026-09-03", "SMTC|2026-09-01"]);
+  assert.equal(m.digests.find((d) => d.symbol === "FIVE")!.tldr, "investing version"); // the later digestedAt wins
+  assert.equal(m.synthesis!.tldr, "newer");
+  assert.equal(m.generatedAt, "2026-09-05T12:00:00Z");
+  assert.deepEqual(m.lastRun.sources, { investing: 2 });
+  // Symmetric: argument order must not matter.
+  assert.deepEqual(mergeCallDigestFiles(pc, nas).digests.map((d) => d.symbol), ["AVGO", "FIVE", "SMTC"]);
+});
 
 test("scopedLocalEnv: CALL_DIGEST_LOCAL_* become LLM_LOCAL_* for this job only; unset = null (fleet untouched)", () => {
   assert.equal(scopedLocalEnv({}), null);
