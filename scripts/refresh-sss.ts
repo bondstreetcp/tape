@@ -28,6 +28,7 @@ import { chatJSON, PRO_MODEL, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../l
 import { loadSnapshot } from "../lib/data";
 import { SSS_INDUSTRIES, isCompMetricLabel, type SssData, type SssGuide, type SssPeriod, type SssTicker } from "../lib/sameStoreSales";
 import { COMP_GUIDE_SCHEMA, COMP_GUIDE_SYSTEM, compGuideWindows, sanitizeCompGuide } from "../lib/compGuide";
+import { advanceGate } from "../lib/incrementalGate";
 
 // Load .env.local into process.env (without printing secrets).
 try {
@@ -202,12 +203,15 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
 
       const periods: SssPeriod[] = BACKFILL ? [] : [...(prior?.periods ?? [])];
       let e0Text: string | null = null, e0Url = e0.url; // the newest release's text, reused for the outlook read
+      // The incremental gate may only advance once the NEWEST release was actually read AND extracted — a
+      // transient EDGAR/LLM failure used to stamp it anyway and skip that quarter forever (lib/incrementalGate).
+      let e0ok = false;
       for (const f of targets) {
         let text = "", src = { form: f.form, url: f.url, date: f.date };
         const ft = await getFilingText(sym, f.acc);
         if (ft && ft.text.length > 400) { text = ft.text; src.url = ft.url; if (f.acc === e0.acc) { e0Text = ft.text; e0Url = ft.url; } }
         else if (!BACKFILL) { const doc = await getFilingDoc(sym, "10-Q"); if (doc) { text = doc.text; src = { form: doc.form, url: doc.url, date: doc.date }; } }
-        if (!text) { console.log(`  ${sym}: no text for ${f.date}`); continue; }
+        if (!text) { console.log(`  ${sym}: no text for ${f.date} — will retry next run`); continue; }
         let ex = await extract(sym, text); calls++;
         // Retry-on-null: sampling variance sometimes returns comp=null on a doc that HAS one (a
         // second pass usually lands it). A doc with genuinely no comp just nulls twice — no harm.
@@ -215,7 +219,8 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
           const retry = await extract(sym, text); calls++;
           if (retry && retry.comp != null) { ex = retry; console.log(`  ${sym} ${f.date}: null → ${retry.comp} on retry`); }
         }
-        if (!ex) { console.log(`  ${sym} ${f.date}: extract failed`); await sleep(150); continue; }
+        if (!ex) { console.log(`  ${sym} ${f.date}: extract failed — will retry next run`); await sleep(150); continue; }
+        if (f.acc === e0.acc) e0ok = true; // read + extracted (a comp-less reply still counts: "checked, none")
         const fpEnd = ex.periodEnd && !Number.isNaN(Date.parse(ex.periodEnd)) ? ex.periodEnd : null;
         if (!fpEnd) { console.log(`  ${sym} ${f.date}: no period-end → skip (comp ${ex.comp})`); await sleep(150); continue; }
         const { periodEnd, quote, ...rest } = ex;
@@ -246,7 +251,7 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
         data.byTicker[sym] = {
           metricLabel: newest?.metricLabel || "Comparable sales",
           definition: newest?.definition ?? null,
-          lastAccession: e0.acc,
+          lastAccession: advanceGate(e0.acc, e0ok, prior?.lastAccession),
           industry,
           periods: periods.slice(0, 16),
           guide: guide ?? null,

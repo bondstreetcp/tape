@@ -17,6 +17,7 @@ import { numberGroundedIn } from "../lib/llmValidate";
 import { loadSnapshot } from "../lib/data";
 import type { GuidanceData, GuidancePeriod, GuidanceTicker, GuidanceAction } from "../lib/guidance";
 import { classifyGuidanceAction } from "../lib/guidance";
+import { advanceGate } from "../lib/incrementalGate";
 
 try {
   const env = readFileSync(join(process.cwd(), ".env.local"), "utf8");
@@ -222,7 +223,7 @@ function loadConsensus(): Map<string, number> {
         await sleep(150);
       }
       history.sort((a, b) => b.date.localeCompare(a.date));
-      data.byTicker[sym] = { lastAccession: e0ok ? e0.acc : (prior?.lastAccession ?? ""), updated: latestUpd || e0.date, source: latestSrc || { form: e0.form, url: "", date: e0.date }, guides: latestGuides, history: history.slice(0, 10) } as GuidanceTicker;
+      data.byTicker[sym] = { lastAccession: advanceGate(e0.acc, e0ok, prior?.lastAccession), updated: latestUpd || e0.date, source: latestSrc || { form: e0.form, url: "", date: e0.date }, guides: latestGuides, history: history.slice(0, 10) } as GuidanceTicker;
       if (latestGuides.length) touched++;
     } catch (e: any) {
       console.log(`  ${sym}: ERROR ${String(e?.message || e).slice(0, 100)}`);
