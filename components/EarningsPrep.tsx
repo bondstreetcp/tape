@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CompanyStats } from "@/lib/companyStats";
 import type { StockRow } from "@/lib/types";
 import { compBogey, type SssTicker } from "@/lib/sameStoreSales";
+import { analyzeCompStack, sgn as sgnPts } from "@/lib/compStack";
 import { guideMidEps, guideMidRevM, beatGuide, type GuidanceTicker, type GuidanceAction } from "@/lib/guidance";
 import { ivStats, type IvSnapshot } from "@/lib/ivHistory";
 import IvCrushScenario, { type IvScenario } from "@/components/IvCrushScenario";
@@ -297,7 +298,7 @@ function Big({ value, label, color, info }: { value: string; label: string; colo
   );
 }
 
-export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory, scanner }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null; scanner?: ScannerRead | null }) {
+export default function EarningsPrep({ symbol, stats, earningsDate, earningsEstimate, row, peers, sss, guidance, ivHistory, scanner, compRevenue }: { symbol: string; stats: CompanyStats | null; earningsDate?: string | null; earningsEstimate?: boolean; row?: StockRow | null; peers?: StockRow[]; sss?: SssTicker | null; guidance?: GuidanceTicker | null; ivHistory?: IvSnapshot[] | null; scanner?: ScannerRead | null; compRevenue?: { date: string; rev: number | null }[] | null }) {
   const [data, setData] = useState<DataPart | null | "loading">("loading");
   const [ai, setAi] = useState<AiPart | null | "idle" | "loading">("idle");
   const [posRead, setPosRead] = useState<PosReadPart | null | "idle" | "loading">("idle"); // options-positioning AI read
@@ -495,6 +496,9 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
   })();
   // The comp needed to hold the 2-yr stack flat into the upcoming quarter (the "bogey"), computed in code.
   const bogey = sss?.periods ? compBogey(sss.periods) : null;
+  // What the latest release's comp GUIDE implies for the 2-yr stack over the rest of the fiscal year (lib/compStack) —
+  // revenue-weighted when the quarterly statements are on hand, so it matches the Comp Stack Analyzer board.
+  const stackRead = sss ? analyzeCompStack(sss, { revenueByDate: compRevenue ?? undefined }) : null;
 
   // Synthesized "into the print" plan — a wheel-minded, CODE-DERIVED suggestion (sell a cash-secured put /
   // put spread / own it / stand aside), NOT advice. Blends the vol read (rich/cheap), the fundamental setup
@@ -809,6 +813,27 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
             </div>
           </div>
         )}
+        {stackRead?.read && stackRead.holdStack && (() => {
+          const a = stackRead, read = a.read!, hold = a.holdStack!;
+          const g = a.remaining.find((p) => p.kind === "guided");
+          const imp = a.implied ? a.remaining.filter((p) => p.kind === "implied") : [];
+          const last = imp[imp.length - 1];
+          const r = (lo: number | null, hi: number | null, d = 1) => (lo == null || hi == null ? "—" : lo === hi ? `${sgnPts(lo, d)}%` : `${sgnPts(lo, d)} to ${sgnPts(hi, d)}%`);
+          const tagColor = read.tag === "decel" ? "#f59e0b" : read.tag === "accel" ? "#22c55e" : "var(--text-3)";
+          return (
+            <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 text-[13px]" title={read.text}>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">
+                Guide vs the 2-yr stack<InfoDot text="What the comp guide in the latest release implies for the two-year stack (this comp + the one it laps) over the rest of the fiscal year: the guided quarter straight from the guide, the un-guided quarters back-solved from the full-year comp guide, against the comps that would simply hold the just-reported stack. Computed in code from the filings (lib/compStack); the Comp Stack Analyzer board has the full quarter table." /> · <span style={{ color: tagColor }}>{read.tag === "decel" ? "embeds decel" : read.tag === "accel" ? "assumes accel" : "holds"} {sgnPts(a.stackShift as number)} pts</span>
+              </div>
+              <div className="mt-0.5 text-[var(--text-2)]">
+                stack <b>{sgnPts(hold.stack)}%</b> now
+                {g && <span> · {g.label} guide {r(g.compLow, g.compHigh, 0)} → stack {r(g.stackLow, g.stackHigh)}</span>}
+                {a.implied && last && <span> · {a.implied.quarters.join("+")} implied {r(a.implied.low, a.implied.high)} → stack {r(last.stackLow, last.stackHigh)}</span>}
+                {hold.fyComp != null && a.fyGuide && <span className="text-[var(--text-4)]"> · holding the stack = FY {sgnPts(hold.fyComp)}% vs the {r(a.fyGuide.low, a.fyGuide.high, 0)} guide</span>}
+              </div>
+            </div>
+          );
+        })()}
       </Bento>
 
       {(guideRows.length > 0 || bg) && (

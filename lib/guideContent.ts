@@ -2706,6 +2706,46 @@ export const GUIDE_GROUPS: GuideGroup[] = [
         ]
       },
       {
+        "path": "/comp-stacks",
+        "title": "2-Yr Comp Stack Analyzer",
+        "question": "What does a retailer's comp guide really imply — is it assuming momentum fades, holds, or builds over the rest of its fiscal year?",
+        "how": "A single quarter's comp can flatter or hide the trend depending on what it laps, so the desk reads comps as a two-year STACK: this quarter's comp plus the same quarter's comp a year earlier. This board takes each retailer's and restaurant's disclosed comp history and the comp outlook from its latest earnings release, then works out what the guide implies for the stack over the rest of the year. The guided quarter's stack comes straight from the guide (its range plus the comp it laps). The quarters the company did NOT guide are back-solved from the full-year comp guide — the year's comp is roughly the four quarterly comps weighted by last year's quarterly revenue, and with the reported quarters and the guided quarter known, the remainder falls out. It then shows the comps it would take to simply HOLD the just-reported stack flat and the full-year comp that path adds up to versus the guide: a guide well below that path is embedding deceleration (conservative if momentum holds — the classic post-print raise that still 'fades the back half'); one above it is assuming acceleration. Everything is computed in code from the filings; nothing is estimated by a model. Read it as decision-support, not advice.",
+        "metrics": [
+          {
+            "term": "2-yr stack",
+            "plain": "This quarter's comp plus the comp it laps (the same fiscal quarter a year earlier), added together — the sell-side shorthand for underlying momentum."
+          },
+          {
+            "term": "Next Q guide → stack",
+            "plain": "The company's comp range for the upcoming quarter, and the 2-yr stack range that produces once you add the comp it laps."
+          },
+          {
+            "term": "Rest of year implied → stack",
+            "plain": "The comp the un-guided quarter(s) must average for the full-year comp guide to hold, given the quarters already reported and the guided one — shown as a range from the guide's low end to its high end, with the stack it produces."
+          },
+          {
+            "term": "FY guide (was …)",
+            "plain": "The full-year comparable-sales guide from the latest release, and the prior outlook when the release shows one — the size of the raise or cut."
+          },
+          {
+            "term": "Read (decel / holds / accel, ± pts)",
+            "plain": "The average guide-implied stack for the remaining quarters minus the just-reported stack, in points: negative means the guide embeds deceleration, positive means it assumes acceleration, within about 2.5 pts reads as holding."
+          },
+          {
+            "term": "To hold the stack",
+            "plain": "The comp each remaining quarter would need to keep the 2-yr stack at the just-reported level, and the full-year comp that path adds up to versus the guide midpoint."
+          },
+          {
+            "term": "$ cross-check",
+            "plain": "The same logic in dollars: the full-year net-sales guide less year-to-date sales less the guided quarter's sales, versus the same quarters a year ago — total growth, which includes new stores as well as comps."
+          },
+          {
+            "term": "Wt",
+            "plain": "Each fiscal quarter's share of the year, from the prior year's quarterly revenue (equal shares if no revenue history is on file) — the weights behind the back-solve."
+          }
+        ]
+      },
+      {
         "path": "/valuation-history",
         "title": "Discount to Own History",
         "question": "Is a stock cheap or expensive versus its OWN typical valuation over the past decade?",

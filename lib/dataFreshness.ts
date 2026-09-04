@@ -122,7 +122,7 @@ const FEEDS: FeedSpec[] = [
   // Forward-accumulating like the trade-log: no count floor (the log legitimately starts empty —
   // the bootstrap-floor trap would gate the deploy on a brand-new feed's first night).
   { file: "earnings-preview-log.json", affects: ["/preview-record"], label: "Preview accuracy record", tier: "core", maxAgeHours: CORE },
-  { file: "same-store-sales.json", affects: ["/comps"], label: "Same-store sales", tier: "core", maxAgeHours: CORE },
+  { file: "same-store-sales.json", affects: ["/comps", "/comp-stacks"], label: "Same-store sales", tier: "core", maxAgeHours: CORE },
   { file: "trade-ideas.json", affects: ["/trade-desk", "/earnings-desk"], label: "Trade desk ideas", tier: "core", maxAgeHours: CORE, countPath: "ideas", minCount: 1 },
   { file: "vol-dislocation.json", affects: ["/vol-dislocation", "/skew", "/term-structure", "/earnings-desk", "/trade-desk"], label: "Vol dislocation", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 100 },
   // VRP capture ledger: forward-only, seeds small and accrues — age-only, no count floor (like trade-log).

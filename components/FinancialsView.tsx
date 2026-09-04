@@ -384,7 +384,7 @@ export default function FinancialsView({
         )
       ) : view === "earnings" ? (
         <div className="space-y-4">
-          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} earningsEstimate={row?.earningsEstimate} row={row} peers={peers} sss={sss} guidance={guidance} ivHistory={ivHistory} scanner={scanner} />
+          <EarningsPrep symbol={symbol} stats={stats} earningsDate={row?.earningsDate} earningsEstimate={row?.earningsEstimate} row={row} peers={peers} sss={sss} guidance={guidance} ivHistory={ivHistory} scanner={scanner} compRevenue={(financials?.quarterly ?? []).map((p) => ({ date: p.date, rev: typeof p.totalRevenue === "number" ? p.totalRevenue / 1e6 : null }))} />
           <CompanyStats stats={stats} currency={currency} show="earnings" />
           <EarningsMultipleChart symbol={symbol} currency={currency} />
         </div>

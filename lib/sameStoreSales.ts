@@ -32,6 +32,32 @@ export interface SssPeriod {
   confidence?: "high" | "medium" | "low";
 }
 
+/** One guided period of the comp OUTLOOK (the upcoming quarter or the fiscal year), as the issuer states it. */
+export interface SssGuideRange {
+  label: string; // the issuer's period label, e.g. "Q3 FY26" / "FY2026"
+  compLow: number | null; // comparable-sales guide range, % signed; null = none or only qualitative ("low-single-digit")
+  compHigh: number | null;
+  priorCompLow?: number | null; // the PRIOR outlook's range when the release shows one (the raise/cut tell)
+  priorCompHigh?: number | null;
+  revLowM: number | null; // net-sales / revenue guide for the same period, $M
+  revHighM: number | null;
+  quote: string | null; // verbatim, grounded in the release (null if not citable)
+}
+
+/** The comp outlook read from the latest earnings release (scripts/refresh-sss.ts, sanitized by
+ *  lib/compGuide) — the input the 2-yr stack analyzer (lib/compStack) needs beyond the comp history. */
+export interface SssGuide {
+  accession: string; // the earnings 8-K it was read from — the fill gate (re-extracted once per new print)
+  date: string; // that 8-K's date
+  url: string;
+  nextQ: SssGuideRange | null; // the single upcoming quarter
+  fy: SssGuideRange | null; // the full fiscal year being guided (the NEXT year on a Q4 release)
+  ytdComp: number | null; // year-to-date comp if the release states one (a cross-check on the blended YTD)
+  netNewUnits: number | null; // planned net new stores/units for the year, if stated
+  metricLabel?: string | null;
+  confidence: "high" | "medium" | "low";
+}
+
 export interface SssTicker {
   metricLabel: string;
   definition?: string | null;
@@ -39,7 +65,14 @@ export interface SssTicker {
   industry?: string;
   region?: string; // "US" (default, US 8-K extractor) | "UK"/"Europe" (intl RNS extractor)
   periods: SssPeriod[]; // newest → oldest
+  guide?: SssGuide | null; // comp outlook from the latest release (null = checked, none disclosed)
 }
+
+/** True for a comparable-/same-store-/identical-/like-for-like sales label — the metric the comp series
+ *  and the comp outlook are allowed to carry (rejects "system-wide sales", "net sales growth"). Shared by
+ *  the SSS extractor and the comp-guide sanitizer so the two can't drift. */
+export const isCompMetricLabel = (label?: string | null): boolean =>
+  !!label && /compar|same.?(store|restaurant|shop|location|site|cafe|salon)|identical|like.?for.?like|\bsss\b|\blfl\b/i.test(label);
 
 export interface SssData {
   generatedAt: string;

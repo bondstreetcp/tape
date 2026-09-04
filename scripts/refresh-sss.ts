@@ -13,14 +13,21 @@
  *
  * Validated against CMG/YUM/KR/TJX/RL/MCD/SBUX/KSS/DG (see the design memo): handles multi-brand,
  * grocery ex-fuel, constant-currency, and NEGATIVE comps with the correct sign.
+ *
+ * COMP OUTLOOK (SssTicker.guide): the same newest release also carries the comp GUIDE (next quarter + fiscal
+ * year, with the $ ranges and any prior outlook) that the 2-yr stack analyzer (lib/compStack, /comp-stacks)
+ * needs. It's a second, FLASH-tier call on the same text, gated per release (guide.accession) — always on a
+ * new print, and budgeted (GUIDE_MAX/run) to backfill names already up to date on comps. Prompt + sanitizer
+ * live in lib/compGuide (tested); every figure must ground in the release or it's dropped.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { getFilings, getFilingText } from "../lib/edgar";
 import { getFilingDoc } from "../lib/filingDoc";
-import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
+import { chatJSON, PRO_MODEL, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { loadSnapshot } from "../lib/data";
-import { SSS_INDUSTRIES, type SssData, type SssPeriod, type SssTicker } from "../lib/sameStoreSales";
+import { SSS_INDUSTRIES, isCompMetricLabel, type SssData, type SssGuide, type SssPeriod, type SssTicker } from "../lib/sameStoreSales";
+import { COMP_GUIDE_SCHEMA, COMP_GUIDE_SYSTEM, compGuideWindows, sanitizeCompGuide } from "../lib/compGuide";
 
 // Load .env.local into process.env (without printing secrets).
 try {
@@ -37,6 +44,10 @@ const BACKFILL = Number(process.env.BACKFILL || 0); // 0 = incremental; N = walk
 const MAXTOK = Number(process.env.MAXTOK || 16000); // Gemini reasoning eats max_tokens → keep high
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const INDUSTRY = (process.env.INDUSTRY || "").trim(); // e.g. "Restaurants" for Phase 1
+// Comp-outlook reads for names ALREADY up to date on comps are capped per run (the one-time backfill of the
+// guide field spreads over a couple of nights); a new print's outlook is never capped. 0 = new prints only.
+const GUIDE_MAX = Number(process.env.GUIDE_MAX ?? 80);
+const GUIDE_MODEL = process.env.COMP_GUIDE_MODEL || FLASH_MODEL; // mechanical schema-fill → the cheap tier (like refresh-guidance)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const KW = /comparable|same[- ]?(store|restaurant|shop|location|cafe|salon)|identical sales|like[- ]for[- ]like|comp(s|arable)?\s+(restaurant|store|sales)|system[- ]wide/i;
@@ -81,8 +92,8 @@ const num = (v: unknown): number | null => (typeof v === "number" && Number.isFi
 // Restaurants/retail use many phrasings: comparable, same-store/-restaurant/-shop/-location, identical
 // sales (grocery), like-for-like (intl), SSS/LFL. (Earlier this only matched "same store" → nulled
 // valid comps for CAVA/WEN/DRI/BROS.) Still rejects "system-wide" / "net sales" / "total revenue".
-const isCompMetric = (label?: string | null) =>
-  !!label && /compar|same.?(store|restaurant|shop|location|site|cafe|salon)|identical|like.?for.?like|\bsss\b|\blfl\b/i.test(label);
+// Shared with the comp-outlook sanitizer (lib/compGuide) so the two can't drift.
+const isCompMetric = isCompMetricLabel;
 
 interface Extracted extends Omit<SssPeriod, "fpEnd" | "source"> { periodEnd?: string | null; quote?: string | null }
 
@@ -136,6 +147,24 @@ async function extract(sym: string, text: string): Promise<Extracted | null> {
   };
 }
 
+// The comp OUTLOOK from the newest release. null = transport/parse failure (the caller leaves the gate
+// untouched so it retries next run); an empty-but-valid reply is stamped as "checked, none disclosed".
+async function extractGuide(sym: string, text: string, src: { accession: string; date: string; url: string }): Promise<SssGuide | null> {
+  const raw = await chatJSON<any>(COMP_GUIDE_SYSTEM + " " + NO_ADVICE, `${COMP_GUIDE_SCHEMA}\n\nEarnings text for ${sym}:\n${compGuideWindows(text)}`, {
+    model: GUIDE_MODEL,
+    maxTokens: MAXTOK,
+    reasoningEffort: "low",
+    local: true,
+  });
+  if (raw == null) return null;
+  return sanitizeCompGuide(raw, text, src);
+}
+const describeGuide = (g: SssGuide) => {
+  const r = (x: SssGuide["nextQ"]) => (x ? `${x.label} ${x.compLow != null ? `${x.compLow}–${x.compHigh}%` : "(no comp range)"}${x.revLowM != null ? ` $${x.revLowM}–${x.revHighM}M` : ""}` : null);
+  const parts = [r(g.nextQ), r(g.fy)].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "no comp outlook";
+};
+
 async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
   const seen = new Map<string, string>();
   for (const u of UNIVERSES) {
@@ -156,21 +185,27 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
   const watch = await buildWatchSet();
   console.log(`watch-set: ${watch.length} names${INDUSTRY ? ` (${INDUSTRY})` : ""}${ONLY.length ? ` [ONLY ${ONLY.join(",")}]` : ""} · mode=${BACKFILL ? `backfill ${BACKFILL}q` : "incremental"}`);
 
-  let touched = 0, calls = 0;
+  let touched = 0, calls = 0, guideFills = 0;
   for (const { sym, industry } of watch) {
     try {
       const { filings } = await getFilings(sym, 0, 90);
       const earnings = filings.filter((f) => f.isEarnings);
       if (!earnings.length) { console.log(`  ${sym}: no earnings 8-K`); continue; }
       const prior = data.byTicker[sym];
-      const targets = BACKFILL ? earnings.slice(0, BACKFILL) : (prior?.lastAccession === earnings[0].acc ? [] : earnings.slice(0, 1));
-      if (!targets.length) { console.log(`  ${sym}: up to date (${earnings[0].date})`); continue; }
+      const e0 = earnings[0];
+      const targets = BACKFILL ? earnings.slice(0, BACKFILL) : (prior?.lastAccession === e0.acc ? [] : earnings.slice(0, 1));
+      // The comp OUTLOOK rides the same newest release: read it whenever that release hasn't been read for its
+      // guide yet — always on a new print, and (budgeted) to backfill names already up to date on comps.
+      // Backfill mode is periods-only; the outlook fills on the next incremental run.
+      const needGuide = !BACKFILL && prior?.guide?.accession !== e0.acc && (targets.length > 0 || guideFills < GUIDE_MAX);
+      if (!targets.length && !needGuide) { console.log(`  ${sym}: up to date (${e0.date})`); continue; }
 
       const periods: SssPeriod[] = BACKFILL ? [] : [...(prior?.periods ?? [])];
+      let e0Text: string | null = null, e0Url = e0.url; // the newest release's text, reused for the outlook read
       for (const f of targets) {
         let text = "", src = { form: f.form, url: f.url, date: f.date };
         const ft = await getFilingText(sym, f.acc);
-        if (ft && ft.text.length > 400) { text = ft.text; src.url = ft.url; }
+        if (ft && ft.text.length > 400) { text = ft.text; src.url = ft.url; if (f.acc === e0.acc) { e0Text = ft.text; e0Url = ft.url; } }
         else if (!BACKFILL) { const doc = await getFilingDoc(sym, "10-Q"); if (doc) { text = doc.text; src = { form: doc.form, url: doc.url, date: doc.date }; } }
         if (!text) { console.log(`  ${sym}: no text for ${f.date}`); continue; }
         let ex = await extract(sym, text); calls++;
@@ -194,14 +229,27 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
         await sleep(150);
       }
       periods.sort((a, b) => b.fpEnd.localeCompare(a.fpEnd));
+      // Comp outlook (next quarter + fiscal year) from the newest release — gated on ITS accession.
+      let guide: SssGuide | null | undefined = prior?.guide;
+      if (needGuide) {
+        if (e0Text == null) { const ft = await getFilingText(sym, e0.acc); if (ft && ft.text.length > 400) { e0Text = ft.text; e0Url = ft.url; } }
+        if (!e0Text) console.log(`  ${sym} outlook: no text for ${e0.date} — will retry next run`);
+        else {
+          const g = await extractGuide(sym, e0Text, { accession: e0.acc, date: e0.date, url: e0Url }); calls++;
+          if (g) { guide = g; guideFills++; console.log(`  ${sym} outlook: ${describeGuide(g)}`); }
+          else console.log(`  ${sym} outlook: LLM failed — will retry next run`);
+          await sleep(150);
+        }
+      }
       const newest = periods.find((p) => p.metricLabel) || periods[0];
       if (periods.length) {
         data.byTicker[sym] = {
           metricLabel: newest?.metricLabel || "Comparable sales",
           definition: newest?.definition ?? null,
-          lastAccession: earnings[0].acc,
+          lastAccession: e0.acc,
           industry,
           periods: periods.slice(0, 16),
+          guide: guide ?? null,
         } as SssTicker;
         touched++;
       }
@@ -215,5 +263,5 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
 
   data.generatedAt = new Date().toISOString();
   writeFileSync(OUT, JSON.stringify(data));
-  console.log(`\nWrote ${OUT} · ${touched} names updated · ${calls} LLM calls · ${Object.keys(data.byTicker).length} total in file`);
+  console.log(`\nWrote ${OUT} · ${touched} names updated · ${guideFills} comp outlooks read · ${calls} LLM calls · ${Object.keys(data.byTicker).length} total in file`);
 })();
