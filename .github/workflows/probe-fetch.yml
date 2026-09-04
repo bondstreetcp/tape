@@ -1,0 +1,21 @@
+# TEMPORARY probe (2026-09-04): can a GitHub runner IP read the transcript sources the NAS's home IP is
+# blocked from? Dispatched once by hand; deleted after the answer is in the run log.
+name: probe-fetch
+on:
+  workflow_dispatch: {}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe transcript sources from a GitHub runner IP
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+          for u in https://www.investing.com/news/transcripts https://www.fool.com/earnings-call-transcripts/ https://www.marketscreener.com/quote/stock/FIVE-BELOW-INC-11054567/news/; do
+            curl -s -m 20 -A "$UA" -o /tmp/p.html -w "%{http_code} %{size_download}B  $u\n" "$u" || echo "curl failed $u"
+          done
+          echo "investing transcript links on page 1: $(curl -s -m 20 -A "$UA" https://www.investing.com/news/transcripts | grep -o 'news/transcripts/earnings-call-transcript-[A-Za-z0-9-]*' | sort -u | wc -l)"
+          a=$(curl -s -m 20 -A "$UA" https://www.investing.com/news/transcripts | grep -o 'https://www.investing.com/news/transcripts/earnings-call-transcript-[A-Za-z0-9-]*' | sort -u | head -1)
+          echo "article: $a"
+          curl -s -m 20 -A "$UA" -o /tmp/a.html -w "article %{http_code} %{size_download}B\n" "$a"
+          echo "operator turns in article: $(grep -o Operator /tmp/a.html | wc -l)"
