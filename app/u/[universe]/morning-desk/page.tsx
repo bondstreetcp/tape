@@ -5,12 +5,14 @@ import Link from "next/link";
 import { loadDeskNote } from "@/lib/deskNote";
 import { loadSnapshot } from "@/lib/data";
 import { loadOvernightFilings } from "@/lib/overnightFilings";
+import { loadCallDigests } from "@/lib/callDigests";
 import type { FilingIndex, RelatedFiling } from "@/lib/filingIndex";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import DeskNote from "@/components/DeskNote";
 import Briefing from "@/components/Briefing";
 import DailyDeskTabs from "@/components/DailyDeskTabs";
 import OvernightFilingsView from "@/components/OvernightFilingsView";
+import CallDigestsView from "@/components/CallDigestsView";
 import WatchlistWire from "@/components/WatchlistWire";
 import { getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import MarketHeadlinesWire from "@/components/MarketHeadlinesWire";
@@ -44,12 +46,13 @@ export default async function DailyDeskPage({
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   const { tab } = await searchParams;
-  const [note, overnight, snapshot, related, headlines] = await Promise.all([
+  const [note, overnight, snapshot, related, headlines, calls] = await Promise.all([
     loadDeskNote(),
     loadOvernightFilings().catch(() => null),
     loadSnapshot(universe).catch(() => null),
     loadRelated(),
     getMarketHeadlines().catch(() => []),
+    loadCallDigests().catch(() => null),
   ]);
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   const sectors: Record<string, string> = {};
@@ -61,7 +64,7 @@ export default async function DailyDeskPage({
         <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
         <h1 className="mt-1 text-2xl font-bold">Daily Desk</h1>
         <p className="mt-1 max-w-3xl text-xs text-[var(--text-3)]">
-          The morning read, in order — the AI <b>desk brief</b> (biggest moves, material SEC filings, unusual options flow, analyst actions; a pre-open <b>morning run</b> and a post-close <b>evening run</b> each weekday), the day&apos;s Reuters <b>news wire</b>, and the <b>overnight filings</b> desk notes. Research / decision-support, not investment advice.
+          The morning read, in order — the AI <b>desk brief</b> (biggest moves, material SEC filings, unusual options flow, analyst actions; a pre-open <b>morning run</b> and a post-close <b>evening run</b> each weekday), the day&apos;s Reuters <b>news wire</b>, the <b>overnight filings</b> desk notes, and <b>yesterday&apos;s earnings calls</b> — every transcript from the last session, read in full and digested on the desk&apos;s local model. Research / decision-support, not investment advice.
         </p>
       </div>
 
@@ -107,6 +110,15 @@ export default async function DailyDeskPage({
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
               No overnight filings ingested yet — this fills on the nightly scan. The standalone board lives at{" "}
               <Link href={`/u/${universe}/overnight`} className="text-[var(--accent)] hover:underline">Overnight Filings</Link>.
+            </div>
+          )
+        }
+        calls={
+          calls ? (
+            <CallDigestsView universe={universe} data={calls} />
+          ) : (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
+              No earnings-call digests yet — the first run happens on the next desk tick (08:00 / 17:00 ET) or the nightly rebuild.
             </div>
           )
         }

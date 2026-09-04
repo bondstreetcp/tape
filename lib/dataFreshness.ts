@@ -198,6 +198,9 @@ const FEEDS: FeedSpec[] = [
   { file: "filing-index.json", affects: ["/overnight"], label: "Filing semantic index", tier: "core", maxAgeHours: CORE, countPath: "rows", minCount: 20 },
 
   // synthesis — skip-write when there's nothing notable, so a stale stamp is legitimate for days
+  // Earnings-call digests (local-box transcript reads) — every trading day, legitimately empty on an
+  // off-season session, so age-only.
+  { file: "call-digests.json", affects: ["/morning-desk"], label: "Earnings-call digests", tier: "event", maxAgeHours: EVENT },
   { file: "desk-note.json", affects: ["/morning-desk"], label: "Morning desk note", tier: "synthesis", maxAgeHours: SYNTH },
   { file: "valuation-explain.json", affects: ["/valuation-history"], label: "Cheap-vs-history verdicts", tier: "synthesis", maxAgeHours: SYNTH },
   { file: "13f-story.json", affects: ["/superinvestors", "/portfolio"], label: "13F quarter story", tier: "synthesis", maxAgeHours: SYNTH },

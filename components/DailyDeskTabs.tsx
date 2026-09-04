@@ -1,7 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 
-type Tab = "brief" | "wire" | "headlines" | "filings";
+type Tab = "brief" | "wire" | "headlines" | "filings" | "calls";
 
 // Sub-tabs for the Daily Desk — the morning workflow in one place, in reading order: the AI desk
 // brief, the Reuters news wire, then Overnight Filings (2026-08, Sam: "wake up in the morning —
@@ -9,10 +9,11 @@ type Tab = "brief" | "wire" | "headlines" | "filings";
 // separate Research page and is now the third stop). All slots render (server markup kept; the
 // self-fetching Briefing keeps its loaded state) and toggle with CSS, so switching is instant and
 // never refetches. The tab mirrors to ?tab= so wire/filings views are deep-linkable (old /briefing
-// bookmarks land on wire).
-export default function DailyDeskTabs({ initial, brief, wire, headlines, filings }: { initial?: string; brief: ReactNode; wire: ReactNode; headlines?: ReactNode; filings?: ReactNode }) {
+// bookmarks land on wire). "Earnings Calls" (2026-09) is the last stop: every transcript from the last
+// session, read in full on the desk's local model and digested, with the cross-call synthesis on top.
+export default function DailyDeskTabs({ initial, brief, wire, headlines, filings, calls }: { initial?: string; brief: ReactNode; wire: ReactNode; headlines?: ReactNode; filings?: ReactNode; calls?: ReactNode }) {
   const [tab, setTab] = useState<Tab>(
-    initial === "wire" ? "wire" : initial === "headlines" && headlines ? "headlines" : initial === "filings" && filings ? "filings" : "brief",
+    initial === "wire" ? "wire" : initial === "headlines" && headlines ? "headlines" : initial === "filings" && filings ? "filings" : initial === "calls" && calls ? "calls" : "brief",
   );
   const pick = (t: Tab) => {
     setTab(t);
@@ -34,11 +35,13 @@ export default function DailyDeskTabs({ initial, brief, wire, headlines, filings
         <button onClick={() => pick("wire")} className={TB(tab === "wire")} title="Reuters Morning News Call · The Day Ahead">News Wire</button>
         {headlines && <button onClick={() => pick("headlines")} className={TB(tab === "headlines")} title="Market headlines — macro, Fed, trade, energy & geopolitics (free wire, ~5-min live)">Market Headlines</button>}
         {filings && <button onClick={() => pick("filings")} className={TB(tab === "filings")} title="Overnight Filings — AI desk notes on new material SEC filings vs the prior comparable">Overnight Filings</button>}
+        {calls && <button onClick={() => pick("calls")} className={TB(tab === "calls")} title="Earnings Calls — every transcript from the last session, read in full and digested on the desk's local model">Earnings Calls</button>}
       </div>
       <div className={tab === "brief" ? "" : "hidden"}>{brief}</div>
       <div className={tab === "wire" ? "" : "hidden"}>{wire}</div>
       {headlines && <div className={tab === "headlines" ? "" : "hidden"}>{headlines}</div>}
       {filings && <div className={tab === "filings" ? "" : "hidden"}>{filings}</div>}
+      {calls && <div className={tab === "calls" ? "" : "hidden"}>{calls}</div>}
     </div>
   );
 }

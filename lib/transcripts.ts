@@ -156,6 +156,12 @@ async function transcriptCandidates(symbol: string, name: string): Promise<{ url
   }
 }
 
+/** The ticker's recent transcript listing (newest first, dated) WITHOUT fetching bodies — so a nightly batch can
+ *  date-filter before spending a fetch per transcript (scripts/refresh-call-digests). */
+export const listTranscriptCandidates = (symbol: string, name = ""): Promise<{ url: string; date: string }[]> => transcriptCandidates(symbol, name);
+/** Fetch one listed transcript's full text. */
+export const fetchTranscriptAt = (symbol: string, c: { url: string; date: string }): Promise<FullTranscript | null> => fetchTranscript(symbol, c);
+
 async function fetchTranscript(symbol: string, c: { url: string; date: string }): Promise<FullTranscript | null> {
   try {
     const pres = await fetch(c.url, { headers: { "User-Agent": BROWSER_UA }, signal: deadline(12_000) });

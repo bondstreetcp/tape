@@ -18,6 +18,7 @@ import { daysUntil } from "../lib/calendar";
 import { selectDeskActions, actionVerb } from "../lib/deskAnalyst";
 import { fmtDate } from "../lib/format";
 import { loadOvernightFilings } from "../lib/overnightFilings";
+import { loadCallDigests, sessionDigests } from "../lib/callDigests";
 import { getOptionsFlow } from "../lib/optionsFlow";
 import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { getNewsChecked, pickHeadlines, CAUSAL_WINDOW_DAYS } from "../lib/news";
@@ -92,10 +93,11 @@ async function main() {
     return;
   }
 
-  const [snap, catalysts, overnight] = await Promise.all([
+  const [snap, catalysts, overnight, callDigests] = await Promise.all([
     loadSnapshot(BASE).catch(() => null),
     loadCatalysts().catch(() => ({} as CatalystMap)),
     loadOvernightFilings().catch(() => null),
+    loadCallDigests().catch(() => null),
   ]);
   const flow = getOptionsFlow();
   // Coverage-aware (2026-08-15 sweep): a 429 storm thins the ~140-name scan to a handful of survivors
@@ -317,6 +319,13 @@ async function main() {
       return `${f.ticker} ${f.form}${t} [${f.impact}/${f.sentiment}]: ${f.headline}${wc ? ` | ${wc}` : ""}${f.decisionTakeaway ? ` | takeaway: ${f.decisionTakeaway}` : ""}`;
     });
 
+  // --- Yesterday's earnings calls: the local box's transcript digests — the "what management actually said" layer ---
+  const callRows = callDigests ? sessionDigests(callDigests).slice(0, 14) : [];
+  const callLines = [
+    ...(callDigests?.synthesis && callRows.length ? [`CROSS-CALL READ (${callDigests.synthesis.sessionDay}, ${callDigests.synthesis.n} calls): ${callDigests.synthesis.tldr}`] : []),
+    ...callRows.map((d) => `${d.symbol} (call ${d.callDate} · tone ${d.tone} · guidance ${d.guidance.action}${d.guidance.detail ? `: ${d.guidance.detail}` : ""}): ${d.tldr}${d.kpis.length ? ` | ${d.kpis.slice(0, 2).join("; ")}` : ""}`),
+  ];
+
   // --- Options flow aggregated per name → call/put skew + total premium ---
   const byName = new Map<string, { call: number; put: number; chg: number | null; top: string }>();
   for (const e of (flow?.entries ?? []).filter((x) => x.unusual)) {
@@ -474,6 +483,7 @@ async function main() {
     `${SCHEMA_HINT}\n` +
     block("BIGGEST MOVES (1-day, S&P 500; with 1w/YTD trend, sector, size, valuation, 52w-position, next-earnings, catalyst / grounded web-search reason / news, MOVE EVIDENCE: sector residual + peer tape + short-vol + Reddit buzz)", movers) +
     block("MATERIAL NEW SEC FILINGS (with what-changed + the model's takeaway)", filings) +
+    block("EARNINGS CALL DIGESTS — every transcript from the last session, read in full by the desk's local model. Use for the 'what management actually said' layer on names that reported (tone, guidance posture, the figures they stated); the CROSS-CALL READ line is thematic context for the tldr. Cite the specific companies listed here — never a call that isn't listed", callLines) +
     block("UNUSUAL OPTIONS FLOW (aggregated per name → call/put skew)", flows) +
     // Each line is prefixed with its OWN date. The model must use it — an item from two sessions ago
     // is not today's news, and saying so ("Friday's downgrade…") is the honest framing.
@@ -533,6 +543,7 @@ async function main() {
   // wrong-company /stock/ link on the home dashboard.
   const knownSyms = new Set<string>(stocks.map((s) => s.symbol));
   for (const f of overnight?.items ?? []) if (f?.ticker) knownSyms.add(String(f.ticker).toUpperCase());
+  for (const d of callDigests?.digests ?? []) if (d?.symbol) knownSyms.add(d.symbol);
   const cleanTickers = (t: unknown) =>
     (Array.isArray(t) ? t.filter((x) => typeof x === "string").map((x) => x.toUpperCase()).filter((x) => knownSyms.has(x)).slice(0, 6) : []);
   const sections = out.sections

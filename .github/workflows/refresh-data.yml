@@ -811,6 +811,17 @@ jobs:
         run: npm run push-alerts
         continue-on-error: true
 
+      # Earnings-call digests — every earnings-call transcript from the last session, read in full and
+      # digested (on the NAS this routes to the local EPYC box via LLM_LOCAL_*; here it is the cloud
+      # default tier). BEFORE the desk note so the brief can cite what management said. Wall-clock
+      # budgeted; names not reached carry to the next tick. Skips cleanly without an LLM key.
+      - name: Refresh earnings-call digests
+        if: ${{ env.FULL == 'true' || env.DESK == 'true' }}
+        run: npm run refresh-call-digests
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
       # Morning Desk Note — ONE GLM brief fusing the night's movers + catalysts + overnight
       # filings + options flow + analyst actions. Must run AFTER those inputs are refreshed
       # (data/catalysts.json, overnight-filings.json, options-flow.json + the snapshot).
