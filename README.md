@@ -1,201 +1,102 @@
-# Index Sector Screener
+# Tape
 
-A local dashboard for tracking index constituents by sector and industry,
-spotting **52-week highs and lows**, and comparing stocks on **line charts** with
-technical indicators. Switch between index universes, click a sector (e.g. XLV)
-for a price chart + a finviz-style treemap, then click an industry to see every
-constituent compared on one chart.
+A self-hosted equity-research terminal. About a hundred boards — screens, earnings, options,
+event-driven, research, macro — across 18 index universes (S&P 500, Nasdaq 100, Russell 1000/3000,
+S&P 1500 and thirteen international indices), rebuilt every night by a pipeline of ~100 scripts and
+served from static JSON feeds. Live at `https://tape.truporchhomesvm.com` from a Synology NAS behind a
+Cloudflare tunnel.
 
-![flow](https://img.shields.io/badge/Next.js-16-black) ![data](https://img.shields.io/badge/data-Yahoo%20Finance-blueviolet)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-black) ![node:test](https://img.shields.io/badge/tests-800%2B-green) ![data](https://img.shields.io/badge/data-R2%20hydrated-blueviolet)
 
-## Features
+Public disclosures and market data, organised for a desk. Not investment advice.
 
-- **Four index universes** — switch between **S&P 500**, **Nasdaq 100**,
-  **Russell 1000**, and **Broad 1500 (S&P 1500)** from any page. (The true
-  Russell 3000 holdings aren't available from free sources, so the broad
-  ~1,500-name S&P 1500 stands in for it.)
-- **11 sector ETFs** (XLK, XLV, XLF, XLY, XLC, XLI, XLP, XLE, XLU, XLRE, XLB) as
-  entry points, sorted by performance and color-coded.
-- **Screener** — sort/filter the whole universe by return (any timeframe),
-  52-week proximity, market cap, P/E, forward P/E, P/B, dividend yield, and
-  sector. Quick presets for stocks near their 52-week high/low. A **Fundamentals**
-  column set + filters adds revenue growth, **operating-margin expansion**, the
-  **DSO trend** (ballooning-receivables red flag), FCF margin, and ROE.
-- **Home dashboard extras** — **top movers** (gainers/losers with the headline
-  driving each) and a **recent analyst-actions** feed (upgrades/downgrades +
-  target changes across the largest names).
-- **Ticker search** in the header on **every page**, and a **watchlist** (★,
-  saved in your browser) you can fill from the screener or any stock page. The
-  watchlist shows **signal badges** per name — at/near 52-week high or low,
-  above/below the 200-day MA, and golden/death cross — plus a summary count.
-- **Market monitor** (Markets tab) — a cross-asset board: major **equity
-  indices, Treasury yields, FX, commodities, and crypto** with price and %
-  change, color-coded, refreshed on a short cache window.
-- **Macro dashboard** (Macro tab) — the U.S. **Treasury yield curve** (now vs 1
-  month / 1 year ago) plus Fed Funds, CPI & core CPI (YoY), unemployment, real
-  GDP, and IG/HY credit spreads — from the free **FRED** API (no key needed).
-- **Earnings calendar** (Earnings tab) — upcoming reports across the universe +
-  watchlist, grouped by day with before-open/after-close timing and forward EPS.
-- **News** — per-ticker headlines on every stock page and a market-wide feed on
-  the Market Monitor (Yahoo).
-- **Market heatmap** (Heatmap tab) — a finviz-style treemap of the whole
-  universe grouped by sector, sized by market cap and colored by return.
-- **Eight timeframes** — 1D, 1W, 3M, 6M, YTD, 1Y, **3Y, 5Y** — switchable
-  everywhere; the treemap recolors and charts re-slice instantly.
-- **Industry line-chart comparison** — click an industry (a chip on the sector
-  page, or its label in the treemap) to see **every constituent as its own
-  line**. Lines are rebased to % change so stocks at very different price levels
-  are directly comparable, and the sector ETF is overlaid as a dashed reference.
-  The legend is interactive: click to hide/show a line, hover to highlight,
-  sorted by performance with 52-week badges.
-- **Technical indicators** — toggle **SMA (20/50/150/200), EMA (12/26),
-  Bollinger Bands** as overlays on any single-stock or sector-ETF chart, plus
-  **MACD** and **RSI** as sub-panels. Computed over the **full price history**
-  then sliced to the view, so a 200-day SMA is correct even on a 3-month zoom.
-  Every constituent has a **dedicated stock page** (its own timeframe, a
-  **line / candlestick toggle** with OHLC readout, a **volume panel**, and the
-  full indicator set) plus a **Compare box** to overlay any other ticker(s)
-  rebased to % for relative performance (e.g. PEP vs KO) — reachable from a
-  treemap tile or any comparison legend.
-- **Company financials & analytics** — from a stock page, open a FactSet-style
-  page with four tabs:
-  - **Statements:** quarterly & annual income statement, balance sheet, and cash
-    flow (with margins and a revenue/net-income trend). The annual income
-    statement adds forward-year **FY+1E / FY+2E consensus-estimate** columns
-    (real analyst consensus where available; the later year falls back to
-    consensus-growth derivation, flagged with `*`).
-  - **Estimates & Stats:** analyst **consensus** (rating distribution, mean
-    target & upside, forward EPS, est. earnings/revenue growth), **earnings
-    surprise** history, **recent analyst actions** (upgrades/downgrades + target
-    changes), **valuation** (P/E, PEG, P/S, P/B, EV/EBITDA, beta),
-    **profitability** (margins, ROE/ROA), **financial health**, and short interest.
-  - **Peers:** the company vs its sub-industry peers on valuation (P/E, fwd P/E,
-    P/B, yield), returns, and market cap — company highlighted, with a peer
-    median; sortable, straight from the snapshot (no extra fetching).
-  - **Ownership:** institutional **and** mutual-fund holders (% held / value /
-    change) with an ownership breakdown, plus **insider activity from SEC EDGAR
-    Form 4s** — a Bloomberg-style price chart with green/red insider buy/sell
-    markers and an infinite-scroll transaction history back to ~2003.
-  - **Filings & Calls:** every material SEC filing (10-K/Q, 8-K, proxy, …) from
-    EDGAR, with **earnings releases** (8-K item 2.02) highlighted and readable
-    **inline**. Full earnings-call / investor-day / conference *transcripts* are
-    a paid data product — wire a transcript API key to surface them here too.
-  - **Options:** the full **options chain** (Yahoo) — calls / puts by strike for
-    any listed expiry, with bid/ask, volume, open interest, and implied
-    volatility; ATM row highlighted, in-the-money contracts shaded. Plus an **IV
-    skew** (IV by strike) and **term-structure** (ATM IV by expiry) chart.
-  - **Profile:** business summary, key facts, executives & comp, upcoming
-    earnings/ex-dividend dates, and dividend history.
+## What it does
 
-  All fetched live from Yahoo on demand and cached 24h (not baked into the snapshot).
-- **Sector & sub-industry comparison** — from the home page, compare the SPDR
-  sectors head-to-head (XLK vs XLY vs XLI …); from any sector, compare its
-  sub-industries as cap-weighted indexes rebased to % (with the whole sector
-  overlaid). Toggle the legend to isolate, e.g., *Managed Health Care vs Health
-  Care Equipment*.
-- **Treemap heatmap** per sector: market-cap-weighted boxes grouped by GICS
-  sub-industry, green→red by the selected timeframe's return.
-- **52-week high/low highlighting** — badges (▲/▼) on stocks within a chosen
-  threshold (1/2/5/10%) of their 52-week extreme, plus a filter that dims the
-  rest so candidates pop.
-- **Click any stock** for a detail panel: its own price chart with indicators, a
-  52-week range bar, and returns across all eight timeframes.
-- **Index breadth** on the home page: advancers/decliners and counts near highs
-  and lows.
+- **Screens** — universe screener with fundamentals, 52-week and trend signals, coiled/dispersion/
+  breadth boards, insiders, buybacks, super-investor 13Fs, Congress trades, government contracts,
+  lobbying, activism and short campaigns.
+- **Earnings** — the earnings desk and calendar, a pre-earnings prep engine with a graded track
+  record, implied vs realised moves, guidance credibility, the two-year comp-stack analyzer, and
+  same-day earnings-call digests.
+- **Options** — dealer gamma, realised-vol cone, put-writing and covered-call/wheel workbenches, skew
+  and term structure, catalyst and biotech event vol.
+- **Event-driven** — overnight SEC filings with AI desk notes and risk-factor redlines, spin-offs,
+  IPOs and lock-ups, tenders, merger and SPAC arb, convertibles, holdco NAV, CEF discounts.
+- **Markets** — the morning desk (desk note, market headlines wire, call digests), macro and rates
+  dashboards with free alt-data, sector rotation, positioning, the Fed and policy trackers.
+- **Research** — per-stock pages with financials, filings, transcripts, compensation and supply
+  chain; a research lake (Parquet on R2) queried with DuckDB; Ask, briefing and compare routes.
 
-## Setup
+The doctrine throughout: **code verifies, models propose.** Models write narrative; code owns every
+number, every quote and every ticker, and a feed that fails a night degrades to *stale*, never to
+*empty*.
+
+## Quick start
 
 ```bash
 npm install
-
-# 1. Build the constituent lists for every universe (Wikipedia)
-npm run fetch-constituents
-
-# 2. Pull prices for the union of all universes + the 11 sector ETFs
-npm run refresh-data        # ~1,650 symbols, 5y daily — several minutes
-
-# 3. Run it
-npm run dev                 # http://localhost:3000  → redirects to /u/sp500
+npm run data-from-r2      # hydrate data/ from R2 (needs the four LAKE_S3_* values in .env.local)
+npm run dev               # http://localhost:3000 → /u/sp500
 ```
 
-> Testing quickly? `LIMIT=60 npm run refresh-data` builds a subset of the union.
+Without R2 access, build a small tree yourself: `npm run fetch-constituents` then
+`LIMIT=60 npm run refresh-data`. Every other feed has an `npm run refresh-<feed>` script; most run
+without keys, the model-backed ones need `OPENROUTER_API_KEY`. See [docs/ENV.md](docs/ENV.md) for
+every knob and its default.
 
-### Optional: real Russell 3000 (iShares IWV)
+## Verify a change
 
-The broad universe defaults to the **S&P 1500** stand-in. To use the *actual*
-Russell 3000, download the holdings from the
-[iShares IWV fund page](https://www.ishares.com/us/products/239714/ishares-russell-3000-etf)
-(**Holdings → Detailed Holdings and Analytics → Download**), save the file as
-`data/iwv-holdings.csv`, then re-run `npm run fetch-constituents` followed by
-`npm run refresh-data`. A `russell3000` universe is built from that file
-(iShares blocks automated fetching, so this one CSV is grabbed by hand; it
-changes only quarterly). See `scripts/iwv.ts`.
-
-## How data works
-
-All prices come from Yahoo Finance via [`yahoo-finance2`](https://github.com/gadicc/node-yahoo-finance2)
-— **no API key, no signup**. `npm run refresh-data` fetches the **union** of all
-universes' symbols once (deduped), pulls **5 years** of daily history (for 3Y/5Y),
-and writes static JSON:
-
-- `data/constituents/<universe>.json` — membership + GICS classification per
-  universe (committed seed; regenerate with `npm run fetch-constituents`).
-- `data/series/symbols/<SYM>.json` — `{ daily, intraday }` compact `[t, c]`
-  series, shared across universes (deduped). Intraday is fetched only for S&P 500
-  & Nasdaq 100 names (enables 1D/1W comparison lines); Russell universes are
-  daily-only.
-- `data/<universe>/snapshot.json` — every stock's returns, market cap, and
-  52-week distances, plus sector aggregates, for that universe.
-
-The app only reads those files, so browsing is instant and never hits Yahoo's
-rate limits. Re-run `npm run refresh-data` after market close to refresh.
-
-### Automatic daily refresh (deployed)
-
-`.github/workflows/refresh-data.yml` runs the fetch on GitHub's runners every
-weekday at 22:00 UTC (after the US close), commits the updated data, and pushes —
-which makes Vercel auto-redeploy with fresh prices. No secrets or extra services
-needed; it uses the repo's built-in token. Trigger it manually anytime from the
-repo's **Actions → Refresh market data → Run workflow**.
-
-> The fetch runs on GitHub Actions (not Vercel) because Vercel's serverless
-> functions have a strict time limit and a read-only filesystem, while the full
-> ~1,650-symbol pull takes several minutes and must write the data files.
-
-## Project layout
-
-```
-app/
-  page.tsx                                  redirect → /u/sp500
-  u/[universe]/page.tsx                     home dashboard (sector grid + breadth)
-  u/[universe]/sector/[etf]/page.tsx        sector detail (chart + treemap + industries)
-  u/[universe]/sector/[etf]/[industry]/...  industry line-chart comparison
-  api/series/[symbol]/route.ts              lazy per-symbol series (stock detail chart)
-components/
-  HomeDashboard / SectorView / IndustryView   page orchestrators
-  UniverseSwitcher.tsx     index-universe dropdown
-  IndicatorChart.tsx       single-series chart + SMA/EMA/BB/MACD/RSI toggles
-  MultiLineChart.tsx       rebased multi-line industry comparison
-  Treemap.tsx              d3-hierarchy treemap, 52w badges, clickable industries
-lib/
-  universes.ts             the 4 index universes
-  sectors.ts               GICS sector ↔ SPDR ETF mapping
-  timeframes.ts            8 timeframes, lookbacks, color clamps
-  indicators.ts            SMA / EMA / MACD / RSI / Bollinger math
-  compute.ts               52w helpers, series slicing, rebased comparison
-scripts/
-  fetch-constituents.ts    build per-universe lists from Wikipedia
-  build-data.ts            pull Yahoo data → data/**.json
+```bash
+npm test                  # node:test, 800+ pure tests; the registry, mirror and manifest tests enforce the contracts
+npx tsc --noEmit
+npx next build            # required for anything a page imports — an fs import reached from a client component only fails here
 ```
 
-## Notes & caveats
+## How it runs
 
-- Sector membership is each universe's stocks grouped by GICS sector — close to,
-  but not identical to, each SPDR ETF's exact holdings.
-- Russell 1000 & S&P 1500 are **daily-only**, so their 1D/1W comparison lines are
-  limited; 3M and longer work everywhere. S&P 500 & Nasdaq 100 have intraday.
-- Indicators like SMA 200 need long windows — they're most meaningful on 3M+.
-- 52-week high/low come from Yahoo's `fiftyTwoWeekHigh`/`Low` (intraday-inclusive).
-- Yahoo is an unofficial source; if a refresh starts failing, per-symbol
-  fallbacks keep partial data flowing — check `yahoo-finance2` for breaking changes.
 ```
+GitHub main ──▶ tape-runner (NAS): run-tick hourly · quotes / desk / news / FULL at 23:00 UTC
+                    │ hydrate prior tree from R2 (hard gate) → ~100 refresh steps → upload
+                    ▼
+              Cloudflare R2: site-data/data.tar.gz + per-object feeds + the runner's secrets channel
+                    │
+                    ▼
+              tape-web (NAS, A/B slots) ── cloudflared ──▶ tape.<domain>      Vercel = paused read replica
+```
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the two-page map: topology, the feed contracts
+(registry, write guard, incremental gates, counted suppressed errors, tick history), the LLM layer and
+its guards, observability, and how to add a feed, a knob or a model call without breaking the tests.
+
+## Docs
+
+| Doc | What |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | the system map |
+| [ENV.md](docs/ENV.md) | every environment knob (generated from `lib/envManifest.ts`) |
+| [SETUP-NAS-CRON.md](docs/SETUP-NAS-CRON.md) · [SETUP-NAS-WEB.md](docs/SETUP-NAS-WEB.md) · [SETUP-NAS-BACKUP.md](docs/SETUP-NAS-BACKUP.md) | the runner, the web slots, backups |
+| [SETUP-clean-ip-worker.md](docs/SETUP-clean-ip-worker.md) | the box that bakes the per-stock cache and the call digests |
+| [SETUP-local-llm.md](docs/SETUP-local-llm.md) · [SETUP-auth.md](docs/SETUP-auth.md) | the local model tier; Supabase auth |
+| [DATA-ON-R2.md](docs/DATA-ON-R2.md) · [RESEARCH-LAKE.md](docs/RESEARCH-LAKE.md) | the data tree on R2; the Parquet lake |
+| [LLM-INTEGRITY-AUDIT.md](docs/LLM-INTEGRITY-AUDIT.md) | how model output is validated, feed by feed |
+
+## Layout
+
+```
+app/          routes — boards under app/u/[universe]/, API routes under app/api/
+components/   one client view per board
+lib/          shared code: feed registry + guards, llm + validation, scriptKit, nav, universes
+scripts/      the pipeline: run-tick, refresh-* (one per feed), build-*, worker/, nas/
+tests/        node:test suites
+docs/         the docs above
+data/         the feed tree — gitignored, hydrated from R2, written only by the runner
+```
+
+## Caveats
+
+- Yahoo Finance is an unofficial source and degrades some payloads by IP; the per-stock cache and
+  the call transcripts are baked on a clean-IP box for that reason.
+- International universes get the boards whose data paths exist for them; SEC-only boards show a
+  notice there.
+- Everything on the site is derived from public disclosures and market data with model-written
+  narrative on top. It is research tooling, not advice.
