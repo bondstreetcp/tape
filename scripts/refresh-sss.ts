@@ -29,6 +29,8 @@ import { loadSnapshot } from "../lib/data";
 import { SSS_INDUSTRIES, isCompMetricLabel, type SssData, type SssGuide, type SssPeriod, type SssTicker } from "../lib/sameStoreSales";
 import { COMP_GUIDE_SCHEMA, COMP_GUIDE_SYSTEM, compGuideWindows, sanitizeCompGuide } from "../lib/compGuide";
 import { advanceGate } from "../lib/incrementalGate";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 // Load .env.local into process.env (without printing secrets).
 try {
@@ -49,7 +51,6 @@ const INDUSTRY = (process.env.INDUSTRY || "").trim(); // e.g. "Restaurants" for 
 // guide field spreads over a couple of nights); a new print's outlook is never capped. 0 = new prints only.
 const GUIDE_MAX = Number(process.env.GUIDE_MAX ?? 80);
 const GUIDE_MODEL = process.env.COMP_GUIDE_MODEL || FLASH_MODEL; // mechanical schema-fill → the cheap tier (like refresh-guidance)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const KW = /comparable|same[- ]?(store|restaurant|shop|location|cafe|salon)|identical sales|like[- ]for[- ]like|comp(s|arable)?\s+(restaurant|store|sales)|system[- ]wide/i;
 function grepWindows(text: string, pad = 900, cap = 15000): string {
@@ -263,10 +264,10 @@ async function buildWatchSet(): Promise<{ sym: string; industry: string }[]> {
     }
     // Persist after every name so a long backfill survives an interrupt/timeout.
     data.generatedAt = new Date().toISOString();
-    writeFileSync(OUT, JSON.stringify(data));
+    await writeFeedOrExit("same-store-sales.json", data);
   }
 
   data.generatedAt = new Date().toISOString();
-  writeFileSync(OUT, JSON.stringify(data));
+  await writeFeedOrExit("same-store-sales.json", data);
   console.log(`\nWrote ${OUT} · ${touched} names updated · ${guideFills} comp outlooks read · ${calls} LLM calls · ${Object.keys(data.byTicker).length} total in file`);
 })();

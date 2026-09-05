@@ -13,6 +13,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { CongressTrade } from "../lib/congress";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdf = require("pdf-parse");
 
@@ -95,7 +97,6 @@ ${lines.join("\n")}`;
   return [];
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Keep lines that plausibly belong to a transaction row (a date, a $ amount, a type word, or an
 // upper-case company-ish name) — drops most of the repeated form boilerplate to cut tokens/cost.
@@ -185,7 +186,7 @@ async function main() {
     },
     trades,
   };
-  await fs.writeFile(path.join(DATA_DIR, "trump-trades.json"), JSON.stringify(out));
+  await writeFeedOrExit("trump-trades.json", out);
   console.log(`\nDone. ${trades.length} trades (${buys} buys / ${sells} sells), $${(out.totals.notionalLow / 1e6).toFixed(0)}M–$${(out.totals.notionalHigh / 1e6).toFixed(0)}M → data/trump-trades.json`);
 }
 

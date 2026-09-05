@@ -7,13 +7,13 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { computeForcedFlow, SPINOFF_ROSTER, type SpinoffRow, type SpinoffsData, type SpinPipelineRow } from "../lib/spinoffs";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 const FILE = path.join(process.cwd(), "data", "spinoffs.json");
 const SCREENED = path.join(process.cwd(), "data", "spinoff-screened.json");
@@ -319,7 +319,7 @@ async function main() {
   const prior: SpinoffsData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: "", rows: [], pipeline: [] }));
   const pipeline = await discoverPipeline(prior.pipeline ?? []).catch((e) => { console.warn(`pipeline failed: ${e?.message || e}`); return prior.pipeline ?? []; });
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: new Date().toISOString(), rows, pipeline } satisfies SpinoffsData));
+  await writeFeedOrExit("spinoffs.json", { generatedAt: new Date().toISOString(), rows, pipeline } satisfies SpinoffsData);
   console.log(`\nwrote ${rows.length} completed spinoffs + ${pipeline.length} upcoming.`);
   for (const p of pipeline.slice(0, 8)) console.log(`  [reg ${String(p.daysInReg).padStart(3)}d] ${(p.ticker || p.spinco).slice(0, 22).padEnd(22)} ← ${p.parent ?? "?"}${p.expectedTiming ? ` · ${p.expectedTiming}` : ""}`);
 }

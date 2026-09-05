@@ -15,12 +15,11 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { chatJSON, PRO_MODEL } from "../lib/llm";
 import { stripHtml } from "../lib/edgarSearch";
+import { BROWSER_UA as UA, sleep } from "../lib/scriptKit";
 
 const CANDIDATE = process.env.CANDIDATE || "qwen/qwen-2.5-72b-instruct";
 const GLM = "z-ai/glm-5.2";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const SEC_UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, { headers: { "User-Agent": /sec\.gov/.test(url) ? SEC_UA : UA } });

@@ -6,9 +6,10 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ApeWisdomData, ApeWisdomEntry } from "../lib/apewisdom";
+import { RESEARCH_UA, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const OUT = join(process.cwd(), "data", "apewisdom.json");
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Raw { rank: number; ticker: string; name: string; mentions: number; upvotes: number; rank_24h_ago: number; mentions_24h_ago: number }
 
@@ -18,7 +19,7 @@ interface Raw { rank: number; ticker: string; name: string; mentions: number; up
   for (let page = 1; page <= pages && page <= 12; page++) {
     try {
       const r = await fetch(`https://apewisdom.io/api/v1.0/filter/all-stocks/page/${page}`, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; tape-research)", Accept: "application/json" },
+        headers: { "User-Agent": RESEARCH_UA, Accept: "application/json" },
       });
       if (!r.ok) { console.log(`  page ${page}: HTTP ${r.status}`); break; }
       const j: any = await r.json();
@@ -46,6 +47,6 @@ interface Raw { rank: number; ticker: string; name: string; mentions: number; up
     }
   }
   const data: ApeWisdomData = { generatedAt: new Date().toISOString(), byTicker };
-  writeFileSync(OUT, JSON.stringify(data));
+  await writeFeedOrExit("apewisdom.json", data);
   console.log(`Wrote ${OUT} · ${Object.keys(byTicker).length} tickers with Reddit buzz`);
 })();

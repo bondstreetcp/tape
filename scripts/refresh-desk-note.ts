@@ -33,6 +33,8 @@ import { buildBinaryWeek } from "../lib/binaryWeek";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import type { DeskNote, DeskNoteSection, DeskNoteWatch, DeskTape, DeskCalendar, DeskSource } from "../lib/deskNote";
 import { deskBriefHasContent } from "../lib/deskNote";
+import { mapPool, readJson } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const BASE = "sp500"; // headline US universe the brief is keyed to
@@ -48,8 +50,6 @@ const GROUNDED_MODEL = process.env.DESK_GROUNDED_MODEL || "gemini-2.5-flash";
 // Bounded by DESK_GROUNDED_MAX, and grounding is free to ~5k searches/mo. Override with DESK_GROUNDED_BIG.
 const GROUNDED_BIG_MOVE_PCT = Number(process.env.DESK_GROUNDED_BIG) || 8;
 
-const readJson = async <T,>(f: string): Promise<T | null> =>
-  fs.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
 
 const SYSTEM =
   "You are a senior markets-desk strategist writing the morning brief for a sharp portfolio manager. You are given PRE-SELECTED overnight data WITH CONTEXT (trend, 52-week position, valuation, next-earnings, options skew, implied upside). " +
@@ -68,16 +68,6 @@ const sizeLabel = (mc: number) => (mc >= 2e11 ? "mega" : mc >= 1e10 ? "large" : 
 
 /** Bounded-concurrency map — used for the desk-note's grounded per-mover "why did it move" pull (see the
  *  no-catalyst block). Same shape as every other refresh script's local pool; kept local by convention. */
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let i = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
-    }),
-  );
-  return out;
-}
 
 async function main() {
   if (!(await llmConfigured())) {
@@ -584,7 +574,7 @@ async function main() {
     moveSources,
     counts,
   };
-  await fs.writeFile(path.join(DATA, "desk-note.json"), JSON.stringify(note));
+  await writeFeedOrExit("desk-note.json", note);
   console.log(`desk-note: wrote ${sections.length} sections (${sections.reduce((n, s) => n + s.bullets.length, 0)} bullets) + ${watchToday.length} watch items from ${JSON.stringify(counts)}`);
 }
 

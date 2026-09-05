@@ -37,6 +37,7 @@ import path from "path";
 import { chatJSON } from "../lib/llm";
 import { flushSync } from "../lib/llmUsage";
 import { stripHtml } from "../lib/edgarSearch";
+import { BROWSER_UA as UA, pct, sleep } from "../lib/scriptKit";
 
 const CONTENDERS = (process.env.MODELS || "z-ai/glm-5.2,moonshotai/kimi-k3")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -52,9 +53,7 @@ const LEGS = (process.env.LEGS || "abcd").toLowerCase();
 const RUNS = Math.max(1, Math.min(10, Number(process.env.RUNS) || 1));
 const NO_ADVICE = "This is analytical commentary, not personalized investment advice.";
 
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const SEC_UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const short = (m: string) => m.replace(/^.*\//, "");
 
 async function fetchText(url: string): Promise<string> {
@@ -257,8 +256,7 @@ Return JSON: { "picks": [ { "symbol": "TICKER", "thesis": "...", "risk": "...", 
 async function legD(): Promise<{ input: string; outs: SynthOut[]; judged: PanelResult }> {
   const MULT_LABEL: Record<string, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
   const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : `$${(v / 1e6).toFixed(0)}M`);
-  const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
-  const vh = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "valuation-history.json"), "utf8"));
+    const vh = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "valuation-history.json"), "utf8"));
   const snap = JSON.parse(await fsp.readFile(path.join(process.cwd(), "data", "russell3000", "snapshot.json"), "utf8"));
   const ctx = new Map((snap?.stocks || []).map((s: any) => [s.symbol, s] as const));
   const cand = Object.entries(vh.names as Record<string, any>)

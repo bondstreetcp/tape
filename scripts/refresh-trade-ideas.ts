@@ -12,6 +12,7 @@ import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { cleanTicker, narrative } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
 import { sideLabel, type TradeIdea, type TradeDeskData, type Conviction } from "../lib/tradeIdeas";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const PICK = Number(process.env.TRADE_PICKS || 8);
@@ -183,7 +184,7 @@ async function main() {
     pool: pool.length,
     ideas,
   };
-  await fs.writeFile(path.join(DATA, "trade-ideas.json"), JSON.stringify(data));
+  await writeFeedOrExit("trade-ideas.json", data);
   const withThesis = ideas.filter((i) => i.thesis).length;
   console.log(`trade-ideas: wrote ${ideas.length} ideas (${withThesis} narrated) · week of ${data.weekOf}.`);
   for (const i of ideas) console.log(`  ${i.symbol.padEnd(6)} ${sideLabel(i.side).padEnd(9)} ${i.conviction ?? "—"}  ${i.structure}`);

@@ -13,13 +13,13 @@ import { inflateRawSync } from "zlib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { loadSnapshot } from "../lib/data";
 import type { CongressTrade, TickerTally, MemberTally, CongressData, TradeType } from "../lib/congress";
+import { BROWSER_UA as UA, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const BASE = "https://efdsearch.senate.gov";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 const DAY = 864e5;
 const WINDOW_DAYS = 300;
 const MAX_REPORTS = 800;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const jar: Record<string, string> = {};
 function setCookies(res: Response) {
@@ -305,7 +305,7 @@ async function main() {
   const cap = (ch: string, n: number) => trades.filter((t) => t.chamber === ch).slice(0, n);
   trades = [...cap("House", 1500), ...cap("Senate", 700)].sort((a, b) => b.txDate.localeCompare(a.txDate));
   const out: CongressData = { generatedAt: new Date().toISOString(), since: trades.length ? trades[trades.length - 1].txDate : "", trades, topTickers, topMembers };
-  await fs.writeFile(path.join(process.cwd(), "data", "congress.json"), JSON.stringify(out));
+  await writeFeedOrExit("congress.json", out);
   console.log(`Wrote ${trades.length} trades · ${topTickers.length} top tickers · ${topMembers.length} members.`);
   console.log("Most-traded:", topTickers.slice(0, 6).map((t) => `${t.ticker}(${t.count})`).join(", "));
 }

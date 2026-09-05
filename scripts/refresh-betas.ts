@@ -14,10 +14,9 @@
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const DAY = 86_400_000;
 

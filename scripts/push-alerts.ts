@@ -17,15 +17,12 @@ import { listPushSubs, sendNtfy } from "../lib/pushSubs";
 import { evalPushRules, type PushFeeds } from "../lib/pushAlerts";
 import { detectPreannounce } from "../lib/preannounce";
 import { pool } from "../lib/edgar";
+import { readJson } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const SENT_PATH = path.join(DATA, ".tmp", "push-sent.json");
 const DAY = 86_400_000;
 
-const readJson = async <T,>(name: string): Promise<T | null> => {
-  try { return JSON.parse(await fs.readFile(path.join(DATA, name), "utf8")) as T; }
-  catch { return null; }
-};
 
 async function main() {
   const isSender = process.env.TAPE_WRITER === "nas" || process.env.PUSH_ALERTS_FORCE === "1";

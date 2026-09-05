@@ -11,35 +11,21 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
 import { symbolFile } from "../lib/symbolfile";
 import type { Snapshot, SeriesPoint, XY } from "../lib/types";
+import { mapPool, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const SYMBOL_DIR = path.join(DATA_DIR, "series", "symbols");
 const DAY = 86_400_000;
 const NOW = Date.now();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const toPoints = (quotes: any[]): SeriesPoint[] =>
   (quotes || []).filter((q) => q && q.close != null && q.date).map((q) => ({ t: new Date(q.date).getTime(), c: q.close as number })).sort((a, b) => a.t - b.t);
 const toXY = (pts: SeriesPoint[]): XY[] => pts.map((p) => [p.t, round2(p.c)]);
 
-async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 async function main() {
   // union of snapshot symbols + which universes want intraday

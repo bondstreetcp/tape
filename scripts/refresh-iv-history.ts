@@ -14,6 +14,8 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { getOptions } from "../lib/options";
 import type { IvHistoryData, IvSnapshot } from "../lib/ivHistory";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const OUT = path.join(process.cwd(), "data", "iv-history.json");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
@@ -22,16 +24,6 @@ const MIN_MKTCAP = 1e9;
 const CAP = 220; // most names snapshotted per run
 const KEEP = 600; // snapshots kept per ticker (~ several earnings windows)
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } }
-  }));
-  return out;
-}
 
 async function main() {
   const now = Date.now();
@@ -59,7 +51,7 @@ async function main() {
   const data: IvHistoryData = await fsp.readFile(OUT, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: "", byTicker: {} }));
 
   let took = 0;
-  const snaps = await mapPool(work, 6, async (w): Promise<{ sym: string; snap: IvSnapshot } | null> => {
+  const snaps = await mapPoolSafe(work, 6, async (w): Promise<{ sym: string; snap: IvSnapshot } | null> => {
     await sleep(120);
     const base = await getOptions(w.symbol).catch(() => null);
     const spot = base?.underlying ?? null;
@@ -87,7 +79,7 @@ async function main() {
     took++;
   }
   data.generatedAt = new Date().toISOString();
-  await fsp.writeFile(OUT, JSON.stringify(data));
+  await writeFeedOrExit("iv-history.json", data);
   console.log(`snapshotted ${took} names · ${Object.keys(data.byTicker).length} tickers in the history file`);
 }
 

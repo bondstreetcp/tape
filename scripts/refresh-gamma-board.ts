@@ -12,6 +12,7 @@ import { loadSnapshot } from "../lib/data";
 import { getOptions } from "../lib/options";
 import { loadGamma } from "../lib/gammaFetch";
 import { buildGammaRow, type GammaBoardData, type GammaBoardRow } from "../lib/gammaBoard";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const TOP = Number(process.env.GAMMA_TOP || 140);
@@ -26,21 +27,6 @@ const INDEX_ETFS: { symbol: string; name: string }[] = [
   { symbol: "DIA", name: "Dow 30 ETF" },
 ];
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i]); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 // Global throttle gate so we never hammer the options endpoint, regardless of worker count.
 let gate: Promise<void> = Promise.resolve();
@@ -78,7 +64,7 @@ async function main() {
   const targets = [...INDEX_ETFS.map((e) => ({ ...e, sector: "Index ETF" })), ...stocks];
   console.log(`gamma-board: scanning ${targets.length} names (${INDEX_ETFS.length} ETFs + top ${stocks.length} S&P), ${MAX_EXP} expiries each`);
 
-  const built = await mapPool(targets, WORKERS, async (t): Promise<GammaBoardRow | null> => {
+  const built = await mapPoolSafe(targets, WORKERS, async (t): Promise<GammaBoardRow | null> => {
     const g = await loadGamma(t.symbol, chainRetry, MAX_EXP).catch(() => null);
     if (!g) return null;
     return buildGammaRow({

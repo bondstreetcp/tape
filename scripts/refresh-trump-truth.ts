@@ -15,21 +15,20 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import type { Perf, Stance, TickerCall, TrumpStockPost, TrumpStocksData } from "../lib/trumpStocks";
+import { BROWSER_UA as UA, mapPoolSafe, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "trump-truth-stocks.json");
 const TRUMP_ID = "107780257626128497"; // @realDonaldTrump
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36";
 const PAGES = 6; // ~40 posts/page
 const KEEP = 200;
 const DAY = 86_400_000;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface RawPost { id: string; date: string; url: string; text: string }
 
 function htmlToText(html: string): string {
@@ -132,15 +131,6 @@ function perfFrom(series: { t: number; c: number }[], postT: number): Perf {
   return { priceAtPost: at, priceNow: now, sincePct: pct(at, now), d1Pct: pct(at, after(postT + 1.5 * DAY)), w1Pct: pct(at, after(postT + 7 * DAY)), m1Pct: pct(at, after(postT + 30 * DAY)) };
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } }
-  }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -177,7 +167,7 @@ async function main() {
   const symbols = [...new Set(merged.flatMap((p) => p.tickers.map((t) => t.ticker)))];
   console.log(`pricing ${symbols.length} unique tickers…`);
   const seriesMap: Record<string, { t: number; c: number }[] | null> = {};
-  await mapPool(symbols, 6, async (sym) => { seriesMap[sym] = await seriesFor(sym); });
+  await mapPoolSafe(symbols, 6, async (sym) => { seriesMap[sym] = await seriesFor(sym); });
 
   // The hallucination-drop applies to NEW posts only. Prior posts already passed that gate once —
   // re-applying it nightly meant one Yahoo 429 on the re-pricing pass permanently deleted tracked
@@ -194,7 +184,7 @@ async function main() {
   const posts = merged.filter((p) => p.tickers.length);
 
   const data: TrumpStocksData = { generatedAt: nowISO, source, scanned: raw.length, posts };
-  await fsp.writeFile(FILE, JSON.stringify(data));
+  await writeFeedOrExit("trump-truth-stocks.json", data);
   console.log(`\nwrote ${posts.length} stock posts (${dropped} dropped for unpriceable tickers). source: ${source}`);
   for (const p of posts.slice(0, 10)) {
     const t = p.tickers.map((x) => `${x.ticker}(${x.stance[0]}${x.perf?.sincePct != null ? " " + (x.perf.sincePct >= 0 ? "+" : "") + x.perf.sincePct + "%" : ""})`).join(", ");

@@ -20,27 +20,13 @@ import { loadSnapshot, loadSymbolSeries } from "../lib/data";
 import { getOptions } from "../lib/options";
 import { ivFromPut, ivFromCall, realizedVol, realizedVolRank } from "../lib/putwrite";
 import type { VolUniRow, VolUniData } from "../lib/volDislocation";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const UNIVERSE = process.env.VOL_UNIVERSE || "russell1000";
 const MIN_MKTCAP = Number(process.env.VOL_MIN_MKTCAP || 1e9);
 const R = 0.043; // risk-free approx; only affects IV at the margin
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R2>(items: T[], n: number, fn: (x: T, i: number) => Promise<R2>): Promise<R2[]> {
-  const out: R2[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 // GLOBAL rate limiter — serialize the START of every option-chain call ≥350ms apart across all workers
 // (Yahoo throttles bursts regardless of per-name retries). Concurrency then only overlaps latency.
@@ -122,7 +108,7 @@ async function main() {
   console.log(`${UNIVERSE}: ${snap.stocks.length} names → ${pool.length} to probe (mktcap>$${(MIN_MKTCAP / 1e9).toFixed(1)}B, excl ${covered.size} putwrite-covered)`);
   const now = Date.now();
 
-  const built = await mapPool(pool, 8, async (s: any) => {
+  const built = await mapPoolSafe(pool, 8, async (s: any) => {
     const sym: string = s.symbol;
     // realized vol from the LOCAL daily series (no fetch)
     const series = await loadSymbolSeries(sym);

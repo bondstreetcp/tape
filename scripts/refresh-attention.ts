@@ -9,10 +9,10 @@
  */
 import { writeFeedGuarded } from "../lib/feedGuard";
 import type { AttnItem, AttnGroup, AttentionData } from "../lib/attention";
+import { sleep } from "../lib/scriptKit";
 
 const API = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/all-agents";
 const UA = { "User-Agent": "stock-chart-screener (research; equity dashboard)" };
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const DAY = 86_400_000;
 
 type Art = { key: string; label: string; ticker?: string; group: AttnGroup; article: string };

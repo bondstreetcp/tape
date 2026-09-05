@@ -22,6 +22,8 @@ import {
   type TenorId, type PutWriteCandidate, type PutWriteData, type PutSuggestion, type CallSuggestion,
   type BullPutSuggestion, type IronCondorSuggestion,
 } from "../lib/putwrite";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
@@ -35,21 +37,6 @@ const R = 0.043; // risk-free approx (~3M T-bill); only affects delta/IV at the 
 const IVHIST = path.join(DATA, "putwrite-ivhist.json");
 const IVHIST_CAP = 300;
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R2>(items: T[], n: number, fn: (x: T, i: number) => Promise<R2>): Promise<R2[]> {
-  const out: R2[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 // GLOBAL rate limiter. Yahoo throttles bursts of option-chain calls regardless of per-name
 // retries, so serialize the START of every call ≥350ms apart across all workers. Concurrency
@@ -217,7 +204,7 @@ async function main() {
   try { ivhist = JSON.parse(await fsp.readFile(IVHIST, "utf8")); } catch { /* first run */ }
   const today = new Date().toISOString().slice(0, 10);
 
-  const built = await mapPool(screened, 8, async (s) => {
+  const built = await mapPoolSafe(screened, 8, async (s) => {
     const sym: string = s.symbol;
 
     // realized vol + 1y rank from the stored daily series
@@ -282,7 +269,7 @@ async function main() {
     filters: { minMarketCap: MIN_MKTCAP, minRoe: MIN_ROE, maxPe: MAX_PE },
     candidates,
   };
-  await fsp.writeFile(path.join(DATA, "putwrite.json"), JSON.stringify(data));
+  await writeFeedOrExit("putwrite.json", data);
   await fsp.writeFile(IVHIST, JSON.stringify(ivhist));
   const withM1 = candidates.filter((c) => c.puts.m1).length;
   const withM3 = candidates.filter((c) => c.puts.m3).length;

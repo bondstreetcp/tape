@@ -7,14 +7,13 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import YahooFinance from "yahoo-finance2";
 import { INTL_UNIVERSES, YAHOO_SECTOR_TO_ETF, type IntlUniverse } from "../lib/intlConstituents";
 import { ETF_TO_SECTOR, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
 import { snapshotWriteAllowed } from "../lib/snapshotGuard";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const ROOT = path.join(process.cwd(), "data");
 const blocked: string[] = []; // universes whose snapshot collapsed this run (write-guard kept the prior)
 const DAY = 86_400_000;

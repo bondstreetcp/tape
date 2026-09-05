@@ -20,9 +20,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { deadline } from "./deadline";
 import { listTranscriptCandidates, fetchTranscriptAt, type FullTranscript } from "./transcripts";
+import { BROWSER_UA as UA } from "./scriptKit";
 
 const execFileP = promisify(execFile);
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 const LISTING = "https://www.investing.com/news/transcripts";
 const HEADERS = { "User-Agent": UA, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" };
 

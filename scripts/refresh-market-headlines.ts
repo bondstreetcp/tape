@@ -11,13 +11,14 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { fetchLiveMarketHeadlines } from "../lib/marketHeadlinesFetch";
 import type { MarketHeadlinesData } from "../lib/marketHeadlines";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const OUT = path.join(process.cwd(), "data", "market-headlines.json");
 
 async function main() {
   const headlines = await fetchLiveMarketHeadlines(60);
   if (!headlines.length) { console.error("market-headlines: no headlines fetched — not overwriting."); process.exit(1); }
-  await fsp.writeFile(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), headlines } satisfies MarketHeadlinesData));
+  await writeFeedOrExit("market-headlines.json", { generatedAt: new Date().toISOString(), headlines } satisfies MarketHeadlinesData);
   console.log(`market-headlines: wrote ${headlines.length} → ${OUT}`);
   for (const h of headlines.slice(0, 10)) console.log(`  [${h.topic.padEnd(7)}] ${h.title.slice(0, 72)}`);
 }

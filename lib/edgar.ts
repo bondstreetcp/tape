@@ -10,6 +10,7 @@
  */
 import * as cheerio from "cheerio";
 import { deadline, VENDOR_TIMEOUT_MS, VENDOR_BUDGET_MS } from "./deadline";
+import { sleep } from "./scriptKit";
 
 export const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 
@@ -44,7 +45,6 @@ let tickerMap: Map<string, string> | null = null;
 const listCache = new Map<string, F4Filing[]>();
 const subCache = new Map<string, any>();
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // EDGAR (data.sec.gov / www.sec.gov) intermittently throttles bulk scans with 429/503.
 // Without a retry these surface as thrown errors / !res.ok that callers swallow (catch →
 // [] / null), silently dropping a symbol from a scan or a filing's text from a digest.

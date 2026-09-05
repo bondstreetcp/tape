@@ -17,9 +17,9 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { getOptions } from "../lib/options";
 import { netCredit, crossedCredit, computeRiskFlags, type TradeLogData, type TradeRec, type TradeLeg } from "../lib/tradeLog";
+import { sleep } from "../lib/scriptKit";
 
 const FILE = path.join(process.cwd(), "data", "trade-log.json");
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** US market hours as a UTC window: 14:00–20:00 covers ~10:00–16:00 ET (EDT) / ~09:00–15:00 (EST),
  *  the settled mid-session where spreads are honest — not the open/close auctions. */

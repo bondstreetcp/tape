@@ -14,10 +14,11 @@ import * as cheerio from "cheerio";
 import { promises as fs } from "fs";
 import path from "path";
 import { INVESTORS, type Holding, type InvestorPortfolio, type MostOwned, type SuperInvestorsData } from "../lib/superinvestors";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const HEADERS = { "User-Agent": "stock-chart-screener (research; jameslyeh@gmail.com)" };
 const DATA = path.join(process.cwd(), "data");
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const numf = (s: string) => { const n = parseFloat(String(s).replace(/,/g, "")); return Number.isFinite(n) ? n : 0; };
 
 // SEC throttles sustained bursts (429) — one flaky response shouldn't cost a manager the whole
@@ -189,7 +190,7 @@ async function main() {
   const mostOwned = [...owned.values()].sort((a, b) => b.holderCount - a.holderCount || b.totalValue - a.totalValue).slice(0, 40);
 
   const out: SuperInvestorsData = { generatedAt: new Date().toISOString(), investors: portfolios, mostOwned };
-  await fs.writeFile(path.join(DATA, "superinvestors.json"), JSON.stringify(out));
+  await writeFeedOrExit("superinvestors.json", out);
   await fs.writeFile(path.join(DATA, "cusip-map.json"), JSON.stringify(cmap));
   const resolved = Object.values(cmap).filter(Boolean).length;
   console.log(`\nWrote ${portfolios.length} investors · ${mostOwned.length} most-owned · CUSIP cache ${resolved}/${Object.keys(cmap).length} resolved`);

@@ -20,15 +20,16 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
 import { EARNINGS_EXTRA_NAMES } from "../lib/earningsExtraNames";
 import { daysUntil } from "../lib/calendar";
 import { getOptions } from "../lib/options";
 import { getEarningsReactions } from "../lib/earningsReaction";
 import type { EarningsMoveData, EarningsMoveRow } from "../lib/earningsMove";
+import { BROWSER_UA, mapPoolSafe, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 
 const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
@@ -57,21 +58,6 @@ const BUDGET_MIN = Number(process.env.EARNINGS_MOVE_BUDGET_MIN || 30);
 const STALE_LOOKBACK_D = 6;
 const STALE_RECHECK_CAP = 40;
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R2>(items: T[], n: number, fn: (x: T, i: number) => Promise<R2>): Promise<R2[]> {
-  const out: R2[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 let gate: Promise<void> = Promise.resolve();
 function throttle(gap = 350): Promise<void> {
@@ -111,7 +97,7 @@ async function fetchNasdaqCalendar(nowDayEpoch: number, windowDays: number): Pro
       const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${iso}`, {
         signal: ctl.signal,
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "User-Agent": BROWSER_UA,
           Accept: "application/json, text/plain, */*",
           "Accept-Language": "en-US,en;q=0.9",
           Origin: "https://www.nasdaq.com",
@@ -253,7 +239,7 @@ async function main() {
 
   const deadline = Date.now() + BUDGET_MIN * 60_000;
   let budgetSkipped = 0;
-  const built = await mapPool(work, 6, async (s) => {
+  const built = await mapPoolSafe(work, 6, async (s) => {
     // Soonest-first ordering means whatever the budget can't reach is the far-dated tail — and those
     // names keep their prior row rather than vanishing. A killed step, by contrast, wrote nothing.
     if (Date.now() > deadline) { budgetSkipped++; return null; }
@@ -366,7 +352,7 @@ async function main() {
     windowDays: WINDOW,
     rows,
   };
-  await fsp.writeFile(path.join(DATA, "earnings-move.json"), JSON.stringify(data));
+  await writeFeedOrExit("earnings-move.json", data);
   const withHist = rows.filter((r) => r.histAvgMovePct != null).length;
   console.log(`\nwrote ${rows.length} rows (${withHist} with reaction history).`);
   console.log("soonest reporters:");

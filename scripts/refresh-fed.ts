@@ -14,23 +14,15 @@ import path from "path";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { narrative, narrativeList } from "../lib/llmValidate";
 import type { Bias, FedItem, FedKind, FedWatchData } from "../lib/fedWatch";
+import { htmlToText, mapPoolSafe, RESEARCH_UA as UA, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "fed-watch.json");
-const UA = "Mozilla/5.0 (stock-chart-screener research; jameslyeh@gmail.com)";
 const KEEP = 50;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface RawItem { id: string; date: string; title: string; url: string; desc: string; kind: FedKind; speaker: string | null }
 
-function htmlToText(html: string): string {
-  return (html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ")
-    .replace(/&mdash;/g, "—").replace(/&#8217;/g, "'")
-    .replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-}
 async function getText(url: string): Promise<string> {
   const res = await fetch(url, { headers: { "User-Agent": UA } });
   return res.ok ? res.text() : "";
@@ -81,14 +73,6 @@ async function classify(item: RawItem, body: string): Promise<{ bias: Bias; head
   };
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } }
-  }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -113,7 +97,7 @@ async function main() {
   const fresh = raw.filter((r) => !known.has(r.id));
   console.log(`${fresh.length} new to classify`);
 
-  const built = await mapPool(fresh, 4, async (r): Promise<FedItem | null> => {
+  const built = await mapPoolSafe(fresh, 4, async (r): Promise<FedItem | null> => {
     const body = /federalreserve\.gov/.test(r.url) ? extractFedBody(await getText(r.url).catch(() => "")) : "";
     await sleep(150);
     const c = await classify(r, body);
@@ -125,7 +109,7 @@ async function main() {
     .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i)
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
     .slice(0, KEEP);
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, items } satisfies FedWatchData));
+  await writeFeedOrExit("fed-watch.json", { generatedAt: nowISO, items } satisfies FedWatchData);
   console.log(`\nwrote ${items.length} items (${built.filter(Boolean).length} new).`);
   for (const i of items.slice(0, 8)) console.log(`  ${i.date.slice(0, 10)} [${i.bias.padEnd(7)}] ${i.kind.padEnd(10)} ${i.title.slice(0, 60)}`);
 }

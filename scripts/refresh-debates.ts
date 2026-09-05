@@ -24,6 +24,7 @@ import { daysUntil } from "../lib/calendar";
 import { getAnalystActionsDetailed } from "../lib/analystActions";
 import { DEBATES } from "../lib/debateRegistry";
 import { assignEvidence, mergeLedgerAccumulate, summarise, DEFAULT_TAU, type Candidate, type EvidenceEntry, type Standing } from "../lib/debates";
+import { readJson } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 // The universe the analyst pull is keyed to — the same headline US set refresh-desk-note uses.
@@ -31,8 +32,6 @@ const BASE = "sp500";
 const WINDOW_DAYS = Number(process.env.DEBATE_WINDOW_DAYS || 120); // how far back a candidate may be
 const KEEP = Number(process.env.DEBATE_KEEP || 4000);              // ledger rows retained per file
 
-const readJson = async <T,>(f: string): Promise<T | null> =>
-  fs.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
 
 interface OvernightItem {
   ticker: string; accession: string; form: string; filedAt: string; headline: string;

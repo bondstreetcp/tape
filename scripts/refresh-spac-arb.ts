@@ -16,19 +16,18 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { instantFrameIds } from "../lib/secFrames";
 import { SPAC_TRUST_BAND, SHARE_CONCEPTS, PLAUSIBLE_MAX_DISCOUNT, pickCommon, trustPerShare, discountPct, type SpacRow, type SpacArbFile } from "../lib/spacArb";
 import { writeFeedGuarded } from "../lib/feedGuard";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 const TRUST_CONCEPTS = ["AssetsHeldInTrustNoncurrent", "AssetsHeldInTrust", "AssetsHeldInTrustCurrent"];
 const PPS_CONCEPT = "TemporaryEquityRedemptionPricePerShare";
 const LIMIT = Number(process.env.SPAC_LIMIT) || Infinity;
 const DAY = 86_400_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const cikKey = (c: string | number) => String(Number(String(c).replace(/\D/g, "")));
 
 // Returns the parsed JSON, `null` for a genuine 404 (legitimate ABSENCE), or `undefined` when all

@@ -12,9 +12,8 @@
  * (survivorship); turnover counts double-handled shares. Heuristic-grade, not academic.
  * Run: npx tsx scripts/backtest-spinoff-turnover.ts
  */
-import YahooFinance from "yahoo-finance2";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 
 // US spinoffs 2020-2024 (first regular-way date, ± a few days is fine — bars start at the date).

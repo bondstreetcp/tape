@@ -23,6 +23,8 @@ import { getEarningsReactions } from "../lib/earningsReaction";
 import { assemblePreviewContext, predictPrint } from "../lib/earningsPreview";
 import { llmConfigured } from "../lib/llm";
 import { gradeEps, actualDirection, gradeReaction, regradeLegacyEps, type PreviewLogData, type PreviewRec } from "../lib/earningsPreviewLog";
+import { mapPoolSafe } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "earnings-preview-log.json");
@@ -33,19 +35,6 @@ const CAP = Number(process.env.PREVIEW_LOG_CAP || 60); // most new forecasts per
 const KEEP = 500;
 const DAY = 86_400_000;
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 async function main() {
   const now = Date.now();
@@ -101,7 +90,7 @@ async function main() {
   console.log(`${pool.length} un-forecast US names report within ${WINDOW}d → predicting ${work.length} (FLASH)`);
 
   let logged = 0, guarded = 0;
-  await mapPool(work, 4, async (s) => {
+  await mapPoolSafe(work, 4, async (s) => {
     const eIso = new Date(s._e).toISOString();
     const c = await assemblePreviewContext(s.symbol, eIso).catch(() => null);
     if (!c) return;
@@ -139,7 +128,7 @@ async function main() {
   // ── 2. SETTLE — grade forecasts whose print has landed ──
   const open = [...byId.values()].filter((r) => r.status === "awaiting_print" && Number.isFinite(Date.parse(r.earningsDate)) && now >= Date.parse(r.earningsDate));
   let settled = 0, invalidated = 0;
-  await mapPool(open, 4, async (rec) => {
+  await mapPoolSafe(open, 4, async (rec) => {
     const eT = Date.parse(rec.earningsDate);
     // The reaction feed is the settlement source: the print matched within ±5d, with the surprise
     // (the beat/miss actual) and the completed 1-day move. Returns nothing while the reaction session
@@ -211,7 +200,7 @@ async function main() {
   // ── prune + write (read-merge-write: the log never loses prior recs on a partial run) ──
   const all = [...byId.values()].sort((a, b) => Date.parse(b.earningsDate) - Date.parse(a.earningsDate));
   const recs = all.slice(0, KEEP);
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, recs } satisfies PreviewLogData));
+  await writeFeedOrExit("earnings-preview-log.json", { generatedAt: nowISO, recs } satisfies PreviewLogData);
 
   const done = recs.filter((r) => r.status === "settled");
   const dirG = done.filter((r) => r.dirHit != null);

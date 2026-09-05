@@ -9,11 +9,11 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { cefGroup, type Cef, type CefData } from "../lib/cef";
+import { BROWSER_UA as UA, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 const num = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const cleanCat = (c: string) => String(c || "").replace(/^Morningstar US CEF\s*/i, "").trim() || "Other";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // London-listed investment trusts via Morningstar's screener (the same data the AIC's
 // find-&-compare tool uses; the fav18yujpm key is embedded + public). NAV isn't a field, but
@@ -108,7 +108,7 @@ async function main() {
   funds.sort((a, b) => a.discount - b.discount); // most-discounted first
 
   const out: CefData = { generatedAt: new Date().toISOString(), asOf: latest || null, funds };
-  await fs.writeFile(path.join(process.cwd(), "data", "cef.json"), JSON.stringify(out));
+  await writeFeedOrExit("cef.json", out);
 
   const byRegion: Record<string, number> = {};
   for (const f of funds) byRegion[f.region] = (byRegion[f.region] || 0) + 1;

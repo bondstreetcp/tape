@@ -6,15 +6,14 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import YahooFinance from "yahoo-finance2";
 import { SECTOR_ETFS } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { UNIVERSES } from "../lib/universes";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const YEAR = new Date().getFullYear();
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Pt { t: number; c: number }
 const toPoints = (quotes: any[]): Pt[] =>

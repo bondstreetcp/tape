@@ -20,6 +20,8 @@ import { getNewsChecked, pickHeadlines, NEWS_JUNK, CAUSAL_WINDOW_DAYS } from "..
 import { buildMoveEvidence } from "../lib/moveEvidence";
 import { detectRecentReport, movePreDatesReport } from "../lib/preannounce";
 import type { CatalystMap } from "../lib/catalysts";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const DAY = 24 * 3600 * 1000;
@@ -28,7 +30,6 @@ const TF_LABEL: Record<string, string> = { "1d": "today", "1w": "this week", ytd
 const TF_RANK: Record<string, number> = { "1d": 0, "1w": 1, ytd: 2, "1y": 3 }; // shortest first
 const TTL_DAYS: Record<string, number> = { "1d": 1.5, "1w": 4, ytd: 7, "1y": 7 }; // cache freshness by tf
 const N = 6; // top/bottom per timeframe
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Headline junk + the per-timeframe recency windows live in lib/news alongside pickHeadlines, so
 // this script and refresh-desk-note pick news the SAME way by construction — the desk note having
@@ -178,7 +179,7 @@ async function main() {
   );
 
   // generatedAt = the file-level staleness stamp (each row also keeps its own ts for the TTL).
-  await fs.writeFile(path.join(DATA, "catalysts.json"), JSON.stringify({ generatedAt: new Date().toISOString(), bySymbol: out }));
+  await writeFeedOrExit("catalysts.json", { generatedAt: new Date().toISOString(), bySymbol: out });
   const total = Object.values(out).filter((c) => c.why).length;
   console.log(`\nWrote ${Object.keys(out).length} catalysts (${total} with a why, ${withWhy} new this run).`);
 }

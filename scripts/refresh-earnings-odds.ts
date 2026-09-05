@@ -18,22 +18,21 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { deadline, withDeadline } from "../lib/deadline";
 import { daysUntil } from "../lib/calendar";
 import { parseEarningsSlug, driftEps, pBeatFrom, SPREAD_SUPPRESS, type EarningsOddsRow, type EarningsOddsFile } from "../lib/earningsOdds";
+import { readJson, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const OUT = path.join(DATA, "earnings-odds.json");
 const GAMMA = "https://gamma-api.polymarket.com/events";
 const UNIVERSE = "russell3000"; // broadest US snapshot — same choice as the other US boards
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 let gate: Promise<void> = Promise.resolve();
 const throttle = (gap = 150): Promise<void> => { const p = gate.then(() => sleep(gap)); gate = p; return p; };
 
-const readJson = (f: string): Promise<any> => fsp.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s)).catch(() => null);
 
 async function fetchOpenEarningsEvents(): Promise<any[]> {
   // Paginate defensively — in-season counts have been observed near 200.
@@ -164,7 +163,7 @@ async function main() {
     offUniverse,
     pastDated,
   };
-  await fsp.writeFile(OUT, JSON.stringify(out));
+  await writeFeedOrExit("earnings-odds.json", out);
   const withDrift = rows.filter((r) => r.driftEps != null).length;
   console.log(`earnings-odds: wrote ${rows.length} rows (${withDrift} with drift, ${rows.filter((r) => r.thin).length} thin-book) from ${events.length} venue events.`);
 }

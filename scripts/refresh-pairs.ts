@@ -18,6 +18,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { scanPairs, bucketByDay, type Daily, type PairsData, type PairRow, type DecoupledRow } from "../lib/pairs";
 import type { Snapshot } from "../lib/types";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const OUT = path.join(DATA, "pairs.json");
@@ -109,7 +110,7 @@ async function main() {
     pairs,
     decoupled: decoupledRows,
   };
-  await fs.writeFile(OUT, JSON.stringify(out));
+  await writeFeedOrExit("pairs.json", out);
   console.log(`pairs: wrote ${pairs.length} stretched + ${decoupledRows.length} decoupled → data/pairs.json`);
   for (const p of pairs.slice(0, 6)) console.log(`  stretched ${p.a}/${p.b} [${p.sector}] z=${p.z.toFixed(2)} hl=${p.halfLifeDays?.toFixed(0)}d corr=${p.corr.toFixed(2)}`);
   for (const d of decoupledRows.slice(0, 6)) console.log(`  decoupled ${d.a}/${d.b} [${d.sector}] corr ${d.corrLong.toFixed(2)}→${d.corrShort.toFixed(2)} (drop ${d.drop.toFixed(2)}) · broke ${d.broke} ${d.brokeMovePct >= 0 ? "+" : ""}${d.brokeMovePct}%`);

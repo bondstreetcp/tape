@@ -31,7 +31,7 @@ const INTERMEDIATES: Record<string, string> = {
   // component or lib reads the file. Wire a board or retire the step — until then it is not a feed to monitor.
   "regime-replay.json": "earnings-vol backtest output with no reader (see note)",
 };
-const RUNTIME = /^(tick-report|llm-usage|av-margins|force-tick|runner|package|tsconfig|manifest|.*-seen|.*-cache|.*cache.*)\.json$/;
+const RUNTIME = /^(tick-report|tick-history|llm-usage|av-margins|force-tick|runner|package|tsconfig|manifest|.*-seen|.*-cache|.*cache.*)\.json$/;
 
 test("every data/*.json a refresh script writes is registered in the freshness monitor or a named intermediate", () => {
   const dir = path.join(ROOT, "scripts");

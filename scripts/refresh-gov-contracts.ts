@@ -13,12 +13,13 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { deadline } from "../lib/deadline";
 import { momentumFrom, type GovContractRow, type GovContractsFile, type QuarterPoint } from "../lib/govContracts";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "gov-contracts.json");
 const API = "https://api.usaspending.gov/api/v2";
 const AWARD_TYPES = ["A", "B", "C", "D"]; // definitive contracts + IDV/BPA/task orders
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // ── The roster: {ticker, USAspending recipient search name}. Every entry verified 2026-08-06 to
 // return >$1M of awards; a name is added ONLY after that check (see lib/govContracts). Dropped from
@@ -95,7 +96,7 @@ async function main() {
   }
   rows.sort((a, b) => b.ttmObligated - a.ttmObligated);
   const out: GovContractsFile = { generatedAt: new Date().toISOString(), rows, rosterSize: ROSTER.length };
-  await fsp.writeFile(FILE, JSON.stringify(out));
+  await writeFeedOrExit("gov-contracts.json", out);
   const risers = rows.filter((r) => r.yoyPct != null && r.yoyPct >= 15).length;
   console.log(`gov-contracts: wrote ${rows.length}/${ROSTER.length} rows, ${risers} with YoY obligations up ≥15%.`);
 }

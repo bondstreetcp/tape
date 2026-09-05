@@ -13,7 +13,6 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { UNIVERSES, DEFAULT_UNIVERSE } from "../lib/universes";
 import { GICS_TO_ETF, SECTORS, SECTOR_ETFS, sectorOverrideFromIndustry } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
@@ -35,8 +34,9 @@ import type {
   StockSeries,
   XY,
 } from "../lib/types";
+import { mapPool } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const SYMBOL_DIR = path.join(DATA_DIR, "series", "symbols");
 const DAY = 86_400_000;
@@ -100,23 +100,6 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
-async function mapPool<T, R>(
-  items: T[],
-  size: number,
-  fn: (item: T, i: number) => Promise<R>,
-): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 function toPoints(quotes: any[]): SeriesPoint[] {
   return (quotes || [])

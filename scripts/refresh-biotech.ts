@@ -14,19 +14,19 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import { daysToReadout, dateNearAnchor, phraseNearAnchor, type BioCatalyst, type BiotechData } from "../lib/biotech";
 import { eftsSearch, fetchFilingBodyText, edgarDocUrl, type EftsHit } from "../lib/edgarSearch";
+import { mapPoolSafe, sleep, validTicker } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "biotech-catalysts.json");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 const DAY = 86_400_000;
 const KEEP = 250;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // The statuses that carry a binary signal.
 const KIND: Record<string, BioCatalyst["statusKind"]> = {
@@ -213,15 +213,6 @@ async function fetchCrl(knownIds: Set<string>): Promise<BioCatalyst[]> {
   return out;
 }
 
-async function validTicker(sym: string): Promise<boolean> {
-  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
-}
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -241,7 +232,7 @@ async function main() {
   // validate the LLM's tickers against Yahoo (drop hallucinations / delisted)
   const cand = fresh.filter((r) => extracted[r.id]);
   const valid: Record<string, boolean> = {};
-  await mapPool([...new Set(cand.map((r) => extracted[r.id].ticker))], 6, async (t) => { valid[t] = await validTicker(t); });
+  await mapPoolSafe([...new Set(cand.map((r) => extracted[r.id].ticker))], 6, async (t) => { valid[t] = await validTicker(t); });
 
   const newItems: BioCatalyst[] = cand
     .filter((r) => valid[extracted[r.id].ticker])
@@ -252,14 +243,14 @@ async function main() {
   const knownEvents = new Set(prior.items.filter((i) => i.statusKind === "pdufa").map((i) => `${i.ticker}|${i.primaryCompletion}`));
   const pdufaRaw = await fetchPdufa(known, knownEvents).catch((e) => { console.error("PDUFA scan failed:", (e as Error).message); return [] as BioCatalyst[]; });
   const pdufaOk: Record<string, boolean> = {};
-  await mapPool([...new Set(pdufaRaw.map((i) => i.ticker))], 6, async (t) => { pdufaOk[t] = await validTicker(t); });
+  await mapPoolSafe([...new Set(pdufaRaw.map((i) => i.ticker))], 6, async (t) => { pdufaOk[t] = await validTicker(t); });
   const pdufaNew = pdufaRaw.filter((i) => pdufaOk[i.ticker]);
   console.log(`→ ${pdufaNew.length} new PDUFA dates`);
 
   // CRLs — the FDA saying no. Same EFTS + grounding machinery, anchored on the phrase itself.
   const crlRaw = await fetchCrl(known).catch((e) => { console.error("CRL scan failed:", (e as Error).message); return [] as BioCatalyst[]; });
   const crlOk: Record<string, boolean> = {};
-  await mapPool([...new Set(crlRaw.map((i) => i.ticker))], 6, async (t) => { crlOk[t] = await validTicker(t); });
+  await mapPoolSafe([...new Set(crlRaw.map((i) => i.ticker))], 6, async (t) => { crlOk[t] = await validTicker(t); });
   const crlNew = crlRaw.filter((i) => crlOk[i.ticker]);
   console.log(`→ ${crlNew.length} new CRLs`);
 
@@ -289,7 +280,7 @@ async function main() {
     .sort((a, b) => Date.parse(b.lastUpdate || "0") - Date.parse(a.lastUpdate || "0")) // most-recent status change first
     .slice(0, KEEP);
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: raw.length, items } satisfies BiotechData));
+  await writeFeedOrExit("biotech-catalysts.json", { generatedAt: nowISO, scanned: raw.length, items } satisfies BiotechData);
   console.log(`\nwrote ${items.length} catalysts (${newItems.length} new).`);
   for (const i of items.slice(0, 10)) console.log(`  ${i.ticker.padEnd(6)} ${i.phase.padEnd(8)} ${i.statusKind.padEnd(14)} readout ${i.primaryCompletion || "?"} — ${i.catalyst.slice(0, 55)}`);
 }

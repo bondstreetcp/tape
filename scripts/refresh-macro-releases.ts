@@ -15,9 +15,10 @@
 import { promises as fsp } from "fs";
 import path from "path";
 import { catOf, type MacroRelease, type MacroReleasesData } from "../lib/macroReleases";
+import { RESEARCH_UA as UA } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const FILE = path.join(process.cwd(), "data", "macro-releases.json");
-const UA = "Mozilla/5.0 (tape macro-feed research; jameslyeh@gmail.com)";
 const KEEP = 60;
 
 async function getText(url: string): Promise<string> {
@@ -103,7 +104,7 @@ async function main() {
     .filter((r) => r.date)
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
     .slice(0, KEEP);
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: new Date().toISOString(), releases } satisfies MacroReleasesData));
+  await writeFeedOrExit("macro-releases.json", { generatedAt: new Date().toISOString(), releases } satisfies MacroReleasesData);
   console.log(`wrote ${releases.length} releases (${added} new) → ${FILE}`);
   for (const r of releases.slice(0, 10)) console.log(`  ${r.date.slice(0, 10)} [${r.source}] ${r.category.padEnd(9)} ${r.title.slice(0, 64)}`);
 }

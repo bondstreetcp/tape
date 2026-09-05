@@ -15,12 +15,13 @@ import path from "path";
 import os from "os";
 import { deadline } from "../lib/deadline";
 import { parseFinraLine, parseFtdLine, rollShortVol, type FinraShortRow, type ShortMechFile, type ShortMechRow } from "../lib/shortMechanics";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "short-mechanics.json");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 const WINDOW_DAYS = 15;
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const yyyymmdd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 async function getText(url: string): Promise<string | null> {
@@ -134,7 +135,7 @@ async function main() {
     windowDays: WINDOW_DAYS,
     rows,
   };
-  await fsp.writeFile(FILE, JSON.stringify(out));
+  await writeFeedOrExit("short-mechanics.json", out);
   console.log(`short-mechanics: wrote ${rows.length} names (${rows.filter((r) => r.ftdShares != null).length} with FTD data).`);
 }
 

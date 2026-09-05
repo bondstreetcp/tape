@@ -13,6 +13,7 @@ import { impliedIssueVol, estimateCreditSpread, creditQuality, dedupeConvertible
 import { getBorrow } from "../lib/borrow";
 import { cachedStats } from "../lib/companyCache";
 import { getTermStructure } from "../lib/options";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DAYS = 180; // look-back window for offerings
 const MAX_FILINGS = 200; // cap the extraction fan-out (newest-first); a busy window won't blow up the nightly LLM spend
@@ -119,7 +120,7 @@ async function main() {
 
   rows.sort((a, b) => b.filedDate.localeCompare(a.filedDate));
   const data: ConvertiblesData = { generatedAt: new Date(now).toISOString(), rows };
-  await fsp.writeFile(path.join(process.cwd(), "data", "convertibles.json"), JSON.stringify(data, null, 2));
+  await writeFeedOrExit("convertibles.json", data);
   console.log(`convertibles: wrote ${rows.length} rows → data/convertibles.json`);
 }
 

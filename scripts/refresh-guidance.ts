@@ -18,6 +18,8 @@ import { loadSnapshot } from "../lib/data";
 import type { GuidanceData, GuidancePeriod, GuidanceTicker, GuidanceAction } from "../lib/guidance";
 import { classifyGuidanceAction } from "../lib/guidance";
 import { advanceGate } from "../lib/incrementalGate";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 try {
   const env = readFileSync(join(process.cwd(), ".env.local"), "utf8");
@@ -33,7 +35,6 @@ const MAXTOK = Number(process.env.MAXTOK || 16000);
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const LIMIT = Number(process.env.LIMIT || 0); // cap names processed this run (for a bounded seed)
 const BACKFILL = Number(process.env.BACKFILL || 0); // 0 = incremental (latest 8-K only); N = walk last N 8-Ks to seed the beat-the-guide history
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const KW = /guidance|outlook|expect|guide|forecast|full[- ]year|fiscal 20\d\d|for the (year|quarter)|anticipat|reaffirm|raott|raise|updat\w+ (its|our|full)|continues? to expect|now expects?/i;
 function grepWindows(text: string, pad = 1100, cap = 14000): string {
@@ -229,9 +230,9 @@ function loadConsensus(): Map<string, number> {
       console.log(`  ${sym}: ERROR ${String(e?.message || e).slice(0, 100)}`);
     }
     data.generatedAt = new Date().toISOString();
-    writeFileSync(OUT, JSON.stringify(data));
+    await writeFeedOrExit("guidance.json", data);
   }
   data.generatedAt = new Date().toISOString();
-  writeFileSync(OUT, JSON.stringify(data));
+  await writeFeedOrExit("guidance.json", data);
   console.log(`\nWrote ${OUT} · ${touched} with guidance · ${calls} LLM calls · ${GROUND_DROPS} ungrounded $ dropped · ${Object.keys(data.byTicker).length} total in file`);
 })();

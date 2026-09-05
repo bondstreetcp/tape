@@ -7,12 +7,12 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { computeBeta, bucketByDay, type Daily } from "../lib/pairs";
 import { sliceSeries, seriesChangePct } from "../lib/compute";
 import { TIMEFRAME_KEYS } from "../lib/timeframes";
+import { yahoo as yf } from "../lib/yahooClient";
 
 /** Timeframe returns (%) from a daily series, via the app's canonical slice+change (lib/compute), so an
  *  ETF's return reads the same way as a stock's. `now` = the last bar, so it's as-of the data date. */
@@ -24,7 +24,6 @@ function etfReturns(daily: [number, number][]): Record<string, number | null> {
   return out;
 }
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DAY = 86_400_000;
 const DATA = path.join(process.cwd(), "data");
 const DIR = path.join(DATA, "series", "symbols");

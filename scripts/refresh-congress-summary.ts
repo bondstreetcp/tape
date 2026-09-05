@@ -12,6 +12,7 @@ import { loadSnapshot } from "../lib/data";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { whitelistTickers, isPlaceholderText } from "../lib/llmValidate";
 import type { CongressSummary, CongressHighlight } from "../lib/congressSummary";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const money = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${v}`);
@@ -95,7 +96,7 @@ async function main() {
   }
 
   const summary: CongressSummary = { generatedAt: new Date().toISOString(), since: cong.since || null, tldr: String(out.tldr).trim(), highlights };
-  await fs.writeFile(path.join(DATA, "congress-summary.json"), JSON.stringify(summary));
+  await writeFeedOrExit("congress-summary.json", summary);
   console.log(`congress-summary: wrote tldr + ${highlights.length} highlights`);
 }
 

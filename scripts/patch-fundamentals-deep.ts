@@ -9,26 +9,13 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
 import type { Fundamentals, Snapshot } from "../lib/types";
+import { mapPool } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 
-async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 type FGet = (x: any, k: string) => number | null;
 

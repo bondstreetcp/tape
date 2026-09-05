@@ -31,12 +31,12 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { getSubmissions, tickerToCik } from "../lib/edgar";
 import { deadline, withDeadline } from "../lib/deadline";
 import { settleLegs, settlePostPrint, type TradeLeg, type TradeRec } from "../lib/tradeLog";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const OUT = path.join(DATA, "regime-replay.json");
 const CACHE = path.join(DATA, ".tmp", "replay-cache.json");
@@ -49,7 +49,6 @@ const WINDOWS: { id: string; from: string; to: string }[] = [
   { id: "vix-aug-2024", from: "2024-07-01", to: "2024-08-31" },
 ];
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 interface ReplayRow {
   id: string; // `${symbol}-${eventDay}`

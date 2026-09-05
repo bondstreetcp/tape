@@ -30,11 +30,10 @@ import {
   type VpOpen,
   type VpClosed,
 } from "../lib/volPremiumLedger";
+import { readJson } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const FILE = "vol-premium-ledger.json";
-const readJson = async <T,>(f: string): Promise<T | null> =>
-  fsp.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
 
 async function main() {
   const disloc = await readJson<VolDisData>("vol-dislocation.json");

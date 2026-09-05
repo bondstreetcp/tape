@@ -18,6 +18,8 @@ import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { getLatestUkResults } from "../lib/irText";
 import { INTL_COMPS } from "../lib/intlComps";
 import type { SssData, SssPeriod, SssTicker } from "../lib/sameStoreSales";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 // Load .env.local into process.env (without printing secrets).
 try {
@@ -33,7 +35,6 @@ const BACKFILL = Number(process.env.BACKFILL || 0); // 0 = incremental; N = walk
 const MAXTOK = Number(process.env.MAXTOK || 16000);
 const TAKE = Number(process.env.TAKE || (BACKFILL || 1));
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Comp-metric keywords (broadened for UK/EU phrasings: full-price sales, organic, comparable store).
 const KW = /like[- ]for[- ]like|\blfl\b|comparable (store |retail )?sales|same[- ]?(store|shop)|full[- ]?price sales|identical sales|organic (revenue|sales|growth)/i;
@@ -151,10 +152,10 @@ async function extract(sym: string, text: string, metricHint: string): Promise<E
       console.log(`  ${c.lse}: ERROR ${String(e?.message || e).slice(0, 120)}`);
     }
     data.generatedAt = new Date().toISOString();
-    writeFileSync(OUT, JSON.stringify(data));
+    await writeFeedOrExit("same-store-sales.json", data);
   }
 
   data.generatedAt = new Date().toISOString();
-  writeFileSync(OUT, JSON.stringify(data));
+  await writeFeedOrExit("same-store-sales.json", data);
   console.log(`\nWrote ${OUT} · ${touched} intl names updated · ${calls} LLM calls · ${Object.keys(data.byTicker).length} total in file`);
 })();

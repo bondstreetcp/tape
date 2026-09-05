@@ -8,14 +8,13 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { SECTOR_ETFS, SECTORS } from "../lib/sectors";
 import { LOOKBACK_TRADING_DAYS } from "../lib/timeframes";
 import { symbolFile } from "../lib/symbolfile";
 import { UNIVERSES } from "../lib/universes";
 import type { Returns, SeriesPoint, Snapshot, XY } from "../lib/types";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const SYMBOL_DIR = path.join(DATA_DIR, "series", "symbols");
 const DAY = 86_400_000;

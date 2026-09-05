@@ -96,3 +96,16 @@ export async function writeFeedGuarded(
     nextCount,
   };
 }
+
+/**
+ * writeFeedGuarded with the standard hard-failure: a blocked write logs the reason and exits 1, so
+ * the tick shows ✗ (and pages), and the freshness gate sees an honestly stale file rather than an
+ * empty one. The 2026-09-05 review found 51 refresh scripts still writing with a raw fs.writeFile —
+ * a night where a source returns nothing would have replaced a healthy feed with an empty one — so
+ * this is now the default way a feed file is written.
+ */
+export async function writeFeedOrExit(file: string, data: unknown, opts: Parameters<typeof writeFeedGuarded>[2] = {}): Promise<FeedWriteResult> {
+  const w = await writeFeedGuarded(file, data, opts);
+  if (!w.written) { console.error(`${file}: WRITE BLOCKED — ${w.reason}`); process.exit(1); }
+  return w;
+}

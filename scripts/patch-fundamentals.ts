@@ -7,11 +7,10 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
 import type { Snapshot } from "../lib/types";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const qnum = (v: any): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;

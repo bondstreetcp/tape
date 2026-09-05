@@ -15,11 +15,11 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { mapYahooIndustry } from "../lib/industryMap";
 import { YAHOO_SECTOR_TO_ETF } from "../lib/intlConstituents";
+import { mapPool, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const US_UNIVERSES = ["sp500", "nasdaq100", "russell1000", "sp1500", "russell3000"];
 const CACHE = path.join(DATA, "industry-map.json");
@@ -35,7 +35,6 @@ const isGeneric = (ind?: string | null): boolean => !ind || GENERIC.has(ind.trim
 
 interface Hit { ind: string; etf: string } // ind = mapped GICS label (""=none); etf = Yahoo's sector ETF
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 let gate: Promise<void> = Promise.resolve();
 const throttle = (gap = 120): Promise<void> => { const p = gate.then(() => sleep(gap)); gate = p; return p; };
 
@@ -50,14 +49,6 @@ async function fetchProfile(sym: string, tries = 2): Promise<{ sector: string | 
   }
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let i = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (i < items.length) { const k = i++; out[k] = await fn(items[k]); }
-  }));
-  return out;
-}
 
 async function main() {
   let cache: Record<string, Hit> = {};

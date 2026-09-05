@@ -51,6 +51,7 @@ import {
   CHUNK_CHARS, MAX_CHUNKS, budgetMinutes, chunkTranscript, lookbackSince, mergeCallDigestFiles, mergeDigests, sanitizeDigest, sanitizeSynthesis, scopedLocalEnv, sessionWindow,
   type CallDigest, type CallDigestsData, type CallSynthesis,
 } from "../lib/callDigests";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
 
 // SCOPED ROUTING — CALL_DIGEST_LOCAL_* become LLM_LOCAL_* for THIS process only (lib/llm reads the local
 // config per call, so this assignment is all it takes). Must precede every env read below.
@@ -89,15 +90,6 @@ const LLM = { model: FLASH_MODEL, local: true as const, reasoningEffort: "low" a
 // The cross-call synthesis is judgment work — one call a run, PRO tier, always cloud (~half a cent).
 const SYNTH_LLM = { model: PRO_MODEL, local: false as const, reasoningEffort: "low" as const, timeoutMs: 180_000, retries: 3 };
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { out[i] = null as any; } }
-  }));
-  return out;
-}
 
 // ── prompts ─────────────────────────────────────────────────────────────────────────────────────
 const NOTES_SYSTEM =
@@ -249,7 +241,7 @@ async function main() {
   const fresh: CallDigest[] = [];
   const budgetMs = BUDGET_MIN * 60_000;
   const lookup = { since, today: w.today };
-  await mapPool(work, CONC, async (c) => {
+  await mapPoolSafe(work, CONC, async (c) => {
     if (Date.now() - t0 > budgetMs) { deferred++; return; }
     const found = await findRecentTranscript(c.symbol, c.name, lookup).catch(() => null);
     await sleep(150);

@@ -9,6 +9,7 @@ import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
 import type { GuidanceData } from "../lib/guidance";
 import type { PeadRow, PeadData } from "../lib/pead";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const MIN_DAYS = 1, MAX_DAYS = 12;
@@ -83,7 +84,7 @@ async function main() {
   });
 
   const out: PeadData = { generatedAt: new Date().toISOString(), scanned: rows.length, rows };
-  await fs.writeFile(path.join(DATA, "pead.json"), JSON.stringify(out));
+  await writeFeedOrExit("pead.json", out);
   const cont = rows.filter((r) => r.continuation).length;
   console.log(`pead: ${rows.length} recent reporters · ${cont} drifting in the gap direction (PEAD momentum), ${rows.length - cont} fading.`);
 }

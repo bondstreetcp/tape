@@ -41,7 +41,6 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { UNIVERSES } from "../lib/universes";
 import { tickerToCik } from "../lib/edgar";
 import { edgarQuarterlyFromFacts } from "../lib/edgarFinancials";
@@ -55,12 +54,12 @@ import type {
   ValuationHistoryData,
   ValuationName,
 } from "../lib/valuationHistory";
+import { mapPool, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA_DIR = path.join(process.cwd(), "data");
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ── The panel cache ───────────────────────────────────────────────────────────────────────────
 const PANEL = path.join(DATA_DIR, "valuation-panel.json");
@@ -131,19 +130,6 @@ async function secFetch(url: string): Promise<Response | null> {
   return null;
 }
 
-async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 // ---- direct companyfacts pull for concepts getEdgarQuarterly doesn't tag ----------
 const STD_CONCEPTS = ["LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper"];

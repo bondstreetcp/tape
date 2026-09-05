@@ -20,10 +20,10 @@
  *
  * Server-only (fetches SEC).
  */
+import { sleep } from "./scriptKit";
 
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)"; // SEC 403s UA's without a contact
 const DAY = 86_400_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Canonical CIK key — frames carry numbers, tickerToCik strings (sometimes zero-padded). */
 export const cikKey = (cik: string | number): string => String(Number(String(cik).replace(/\D/g, "")));

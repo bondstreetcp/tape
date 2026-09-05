@@ -13,19 +13,19 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
 import { cleanTicker, narrative } from "../lib/llmValidate";
 import type { Campaign, CampaignType, CampPerf, CampaignsData } from "../lib/campaigns";
+import { BROWSER_UA, htmlToText, mapPoolSafe, sleep, validTicker } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "campaigns.json");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 const DAY = 86_400_000;
 const KEEP = 200;
 const WINDOW_DAYS = 21;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const FORMS: { form: string; type: CampaignType }[] = [
   { form: "SCHEDULE 13D", type: "activist" },
@@ -36,12 +36,6 @@ const FORMS: { form: string; type: CampaignType }[] = [
 
 interface Raw { id: string; date: string; type: CampaignType; form: string; issuer: string; ticker: string | null; other: string; url: string; docUrl: string; ciks: string[]; doc: string }
 
-function htmlToText(html: string): string {
-  return (html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&quot;/g, '"')
-    .replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-}
 // From a display_name like "Newegg Commerce, Inc.  (NEGG)  (CIK 0001474627)" pull the ticker + clean name.
 function parseName(dn: string): { name: string; ticker: string | null } {
   const parens = [...dn.matchAll(/\(([^)]+)\)/g)].map((m) => m[1].trim());
@@ -98,7 +92,6 @@ const SHORT_RSS: { firm: string; url: string; nitter?: boolean }[] = [
 const SHORT_SEED_DAYS = 120; // feeds carry history; only seed items this recent
 // Firm sites / nitter want a BROWSER UA (Cloudflare et al. reject research UAs) — EDGAR keeps the
 // SEC-style UA above, per its fair-access policy.
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 async function rssShorts(firm: string, url: string, nitter = false): Promise<Raw[]> {
   try {
@@ -173,9 +166,9 @@ async function viceroy(): Promise<Raw[]> {
 }
 
 async function shortReports(): Promise<Raw[]> {
-  const lists = await mapPool(SHORT_RSS, 4, (s) => rssShorts(s.firm, s.url, s.nitter));
+  const lists = await mapPoolSafe(SHORT_RSS, 4, (s) => rssShorts(s.firm, s.url, s.nitter));
   const html = await Promise.all([sprucePoint(), viceroy()]);
-  const all = [...lists.flat().filter(Boolean), ...html.flat()];
+  const all = [...lists.flat().filter((r): r is Raw => r != null), ...html.flat()];
   const cutoff = Date.now() - SHORT_SEED_DAYS * DAY;
   const kept = all.filter((r) => Date.parse(r.date) >= cutoff);
   const byFirm: Record<string, number> = {};
@@ -207,9 +200,6 @@ async function classify(r: Raw, text: string, pro = false): Promise<{ ticker: st
 
 // A ticker the LLM emitted (vs one EDGAR supplied) must actually price on Yahoo before it is
 // stored — else a wrong-but-real symbol shows another company's move as this event's performance.
-async function validTicker(sym: string): Promise<boolean> {
-  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
-}
 async function perfFor(ticker: string, eventISO: string): Promise<CampPerf | null> {
   try {
     const eT = Date.parse(eventISO);
@@ -222,14 +212,6 @@ async function perfFor(ticker: string, eventISO: string): Promise<CampPerf | nul
   } catch { return null; }
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } }
-  }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -276,7 +258,7 @@ async function main() {
   console.log(`${fresh.length} new to classify ${JSON.stringify(capBy)}`);
 
   let llmFails = 0, rejects = 0;
-  const built = await mapPool(fresh, 4, async (r): Promise<Campaign | null> => {
+  const built = await mapPoolSafe(fresh, 4, async (r): Promise<Campaign | null> => {
     const text = r.type === "short" ? r.doc : await fetchFilingText(r);
     let c = await classify(r, text);
     // PRO second opinion on the SHORT bucket: short reports are few per week and each one matters —
@@ -298,10 +280,10 @@ async function main() {
   // refresh perf for tickered campaigns (dedupe tickers)
   const syms = [...new Set(merged.map((c) => c.ticker).filter((t): t is string => !!t))];
   const perfMap: Record<string, CampPerf | null> = {};
-  await mapPool(syms, 6, async (s) => { perfMap[s] = await perfFor(s, merged.find((c) => c.ticker === s)!.date); });
+  await mapPoolSafe(syms, 6, async (s) => { perfMap[s] = await perfFor(s, merged.find((c) => c.ticker === s)!.date); });
   for (const c of merged) c.perf = c.ticker ? (perfMap[c.ticker] ?? null) : null;
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: allRaw.length, campaigns: merged } satisfies CampaignsData));
+  await writeFeedOrExit("campaigns.json", { generatedAt: nowISO, scanned: allRaw.length, campaigns: merged } satisfies CampaignsData);
   console.log(`\nwrote ${merged.length} campaigns (${built.filter(Boolean).length} new).`);
   for (const c of merged.slice(0, 10)) console.log(`  ${c.date.slice(0, 10)} [${c.type.padEnd(11)}] ${(c.ticker || "—").padEnd(6)} ${c.campaigner.slice(0, 24).padEnd(24)} — ${c.ask.slice(0, 50)}`);
 }

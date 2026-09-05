@@ -14,6 +14,7 @@ import { getCompanyStats, type CompanyStats } from "../lib/companyStats";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import type { Snapshot } from "../lib/types";
 import type { EstSnap, EstimatesFile } from "../lib/revisions";
+import { mapPool } from "../lib/scriptKit";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const SHORT_HIST = path.join(DATA_DIR, "short-history.json");
@@ -50,19 +51,6 @@ function pushShort(hist: ShortHist, sym: string, today: string, shares: number):
   if (arr.length > 8) arr.splice(0, arr.length - 8);
 }
 
-async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 async function loadUsSymbols(): Promise<string[]> {
   const US = ["russell3000", "sp1500", "russell1000", "sp500", "nasdaq100"];

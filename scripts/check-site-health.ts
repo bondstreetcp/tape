@@ -13,9 +13,9 @@
  * blip must not page.
  */
 import { notifyAlert } from "../lib/alertNotify";
+import { sleep } from "../lib/scriptKit";
 
 const URL = process.env.SITE_HEALTH_URL || "https://tape.truporchhomesvm.com/api/health/data";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Probe = { kind: "ok"; detail: string } | { kind: "red"; detail: string } | { kind: "down"; detail: string };
 

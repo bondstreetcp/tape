@@ -20,6 +20,7 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { narrative, narrativeList } from "../lib/llmValidate";
 import { tickerFor, inflectionOf, type ScanLevel, type ScanRow, type ScanReport, type ScanSummary, type StaplesScannerData } from "../lib/staplesScanner";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 // Load .env.local into process.env for local tsx runs (CI injects the vars directly).
 try {
@@ -194,7 +195,7 @@ async function main() {
     if (fresh) { summary = fresh; console.log(`  summary: ${fresh.headline.slice(0, 90)}`); }
   }
 
-  writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), summary, reports }));
+  await writeFeedOrExit("staples-scanner.json", { generatedAt: new Date().toISOString(), summary, reports });
   console.log(`staples-scanner: wrote ${reports.length} reports (${extracted} newly extracted) → ${OUT}`);
 }
 

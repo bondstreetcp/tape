@@ -6,18 +6,18 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { cleanTicker, narrative } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { CorpEvent, CorpEventType, CorpEventsData } from "../lib/corpEvents";
+import { mapPoolSafe, sleep, validTicker } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "corp-events.json");
 const DAY = 86_400_000;
 const KEEP = 250;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // per-type EFTS query + how far back to scan (leadership 8-Ks are high-volume → tight window)
 const QUERIES: { type: CorpEventType; q: string; days: number }[] = [
@@ -59,9 +59,6 @@ async function classify(hit: EftsHit, type: CorpEventType, text: string): Promis
 
 // A ticker the LLM emitted (vs one EDGAR supplied) must actually price on Yahoo before it is
 // stored — else a wrong-but-real symbol shows another company's move as this event's performance.
-async function validTicker(sym: string): Promise<boolean> {
-  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
-}
 async function sinceFor(ticker: string, iso: string): Promise<number | null> {
   try {
     const eT = Date.parse(iso);
@@ -71,12 +68,6 @@ async function sinceFor(ticker: string, iso: string): Promise<number | null> {
     const at = (q.find((p: any) => p.t >= eT) || q[0]).c, now = q[q.length - 1].c;
     return at && now ? +(((now / at) - 1) * 100).toFixed(2) : null;
   } catch { return null; }
-}
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
 }
 
 async function main() {
@@ -105,7 +96,7 @@ async function main() {
   console.log(`${fresh.length} new to classify (${JSON.stringify(perType)})`);
 
   let llmFails = 0, rejects = 0, noText = 0;
-  const built = await mapPool(fresh, 4, async ({ hit, type }): Promise<CorpEvent | null> => {
+  const built = await mapPoolSafe(fresh, 4, async ({ hit, type }): Promise<CorpEvent | null> => {
     const text = await fetchFilingBodyText(hit);
     if (!text) { noText++; return null; }
     const c = await classify(hit, type, text);
@@ -125,10 +116,10 @@ async function main() {
   // refresh since-perf (dedupe tickers)
   const syms = [...new Set(merged.map((e) => e.ticker).filter((t): t is string => !!t))];
   const perf: Record<string, number | null> = {};
-  await mapPool(syms, 6, async (s) => { perf[s] = await sinceFor(s, merged.find((e) => e.ticker === s)!.date); });
+  await mapPoolSafe(syms, 6, async (s) => { perf[s] = await sinceFor(s, merged.find((e) => e.ticker === s)!.date); });
   for (const e of merged) e.sincePct = e.ticker ? (perf[e.ticker] ?? null) : null;
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies CorpEventsData));
+  await writeFeedOrExit("corp-events.json", { generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies CorpEventsData);
   const by: Record<string, number> = {}; for (const e of merged) by[e.type] = (by[e.type] || 0) + 1;
   console.log(`\nwrote ${merged.length} events (${built.filter(Boolean).length} new). by type: ${JSON.stringify(by)}`);
   for (const e of merged.slice(0, 10)) console.log(`  ${e.date.slice(0, 10)} [${e.type.padEnd(13)}] ${(e.ticker || "—").padEnd(6)} ${e.headline.slice(0, 60)}`);

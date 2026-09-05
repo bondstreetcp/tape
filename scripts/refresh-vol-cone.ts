@@ -11,23 +11,11 @@ import path from "path";
 import { loadSnapshot, loadSymbolSeries } from "../lib/data";
 import { UNIVERSE_IDS } from "../lib/universes";
 import { buildVolCone, toFeedRow, CONE_HORIZONS, type VolConeData, type VolConeFeedRow, type Daily } from "../lib/volCone";
+import { mapPoolSafe } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const WORKERS = 16;
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i]); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 async function main() {
   // Union of every universe's constituents (a name in several universes is scored once).
@@ -42,7 +30,7 @@ async function main() {
   const syms = [...meta.keys()];
   console.log(`vol-cone: scoring ${syms.length} names across ${UNIVERSE_IDS.length} universes (local series only)`);
 
-  const built = await mapPool(syms, WORKERS, async (sym): Promise<VolConeFeedRow | null> => {
+  const built = await mapPoolSafe(syms, WORKERS, async (sym): Promise<VolConeFeedRow | null> => {
     const series = await loadSymbolSeries(sym);
     const daily = series?.daily;
     if (!Array.isArray(daily) || daily.length < 60) return null;

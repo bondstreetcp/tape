@@ -13,14 +13,14 @@ import { loadValuationHistory, type MultipleStat, type MultipleKey } from "../li
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import type { ValuationExplainMap, Verdict } from "../lib/valuationExplain";
+import { money, pct } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const UNIVERSE = "russell3000";
 const TOP = 40; // deepest discounts to label
 
 const MULT_LABEL: Record<string, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
-const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${Math.round(v / 1e3)}K`);
-const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 
 async function main() {
   if (!(await llmConfigured())) {
@@ -91,7 +91,7 @@ async function main() {
     console.warn("valuation-explain: LLM returned no usable verdicts — skipping write.");
     return;
   }
-  await fs.writeFile(path.join(DATA, "valuation-explain.json"), JSON.stringify({ generatedAt: new Date().toISOString(), verdicts: map }));
+  await writeFeedOrExit("valuation-explain.json", { generatedAt: new Date().toISOString(), verdicts: map });
   const tally = Object.values(map).reduce((a, v) => ((a[v.verdict] = (a[v.verdict] || 0) + 1), a), {} as Record<string, number>);
   console.log(`valuation-explain: wrote ${Object.keys(map).length} verdicts · ${JSON.stringify(tally)}`);
 }

@@ -12,9 +12,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { getEdgarQuarterly } from "../lib/edgarFinancials";
+import { sleep } from "../lib/scriptKit";
 
 const CACHE = path.join(process.cwd(), "data", "simfin-margins.json");
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // same gap list as the AV backfill (issuers that report gross profit in some quarters but tag
 // cost of revenue inconsistently); financials with no COGS are excluded.

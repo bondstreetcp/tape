@@ -17,10 +17,10 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { getEdgarQuarterly } from "../lib/edgarFinancials";
+import { sleep } from "../lib/scriptKit";
 
 const CACHE = path.join(process.cwd(), "data", "av-margins.json");
 const BUDGET = parseInt(process.env.AV_BUDGET || "24", 10);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Material gross-margin-gap names from the S&P 500 / Russell audits (issuers that DO report
 // gross profit in some quarters but whose cost-of-revenue tagging is inconsistent). Financials

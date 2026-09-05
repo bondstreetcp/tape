@@ -13,6 +13,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { ValuationHistoryData, MultipleKey } from "../lib/valuationHistory";
 import type { IndexValuationData } from "../lib/relValuation";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const MULTIPLES: MultipleKey[] = ["pe", "evEbitda", "ps", "pb"];
@@ -72,7 +73,7 @@ async function main() {
     series,
     coverage,
   };
-  await fs.writeFile(path.join(DATA, "index-valuation-history.json"), JSON.stringify(data));
+  await writeFeedOrExit("index-valuation-history.json", data);
   console.log(`Wrote data/index-valuation-history.json`);
 }
 

@@ -10,6 +10,7 @@ import { loadSuperInvestors } from "../lib/superinvestors";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { isPlaceholderText } from "../lib/llmValidate";
 import type { ThirteenFStory, StoryTheme } from "../lib/thirteenFStory";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 
@@ -88,7 +89,7 @@ async function main() {
   }
 
   const story: ThirteenFStory = { generatedAt: new Date().toISOString(), asOf, tldr: String(out.tldr).trim(), themes };
-  await fs.writeFile(path.join(DATA, "13f-story.json"), JSON.stringify(story));
+  await writeFeedOrExit("13f-story.json", story);
   console.log(`13f-story: wrote tldr + ${themes.length} themes (quarter ${asOf || "?"})`);
 }
 

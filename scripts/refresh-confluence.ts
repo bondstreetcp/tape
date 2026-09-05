@@ -22,6 +22,8 @@ import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import type { ConfluenceData, ConfluenceName, ConfluenceSignal, ConfluenceRead, SignalKind } from "../lib/confluence";
 import { SIGNAL_ORDER } from "../lib/confluence";
+import { money, pct } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const UNIVERSE = "russell3000"; // broadest US context snapshot (2.5k names ≈ the valuation set)
@@ -29,8 +31,6 @@ const BOARD_MAX = 60; // names kept on the board
 const TOP_EXPLAIN = 16; // names GLM writes up (cost/quality control)
 
 const MULT_LABEL: Record<string, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
-const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${Math.round(v / 1e3)}K`);
-const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 
 async function main() {
   const [snap, vh, si, cong, cats] = await Promise.all([
@@ -345,7 +345,7 @@ async function main() {
     names: board,
     counts,
   };
-  await fs.writeFile(path.join(DATA, "confluence.json"), JSON.stringify(data));
+  await writeFeedOrExit("confluence.json", data);
   const explained = board.filter((n) => n.read).length;
   console.log(`confluence: wrote ${board.length} names (${explained} explained) · signal coverage ${JSON.stringify(counts)}`);
 }

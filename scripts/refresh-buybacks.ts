@@ -39,6 +39,7 @@ import {
   quarterize, despikeQuarters, ttmSum, yoyChange, classifyBuyback,
   type BuybackRow, type BuybackData, type DurFact, type InstFact,
 } from "../lib/buybacks";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
 
 const OUT = "buybacks.json"; // written via the registry-backed guard (lib/feedGuard), not raw fs
 const CACHE = path.join(process.cwd(), "data", "buybacks-facts.json");
@@ -48,7 +49,6 @@ const SEED = path.join(process.cwd(), "data-seed", "buybacks-facts.seed.json");
 const UA = "stock-chart-screener research jameslyeh@gmail.com";
 const DAY = 86_400_000;
 const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const CAP = Number(process.env.CAP || 0); // optional: limit names (for a quick test run)
 /** Wall-clock ceiling for SEC fetching. MUST stay under run-tick's STEP_TIMEOUT_MIN (45) — the whole
@@ -93,14 +93,6 @@ async function secFetch(url: string): Promise<Response | null> {
   return null;
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; } }
-  }));
-  return out;
-}
 
 /** First concept (in preference order) that has USD duration facts → normalized DurFact[]. */
 function durFacts(gaap: any, concepts: string[]): DurFact[] {
@@ -305,7 +297,7 @@ async function main() {
   // the budget instead of extending the step past it — the whole step must fit run-tick's 45-min cap.
   const deadline = now + BUDGET_MIN * 60_000;
   let fetched = 0, noData = 0, budgetHit = false;
-  await mapPool(due, 6, async (s) => {
+  await mapPoolSafe(due, 6, async (s) => {
     if (Date.now() > deadline) { budgetHit = true; return; }
     const f = await fetchFacts(s.symbol);
     if (!f) { noData++; return; }

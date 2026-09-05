@@ -9,14 +9,14 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { HOLDCOS, type Holdco, type HoldcoNav, type HoldcoNavData, type StakeVal } from "../lib/holdco";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const DAY = 86_400_000;
 const dayKey = (t: number) => new Date(t).toISOString().slice(0, 10);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Q { price: number | null; currency: string; marketCap: number | null }
 const qCache = new Map<string, Q>();
@@ -157,7 +157,7 @@ async function main() {
   }
   holdcos.sort((a, b) => (a.discount ?? 99) - (b.discount ?? 99)); // deepest discount first
   const out: HoldcoNavData = { generatedAt: new Date().toISOString(), asOf: new Date().toISOString().slice(0, 10), holdcos };
-  await fs.writeFile(path.join(DATA, "holdco-nav.json"), JSON.stringify(out));
+  await writeFeedOrExit("holdco-nav.json", out);
   console.log(`Wrote data/holdco-nav.json (${holdcos.length} holdcos)`);
 }
 

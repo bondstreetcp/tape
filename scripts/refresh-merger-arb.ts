@@ -10,14 +10,15 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, llmConfigured } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import { deadline, withDeadline } from "../lib/deadline";
 import { daysUntil } from "../lib/calendar";
 import { isSpac, priceInText, spreadMath, dedupeTargets, DEFAULT_CLOSE_DAYS, type MergerArbRow, type MergerArbFile, type DealTarget } from "../lib/mergerArb";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "merger-arb.json");
 const CACHE = path.join(DATA, ".tmp", "merger-arb-seen.json");
@@ -29,7 +30,6 @@ const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 // BROKEN deal wrongly withholding plays until it ages out — a conservative miss, accepted.
 const WINDOW_DAYS = 365;
 const DAY = 86_400_000;
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function tickerFrom(dn: string): string | null {
   for (const m of dn.matchAll(/\(([^)]+)\)/g)) {
@@ -188,7 +188,7 @@ async function main() {
   const out: MergerArbFile = { generatedAt: new Date().toISOString(), rows: live, scanned: hits.length, spacs, targets: allTargets };
   await fsp.mkdir(path.join(DATA, ".tmp"), { recursive: true });
   await fsp.writeFile(CACHE, JSON.stringify(seen));
-  await fsp.writeFile(FILE, JSON.stringify(out));
+  await writeFeedOrExit("merger-arb.json", out);
   console.log(`merger-arb: ${live.length} live cash deals (${spacs} SPACs dropped of ${hits.length} DEFM14A); ${allTargets.length} deal targets recorded (any consideration).`);
 }
 

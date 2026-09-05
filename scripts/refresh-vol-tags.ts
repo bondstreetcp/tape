@@ -13,6 +13,7 @@ import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { getNewsChecked, pickHeadlines } from "../lib/news";
 import { cleanTicker, narrative } from "../lib/llmValidate";
 import type { VolDisData } from "../lib/volDislocation";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const TOP = Number(process.env.LIMIT || 24); // budget cap: only the top rich non-earnings names get an LLM read
 
@@ -88,7 +89,7 @@ Return JSON: { "tags": [ { "symbol": "TICKER", "kind": "event" | "none" | "uncle
     }
   }
   data.taggedAt = new Date().toISOString();
-  await fs.writeFile(p, JSON.stringify(data));
+  await writeFeedOrExit("vol-dislocation.json", data); // the board's own feed — a blocked write keeps the prior tags
   console.log(`vol-tags: tagged ${tagged}/${withNews.length} rich non-earnings names with a grounded catalyst${preserved ? ` · ${preserved} prior tag(s) preserved (news fetch died)` : ""}.`);
 }
 

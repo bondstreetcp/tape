@@ -28,6 +28,8 @@ import { spawnSync, execSync } from "node:child_process";
 import { notifyAlert } from "../lib/alertNotify";
 import { existsSync, readFileSync, writeFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { parseSuppressed } from "../lib/scriptKit";
+import { appendTickHistory, summarizeTick, type TickHistory } from "../lib/tickHistory";
 
 // Data-pipeline modes (mirror refresh-data.yml) + two ported side-workflows: `narration` =
 // refresh-narration.yml (the cheap "refresh AI narration" button — the 7 LLM narration steps, no full
@@ -340,7 +342,7 @@ function sessionOnly(): string {
  *  rides the tar into R2 and a broken runner is diagnosable REMOTELY (2026-08-15: the NAS failed every
  *  refresh step for 4 nights while stamping a fresh heartbeat, and the only evidence was inside docker
  *  logs nobody could reach; the tar itself is the one channel that provably still works). */
-const stepReport: { name: string; cmd: string; ok: boolean; exit: number | string | null; mins: number; stderrTail?: string }[] = [];
+const stepReport: { name: string; cmd: string; ok: boolean; exit: number | string | null; mins: number; stderrTail?: string; suppressed?: Record<string, number> }[] = [];
 
 function step(name: string, cmd: string, extraEnv: Record<string, string> = {}): boolean {
   const t0 = Date.now();
@@ -359,8 +361,15 @@ function step(name: string, cmd: string, extraEnv: Record<string, string> = {}):
   const mins = +(((Date.now() - t0) / 60_000).toFixed(1));
   const ok = r.status === 0;
   const exit = r.status ?? (r.signal ? `signal:${r.signal}` : r.error ? `spawn:${String((r.error as any)?.code ?? r.error).slice(0, 60)}` : "timeout");
-  stepReport.push({ name, cmd, ok, exit, mins, ...(ok ? {} : { stderrTail: stderr.slice(-800) }) });
+  // Errors the step swallowed on purpose (lib/scriptKit.swallow prints one marker line at exit). A
+  // step can exit 0 every night while every one of its fetches fails — this is where that shows.
+  const suppressed = parseSuppressed(stderr);
+  stepReport.push({ name, cmd, ok, exit, mins, ...(ok ? {} : { stderrTail: stderr.slice(-800) }), ...(suppressed ? { suppressed } : {}) });
   log(`${ok ? "✓" : "✗"} ${name} (${mins}min${ok ? "" : ` — exit ${exit}`})`);
+  if (suppressed) {
+    const total = Object.values(suppressed).reduce((a, b) => a + b, 0);
+    log(`  ↳ ${total} suppressed error${total === 1 ? "" : "s"}: ${Object.entries(suppressed).map(([k, v]) => `${k}×${v}`).join(", ").slice(0, 300)}`);
+  }
   return ok;
 }
 
@@ -534,6 +543,16 @@ async function main() {
         fails, total: plan.length, steps: stepReport,
       }, null, 1));
     } catch (e) { log(`tick-report write failed (non-fatal): ${String(e).slice(0, 120)}`); }
+
+    // ── Tick history: thirty days of outcomes for the status page (lib/tickHistory). The prior file
+    // was hydrated from R2 with the rest of data/, so the append survives container recreates. ─────
+    try {
+      const HIST = path.join("data", "tick-history.json");
+      const latest = JSON.parse(readFileSync(path.join("data", "tick-report.json"), "utf8"));
+      let prev: TickHistory | null = null;
+      try { prev = JSON.parse(readFileSync(HIST, "utf8")); } catch { /* first tick on this tree */ }
+      writeFileSync(HIST, JSON.stringify(appendTickHistory(prev, summarizeTick(latest))));
+    } catch (e) { log(`tick-history write failed (non-fatal): ${String(e).slice(0, 120)}`); }
 
     // A majority-failed tick is a BROKEN RUNNER, not a quiet market — say so out loud (ntfy), because
     // the upload below will still succeed and stamp fresh, and without this push the outage is silent.

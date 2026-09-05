@@ -11,20 +11,20 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { isoDateOnly } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import { getOptions } from "../lib/options";
 import { straddleMove } from "../lib/earningsTrade";
 import type { CatalystRow, CatalystVolData } from "../lib/catalystVol";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "catalyst-vol.json");
 const DAY = 86_400_000;
 const MAX_DAYS_OUT = 120; // catalysts within ~4 months (investor days are often announced well ahead)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function findEventHits(): Promise<EftsHit[]> {
   const enddt = new Date().toISOString().slice(0, 10);
@@ -64,12 +64,6 @@ async function hvAnnual(sym: string): Promise<number | null> {
   } catch { return null; }
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -79,7 +73,7 @@ async function main() {
   console.log(`${hits.length} unique tickers with a recent investor/analyst-day 8-K`);
 
   // extract the event date for each (fetch the filing text + LLM)
-  const dated = await mapPool(hits.slice(0, 40), 4, async (h) => {
+  const dated = await mapPoolSafe(hits.slice(0, 40), 4, async (h) => {
     const text = await fetchFilingBodyText(h);
     if (!text) return null;
     const d = await extractDate(h, text);
@@ -100,7 +94,7 @@ async function main() {
   for (const r of prior.rows) if (Date.parse(r.eventDate) > Date.now()) calendar.set(`${r.ticker}-${r.eventDate}`, { ticker: r.ticker, company: r.company, eventType: r.eventType, eventDate: r.eventDate, url: r.url });
   for (const e of events) calendar.set(`${e.hit.ticker}-${e.eventDate}`, { ticker: e.hit.ticker!, company: e.hit.issuer, eventType: e.eventType, eventDate: e.eventDate, url: `https://www.sec.gov/Archives/edgar/data/${Number(e.hit.ciks[0])}/${e.hit.accession.replace(/-/g, "")}/${e.hit.doc}` });
 
-  const rows = await mapPool([...calendar.values()], 4, async (ev): Promise<CatalystRow | null> => {
+  const rows = await mapPoolSafe([...calendar.values()], 4, async (ev): Promise<CatalystRow | null> => {
     const days = Math.round((Date.parse(ev.eventDate) - Date.now()) / DAY);
     if (days < 0 || days > MAX_DAYS_OUT) return null; // event passed / too far out — off the calendar
     // A pricing failure must NOT drop the row: this file is the calendar's only memory, so a
@@ -125,7 +119,7 @@ async function main() {
   });
 
   const out = (rows.filter(Boolean) as CatalystRow[]).sort((a, b) => (a.ratio ?? 99) - (b.ratio ?? 99)); // cheapest first, unpriced last
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: hits.length, rows: out } satisfies CatalystVolData));
+  await writeFeedOrExit("catalyst-vol.json", { generatedAt: nowISO, scanned: hits.length, rows: out } satisfies CatalystVolData);
   const priced = out.filter((r) => r.ratio != null);
   console.log(`\nwrote ${out.length} calendar rows (${priced.length} priced, ${out.length - priced.length} kept unpriced):`);
   for (const r of priced.slice(0, 12)) console.log(`  ${r.ticker.padEnd(6)} ${r.eventType.padEnd(16)} ${r.eventDate} (${r.daysToEvent}d) implied ±${r.impliedMovePct}% vs baseline ±${r.baselineMovePct}% = ${r.ratio}×`);

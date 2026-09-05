@@ -11,7 +11,6 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
 import { buildSmartMoney } from "../lib/smartMoney";
 import { buildSmartMoneySell } from "../lib/smartMoneySell";
@@ -29,13 +28,13 @@ import {
 } from "../lib/signalLog";
 import type { SplitLedgerFile } from "../lib/splits";
 import type { Snapshot } from "../lib/types";
+import { readJson } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "signal-log.json");
 
-const readJson = async <T,>(f: string): Promise<T | null> =>
-  fsp.readFile(path.join(DATA, f), "utf8").then((s) => JSON.parse(s) as T).catch(() => null);
 
 // Board universe: the broadest US snapshot (same chain the insiders page uses) — the builders run on
 // ONE universe's stocks. Prices/context, though, come from the UNION of every US snapshot: some board
@@ -235,7 +234,7 @@ async function main() {
     lastMembership,
     lastSeen,
   };
-  await fsp.writeFile(FILE, JSON.stringify(out));
+  await writeFeedOrExit("signal-log.json", out);
 
   const perSignal = SIGNAL_KEYS.map((k) => `${k}:${membership[k]?.length ?? "—"}`).join(" ");
   console.log(`signal-log: ${events.length} events (+${newN} new, ${filled} marks filled${skippedNoPrice ? `, ${skippedNoPrice} skipped no-price` : ""}) · spx ${spx ?? "n/a"}`);

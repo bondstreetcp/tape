@@ -11,12 +11,13 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured } from "../lib/llm";
 import { cleanTicker, coerceEnum, narrative } from "../lib/llmValidate";
 import type { AffectedTicker, Impact, PolicyData, PolicyItem } from "../lib/policy";
+import { mapPoolSafe, validTicker } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "policy.json");
 const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
@@ -71,15 +72,6 @@ async function classifyContracts(rows: RawContract[]): Promise<Record<string, { 
   return map;
 }
 
-async function validTicker(sym: string): Promise<boolean> {
-  try { const ch: any = await yf.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false }); return (ch?.quotes || []).some((q: any) => q?.close != null); } catch { return false; }
-}
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -114,13 +106,13 @@ async function main() {
   const fresh: PolicyItem[] = [...newRules, ...newCons];
   const syms = [...new Set(fresh.flatMap((m) => m.tickers.map((t) => t.ticker)))];
   const valid: Record<string, boolean> = {};
-  await mapPool(syms, 6, async (s) => { valid[s] = await validTicker(s); });
+  await mapPoolSafe(syms, 6, async (s) => { valid[s] = await validTicker(s); });
   const freshValid = fresh.map((m) => ({ ...m, tickers: m.tickers.filter((t) => valid[t.ticker]) })).filter((m) => m.tickers.length);
   let merged = [...freshValid, ...prior.items].filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
   merged.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   const items = merged.slice(0, KEEP);
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: rules.length + contracts.length, items } satisfies PolicyData));
+  await writeFeedOrExit("policy.json", { generatedAt: nowISO, scanned: rules.length + contracts.length, items } satisfies PolicyData);
   console.log(`\nwrote ${items.length} items (${newRules.length + newCons.length} new).`);
   for (const i of items.slice(0, 10)) console.log(`  ${i.date.slice(0, 10)} [${i.kind.padEnd(8)}] ${i.tickers.map((t) => t.ticker).join(",").padEnd(12)} ${i.amount ? "$" + (i.amount / 1e6).toFixed(0) + "M " : ""}${i.summary.slice(0, 55)}`);
 }

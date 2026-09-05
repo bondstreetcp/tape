@@ -7,11 +7,10 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { HEDGE_ETFS } from "../lib/hedge";
 import { writeFeedGuarded } from "../lib/feedGuard";
+import { yahoo as yf } from "../lib/yahooClient";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const BATCH = 200;
 

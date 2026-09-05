@@ -18,14 +18,14 @@ import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import type { WarningsData, WarningName, WarningSignal, WarningRead, WarningKind } from "../lib/warnings";
 import { WARNING_ORDER } from "../lib/warnings";
+import { money, pct } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const UNIVERSE = "russell3000";
 const BOARD_MAX = 60;
 const TOP_EXPLAIN = 16;
 const MULT_LABEL: Record<string, string> = { pe: "P/E", evEbitda: "EV/EBITDA", ps: "P/S", pb: "P/B" };
-const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${Math.round(v / 1e3)}K`);
-const pct = (v: number | null | undefined, d = 0) => (v == null ? "?" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
 
 async function main() {
   const [snap, vh, si] = await Promise.all([loadSnapshot(UNIVERSE).catch(() => null), loadValuationHistory().catch(() => null), loadSuperInvestors().catch(() => null)]);
@@ -159,7 +159,7 @@ async function main() {
 
   const counts = WARNING_ORDER.reduce((acc, k) => { acc[k] = board.filter((n) => n.kinds.includes(k)).length; return acc; }, {} as Record<WarningKind, number>);
   const data: WarningsData = { generatedAt: new Date().toISOString(), universe: UNIVERSE, asOf: snap?.generatedAt || null, names: board, counts };
-  await fs.writeFile(path.join(DATA, "warnings.json"), JSON.stringify(data));
+  await writeFeedOrExit("warnings.json", data);
   console.log(`warnings: wrote ${board.length} names (${board.filter((n) => n.read).length} explained) · signal coverage ${JSON.stringify(counts)}`);
 }
 

@@ -11,13 +11,14 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { getOptions } from "../lib/options";
 import { straddleMove } from "../lib/earningsTrade";
 import type { BioCatalyst, BiotechData } from "../lib/biotech";
 import type { BioVolRow, BiotechVolData } from "../lib/biotechVol";
+import { mapPoolSafe } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "biotech-vol.json");
 const DAY = 86_400_000;
@@ -36,12 +37,6 @@ async function hvAnnual(sym: string): Promise<number | null> {
   } catch { return null; }
 }
 
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`);
-  return out;
-}
 
 // Calendar-day countdown: floor "now" to its own UTC midnight before diffing the stored YYYY-MM-DD —
 // this script runs in the ~22:47 UTC FULL rebuild, where an un-floored diff rounds tomorrow's event to
@@ -69,7 +64,7 @@ async function main() {
     .sort((a, b) => Date.parse(a.primaryCompletion!) - Date.parse(b.primaryCompletion!));
   console.log(`${events.length} forward biotech binaries (≤${MAX_DAYS_OUT}d) → pricing options`);
 
-  const priced = await mapPool(events, 4, async (i): Promise<BioVolRow | null> => {
+  const priced = await mapPoolSafe(events, 4, async (i): Promise<BioVolRow | null> => {
     const eventDate = i.primaryCompletion!;
     const days = daysToUTC(eventDate); // calendar-day diff, not wall-clock (see daysToUTC)
     const base: BioVolRow = {
@@ -104,7 +99,7 @@ async function main() {
   withRatio.forEach((r) => { r.premiumPctile = withRatio.length > 1 ? Math.round((firstIdxByRatio.get(r.ratio!)! / (withRatio.length - 1)) * 100) : 50; });
 
   const out = rows.filter((r) => r.impliedMovePct != null).sort((a, b) => a.daysToEvent - b.daysToEvent);
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: events.length, rows: out } satisfies BiotechVolData));
+  await writeFeedOrExit("biotech-vol.json", { generatedAt: nowISO, scanned: events.length, rows: out } satisfies BiotechVolData);
   console.log(`\nwrote ${out.length} priced biotech binaries:`);
   for (const r of out.slice(0, 12)) console.log(`  ${r.ticker.padEnd(6)} ${r.eventLabel.padEnd(20)} ${r.eventDate} (${r.daysToEvent}d) implied ±${r.impliedMovePct}% vs base ±${r.baselineMovePct}% = ${r.ratio}× (p${r.premiumPctile})`);
 }

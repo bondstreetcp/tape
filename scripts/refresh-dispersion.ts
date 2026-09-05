@@ -11,26 +11,13 @@ import { loadSnapshot } from "../lib/data";
 import { getOptions } from "../lib/options";
 import { ivFromPut, ivFromCall } from "../lib/putwrite";
 import { computeDispersion, type DispersionData } from "../lib/dispersion";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const TOP = Number(process.env.DISP_TOP || 100);
 const R = 0.043;
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function mapPool<T, R2>(items: T[], n: number, fn: (x: T) => Promise<R2>): Promise<R2[]> {
-  const out: R2[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i]); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
-}
 
 let gate: Promise<void> = Promise.resolve();
 function throttle(gap = 350): Promise<void> {
@@ -95,7 +82,7 @@ async function main() {
   if (!(vix > 0)) { console.error("dispersion: no VIX in macro.json."); process.exit(1); }
   console.log(`dispersion: solving ATM IV for the top ${top.length} S&P names by cap; VIX ${vix}`);
 
-  const built = await mapPool(top, 8, async (s: any) => {
+  const built = await mapPoolSafe(top, 8, async (s: any) => {
     const iv = await atmIV(s.symbol).catch(() => null);
     if (iv == null) return null;
     return { symbol: s.symbol, name: s.name, sector: s.sector || "—", atmIV: +iv.toFixed(3), marketCap: s.marketCap };
@@ -105,7 +92,7 @@ async function main() {
   if (!disp) { console.error(`dispersion: only ${rows.length} names solved — not enough.`); process.exit(1); }
 
   const out: DispersionData = { ...disp, generatedAt: new Date().toISOString(), vix, coverage: rows.length };
-  await fs.writeFile(path.join(DATA, "dispersion.json"), JSON.stringify(out));
+  await writeFeedOrExit("dispersion.json", out);
   console.log(`dispersion: index ${(disp.indexIV * 100).toFixed(1)}% vs cap-wtd single-name ${(disp.singleNameIV * 100).toFixed(1)}% (n=${disp.n}) · implied corr ${disp.impliedCorr != null ? (disp.impliedCorr * 100).toFixed(0) + "%" : "—"}`);
 }
 

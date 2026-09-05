@@ -25,6 +25,7 @@ import {
 import type { Registrant, NameIndex } from "../lib/newsTape";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { getObject, r2Configured } from "../lib/r2";
+import { sleep } from "../lib/scriptKit";
 
 const DATA = path.join(process.cwd(), "data");
 const STORE = path.join(DATA, "lobbying-store.json");
@@ -44,7 +45,6 @@ const MAX_PAGES = Number(process.env.LOBBY_MAX_PAGES) || (process.env.SEED ? 400
 const BILL_TTL_MS = 7 * 24 * 3600e3;
 const TOP_BILLS = 150;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface StoreRow {
   uuid: string;

@@ -14,13 +14,14 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, llmConfigured } from "../lib/llm";
 import { narrative } from "../lib/llmValidate";
 import { deadline, withDeadline } from "../lib/deadline";
 import { dedupeOffers, detectOddLotPriority, oddLotMath, priceInText, tickersFromDisplayName, type TenderRow, type TendersFile } from "../lib/tenders";
+import { sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "tenders.json");
 const CACHE = path.join(DATA, ".tmp", "tenders-seen.json");
@@ -28,7 +29,6 @@ const UA = "stock-chart-screener (research; jameslyeh@gmail.com)";
 const WINDOW_DAYS = 45; // tenders run 20 business days; 45d keeps live ones visible through expiry
 const DAY = 86_400_000;
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 async function efts(form: string, startdt: string, enddt: string): Promise<any[]> {
   const u = `https://efts.sec.gov/LATEST/search-index?forms=${encodeURIComponent(form)}&startdt=${startdt}&enddt=${enddt}`;
@@ -162,7 +162,7 @@ async function main() {
   const outFile: TendersFile = { generatedAt: new Date().toISOString(), windowDays: WINDOW_DAYS, rows: deduped, scanned: hits.length, unlisted };
   await fsp.mkdir(path.join(DATA, ".tmp"), { recursive: true });
   await fsp.writeFile(CACHE, JSON.stringify(seen));
-  await fsp.writeFile(FILE, JSON.stringify(outFile));
+  await writeFeedOrExit("tenders.json", outFile);
   console.log(`tenders: ${deduped.length} offer(s) after dedup (${rows.length} filings kept, ${unlisted} unlisted/rejected of ${hits.length} scanned), ${deduped.filter((r) => r.oddLotPriority).length} with odd-lot priority.`);
 }
 

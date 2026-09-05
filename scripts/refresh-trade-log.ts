@@ -18,14 +18,15 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { loadSnapshot } from "../lib/data";
 import { buildEarningsTrade } from "../lib/earningsTrade";
 import { computeRiskFlags, crossedCredit, marginPerShare, netCredit, payoffBounds, prePrintDriftPct, settleLegs, settlePostPrint, type TradeLogData, type TradeRec } from "../lib/tradeLog";
 import { loadCatalystOverlay } from "../lib/catalystOverlay";
 import { detectPreannounceChecked, detectRecentReportChecked } from "../lib/preannounce";
+import { mapPoolSafe, sleep } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "trade-log.json");
 const US_UNIVERSES = ["russell3000", "sp1500", "russell1000", "nasdaq100", "sp500"];
@@ -35,25 +36,11 @@ const CAP = 90; // most new names to price per run
 const KEEP = 500; // recs to retain
 const DAY = 86_400_000;
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 let gate: Promise<void> = Promise.resolve();
 function throttle(gap = 300): Promise<void> {
   const p = gate.then(() => sleep(gap));
   gate = p;
   return p;
-}
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let idx = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        try { out[i] = await fn(items[i], i); } catch { out[i] = null as any; }
-      }
-    }),
-  );
-  return out;
 }
 
 // Underlying close on the last trading day on/before `iso` (used to settle at expiry / read a reaction close).
@@ -171,7 +158,7 @@ async function main() {
   console.log(`${pool.length} un-logged US names report within ${WINDOW}d → pricing ${work.length}`);
 
   let logged = 0;
-  await mapPool(work, 5, async (s) => {
+  await mapPoolSafe(work, 5, async (s) => {
     // FULL timestamp, not date-only — straddleMove needs the hour to apply the AMC bracketing rule
     // (an after-close print must use an expiry strictly after the report date).
     const eIso = new Date(s._e).toISOString();
@@ -295,7 +282,7 @@ async function main() {
   // ── 2. SETTLE at the POST-PRINT (primary), then fill held-to-expiry (secondary) ──
   const openRecs = [...byId.values()].filter((r) => r.status !== "settled" || rec_needsExpiry(r));
   let settled = 0, expiryFilled = 0;
-  await mapPool(openRecs, 5, async (rec) => {
+  await mapPoolSafe(openRecs, 5, async (rec) => {
     const eT = Date.parse(rec.earningsDate);
     const expT = Date.parse(rec.expiry + "T00:00:00Z");
 
@@ -362,7 +349,7 @@ async function main() {
   const all = [...byId.values()].sort((a, b) => Date.parse(b.earningsDate) - Date.parse(a.earningsDate));
   const recs = all.slice(0, KEEP);
   const data: TradeLogData = { generatedAt: nowISO, recs };
-  await fsp.writeFile(FILE, JSON.stringify(data));
+  await writeFeedOrExit("trade-log.json", data);
 
   const open = recs.filter((r) => r.status !== "settled").length;
   const done = recs.filter((r) => r.status === "settled").length;

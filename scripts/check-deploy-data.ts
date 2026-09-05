@@ -21,11 +21,11 @@
  *   ALERT_WEBHOOK_URL      Slack/Discord/ntfy webhook (optional; just logs if unset)
  */
 import { notifyAlert } from "../lib/alertNotify";
+import { sleep } from "../lib/scriptKit";
 
 const BASE = (process.env.DEPLOY_CHECK_URL || "").trim().replace(/\/+$/, "");
 const SYM = (process.env.DEPLOY_CHECK_SYMBOL || "AAPL").toUpperCase();
 const UNI = process.env.DEPLOY_CHECK_UNIVERSE || "sp500";
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // A probe returns null when healthy, or a short failure reason. `transient:true` means "retry" (the
 // origin was unreachable / 5xx / non-JSON) rather than a real data problem.

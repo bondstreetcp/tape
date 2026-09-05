@@ -17,6 +17,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { recordUsage, webSpendCapped } from "./llmUsage";
+import { sleep } from "./scriptKit";
 
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "z-ai/glm-5.2";
@@ -101,7 +102,6 @@ function model(): string {
   return process.env.LLM_MODEL || DEFAULT_MODEL;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface ChatOpts {
   model?: string;

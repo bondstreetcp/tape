@@ -18,24 +18,11 @@ import { tickerToCik, getForm4List, parseForm4, pool } from "../lib/edgar";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import type { Snapshot } from "../lib/types";
 import type { InsiderBuy, InsidersFile, NameBuys } from "../lib/insiders";
+import { mapPool, sleep } from "../lib/scriptKit";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const WINDOW_DAYS = 90; // trailing window for "recent" open-market buys
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function mapPool<T, R>(items: T[], size: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const ret = new Array<R>(items.length);
-  let idx = 0;
-  async function worker() {
-    for (;;) {
-      const i = idx++;
-      if (i >= items.length) return;
-      ret[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));
-  return ret;
-}
 
 async function loadUsSymbols(): Promise<string[]> {
   const US = ["russell3000", "sp1500", "russell1000", "sp500", "nasdaq100"];

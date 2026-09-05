@@ -36,6 +36,8 @@ import { chatJSON, FLASH_MODEL, llmConfigured } from "../lib/llm";
 import { isPlaceholderText, narrative, narrativeList } from "../lib/llmValidate";
 import { mergeCarryForward, isMassLlmFailure, type ReportTiming } from "../lib/overnightFilings";
 import { classifyReportTiming } from "../lib/preannounce";
+import { sleep } from "../lib/scriptKit";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
 const DATA = path.join(process.cwd(), "data");
 const OUT = path.join(DATA, "overnight-filings.json");
@@ -57,7 +59,6 @@ const TEST_SYMBOLS = (process.env.TEST_SYMBOLS || "").trim();
 // the numbers Flash cites MATCH GLM exactly, no fabrication, ~4x cheaper; the prompt's "never compute a
 // figure / only explicitly-stated numbers" rubric keeps it grounded). Override with OVERNIGHT_MODEL.
 const OVERNIGHT_MODEL = process.env.OVERNIGHT_MODEL || FLASH_MODEL;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // 8-K items we treat as candidate-material. Cast a wide net here and let the LLM's
 // NONE-gate trim the noise (routine annual-meeting votes, boilerplate exhibits) — a
@@ -527,7 +528,7 @@ async function main() {
     count: merged.items.length,
     items: merged.items,
   };
-  await fs.writeFile(OUT, JSON.stringify(out));
+  await writeFeedOrExit("overnight-filings.json", out);
   const focusedN = merged.items.filter((x: OvernightItem) => x.sentimentSource === "focused").length;
   const dist = (["bullish", "neutral", "bearish"] as const)
     .map((s) => `${s.slice(0, 4)}=${merged.items.filter((x: OvernightItem) => x.sentiment === s).length}`)
