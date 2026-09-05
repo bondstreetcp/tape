@@ -9,14 +9,15 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import YahooFinance from "yahoo-finance2";
 import { chatJSON, NO_ADVICE, llmConfigured, PRO_MODEL } from "../lib/llm";
 import { cleanTicker, narrative, narrativeList } from "../lib/llmValidate";
 import { eftsSearch, fetchFilingBodyText, type EftsHit } from "../lib/edgarSearch";
 import type { IpoData, IpoEvent, IpoKind, IpoSummary } from "../lib/ipoMonitor";
 import { deriveIpoMetrics, type IpoFinancials, type IpoFiscalYear } from "../lib/ipoFinancials";
+import { mapPoolSafe } from "../lib/scriptKit";
+import { yahoo as yf } from "../lib/yahooClient";
+import { writeFeedOrExit } from "../lib/feedGuard";
 
-const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] } as any);
 const DATA = path.join(process.cwd(), "data");
 const FILE = path.join(DATA, "ipo-monitor.json");
 const DAY = 86_400_000;
@@ -39,11 +40,15 @@ async function classifyIpo(hit: EftsHit, text: string) {
   // SECOND OPINION on rejects: a 424B4 is a PRICED prospectus, so a "not an IPO" verdict is usually
   // a false negative (model-quality eval: the cheap tier rejected real IPOs). Before dropping the
   // filing, re-ask the PRO model — a reject must be confirmed twice to stand. ~$0.002/reject.
-  if (!out || out.isIpo === false) {
+  // TICKERED rejects only (2026-09-05): the untickered 424B4 pile is overwhelmingly follow-ons, unit
+  // offerings and debt, and the PRO re-asks on it were the single biggest line in the IPO monitor's
+  // $17.71/60d — more than the desk note. A real IPO's 424B4 names its exchange ticker.
+  if ((!out || out.isIpo === false) && hit.ticker) {
     const second = await chatJSON<any>(SYSTEM, user, { maxTokens: 1200, reasoningEffort: "low", model: PRO_MODEL }).catch(() => null);
     if (second && second.isIpo !== false) { console.log(`  ${hit.ticker || hit.issuer.slice(0, 20)}: reject overturned by second opinion`); out = second; }
     else return null;
   }
+  if (!out || out.isIpo === false) return null; // an untickered reject stands on the first opinion
   const ticker = cleanTicker(out.ticker || hit.ticker);
   if (!ticker) return null;
   return { ticker, company: String(out.company || hit.issuer).slice(0, 70), priceUsd: num(out.priceUsd, 1000), sizeUsdM: num(out.sizeUsdM, 100000), exchange: String(out.exchange || "").slice(0, 12) };
@@ -131,12 +136,6 @@ function dedupeUpcoming(events: IpoEvent[]): IpoEvent[] {
   }
   return out;
 }
-async function mapPool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length); let idx = 0, errs = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (idx < items.length) { const i = idx++; try { out[i] = await fn(items[i]); } catch { errs++; out[i] = null as any; } } }));
-  if (errs) console.warn(`  mapPool: ${errs}/${items.length} tasks threw (dropped as null)`); // A9: swallowed errors must be visible
-  return out;
-}
 
 async function main() {
   const nowISO = new Date().toISOString();
@@ -188,7 +187,7 @@ async function main() {
     .filter((t) => { const n = cap[t.kind] || 0; if (n >= LIMIT[t.kind]) return false; cap[t.kind] = n + 1; return true; });
   console.log(`${fresh.length} new filings to screen ${JSON.stringify(cap)} (${Object.keys(screened).length} previously screened, skipped)`);
 
-  const built = await mapPool(fresh, 4, async ({ hit, kind }): Promise<IpoEvent | null> => {
+  const built = await mapPoolSafe(fresh, 4, async ({ hit, kind }): Promise<IpoEvent | null> => {
     const text = await fetchFilingBodyText(hit);
     if (!text) return null; // fetch failed — do NOT mark screened; retry next night
     screened[hit.accession] = iso(Date.now()); // classification is about to run — verdict is final either way
@@ -220,7 +219,7 @@ async function main() {
   const priceBy: Record<string, number | null> = {};
   merged.forEach((e) => { if (e.priceUsd && e.ticker) priceBy[e.ticker] = e.priceUsd; });
   const perf: Record<string, number | null> = {};
-  await mapPool(syms, 6, async (s) => { perf[s] = await ipoPerf(s, priceBy[s] ?? null); });
+  await mapPoolSafe(syms, 6, async (s) => { perf[s] = await ipoPerf(s, priceBy[s] ?? null); });
   for (const e of merged) e.sinceIpoPct = e.kind !== "upcoming" && e.ticker ? (perf[e.ticker] ?? null) : null;
 
   // Backfill prospectus summaries for kept rows that lack one — OR that were summarized before
@@ -229,7 +228,7 @@ async function main() {
   const needSummary = merged.filter((e) => (!e.summary || e.summary.underwriters === undefined) && e.url).slice(0, 60);
   if (needSummary.length) {
     console.log(`backfilling ${needSummary.length} prospectus summaries (missing summary or underwriters)…`);
-    await mapPool(needSummary, 3, async (e) => {
+    await mapPoolSafe(needSummary, 3, async (e) => {
       const hit = hitFromUrl(e.url, e.id, e.company);
       if (!hit) return;
       const text = await fetchFilingBodyText(hit);
@@ -247,7 +246,7 @@ async function main() {
   const needFin = merged.filter((e) => e.kind === "ipo" && e.ticker && e.url && e.financials == null).slice(0, 30);
   if (needFin.length) {
     console.log(`extracting S-1 financials for ${needFin.length} recent IPOs…`);
-    await mapPool(needFin, 3, async (e) => {
+    await mapPoolSafe(needFin, 3, async (e) => {
       const cikM = e.url.match(/edgar\/data\/(\d+)\//);
       e.financials = cikM ? await fetchIpoFinancials(cikM[1], e.ticker).catch(() => null) : null;
     });
@@ -259,7 +258,7 @@ async function main() {
   for (const [acc, d] of Object.entries(screened)) if (d < pruneBefore) delete screened[acc];
   await fsp.writeFile(SCREENED_FILE, JSON.stringify(screened));
 
-  await fsp.writeFile(FILE, JSON.stringify({ generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData));
+  await writeFeedOrExit("ipo-monitor.json", { generatedAt: nowISO, scanned: uniq.length, events: merged } satisfies IpoData);
   const by = (k: string) => merged.filter((e) => e.kind === k).length;
   console.log(`\nwrote ${merged.length} events (${by("upcoming")} upcoming, ${by("ipo")} recent IPOs, ${by("lockup")} lockups).`);
   for (const e of merged.slice(0, 12)) console.log(`  [${e.kind.padEnd(8)}] ${(e.ticker || "—").padEnd(6)} ${e.company.slice(0, 30).padEnd(30)} ${e.summary ? "✓summary" : ""}`);
