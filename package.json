@@ -126,7 +126,8 @@
     "add-runner-secret": "tsx scripts/add-runner-secret.ts",
     "refresh-lobbying": "tsx scripts/refresh-lobbying.ts",
     "capture-trade-spreads": "tsx scripts/capture-trade-spreads.ts",
-    "refresh-spac-arb": "tsx scripts/refresh-spac-arb.ts"
+    "refresh-spac-arb": "tsx scripts/refresh-spac-arb.ts",
+    "gen-env-reference": "tsx scripts/gen-env-reference.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
