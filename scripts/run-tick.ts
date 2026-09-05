@@ -542,6 +542,15 @@ async function main() {
         `run-tick mode=${mode}: ${fails}/${plan.length} steps FAILED — the runner is broken (data will read stale). First failure: ${stepReport.find((s) => !s.ok)?.name ?? "?"} (exit ${stepReport.find((s) => !s.ok)?.exit}). See data/tick-report.json in the R2 tar.`,
         "Tape runner broken",
       );
+    } else if (fails > 0) {
+      // A single failed step is quiet by design (continue-on-error keeps the tick alive), which is exactly
+      // how a feed dies unnoticed: the step fails every night, the file ages out, and nobody is told until
+      // the freshness gate trips days later. Page on the first failure, with the step names.
+      const failed = stepReport.filter((s) => !s.ok);
+      void notifyAlert(
+        `run-tick mode=${mode}: ${fails}/${plan.length} step(s) failed — ${failed.slice(0, 5).map((s) => `${s.name} (exit ${s.exit})`).join("; ")}${failed.length > 5 ? "; …" : ""}. Tail: ${(failed[0]?.stderrTail || "").replace(/\s+/g, " ").slice(-200)}`,
+        `Tape tick: ${fails} step${fails === 1 ? "" : "s"} failed`,
+      );
     }
 
     // ── Upload + gate + deploy (workflow tail) ────────────────────────────────────────────────────

@@ -1,0 +1,10 @@
+[Unit]
+Description=Tape clean-IP worker (company cache + earnings-call digests → R2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/tape
+ExecStart=/usr/bin/env bash scripts/worker/run.sh
+Nice=10

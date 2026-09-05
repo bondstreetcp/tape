@@ -13,6 +13,7 @@ import { cachedStats, cachedProfile } from "@/lib/companyCache";
 import { GICS_TO_ETF } from "@/lib/sectors";
 import { loadSymbolSeries } from "@/lib/data";
 import { memo } from "@/lib/memoCache";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ export const maxDuration = 60;
 // with the nightly preview logger so the logged record is exactly what this route serves.
 
 export async function GET(req: Request, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const sp = new URL(req.url).searchParams;

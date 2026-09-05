@@ -4,6 +4,7 @@ import { gather10K } from "@/lib/spinoffFilings";
 import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
 import type { CompanyBriefing } from "@/lib/companyBriefing";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -29,6 +30,7 @@ const SCHEMA =
 // gather10K moved to lib/spinoffFilings.ts — shared with the two-entity spin preview route.
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const base = (extra: Partial<CompanyBriefing>): CompanyBriefing =>

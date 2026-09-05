@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchRiskFactorSections, type RiskChange } from "@/lib/riskFactors";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -8,6 +9,7 @@ export const maxDuration = 60;
 // Diffs a company's two most recent 10-K "Item 1A. Risk Factors" sections. Lazy per-stock; cached
 // a day (risk factors only change annually). Returns { diff: null } when it can't extract/compare.
 export async function GET(_req: Request, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   try {
     if (!(await llmConfigured())) return NextResponse.json({ diff: null });

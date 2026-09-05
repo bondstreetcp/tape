@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askConfigured, gatherContext, askGemini } from "@/lib/ask";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -9,6 +10,7 @@ export const maxDuration = 60;
 // read — better business vs better value, with a bull/bear on each. Extends the two-name
 // /api/ai-compare to N names.
 export async function POST(req: NextRequest) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   if (!askConfigured()) return NextResponse.json({ configured: false });
   let body: { symbols?: string[]; names?: string[] } = {};
   try { body = await req.json(); } catch { /* empty */ }

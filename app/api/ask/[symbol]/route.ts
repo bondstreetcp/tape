@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askConfigured, gatherContext, askGemini } from "@/lib/ask";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // 2.5 Pro + reasoning is slower than Flash
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const p = req.nextUrl.searchParams;
   const q = (p.get("q") || "").trim();
@@ -22,6 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
 
 // POST carries the prior Q&A so the model can answer follow-up questions in context.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   if (!askConfigured()) return NextResponse.json({ configured: false });
   let body: { q?: string; name?: string; history?: { q: string; a: string }[] } = {};

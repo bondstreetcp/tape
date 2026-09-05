@@ -57,6 +57,27 @@ function add(b: Record<string, Bucket>, key: string, inTok: number, outTok: numb
   x.estUsd += usd(model, inTok, outTok);
 }
 
+// This PROCESS's estimated spend today (the web slot's live routes; the nightly runs in another process).
+const today = { day: "", usd: 0 };
+function rollDay(): string {
+  const d = new Date().toISOString().slice(0, 10);
+  if (today.day !== d) { today.day = d; today.usd = 0; }
+  return d;
+}
+/** Estimated USD this process has spent on model calls today. */
+export function spendTodayUsd(): number { rollDay(); return today.usd; }
+/**
+ * The site's daily AI ceiling: true once the Next server process has spent LLM_WEB_DAILY_CAP_USD (default
+ * $5) today — lib/llm then declines the call and each route falls to its own "couldn't generate" path
+ * while cached answers keep serving. Only the web process (NEXT_RUNTIME is set) is capped; the nightly
+ * scripts have their own budgets. An open beta site needs a ceiling more than it needs a login.
+ */
+export function webSpendCapped(): boolean {
+  if (!process.env.NEXT_RUNTIME) return false;
+  const cap = Number(process.env.LLM_WEB_DAILY_CAP_USD || 5);
+  return cap > 0 && spendTodayUsd() >= cap;
+}
+
 /** Record one model call's token usage. Safe to call from scripts and server routes. */
 export function recordUsage(model: string, inTok = 0, outTok = 0): void {
   if (!model || (typeof process === "undefined")) return;
@@ -65,6 +86,8 @@ export function recordUsage(model: string, inTok = 0, outTok = 0): void {
   if (i === 0 && o === 0) return;
   add(pending.byModel, model, i, o, model);
   add(pending.byJob, JOB, i, o, model);
+  rollDay();
+  today.usd += usd(model, i, o);
   dirty = true;
   if (!hooked) {
     hooked = true;

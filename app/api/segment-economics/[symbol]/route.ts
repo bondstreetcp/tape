@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSegmentSource } from "@/lib/segments";
 import { cachedStats } from "@/lib/companyCache";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,6 +11,7 @@ export const maxDuration = 60;
 // segment from the filing's segment-note tables (the revenue-only parser misses OI), plus an AI
 // segment read. Button-triggered; cached a day.
 export async function GET(_req: Request, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   if (!(await llmConfigured())) return NextResponse.json({ configured: false });

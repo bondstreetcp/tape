@@ -192,6 +192,13 @@ const FEEDS: FeedSpec[] = [
   { file: "trump-truth-stocks.json", affects: ["/trump-stocks"], label: "Trump stock calls", tier: "event", maxAgeHours: EVENT },
   { file: "trump-trades.json", affects: ["/congress"], label: "Trump OGE trades", tier: "event", maxAgeHours: EVENT },
   { file: "overnight-filings.json", affects: ["/overnight"], label: "Overnight filings", tier: "event", maxAgeHours: EVENT, origin: "sec" },
+  // Registered 2026-09-05 — written nightly for months but invisible to this monitor (tests/feedRegistry
+  // now fails on any script-written feed that is neither registered nor a named intermediate).
+  { file: "market-headlines.json", affects: ["/morning-desk"], label: "Market headlines (wire fallback)", tier: "core", maxAgeHours: CORE, countPath: "headlines", minCount: 10 },
+  { file: "macro-releases.json", affects: ["/macro"], label: "Macro release calendar", tier: "core", maxAgeHours: CORE, countPath: "releases", minCount: 5 },
+  { file: "valuation-panel.json", affects: ["/forensics"], label: "Valuation panel (forensics)", tier: "core", maxAgeHours: CORE, countPath: "bySymbol", minCount: 500 },
+  // Licensed NielsenIQ scan notes land every ~2 weeks (a human drops the PDFs) — age-only, three-week window.
+  { file: "staples-scanner.json", affects: ["/staples-scanner"], label: "Staples scanner (NielsenIQ notes)", tier: "event", maxAgeHours: 24 * 21, countPath: "reports", minCount: 1 },
   // Local-embedding index over the overnight-filings notes (compute-over-owned-data, no fetches) — NOT
   // origin:"sec". Accumulates over nights; the count only grows, so the floor protects the archive from
   // a broken-embed night collapsing it (degrade to STALE, never EMPTY).

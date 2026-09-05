@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
 import { loadSnapshot } from "@/lib/data";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
@@ -30,6 +31,7 @@ const nameMatches = (nodeName: string, snapName: string): boolean => {
 // model's knowledge of the company's value chain, with public tickers where the entity is listed so
 // the read-throughs are clickable. Button-triggered; cached a day (relationships change slowly).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const name = req.nextUrl.searchParams.get("name") || sym;

@@ -16,7 +16,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import { recordUsage } from "./llmUsage";
+import { recordUsage, webSpendCapped } from "./llmUsage";
 
 const DEFAULT_BASE = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "z-ai/glm-5.2";
@@ -170,6 +170,7 @@ async function callChat(
   jsonMode: boolean,
 ): Promise<string | null> {
   const key = await apiKey();
+  if (webSpendCapped()) { console.warn("lib/llm: the site's daily AI budget (LLM_WEB_DAILY_CAP_USD) is used up — declining this live call."); return null; }
   const L = localCfg(); // per call — see localCfg()
   const wantLocal = !!L.url && !!L.model && localEligible(opts); // nightly extraction only — see localEligible()
   if (!key && !wantLocal) {

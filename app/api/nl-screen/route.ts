@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SCREEN_FIELDS, FIELD_KEYS, GICS_SECTORS, type ScreenSpec } from "@/lib/nlScreen";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -33,6 +34,7 @@ const RESPONSE_SCHEMA = {
 };
 
 export async function POST(req: NextRequest) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   if (!KEY) return NextResponse.json({ configured: false });
   let body: { query?: string } = {};
   try { body = await req.json(); } catch { /* empty */ }

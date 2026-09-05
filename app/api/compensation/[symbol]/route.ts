@@ -3,6 +3,7 @@ import { tickerToCik, getSubmissions, fetchWithRetry, htmlToText } from "@/lib/e
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import { numberGroundedIn } from "@/lib/llmValidate";
 import type { CompensationResponse, ExecComp, CompMetric, CompYear } from "@/lib/execComp";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -117,6 +118,7 @@ function phraseGrounded(str: string, textLower: string): boolean {
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const base = (extra: Partial<CompensationResponse>): CompensationResponse =>

@@ -3,6 +3,7 @@ import { chatJSON, PRO_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import { section, namedCompetitors, phraseGrounded, norm, clean, strList } from "@/lib/filingSections";
 import { gatherForm10 } from "@/lib/spinoffFilings";
 import type { SpinoffReport, SpinoffFinancials } from "@/lib/spinoffReport";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,6 +34,7 @@ const SCHEMA =
 // read the identical documents.
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { cik: cikRaw } = await params;
   const cik = String(cikRaw).replace(/\D/g, "");
   const base = (extra: Partial<SpinoffReport>): SpinoffReport =>

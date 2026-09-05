@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecentTranscripts } from "@/lib/transcripts";
 import { chatJSON, NO_ADVICE, PRO_MODEL, llmConfigured } from "@/lib/llm";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -9,6 +10,7 @@ export const maxDuration = 60;
 // management answered) + what changed vs the prior quarter. Button-triggered; one Gemini pass over
 // the latest transcript (+ a slice of the prior for the diff).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
   const name = req.nextUrl.searchParams.get("name") || sym;

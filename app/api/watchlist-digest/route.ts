@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askConfigured, askGemini } from "@/lib/ask";
 import { getNews } from "@/lib/news";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,6 +11,7 @@ const mv = (v: number | null | undefined) => (v == null ? null : `${v >= 0 ? "+"
 interface Item { symbol: string; name?: string; chg1d?: number | null; chgWk?: number | null; earnings?: string | null }
 
 export async function POST(req: NextRequest) {
+  const limited = guardLlmRoute(req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   if (!askConfigured()) return NextResponse.json({ configured: false });
   let body: { items?: Item[] } = {};
   try { body = await req.json(); } catch { /* empty */ }

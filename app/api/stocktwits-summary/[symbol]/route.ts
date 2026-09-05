@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchStockTwitsWindow } from "@/lib/stocktwits";
 import { chatJSON, NO_ADVICE, llmConfigured } from "@/lib/llm";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 // Distilling messy retail chatter is a GLM job, NOT Gemini's: Gemini's safety filters choke on the
 // crude/spammy posts and return empty. GLM is less restrictive and better at this extraction.
@@ -13,6 +14,7 @@ export const maxDuration = 30;
 // Gemini distills a name's last day + week of StockTwits chatter into signal (most of it is noise).
 // Lazy per-stock, cached 30 min. Returns { summary: null } when there's too little to summarize.
 export async function GET(_req: Request, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   try {
     if (!(await llmConfigured())) return NextResponse.json({ summary: null });

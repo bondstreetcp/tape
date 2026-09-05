@@ -10,6 +10,7 @@ import { pipelineParentTicker, type SpinoffsData, type SpinPipelineRow } from "@
 import type { TwoEntityPreview, SpinEntity, SpinMechanics } from "@/lib/spinoffPreview";
 import { raceTimeout } from "@/lib/earningsPreview";
 import type { StoredDoc } from "@/lib/research/types";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -59,6 +60,7 @@ function researchDigest(docs: StoredDoc[]): string {
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ cik: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { cik: cikRaw } = await params;
   const cik = String(cikRaw).replace(/\D/g, "").padStart(10, "0");
   const base = (extra: Partial<TwoEntityPreview>): TwoEntityPreview =>

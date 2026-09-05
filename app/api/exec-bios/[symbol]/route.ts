@@ -3,6 +3,7 @@ import { cachedProfile } from "@/lib/companyCache";
 import { tickerToCik, getSubmissions, fetchWithRetry, htmlToText } from "@/lib/edgar";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, llmConfigured } from "@/lib/llm";
 import type { ExecBio, ExecBiosResponse } from "@/lib/execBios";
+import { guardLlmRoute } from "@/lib/llmGuard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -108,6 +109,7 @@ async function gatherSources(symbol: string): Promise<{ proxy: { url: string; da
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ symbol: string }> }) {
+  const limited = guardLlmRoute(_req); if (limited) return limited; // open-beta rate limit (lib/llmGuard)
   const { symbol } = await params;
   const sym = decodeURIComponent(symbol).toUpperCase();
 
