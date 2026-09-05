@@ -24,7 +24,8 @@ export const BROWSER_UA =
 /** An honest research UA with a contact, which the public-data hosts (SEC, BLS, BEA, the Fed) ask for. */
 export const RESEARCH_UA = "Mozilla/5.0 (tape research; jameslyeh@gmail.com)";
 
-const errMsg = (e: unknown): string => String((e as any)?.message ?? e).replace(/\s+/g, " ").slice(0, 200);
+const errMsg = (e: unknown): string =>
+  String((e as { message?: unknown } | null | undefined)?.message ?? e).replace(/\s+/g, " ").slice(0, 200);
 
 // ── Concurrency ──────────────────────────────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export async function readJson<T = any>(file: string, dir = DATA_DIR): Promise<T
   const abs = path.isAbsolute(file) ? file : path.join(dir, file);
   try { return JSON.parse(await fs.readFile(abs, "utf8")) as T; }
   catch (e) {
-    if ((e as any)?.code !== "ENOENT") swallow(`readJson ${path.basename(abs)}`, e);
+    if ((e as { code?: string } | null)?.code !== "ENOENT") swallow(`readJson ${path.basename(abs)}`, e);
     return null;
   }
 }
@@ -145,8 +146,9 @@ export async function readJson<T = any>(file: string, dir = DATA_DIR): Promise<T
 export async function validTicker(sym: string): Promise<boolean> {
   try {
     const { yahoo } = await import("./yahooClient");
-    const ch: any = await yahoo.chart(sym, { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as any, { validateResult: false });
-    return (ch?.quotes || []).some((q: any) => q?.close != null);
+    const opts = { period1: new Date(Date.now() - 20 * DAY), interval: "1d" } as Parameters<typeof yahoo.chart>[1];
+    const ch = (await yahoo.chart(sym, opts, { validateResult: false })) as unknown as { quotes?: { close?: number | null }[] } | null;
+    return (ch?.quotes || []).some((q) => q?.close != null);
   } catch { return false; }
 }
 

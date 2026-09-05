@@ -119,7 +119,7 @@ async function fetchTelegramChannel(channel: string, brand: string): Promise<Mar
       const text = rawText.split(/<br\s*\/?>/i)[0]
         .replace(/<[^>]+>/g, " ")
         .replace(/&amp;/g, "&").replace(/&#0?39;/g, "'").replace(/&quot;/g, '"').replace(/&#0?36;/g, "$").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&nbsp;/g, " ")
-        .replace(/\(\s*@?\s*walter\s*bloomberg\s*\)/i, "").replace(/^[*🇺🇸\s]+/, "")
+        .replace(/\(\s*@?\s*walter\s*bloomberg\s*\)/i, "").replace(/^(?:[*\s]|🇺🇸)+/u, "")
         .replace(/\s+/g, " ").trim();
       if (text.length < 6) continue;
       out.push({

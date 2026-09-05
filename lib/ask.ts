@@ -260,7 +260,7 @@ async function askGeminiInner(
     // Both attempts dead. Say so like a person — the raw DOMException text is what the user
     // screenshot showed, and it reads like a stack trace, not an answer.
     if (isDeadline(e2) || /Gemini (429|5\d\d)/.test(String(e2?.message || e2)))
-      throw new Error("The AI took too long to answer — Google's models are busy right now. Try again in a moment.");
+      throw new Error("The AI took too long to answer — Google's models are busy right now. Try again in a moment.", { cause: e2 });
     throw e2;
   }
 }

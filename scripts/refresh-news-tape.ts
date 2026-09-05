@@ -72,7 +72,7 @@ async function loadRegistrants(): Promise<Registrant[]> {
     // Fall back to whatever is on disk, however old — tagging with a stale list beats not running.
     const stale = await fs.readFile(cache, "utf8").then((s) => JSON.parse(s) as Registrant[]).catch(() => null);
     if (stale?.length) { console.warn(`  registrants: SEC pull failed (${String((e as Error).message)}), using stale cache of ${stale.length}`); return stale; }
-    throw new Error(`cannot load registrants and no cache exists: ${String((e as Error).message)}`);
+    throw new Error(`cannot load registrants and no cache exists: ${String((e as Error).message)}`, { cause: e });
   }
 }
 

@@ -426,24 +426,27 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
       .finally(() => clearTimeout(timer));
   };
 
-  if (!stats) return null;
-  const q0 = stats.estimates?.find((e) => e.period === "0q") || stats.estimates?.[0] || null;
+  // Derived with `stats` possibly null. The `if (!stats) return null` used to sit here — ABOVE the
+  // useMemo below — which made that hook conditional: a stats null→object flip across renders would
+  // throw "rendered more hooks than during the previous render". The guard now sits just before the
+  // JSX, and everything between is null-safe. (react-hooks/rules-of-hooks, 2026-09-05.)
+  const q0 = stats?.estimates?.find((e) => e.period === "0q") || stats?.estimates?.[0] || null;
   const days = earningsDate ? Math.round((Date.parse(earningsDate) - Date.now()) / 86_400_000) : null;
   const dateLabel = earningsDate && !Number.isNaN(Date.parse(earningsDate)) ? new Date(earningsDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
   const revPct = q0 && q0.epsCurrent != null && q0.eps90dAgo != null && q0.eps90dAgo !== 0 ? (q0.epsCurrent / q0.eps90dAgo - 1) * 100 : null;
-  const sp = stats.surprises.map((s) => s.surprisePercent).filter((x): x is number => x != null);
+  const sp = (stats?.surprises ?? []).map((s) => s.surprisePercent).filter((x): x is number => x != null);
   const beatRate = sp.length ? sp.filter((x) => x > 0).length / sp.length : null;
   const avgSurprise = sp.length ? sp.reduce((a, x) => a + x, 0) / sp.length : null;
 
   // #2 sell-side positioning
-  const r = stats.ratings;
+  const r = stats?.ratings ?? null;
   const buys = r ? r.strongBuy + r.buy : null;
   const sells = r ? r.sell + r.strongSell : null;
-  const upside = stats.targetMean != null && stats.price ? stats.targetMean / stats.price - 1 : null;
+  const upside = stats?.targetMean != null && stats.price ? stats.targetMean / stats.price - 1 : null;
   // #3 short trend
-  const shortMoM = stats.sharesShort != null && stats.sharesShortPriorMonth ? stats.sharesShort / stats.sharesShortPriorMonth - 1 : null;
+  const shortMoM = stats?.sharesShort != null && stats.sharesShortPriorMonth ? stats.sharesShort / stats.sharesShortPriorMonth - 1 : null;
   // #6 comp (year-ago quarter actual ≈ oldest of the recent reported quarters)
-  const compEps = stats.surprises.length ? stats.surprises[0].actual : null;
+  const compEps = stats?.surprises.length ? stats.surprises[0].actual : null;
 
   const d = typeof data === "object" ? data : null;
   // The implied-distribution slice whose expiry is nearest the event (straddle) expiry — the print itself.
@@ -476,7 +479,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
     .slice(0, 7);
 
   // Pre-print analyst moves — rating/PT changes dated into the print (last ~45d), newest first
-  const moves = (stats.ratingChanges || [])
+  const moves = (stats?.ratingChanges || [])
     .filter((c) => c.date && !Number.isNaN(Date.parse(c.date)) && (Date.now() - Date.parse(c.date)) / 86_400_000 <= 45)
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
     .slice(0, 5);
@@ -546,7 +549,7 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
 
   // Guidance — the standing outlook + a consensus SANITY GATE: only trust an extracted number that sits
   // within 0.5–2× of SOME consensus period (filters LLM misreads, e.g. a margin% pulled in as EPS).
-  const estimates = (stats.estimates || []) as any[];
+  const estimates = (stats?.estimates || []) as any[];
   const matchConsensus = (mid: number | null, field: "epsAvg" | "revAvg"): { val: number; ok: boolean } | null => {
     if (mid == null) return null;
     let best: { val: number; ok: boolean } | null = null, bestRatio = Infinity;
@@ -569,6 +572,8 @@ export default function EarningsPrep({ symbol, stats, earningsDate, earningsEsti
 
   // The AI preview's quant-signal line is built server-side in the route (from the same sources as
   // part=data) — see runAi above; nothing signal-shaped is sent from the client.
+
+  if (!stats) return null; // the guard, now below every hook
 
   return (
     <div className="mb-5">

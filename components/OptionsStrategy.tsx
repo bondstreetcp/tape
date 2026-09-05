@@ -126,7 +126,23 @@ const valueAt = (legs: Leg[], tDays: number, stratDte: number, atmIV: number, iv
 
 const CW = 520, CH = 200, ML = 44, MR = 12, MT = 12, MB = 22;
 
-export default function OptionsStrategy({ symbol, calls, puts, underlying, expiry, dte, currency, nextExpiry, nextIV }: { symbol?: string; calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null; currency?: string; nextExpiry?: string | null; nextIV?: number | null }) {
+type Props = { symbol?: string; calls: Opt[]; puts: Opt[]; underlying: number | null; expiry: string | null; dte: number | null; currency?: string; nextExpiry?: string | null; nextIV?: number | null };
+
+/**
+ * The thin-chain guard lives OUTSIDE the modelling component. The body calls hooks after the point
+ * where this check used to `return`, and a hook after a conditional return is a hook whose order can
+ * change between renders — React throws "rendered more hooks than during the previous render" the
+ * first time a thin chain fills in. (react-hooks/rules-of-hooks, 2026-09-05.)
+ */
+export default function OptionsStrategy(props: Props) {
+  const strikes = new Set<number>([...props.calls.map((c) => c.strike), ...props.puts.map((p) => p.strike)]);
+  if (strikes.size < 2 || !props.underlying) {
+    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">Not enough chain data to model strategies for this expiry.</div>;
+  }
+  return <OptionsStrategyBody {...props} />;
+}
+
+function OptionsStrategyBody({ symbol, calls, puts, underlying, expiry, dte, currency, nextExpiry, nextIV }: Props) {
   const u = underlying ?? 0;
   const sym = currencyPrefix(currency);
   const dollars = (v: number) => fmtDollars(v, sym);
@@ -170,10 +186,6 @@ export default function OptionsStrategy({ symbol, calls, puts, underlying, expir
   const strat = STRATS.find((s) => s.key === stratKey)!;
 
   const at = (off: number) => strikes[Math.min(strikes.length - 1, Math.max(0, atmIdx + off))];
-
-  if (strikes.length < 2 || !u) {
-    return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">Not enough chain data to model strategies for this expiry.</div>;
-  }
 
   const stratDte = dte ?? 30;
   const ks = strat.strikes.map((spec, i) => ov[i] ?? at(spec.off));

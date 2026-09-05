@@ -32,5 +32,7 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npx tsc --noEmit
-      - name: Unit tests (pure-function core)
+      - name: Lint (errors only — hooks order, undefined names, unsafe patterns; eslint.config.mjs)
+        run: npm run lint
+      - name: Tests (pure-function core + the component smoke harness in tests/ui)
         run: npm test
