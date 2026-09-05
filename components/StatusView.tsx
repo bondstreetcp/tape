@@ -5,6 +5,8 @@ import type { FreshReport, FreshResult } from "@/lib/dataFreshness";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
 import { ALL_NAV } from "@/lib/nav";
 import UniverseSwitcher from "./UniverseSwitcher";
+import RunnerHistory from "./RunnerHistory";
+import type { TickHistory, TickReport } from "@/lib/tickHistory";
 
 /**
  * System Status — the one page that answers "what's working right now?".
@@ -42,11 +44,13 @@ const TIER_ORDER = ["core", "snapshot", "event", "synthesis"];
 const fmtAge = (h: number | null) => (h == null ? "—" : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`);
 
 export default function StatusView({
-  universe, report: initial, build,
+  universe, report: initial, build, ticks,
 }: {
   universe: string;
   report: FreshReport;
   build: { version: string; sha: string; builtAt: string };
+  /** The runner's last 30 days + the last tick report (absent on a tree that predates the history). */
+  ticks?: { history: TickHistory | null; latest: TickReport | null };
 }) {
   const [report, setReport] = useState<FreshReport>(initial);
   const [busy, setBusy] = useState(false);
@@ -155,6 +159,9 @@ export default function StatusView({
         <Tile label="Live build" value={build.sha} sub={build.builtAt ? `v${build.version} · built ${build.builtAt.slice(0, 16).replace("T", " ")} UTC` : `v${build.version}`} />
         <Tile label="Upstream (SEC)" value={report.secProbe ? (report.secProbe.reachable ? "reachable" : "down") : "not probed"} color={report.secProbe ? (report.secProbe.reachable ? GREEN : RED) : undefined} sub={report.secProbe?.detail ?? "only probed when an SEC feed fails"} />
       </div>
+
+      {/* the runner's record: a step that fails every night and passes every hour is only visible here */}
+      {ticks && <RunnerHistory history={ticks.history} latest={ticks.latest} />}
 
       {/* what's actually affected — the reason this page exists */}
       {affected.length > 0 && (
