@@ -21,6 +21,7 @@ import { promisify } from "node:util";
 import { deadline } from "./deadline";
 import { listTranscriptCandidates, fetchTranscriptAt, type FullTranscript } from "./transcripts";
 import { BROWSER_UA as UA } from "./scriptKit";
+import type { Browser } from "playwright-core"; // type-only (erased) — the runtime import is lazy, see sharedBrowser()
 
 const execFileP = promisify(execFile);
 const LISTING = "https://www.investing.com/news/transcripts";
@@ -47,7 +48,7 @@ async function getHtml(url: string): Promise<string | null> {
 }
 
 export interface InvestingItem { url: string; title: string; date: string | null; slug: string }
-export type TranscriptSource = "investing" | "fool";
+export type TranscriptSource = "google" | "investing" | "fool";
 export interface FoundTranscript { transcript: FullTranscript; source: TranscriptSource; date: string }
 
 const SUFFIX = new Set(["inc", "corp", "corporation", "co", "company", "ltd", "limited", "plc", "holdings", "holding", "group", "the", "nv", "sa", "ag", "se", "llc", "lp", "trust", "class", "cl", "a", "b", "c", "adr", "ads", "ord", "shs", "common", "stock", "shares", "and", "of", "companies"]);
@@ -167,12 +168,143 @@ export async function fetchInvestingTranscript(item: InvestingItem, symbol: stri
   return { title: parsed.title || item.title, date: item.date, source: "Investing.com", url: item.url, text: parsed.text };
 }
 
+// ── Google Finance (Quartr-sourced) — the freshest source the NAS's OWN IP can reach (Investing.com + GitHub
+// are IP-blocked; Google is not). The transcript renders client-side via an obfuscated batchexecute RPC, so a
+// static fetch can't read it — a headless Chromium renders the earnings tab and we scrape the DOM. Google carries
+// ONLY the latest call per company (no back-catalogue) — exactly what the per-tick digest wants. playwright-core
+// never downloads a browser on install; if Chromium is absent the launch throws and this source disables itself
+// (→ falls back to Investing.com/Fool), so shipping this is safe before the NAS is provisioned. Provision with
+// `npx playwright install chromium` (or apt chromium + a channel). ─────────────────────────────────────────
+
+// yahoo-finance2 quote().exchange (short code) → the Google Finance URL exchange segment. Pure.
+const GOOGLE_EXCH: Record<string, string> = {
+  NMS: "NASDAQ", NGM: "NASDAQ", NCM: "NASDAQ", NAS: "NASDAQ", NGS: "NASDAQ", NASDAQ: "NASDAQ",
+  NYQ: "NYSE", NYS: "NYSE", NYSE: "NYSE", ASE: "NYSEAMERICAN", AMEX: "NYSEAMERICAN",
+  PCX: "NYSEARCA", ARCA: "NYSEARCA", BTS: "BATS", BATS: "BATS",
+};
+export function googleExchange(yahooExch: string | null | undefined): string | null {
+  return yahooExch ? GOOGLE_EXCH[yahooExch.toUpperCase()] ?? null : null;
+}
+
+const GF_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+/** Resolve Google's earnings-header date → YYYY-MM-DD. `callTime` ("Wed, Sep 2, 5:00 PM", year-less) is the CURRENT
+ *  call when the page awaits the next print; else `repDate` ("Aug 27, 2026") is the latest report. Prefer callTime
+ *  and pin its year to the most-recent PAST occurrence (a fiscal-period year ≠ calendar year). Pure. */
+export function parseGoogleCallDate(callTime: string | null, repDate: string | null, todayISO: string): string | null {
+  if (callTime) {
+    const m = callTime.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2})/);
+    const mo = m ? GF_MONTHS.indexOf(m[1].toLowerCase()) : -1;
+    if (m && mo >= 0) {
+      const day = Number(m[2]);
+      const today = new Date(`${todayISO}T00:00:00Z`);
+      let y = today.getUTCFullYear();
+      if (Date.UTC(y, mo, day) > today.getTime() + 86_400_000) y -= 1; // a future month/day → last year's occurrence
+      return `${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  if (repDate) {
+    const m = repDate.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2}),\s+(\d{4})/);
+    const mo = m ? GF_MONTHS.indexOf(m[1].toLowerCase()) : -1;
+    if (m && mo >= 0) return `${m[3]}-${String(mo + 1).padStart(2, "0")}-${String(Number(m[2])).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/** The transcript body from the earnings tab's `main` innerText — "Call transcript" heading to the next section
+ *  (the AI "Highlights" blurb then the speaker-labelled call). Pure. '' when absent. */
+export function extractGoogleTranscript(mainText: string): string {
+  const start = mainText.indexOf("Call transcript");
+  if (start < 0) return "";
+  let end = mainText.indexOf("Related earnings", start);
+  if (end < 0) end = mainText.indexOf("Previous reports", start);
+  if (end < 0) end = mainText.length;
+  return mainText.slice(start, end)
+    .replace(/^Call transcript\s*/i, "")
+    .replace(/^(?:(?:expand_less|expand_more|summarize_auto|expand_all)\s*)+/i, "") // strip leading material-icon chrome
+    .trim();
+}
+
+/** Is the rendered text a REAL transcript for THIS company (not a placeholder / wrong page)? Pure. */
+export function googleTranscriptValid(text: string, symbol: string, name: string): boolean {
+  if (text.length < 3000) return false;
+  const sym = symbol.toUpperCase();
+  const tickerHits = (text.match(new RegExp(`\\b${sym.replace(/[.^$*+?()[\]{}|\\]/g, "\\$&")}\\b`, "g")) || []).length;
+  const first = nameWords(name)[0];
+  const nameHits = first ? (text.toLowerCase().replace(/['’]/g, "").match(new RegExp(`\\b${first}\\b`, "g")) || []).length : 0;
+  const hasSpeakers = /operator|prepared remarks|earnings call|conference call|analyst/i.test(text);
+  return (tickerHits >= 1 || nameHits >= 2) && hasSpeakers;
+}
+
+let _browser: Promise<Browser | null> | null = null;
+async function sharedBrowser(): Promise<Browser | null> {
+  if (!_browser) _browser = (async () => {
+    try { const { chromium } = await import("playwright-core"); return await chromium.launch({ headless: true }); }
+    catch (e) { console.warn(`google-transcripts: headless Chromium unavailable (${String((e as Error)?.message || e).slice(0, 80)}) — source disabled`); return null; }
+  })();
+  return _browser;
+}
+/** Close the shared headless browser so the process can exit — the digest job calls this in its finally. */
+export async function closeGoogleBrowser(): Promise<void> {
+  const p = _browser; _browser = null;
+  const b = p ? await p.catch(() => null) : null;
+  if (b) await b.close().catch(() => {});
+}
+
+/** Render one earnings tab → {title, mainText}, or null (bad exchange / missing / Chromium down). */
+async function renderGoogleEarnings(symbol: string, exchange: string): Promise<{ title: string; mainText: string } | null> {
+  const browser = await sharedBrowser();
+  if (!browser) return null;
+  const ctx = await browser.newContext({ userAgent: UA, locale: "en-US", extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" } });
+  try {
+    await ctx.addCookies([{ name: "SOCS", value: "CAI", domain: ".google.com", path: "/" }]); // pre-accept consent, no personalization
+    const page = await ctx.newPage();
+    await page.goto(`https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${exchange}?tab=earnings`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    if (/consent\.google\.com/.test(page.url())) return null;
+    await page.getByText("Call transcript", { exact: false }).first().waitFor({ timeout: 15_000 }).catch(() => {});
+    await page.getByText("Call transcript", { exact: false }).first().click({ timeout: 4_000 }).catch(() => {}); // expand (CSS toggle)
+    await page.waitForTimeout(1_200);
+    return await page.evaluate(() => ({ title: document.title || "", mainText: (document.querySelector("main") as HTMLElement)?.innerText || "" }));
+  } catch { return null; }
+  finally { await ctx.close().catch(() => {}); }
+}
+
+/** Google Finance's latest transcript for a reporter, dated within [since, today] — else null. Resolves the exact
+ *  exchange via Yahoo (a bare/wrong ticker 404s on Google), falling back to the two big US boards. */
+export async function findGoogleTranscript(symbol: string, name: string, w: { since: string; today: string }): Promise<FoundTranscript | null> {
+  let exchanges: string[] = ["NASDAQ", "NYSE"];
+  try {
+    const mod = await import("yahoo-finance2");
+    // dynamic-import boundary: this build's default export is a constructor with a .quote() — type just what we read
+    const YF = mod.default as unknown as { new (opts?: { suppressNotices?: string[] }): { quote(s: string): Promise<{ exchange?: string }> } };
+    const q = await new YF({ suppressNotices: ["yahooSurvey"] }).quote(symbol);
+    const g = googleExchange(q?.exchange);
+    if (g) exchanges = [g];
+  } catch { /* Yahoo down — try both boards */ }
+  for (const exch of exchanges) {
+    const rendered = await renderGoogleEarnings(symbol, exch);
+    if (!rendered) continue;
+    const text = extractGoogleTranscript(rendered.mainText);
+    if (!googleTranscriptValid(text, symbol, name)) continue;
+    const callTime = (rendered.mainText.match(/Call Time:\s*([^\n]+)/) || [])[1]?.trim() || null;
+    const ri = rendered.mainText.indexOf("Previous reports");
+    const repDate = ri >= 0 ? (rendered.mainText.slice(ri, ri + 900).match(/[A-Za-z]{3}\s+\d{1,2},\s+\d{4}/) || [])[0] || null : null;
+    const date = parseGoogleCallDate(callTime, repDate, w.today);
+    if (!date || date < w.since || date > w.today) continue; // Google's latest isn't the recent call → skip
+    const coName = (rendered.title.match(/^(.*?)\s*\(/) || [])[1]?.trim() || name;
+    const url = `https://www.google.com/finance/quote/${symbol}:${exch}?tab=earnings`;
+    return { transcript: { title: `${coName} earnings call transcript`, date, source: "Google Finance", url, text }, source: "google", date };
+  }
+  return null;
+}
+
 /**
- * The one call the digest job makes per reporter: the freshest full transcript dated within [since, today] —
- * Investing.com when reachable, else The Motley Fool's per-ticker listing. null = nothing posted yet (or blocked
- * everywhere) — the caller retries next tick.
+ * The one call the digest job makes per reporter: the freshest full transcript dated within [since, today].
+ * Google Finance FIRST (the only same-day source the NAS's own IP can reach) → Investing.com (clean-IP only) →
+ * The Motley Fool's per-ticker listing. null = nothing posted yet (or unreachable everywhere) — retry next tick.
  */
 export async function findRecentTranscript(symbol: string, name: string, w: { since: string; today: string }): Promise<FoundTranscript | null> {
+  const g = await findGoogleTranscript(symbol, name, w).catch(() => null);
+  if (g) return g;
   if (await investingReachable()) {
     const items = await listInvestingTranscripts(6); // ~35 articles a page; six pages cover the lookback in season
     const hit = items.find((it) => it.date && it.date >= w.since && it.date <= w.today && investingSlugMatches(it.slug, name, symbol));

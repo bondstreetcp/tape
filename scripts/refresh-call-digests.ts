@@ -43,7 +43,7 @@ import path from "path";
 import { loadSnapshot } from "../lib/data";
 import { loadOvernightFilings, isMassLlmFailure } from "../lib/overnightFilings";
 import type { FullTranscript } from "../lib/transcripts";
-import { findRecentTranscript, investingReachable } from "../lib/transcriptSources";
+import { findRecentTranscript, investingReachable, closeGoogleBrowser } from "../lib/transcriptSources";
 import { chatJSON, FLASH_MODEL, NO_ADVICE, PRO_MODEL, llmConfigured } from "../lib/llm";
 import { writeFeedGuarded } from "../lib/feedGuard";
 import { getObject, putObject, r2Configured } from "../lib/r2";
@@ -297,4 +297,6 @@ async function main() {
   );
 }
 
-main().catch((e) => { console.error("refresh-call-digests:", String(e?.message || e)); process.exit(1); });
+main()
+  .catch((e) => { console.error("refresh-call-digests:", String(e?.message || e)); process.exitCode = 1; })
+  .finally(() => closeGoogleBrowser()); // release the shared headless Chromium so the process can exit

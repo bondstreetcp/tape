@@ -136,6 +136,7 @@
     "d3-hierarchy": "^3.1.2",
     "next": "^16.2.9",
     "pdf-parse": "^1.1.1",
+    "playwright-core": "^1.63.0",
     "postgres": "^3.4.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

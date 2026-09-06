@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { investingSlugMatches, nameWords, parseInvestingArticle, parseInvestingListing } from "../lib/transcriptSources";
+import { investingSlugMatches, nameWords, parseInvestingArticle, parseInvestingListing, googleExchange, parseGoogleCallDate, extractGoogleTranscript, googleTranscriptValid } from "../lib/transcriptSources";
 
 // Investing.com is the only same-day full-transcript source left (2026-09). These pin the pure parsers against
 // the page's real markup (data-test attributes, #article paragraphs) and the company-matching rules, so a
@@ -78,4 +78,44 @@ test("parseInvestingArticle: the #article paragraphs minus boilerplate, cut at t
 
 test("parseInvestingArticle: a stub page (too short) is null", () => {
   assert.equal(parseInvestingArticle(`<html><body><div id="article"><p>Five Below (FIVE) FIVE brief.</p></div></body></html>`, "FIVE", "Five Below"), null);
+});
+
+// Google Finance (Quartr-sourced) — the NAS-reachable source (2026-09). The network lives in a headless render;
+// these pin the PURE parsers (exchange map, header-date resolution, DOM-text slice, company verification).
+
+test("googleExchange: maps Yahoo short codes to Google URL segments, else null", () => {
+  assert.equal(googleExchange("NMS"), "NASDAQ");
+  assert.equal(googleExchange("ngm"), "NASDAQ");
+  assert.equal(googleExchange("NYQ"), "NYSE");
+  assert.equal(googleExchange("ASE"), "NYSEAMERICAN");
+  assert.equal(googleExchange("PCX"), "NYSEARCA");
+  assert.equal(googleExchange("LSE"), null); // a foreign board we don't map
+  assert.equal(googleExchange(null), null);
+  assert.equal(googleExchange(undefined), null);
+});
+
+test("parseGoogleCallDate: prefers callTime (year = most-recent past occurrence), else the dated repDate", () => {
+  const today = "2026-09-06";
+  assert.equal(parseGoogleCallDate("Wed, Sep 2, 5:00 PM", "Jun 3, 2026", today), "2026-09-02"); // callTime beats a prior-qtr repDate
+  assert.equal(parseGoogleCallDate("Tue, Dec 9, 2:00 PM", null, today), "2025-12-09"); // a future month/day → last year's
+  assert.equal(parseGoogleCallDate(null, "Aug 27, 2026", today), "2026-08-27"); // no callTime → repDate carries its own year
+  assert.equal(parseGoogleCallDate(null, null, today), null);
+});
+
+test("extractGoogleTranscript: slices the transcript region, strips leading icon chrome", () => {
+  const main = "Fiscal period\nQ3 2026\nCall transcript\nexpand_less\nsummarize_auto\nHighlights\nBroadcom delivered a record quarter. [Operator Instructions] Welcome to the call.\nRelated earnings\nNVDA\nAAPL";
+  const t = extractGoogleTranscript(main);
+  assert.ok(t.startsWith("Highlights"), `expected to start at Highlights, got: ${t.slice(0, 40)}`);
+  assert.ok(t.includes("[Operator Instructions]"));
+  assert.ok(!t.includes("Related earnings"), "must stop before the next section");
+  assert.ok(!/^Call transcript/.test(t) && !t.startsWith("expand_less"));
+  assert.equal(extractGoogleTranscript("no transcript section here"), "");
+});
+
+test("googleTranscriptValid: real+company-matched passes; short or wrong-company fails", () => {
+  const real = "Welcome to the Broadcom conference call. Operator: please go ahead. " + "AVGO management discussed AI demand and margins. ".repeat(80);
+  assert.equal(googleTranscriptValid(real, "AVGO", "Broadcom Inc"), true);
+  assert.equal(googleTranscriptValid("AVGO Operator earnings call analyst", "AVGO", "Broadcom Inc"), false); // < 3000 chars
+  const wrong = "The operator welcomed everyone to the earnings call. ".repeat(120); // long + speaker words, but no AVGO/Broadcom
+  assert.equal(googleTranscriptValid(wrong, "AVGO", "Broadcom Inc"), false);
 });
