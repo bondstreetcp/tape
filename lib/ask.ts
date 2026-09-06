@@ -6,6 +6,7 @@
  * reports unconfigured and the UI explains how to add one.
  */
 import { loadCompanyBundle } from "./companyCache";
+import { loadCallDigests } from "./callDigests";
 import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
@@ -39,9 +40,10 @@ const r1 = (v: number | null) => (v == null ? "n/a" : v.toFixed(1));
 
 export async function gatherContext(symbol: string, name = ""): Promise<{ name: string; text: string }> {
   // stats/profile/financials from the baked per-stock cache (local on a hit); only news stays live.
-  const [bundle, news] = await Promise.all([
+  const [bundle, news, digests] = await Promise.all([
     loadCompanyBundle(symbol),
     getNews(name || symbol, 8).catch(() => []),
+    loadCallDigests().catch(() => null), // recent earnings-call digests — attribute a move to what management said
   ]);
   const { stats, profile, financials: fin } = bundle;
   const display = name || symbol;
@@ -80,6 +82,14 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
       series("Diluted EPS", ["dilutedEPS"], (v) => `$${v.toFixed(2)}`),
     ].filter(Boolean);
     if (lines.length) text += `Annual financial trend (oldest→newest):\n${lines.join("\n")}\n`;
+  }
+  // Earnings-call digests for THIS name (newest first) — lets the move-explainer pin a drop/pop on a guidance
+  // cut or tone shift, not just news. Compact by design: the grounded ask runs ~10× nightly on the desk note.
+  const calls = (digests?.digests ?? []).filter((d) => d.symbol === symbol).slice(0, 4);
+  if (calls.length) {
+    text += `Recent earnings calls (what management said on the call):\n${calls
+      .map((d) => `- ${d.callDate}: tone ${d.tone}, guidance ${d.guidance.action}${d.guidance.detail ? ` (${d.guidance.detail})` : ""} — ${d.tldr}`)
+      .join("\n")}\n`;
   }
   if (news.length) text += `Recent news headlines:\n${news.map((n) => `- ${n.title} (${n.publisher})`).join("\n")}\n`;
   return { name: display, text };
