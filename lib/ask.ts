@@ -7,6 +7,7 @@
  */
 import { loadCompanyBundle } from "./companyCache";
 import { loadCallDigests } from "./callDigests";
+import { getCallDigestHistory } from "./callsArchive";
 import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
@@ -40,10 +41,11 @@ const r1 = (v: number | null) => (v == null ? "n/a" : v.toFixed(1));
 
 export async function gatherContext(symbol: string, name = ""): Promise<{ name: string; text: string }> {
   // stats/profile/financials from the baked per-stock cache (local on a hit); only news stays live.
-  const [bundle, news, digests] = await Promise.all([
+  const [bundle, news, archiveCalls, digests] = await Promise.all([
     loadCompanyBundle(symbol),
     getNews(name || symbol, 8).catch(() => []),
-    loadCallDigests().catch(() => null), // recent earnings-call digests — attribute a move to what management said
+    getCallDigestHistory(symbol, 4).catch(() => []), // deep archive (data/calls) — the multi-quarter history
+    loadCallDigests().catch(() => null), // fallback: the rolling desk digests until the archive is ingested
   ]);
   const { stats, profile, financials: fin } = bundle;
   const display = name || symbol;
@@ -85,7 +87,7 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
   }
   // Earnings-call digests for THIS name (newest first) — lets the move-explainer pin a drop/pop on a guidance
   // cut or tone shift, not just news. Compact by design: the grounded ask runs ~10× nightly on the desk note.
-  const calls = (digests?.digests ?? []).filter((d) => d.symbol === symbol).slice(0, 4);
+  const calls = archiveCalls.length ? archiveCalls : (digests?.digests ?? []).filter((d) => d.symbol === symbol).slice(0, 4);
   if (calls.length) {
     text += `Recent earnings calls (what management said on the call):\n${calls
       .map((d) => `- ${d.callDate}: tone ${d.tone}, guidance ${d.guidance.action}${d.guidance.detail ? ` (${d.guidance.detail})` : ""} — ${d.tldr}`)

@@ -1,7 +1,7 @@
 # Environment reference
 
 Generated from `lib/envManifest.ts` by `npm run gen-env-reference` — edit the table there, not this file.
-153 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
+157 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
 or GitHub secrets; everything else is optional and documented with its default.
 
 ## Secrets and endpoints
@@ -118,6 +118,10 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `BACKFILL_DELAY_MS` | `700` | backfill-transcripts | Politeness delay (ms) between MarketBeat fetches. |
 | `BACKFILL_TICKER_LIMIT` | `0` | backfill-transcripts | Cap the S&P 500 names processed (0 = all) — for chunking/testing. |
 | `BACKFILL_ONLY` | `` | backfill-transcripts | Comma/space-separated ticker subset to backfill (test scope); empty = all. |
+| `INGEST_LOCAL_ONLY` | `1` | ingest-transcripts | 1 = refuse to digest the archive on the paid cloud (require the local rig); 0 = allow cloud fallback. |
+| `INGEST_LIMIT` | `0` | ingest-transcripts | Max un-digested archive records to ingest this run (0 = all) — for overnight chunking. |
+| `INGEST_ONLY` | `` | ingest-transcripts | Comma/space-separated ticker subset to ingest; empty = all. |
+| `INGEST_DELAY_MS` | `0` | ingest-transcripts | Delay (ms) between digest calls (pace a one-sequence rig). |
 | `CALL_DIGEST_LOCAL_ONLY` | — | refresh-call-digests | =1 refuses the cloud tier (local model or nothing). |
 | `BUYBACK_BUDGET_MIN` | `30` | refresh-buybacks | Wall-clock budget (minutes). |
 | `BUYBACK_MAX_AGE_DAYS` | `7` | refresh-buybacks | Re-read a name's facts only when older than this. |

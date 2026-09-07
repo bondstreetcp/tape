@@ -25,6 +25,8 @@ import { chatJSON, NO_ADVICE, PRO_MODEL, FLASH_MODEL } from "./llm";
 import { isPlaceholderText, narrative, narrativeList } from "./llmValidate";
 import { computeQuant, buildSig, loadGuidance, loadSss, loadScannerRead, type QuantResult } from "./earningsQuant";
 import { listDocs } from "./research/store";
+import { getCallDigestHistory } from "./callsArchive";
+import { loadCallDigests, type CallDigest } from "./callDigests";
 import type { CompanyStats } from "./companyStats";
 
 /** Race a live sub-fetch against a timeout so one slow source (the NAS home uplink) can't stall the
@@ -73,7 +75,7 @@ export interface PreviewContext {
 /** Assemble everything both model passes need — every live sub-fetch time-bound (the NAS has no
  *  platform function ceiling; see the route). One assembly, two prompts. */
 export async function assemblePreviewContext(sym: string, earningsISO: string | null): Promise<PreviewContext> {
-  const [stats, news, transcript, quant, priorRelease, peerSet, researchDocs] = await Promise.all([
+  const [stats, news, transcript, quant, priorRelease, peerSet, researchDocs, callHist] = await Promise.all([
     // Cache-first (local file for baked names); the live fallback on a cold/off-index name is one
     // Yahoo call — bound it like the rest.
     raceTimeout(cachedStats(sym).catch(() => null), 10_000, null),
@@ -104,6 +106,14 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     // preview couldn't reference it before (only the separate part=preprint path loaded it); wire it in
     // here so the narrative can synthesize it (the Campbell's gap). Empty for names with no notes.
     raceTimeout(listDocs(sym).catch(() => []), 6_000, [] as Awaited<ReturnType<typeof listDocs>>),
+    // Earnings-call HISTORY — the deep archive's digests (data/calls), falling back to the rolling desk digests
+    // until the archive is ingested. Guidance trajectory + tone across quarters, read INTO this print.
+    raceTimeout((async () => {
+      const arch = await getCallDigestHistory(sym, 4).catch(() => [] as CallDigest[]);
+      if (arch.length) return arch;
+      const dd = await loadCallDigests().catch(() => null);
+      return (dd?.digests ?? []).filter((d) => d.symbol === sym).slice(0, 4);
+    })(), 6_000, [] as CallDigest[]),
   ]);
   const guid = loadGuidance(sym);
   const sss = loadSss(sym);
@@ -138,6 +148,17 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
         .slice(0, 2600)
     : "";
 
+  // Earnings-call HISTORY — the last few quarters' digests (deep archive, else the rolling desk digests). Lets
+  // the setup read judge guidance TRAJECTORY and whether management's tone is improving/deteriorating into the
+  // print — the block self-instructs, so no SYSTEM-prompt change is needed. Capped like researchCtx.
+  const callHistCtx = callHist.length
+    ? `\n\nEARNINGS CALL HISTORY (last ${callHist.length} quarters — this desk's digests; use for guidance TRAJECTORY, follow-through, and whether management's tone is improving or deteriorating INTO this print):\n` +
+      callHist
+        .map((d) => `• ${d.callDate} · tone ${d.tone} · guidance ${d.guidance.action}${d.guidance.detail ? `: ${d.guidance.detail}` : ""}: ${d.tldr}${d.kpis.length ? ` | KPIs: ${d.kpis.slice(0, 2).join("; ")}` : ""}${d.watch.length ? ` | watch: ${d.watch.slice(0, 2).join("; ")}` : ""}`)
+        .join("\n")
+        .slice(0, 2600)
+    : "";
+
   // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —
   // a client-supplied string was spoofable and the poisoned preview would be CDN-cached).
   const sig = quant ? buildSig(quant, guid, sss) : "";
@@ -157,6 +178,7 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     (sig ? `\n\nQUANT SIGNALS — this terminal's own options + reaction-history analysis (GROUND the preview in the notable ones; synthesize, don't just restate): ${sig.slice(0, 1400)}` : "") +
     scannerCtx +
     researchCtx +
+    callHistCtx +
     (priorRelease?.text ? `\n\nPRIOR EARNINGS PRESS RELEASE (8-K filed ${priorRelease.date} — the company's own results + outlook language from LAST quarter):\n${priorRelease.text.slice(0, 6000)}` : "") +
     (transcript?.text && transcript.text.length > 1000 ? `\n\nMOST RECENT EARNINGS CALL (${transcript.date || "prior quarter"} — ${transcript.title}):\n${transcript.text.slice(0, 9000)}` : "");
   return { sym, stats, quant, sig, consEps: q0?.epsAvg ?? null, consRevB: q0?.revAvg != null ? q0.revAvg / 1e9 : null, ctx };

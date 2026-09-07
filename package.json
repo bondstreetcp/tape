@@ -113,6 +113,7 @@
     "refresh-desk-note": "tsx scripts/refresh-desk-note.ts",
     "refresh-call-digests": "tsx scripts/refresh-call-digests.ts",
     "backfill-transcripts": "tsx scripts/backfill-transcripts.ts",
+    "ingest-transcripts": "tsx scripts/ingest-transcripts.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "refresh-warnings": "tsx scripts/refresh-warnings.ts",
     "refresh-signal-log": "tsx scripts/refresh-signal-log.ts",
