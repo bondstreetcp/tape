@@ -114,6 +114,7 @@
     "refresh-call-digests": "tsx scripts/refresh-call-digests.ts",
     "backfill-transcripts": "tsx scripts/backfill-transcripts.ts",
     "ingest-transcripts": "tsx scripts/ingest-transcripts.ts",
+    "sync-calls-archive": "tsx scripts/sync-calls-archive.ts",
     "refresh-confluence": "tsx scripts/refresh-confluence.ts",
     "refresh-warnings": "tsx scripts/refresh-warnings.ts",
     "refresh-signal-log": "tsx scripts/refresh-signal-log.ts",
