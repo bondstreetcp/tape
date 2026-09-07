@@ -1,12 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import RedlineSection from "./Redline";
 import TranscriptIntel from "./TranscriptIntel";
 import CallAnalysis from "./CallAnalysis";
 import EarningsCallAI from "./EarningsCallAI";
 import FilingAI from "./FilingAI";
+import TranscriptThread from "./TranscriptThread";
 import { LoadingState } from "./Spinner";
+import type { TranscriptTurn } from "@/lib/transcriptTurns";
+import type { CallDigest } from "@/lib/callDigests";
 
 interface Filing {
   form: string;
@@ -19,15 +21,21 @@ interface Filing {
   url: string;
 }
 
-interface ArchivedQuarter {
+interface QuarterMeta {
   period: string; // "2026-Q2"
   callDate: string; // "2026-05-01"
-  title: string;
-  source: string;
   hasDigest: boolean;
   tone: string | null;
   tldr: string | null;
-  chars: number;
+}
+interface SelectedCall {
+  period: string;
+  callDate: string;
+  title: string;
+  source: string;
+  url: string;
+  digest: CallDigest | null;
+  turns: TranscriptTurn[];
 }
 
 export default function FilingsView({ symbol, name }: { symbol: string; name?: string }) {
@@ -167,34 +175,50 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
 
 const TONE_DOT: Record<string, string> = { upbeat: "🟢", measured: "🟡", cautious: "🟠", defensive: "🔴" };
 
-// Our OWN archived earnings calls (data/calls via /api/calls) — replaces the old list of publisher-site links.
-// Each quarter opens the iMessage-style reader (full Q&A + AI digest). The reader lives at <stock page>/transcripts,
-// so we build its href from the current pathname (query-less: /u/<universe>/stock/<symbol>) — no universe prop needed.
+// Our OWN archived earnings calls (data/calls via /api/calls), read INLINE right here — no page hop. Quarter pills
+// pick a call; the selected quarter's iMessage thread (with the AI digest when ingested) renders below in a
+// scroll-contained box. Only the selected quarter's turns are fetched, so switching quarters is a light request.
 function EarningsCallTranscripts({ symbol }: { symbol: string }) {
-  const pathname = usePathname();
-  const [quarters, setQuarters] = useState<ArchivedQuarter[] | null>(null);
+  const [quarters, setQuarters] = useState<QuarterMeta[] | null>(null);
+  const [selected, setSelected] = useState<SelectedCall | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setQuarters(null);
+    setSelected(null);
     fetch(`/api/calls/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((d) => alive && setQuarters(d.quarters || []))
-      .catch(() => alive && setQuarters([]));
+      .then((d) => {
+        if (!alive) return;
+        setQuarters(d.quarters || []);
+        setSelected(d.selected || null);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setQuarters([]);
+        setSelected(null);
+      });
     return () => {
       alive = false;
     };
   }, [symbol]);
 
-  const readerBase = `${(pathname || "").replace(/\/$/, "")}/transcripts`;
+  const pick = (period: string) => {
+    if (selected?.period === period || switching) return;
+    setSwitching(true);
+    fetch(`/api/calls/${encodeURIComponent(symbol)}?q=${encodeURIComponent(period)}`)
+      .then((r) => r.json())
+      .then((d) => setSelected(d.selected || null))
+      .catch(() => {})
+      .finally(() => setSwitching(false));
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
+      <div className="border-b border-[var(--border)] px-4 py-2.5">
         <span className="text-sm font-semibold text-[var(--text-2)]">Earnings-call transcripts</span>
-        {quarters && quarters.length > 0 && (
-          <a href={readerBase} className="text-xs text-[var(--accent)] hover:underline">Open reader →</a>
-        )}
+        <span className="ml-2 text-[11px] text-[var(--text-4)]">full Q&amp;A as a chat thread</span>
       </div>
 
       {quarters == null ? (
@@ -204,32 +228,46 @@ function EarningsCallTranscripts({ symbol }: { symbol: string }) {
           No archived transcripts for {symbol} yet — the earnings-call archive fills in as the backfill + AI ingestion run.
         </div>
       ) : (
-        <ul>
-          {quarters.map((q) => (
-            <li key={q.period} className="border-b border-[var(--divider)] last:border-0">
-              <a href={`${readerBase}?q=${encodeURIComponent(q.period)}`} className="block px-4 py-2.5 hover:bg-[var(--surface-hover)]">
-                <span className="flex items-center gap-2">
-                  <span className="shrink-0 whitespace-nowrap rounded bg-[var(--bg)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-[var(--text-3)]">
-                    {q.period.replace("-", " ")}
-                  </span>
-                  <span className="text-sm tabular-nums text-[var(--text-2)]">{q.callDate}</span>
-                  {q.tone && <span className="text-[11px] text-[var(--text-4)]">{TONE_DOT[q.tone] || ""} {q.tone}</span>}
-                  <span className="ml-auto shrink-0 text-[11px] text-[var(--accent)]">Read →</span>
-                </span>
-                {q.tldr ? (
-                  <span
-                    className="mt-1 block text-[12px] leading-snug text-[var(--text-3)]"
-                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-                  >
-                    {q.tldr}
-                  </span>
-                ) : (
-                  <span className="mt-1 block text-[11px] italic text-[var(--text-4)]">Full transcript archived · AI digest pending</span>
-                )}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* Quarter picker — newest first */}
+          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--divider)] px-4 py-2.5" style={{ scrollbarWidth: "thin" }}>
+            {quarters.map((q) => {
+              const active = selected?.period === q.period;
+              return (
+                <button
+                  key={q.period}
+                  onClick={() => pick(q.period)}
+                  className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+                    active
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:border-[var(--border-strong)]"
+                  }`}
+                >
+                  {q.period.replace("-", " ")}
+                </button>
+              );
+            })}
+          </div>
+
+          {selected && (
+            <div className="px-4 py-3">
+              <div className="mb-2 text-[11px] text-[var(--text-4)]">
+                {selected.period.replace("-", " ")} · {selected.callDate}
+                {selected.digest ? ` · ${TONE_DOT[selected.digest.tone] || ""} tone ${selected.digest.tone}` : " · AI digest pending ingestion"}
+              </div>
+              {selected.digest?.tldr && (
+                <p className="mb-3 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px] leading-relaxed text-[var(--text)]">{selected.digest.tldr}</p>
+              )}
+              <div className="max-h-[560px] overflow-y-auto pr-1" style={{ opacity: switching ? 0.45 : 1, transition: "opacity 120ms" }}>
+                <TranscriptThread turns={selected.turns} />
+              </div>
+              <div className="mt-3 text-[11px] text-[var(--text-4)]">
+                Transcript via{" "}
+                <a href={selected.url} target="_blank" rel="noreferrer" className="hover:underline">{selected.source}</a>. Research, not advice.
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

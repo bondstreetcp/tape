@@ -36,6 +36,25 @@ export function splitNameRole(label: string): { name: string; role: string } {
   return { name: s, role: "" };
 }
 
+/** Split ONE speaker's turn into reader-friendly chat bubbles so prepared remarks read as a sequence of short
+ *  messages instead of one wall of text: paragraphs (blank-line breaks) first, then any long paragraph into
+ *  ~2-3 sentence groups under `maxChars`. Pure. A single over-long sentence stays whole (never mid-sentence). */
+export function splitIntoBubbles(text: string, maxChars = 320): string[] {
+  const paras = (text || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const para of paras) {
+    if (para.length <= maxChars) { out.push(para); continue; }
+    const sentences = para.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [para];
+    let buf = "";
+    for (const s of sentences) {
+      if (buf && buf.length + s.length > maxChars) { out.push(buf.trim()); buf = ""; }
+      buf += s;
+    }
+    if (buf.trim()) out.push(buf.trim());
+  }
+  return out;
+}
+
 /** Split the labeled transcript into classified turns. Continuations / unlabeled blocks attach to the prior turn. */
 export function parseTranscriptTurns(text: string): TranscriptTurn[] {
   const turns: TranscriptTurn[] = [];

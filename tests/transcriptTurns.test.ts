@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifySpeaker, splitNameRole, parseTranscriptTurns } from "../lib/transcriptTurns";
+import { classifySpeaker, splitNameRole, parseTranscriptTurns, splitIntoBubbles } from "../lib/transcriptTurns";
 
 // The reader UI (components/TranscriptReader) renders these turns as an iMessage thread: management right,
 // analysts/operator left. These pin the speaker classification + the labeled-text split.
@@ -24,6 +24,19 @@ test("splitNameRole: separate a glued name+role", () => {
   assert.deepEqual(splitNameRole("Operator"), { name: "Operator", role: "" });
   // "COO" must not match the "coo" inside "Cook" — the name is "Tim Cook", not "Tim"
   assert.deepEqual(splitNameRole("Tim CookCEO at Apple"), { name: "Tim Cook", role: "CEO at Apple" });
+});
+
+test("splitIntoBubbles: walls of text become several short bubbles; short stays one", () => {
+  assert.deepEqual(splitIntoBubbles("Short and sweet."), ["Short and sweet."]);
+  // explicit paragraphs → one bubble each
+  assert.deepEqual(splitIntoBubbles("First para.\n\nSecond para."), ["First para.", "Second para."]);
+  // a long single paragraph → split into <=maxChars sentence groups, none mid-sentence
+  const wall = "We delivered a strong quarter with broad-based growth. Revenue rose sharply across every region. Margins expanded on better mix. Guidance was raised for the year ahead.";
+  const bubbles = splitIntoBubbles(wall, 80);
+  assert.ok(bubbles.length >= 2, "the wall is broken up");
+  assert.ok(bubbles.every((b) => b.length <= 100), "each bubble is reader-sized");
+  assert.equal(bubbles.join(" ").replace(/\s+/g, " "), wall.replace(/\s+/g, " "), "no text lost");
+  assert.deepEqual(splitIntoBubbles(""), []);
 });
 
 test("parseTranscriptTurns: splits labeled turns, classifies sides, merges continuations", () => {

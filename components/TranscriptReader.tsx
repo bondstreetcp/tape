@@ -6,6 +6,7 @@
  */
 import type { CallDigest } from "@/lib/callDigests";
 import type { TranscriptTurn } from "@/lib/transcriptTurns";
+import TranscriptThread from "./TranscriptThread";
 
 interface Quarter { period: string; callDate: string; href: string; active: boolean }
 export interface TranscriptReaderData {
@@ -90,7 +91,7 @@ export default function TranscriptReader({
           )}
 
           {/* The iMessage-style thread */}
-          <Thread turns={selected.turns} />
+          <TranscriptThread turns={selected.turns} />
 
           <footer style={{ marginTop: 20, fontSize: 11, color: "var(--text-4)", textAlign: "center" }}>
             Transcript via <a href={selected.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--text-3)" }}>{selected.source}</a>. Research, not advice.
@@ -101,53 +102,3 @@ export default function TranscriptReader({
   );
 }
 
-function Thread({ turns }: { turns: TranscriptTurn[] }) {
-  const out: React.ReactNode[] = [];
-  let prevKey = "";
-  turns.forEach((t, i) => {
-    if (t.side === "operator") {
-      prevKey = "";
-      out.push(
-        <div key={i} style={{ textAlign: "center", margin: "14px 0 6px" }}>
-          <span style={{ fontSize: 11, color: "var(--text-4)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 999, padding: "3px 10px" }}>
-            Operator{t.text.length < 200 ? ` · ${t.text}` : ""}
-          </span>
-        </div>,
-      );
-      if (t.text.length >= 200) out.push(<Bubble key={`${i}o`} side="analyst" text={t.text} />);
-      return;
-    }
-    const right = t.side === "mgmt";
-    const key = `${t.side}|${t.speaker}`;
-    if (key !== prevKey && (t.speaker || t.role)) {
-      out.push(
-        <div key={`${i}h`} style={{ fontSize: 11, color: "var(--text-3)", margin: "12px 6px 3px", textAlign: right ? "right" : "left" }}>
-          <span style={{ fontWeight: 600, color: "var(--text-2)" }}>{t.speaker || (right ? "Management" : "Analyst")}</span>
-          {t.role ? <span> · {t.role}</span> : null}
-        </div>,
-      );
-    }
-    prevKey = key;
-    out.push(<Bubble key={i} side={t.side} text={t.text} />);
-  });
-  return <div>{out}</div>;
-}
-
-function Bubble({ side, text }: { side: TranscriptTurn["side"]; text: string }) {
-  const right = side === "mgmt";
-  return (
-    <div style={{ display: "flex", justifyContent: right ? "flex-end" : "flex-start", marginBottom: 4 }}>
-      <div
-        style={{
-          maxWidth: "82%", padding: "9px 13px", fontSize: 14.5, lineHeight: 1.5, whiteSpace: "pre-wrap",
-          borderRadius: 18,
-          ...(right
-            ? { background: "var(--accent)", color: "#fff", borderBottomRightRadius: 5 }
-            : { background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border)", borderBottomLeftRadius: 5 }),
-        }}
-      >
-        {text}
-      </div>
-    </div>
-  );
-}
