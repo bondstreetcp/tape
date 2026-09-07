@@ -406,6 +406,19 @@ export default function FinancialsView({
         <OwnershipPanel profile={profile} symbol={symbol} currency={currency} />
       ) : view === "filings" ? (
         <div className="space-y-5">
+          <Link
+            href={`/u/${universe}/stock/${encodeURIComponent(symbol)}/transcripts`}
+            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 transition-colors hover:border-[var(--accent)]"
+          >
+            <span className="flex items-center gap-2.5">
+              <span aria-hidden className="text-lg">💬</span>
+              <span>
+                <span className="block text-[13px] font-semibold text-[var(--text)]">Read earnings-call transcripts</span>
+                <span className="block text-[11px] text-[var(--text-3)]">Full Q&amp;A as a chat thread, with the AI digest — up to 3 years back</span>
+              </span>
+            </span>
+            <span className="text-[13px] font-semibold text-[var(--accent)]">Open →</span>
+          </Link>
           <RiskFactorPanel symbol={symbol} />
           <FilingsView symbol={symbol} name={name} />
         </div>
