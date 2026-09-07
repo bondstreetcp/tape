@@ -27,6 +27,7 @@ import { extractAtomic } from "../lib/atomicExtract";
 
 const KEY_TAR = "site-data/data.tar.gz";
 const KEY_COMPANY = "site-data/company.tar.gz";
+const KEY_CALLS = "site-data/calls.tar.gz";
 const KEY_NEWS_TAPE = "site-data/news-tape.json.gz"; // must match scripts/news-tape-sync.ts
 const KEY_CALL_DIGESTS = "site-data/call-digests.json"; // must match scripts/refresh-call-digests.ts (CALL_DIGEST_PUBLISH)
 const haveCommitted = () => existsSync(path.join("data", "russell3000", "snapshot.json"));
@@ -62,7 +63,7 @@ async function main() {
   // out of the tarball so intraday ticks don't re-ship ~14 MB of unchanged cache). Fetch both in
   // parallel; the trees are disjoint (data/company/* lives ONLY in company.tar.gz), so extraction order
   // is moot. allSettled so a missing/failed company object can't reject the required data download.
-  const [dataRes, companyRes] = await Promise.allSettled([getObject(KEY_TAR), getObject(KEY_COMPANY)]);
+  const [dataRes, companyRes, callsRes] = await Promise.allSettled([getObject(KEY_TAR), getObject(KEY_COMPANY), getObject(KEY_CALLS)]);
 
   // The main data tree is REQUIRED — unchanged fatal-with-committed-fallback contract. Extract is inside
   // the guard too, so a corrupt download falls back to committed data/ exactly as before.
@@ -104,6 +105,22 @@ async function main() {
     }
   } else {
     console.warn(`data-from-r2: per-stock cache not hydrated (${String(companyRes.reason?.message || companyRes.reason).slice(0, 100)}) — stock pages live-fetch until the next FULL ships it.`);
+  }
+
+  // Earnings-call archive (data/calls/*): OPTIONAL, best-effort, its OWN FULL-only object (KEY_CALLS), kept off
+  // the every-tick tarball. A miss / extract failure must NOT break the build — the AI (earningsPreview, ask)
+  // falls back to the rolling desk digests (data/call-digests.json) until the next FULL ships it.
+  if (callsRes.status === "fulfilled") {
+    try {
+      const kPath = path.join(tmp, "calls.tar.gz");
+      writeFileSync(kPath, callsRes.value);
+      hydrate(kPath, path.join(tmp, "stage-calls"), "data/calls/");
+      console.log(`data-from-r2: hydrated data/calls/ from R2 (${(callsRes.value.length / 1e6).toFixed(1)} MB)`);
+    } catch (e) {
+      console.warn(`data-from-r2: calls archive extract failed (${String((e as Error)?.message || e).slice(0, 100)}) — the AI falls back to the desk digests.`);
+    }
+  } else {
+    console.warn(`data-from-r2: calls archive not hydrated (${String(callsRes.reason?.message || callsRes.reason).slice(0, 100)}) — the AI falls back to the desk digests until the next FULL ships it.`);
   }
 
   // News tape: its OWN object, for the same reason data/company has one — it is on a different clock.

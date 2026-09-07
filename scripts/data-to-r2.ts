@@ -12,6 +12,8 @@ import { readFileSync, mkdirSync, rmSync, existsSync } from "fs";
 import path from "path";
 import { putObject, r2Configured } from "../lib/r2";
 import { uploadCompanyArchive } from "../lib/companyArchive";
+import { uploadCallsArchive } from "../lib/callsArchiveSync";
+import { countCallRecords } from "../lib/callsArchive";
 
 const KEY_TAR = "site-data/data.tar.gz";
 const KEY_MANIFEST = "site-data/manifest.json";
@@ -33,7 +35,7 @@ async function main() {
   // the wires it is built from keep only ~20 items each — so history exists nowhere else. If it rode
   // this tarball too, a nightly upload carrying an hours-old copy would overwrite the dedicated
   // object's newer one and permanently delete every row in between. One writer, one object.
-  execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "--exclude=data/company", "--exclude=data/news-tape.json", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync("tar", ["--exclude=data/.research", "--exclude=data/.tmp", "--exclude=data/company", "--exclude=data/calls", "--exclude=data/news-tape.json", "-czf", tarPath, "data"], { stdio: ["ignore", "ignore", "inherit"] });
   const buf = readFileSync(tarPath);
   await putObject(KEY_TAR, buf, "application/gzip");
   // `writer` is the standdown protocol's signal (refresh-data.yml "primary-check" reads it): while the
@@ -55,6 +57,7 @@ async function main() {
   // heartbeat below and flunk run-tick's `uploaded` deploy gate, stranding fresh core data undeployed
   // over a cache blip. Worst case the prior company.tar.gz stands and stock pages live-fetch.
   let companyMsg = "";
+  let callsMsg = "";
   if (isFull) {
     try {
       // Shared with scripts/upload-company-cache.ts (the PC pipe) — one uploader, one stamp shape.
@@ -64,6 +67,15 @@ async function main() {
       companyMsg = ` + company.tar.gz (${(m.bytes / 1e6).toFixed(1)} MB)`;
     } catch (e: any) {
       console.warn(`data-to-r2: per-stock cache upload failed (${String(e?.message || e).slice(0, 120)}) — leaving the prior company.tar.gz; heartbeat + deploy proceed.`);
+    }
+    try {
+      // The earnings-call archive (data/calls/*) — its OWN object (KEY_CALLS), FULL-only, best-effort, and
+      // excluded from the every-tick tarball above (it can reach ~300 MB). A tar/PUT failure must never break
+      // the FULL; the prior calls.tar.gz stands and the AI falls back to the rolling desk digests.
+      const n = await countCallRecords();
+      if (n > 0) { const cm = await uploadCallsArchive(n); callsMsg = ` + calls.tar.gz (${(cm.bytes / 1e6).toFixed(1)} MB, ${n} calls)`; }
+    } catch (e) {
+      console.warn(`data-to-r2: calls archive upload failed (${String((e as Error)?.message || e).slice(0, 120)}) — leaving the prior calls.tar.gz.`);
     }
   }
 
@@ -80,7 +92,7 @@ async function main() {
     await putObject(KEY_HEARTBEAT, Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), bytes: buf.length, stepFails, stepTotal })), "application/json");
   }
   rmSync(tarPath, { force: true });
-  console.log(`data-to-r2: uploaded ${KEY_TAR} (${(buf.length / 1e6).toFixed(1)} MB) + manifest${companyMsg}${isFull ? " + FULL heartbeat" : ""} to R2`);
+  console.log(`data-to-r2: uploaded ${KEY_TAR} (${(buf.length / 1e6).toFixed(1)} MB) + manifest${companyMsg}${callsMsg}${isFull ? " + FULL heartbeat" : ""} to R2`);
 }
 
 main().catch((e) => { console.error("data-to-r2:", String(e?.message || e)); process.exit(1); });
