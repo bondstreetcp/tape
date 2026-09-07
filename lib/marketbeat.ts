@@ -79,6 +79,21 @@ export async function discoverMarketBeatReports(ticker: string, exchange?: strin
   return [];
 }
 
+/** The company slug from a report URL — "…/reports/2026-9-3-lululemon-athletica-inc-stock/" → "lululemon-athletica-inc". Pure. */
+export function slugFromReportUrl(url: string): string | null {
+  return url.match(/\/reports\/\d{4}-\d{1,2}-\d{1,2}-(.+?)-stock\/?$/)?.[1] ?? null;
+}
+/** Build a report URL from a slug + ISO date. MarketBeat uses NON-zero-padded month/day ("2024-8-1"). Pure. */
+export function marketBeatReportUrl(slug: string, dateISO: string): string {
+  const [y, m, d] = dateISO.split("-");
+  return `${BASE}/earnings/reports/${y}-${Number(m)}-${Number(d)}-${slug}-stock/`;
+}
+const shiftDate = (dateISO: string, days: number): string => {
+  const dt = new Date(`${dateISO}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+};
+
 export interface MbTranscript { text: string; chars: number; title: string; date: string; fiscalPeriod: string | null; url: string; source: "MarketBeat" }
 
 /** Fetch + parse one report page into a transcript. null on miss / no-transcript page. */
@@ -88,4 +103,16 @@ export async function fetchMarketBeatTranscript(report: { url: string; date: str
   const parsed = parseMarketBeatReport(html);
   if (!parsed) return null;
   return { text: parsed.text, chars: parsed.text.length, title: parsed.title, date: report.date, fiscalPeriod: parsed.fiscalPeriod, url: report.url, source: "MarketBeat" };
+}
+
+/** Fetch an OLDER report (unlinked from the earnings page, discovered via an EDGAR earnings date) by constructing
+ *  its URL from slug + date. MarketBeat's report date usually equals the 8-K date but can be a day off, so it
+ *  tries the date then ±1. null if none resolves to a transcript. */
+export async function fetchMarketBeatByDate(slug: string, dateISO: string): Promise<MbTranscript | null> {
+  for (const delta of [0, -1, 1, -2, 2]) {
+    const d = delta === 0 ? dateISO : shiftDate(dateISO, delta);
+    const t = await fetchMarketBeatTranscript({ url: marketBeatReportUrl(slug, d), date: d });
+    if (t) return t;
+  }
+  return null;
 }

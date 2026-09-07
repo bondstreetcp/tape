@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseMarketBeatReportList, parseMarketBeatReport } from "../lib/marketbeat";
+import { parseMarketBeatReportList, parseMarketBeatReport, slugFromReportUrl, marketBeatReportUrl } from "../lib/marketbeat";
 
 // MarketBeat is the free full-text backfill source (chosen after vetting 6 sources, 2026-09). These pin the
 // PURE parsers against its real markup: the ticker earnings page's dated report links, and a report page's
@@ -42,4 +42,15 @@ test("parseMarketBeatReport: speaker-labeled text + fiscal period, timestamps + 
 test("parseMarketBeatReport: a results-only page (no real transcript) is null", () => {
   const html = `<html><body><div class="transcript-discussion">${turn("left", "Operator", "Short.")}</div></body></html>`;
   assert.equal(parseMarketBeatReport(html), null); // under the 3000-char floor
+});
+
+// Deep discovery: the earnings page lists only ~8 recent reports, but older report pages exist at date-addressable
+// URLs. We derive the slug from a recent URL and construct older ones from EDGAR earnings dates.
+test("slugFromReportUrl / marketBeatReportUrl: extract the slug, rebuild older URLs (non-zero-padded date)", () => {
+  assert.equal(slugFromReportUrl("https://www.marketbeat.com/earnings/reports/2026-9-3-lululemon-athletica-inc-stock/"), "lululemon-athletica-inc");
+  assert.equal(slugFromReportUrl("https://www.marketbeat.com/earnings/reports/2024-10-31-apple-inc-stock/"), "apple-inc");
+  assert.equal(slugFromReportUrl("https://www.marketbeat.com/stocks/NASDAQ/AAPL/earnings/"), null);
+  // EDGAR gives 2024-08-01; MarketBeat's URL uses non-padded month/day → 2024-8-1
+  assert.equal(marketBeatReportUrl("apple-inc", "2024-08-01"), "https://www.marketbeat.com/earnings/reports/2024-8-1-apple-inc-stock/");
+  assert.equal(marketBeatReportUrl("nvidia-corp", "2023-11-21"), "https://www.marketbeat.com/earnings/reports/2023-11-21-nvidia-corp-stock/");
 });

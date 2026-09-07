@@ -14,7 +14,8 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
-import { discoverMarketBeatReports, fetchMarketBeatTranscript } from "../lib/marketbeat";
+import { discoverMarketBeatReports, fetchMarketBeatTranscript, fetchMarketBeatByDate, slugFromReportUrl } from "../lib/marketbeat";
+import { getFilings } from "../lib/edgar";
 import { saveCallRecord, loadSymbolCalls, type CallRecord } from "../lib/callsArchive";
 import { sleep } from "../lib/scriptKit";
 
@@ -27,6 +28,15 @@ async function loadConstituents(): Promise<{ symbol: string; name: string }[]> {
   const p = path.join(process.cwd(), "data", "constituents", "sp500.json");
   const arr = JSON.parse(await fs.readFile(p, "utf8")) as { symbol: string; name: string }[];
   return arr.filter((c) => c.symbol);
+}
+
+/** Earnings-announcement dates (8-K item 2.02) from EDGAR within the window — used to construct OLDER MarketBeat
+ *  report URLs the earnings page (only ~8 recent) doesn't link, for the full 3-year depth. Best-effort: []. */
+async function edgarEarningsDates(sym: string, sinceISO: string): Promise<string[]> {
+  try {
+    const { filings } = await getFilings(sym, 0, 300);
+    return filings.filter((f) => f.isEarnings && f.date >= sinceISO).map((f) => f.date);
+  } catch { return []; }
 }
 
 async function main() {
@@ -44,19 +54,25 @@ async function main() {
   for (const { symbol } of names) {
     const sym = symbol.toUpperCase();
     try {
-      const reports = await discoverMarketBeatReports(sym);
-      const inWindow = reports.filter((r) => r.date >= cutoffISO);
-      if (!inWindow.length) { noReports++; await sleep(DELAY_MS); continue; }
+      // Recent reports the earnings page links (~8) + OLDER earnings dates from EDGAR (the page caps at ~8, but
+      // the older report PAGES exist at date-addressable URLs) → the full 3-year depth. Recent carry their exact
+      // URL; older are fetched by slug+date (±a day, since MarketBeat's report date can differ from the 8-K's).
+      const recent = await discoverMarketBeatReports(sym);
+      const slug = recent.length ? slugFromReportUrl(recent[0].url) : null;
+      const targets = new Map<string, { date: string; url?: string }>();
+      for (const r of recent) if (r.date >= cutoffISO) targets.set(r.date, { date: r.date, url: r.url });
+      if (slug) for (const d of await edgarEarningsDates(sym, cutoffISO)) if (!targets.has(d)) targets.set(d, { date: d });
+      if (!targets.size) { noReports++; await sleep(DELAY_MS); continue; }
       const have = new Set((await loadSymbolCalls(sym)).map((r) => r.callDate)); // incremental: skip archived dates
       let got = 0;
-      for (const rep of inWindow) {
-        if (have.has(rep.date)) { skipped++; continue; }
+      for (const tgt of [...targets.values()].sort((a, b) => b.date.localeCompare(a.date))) {
+        if (have.has(tgt.date)) { skipped++; continue; }
         await sleep(DELAY_MS);
-        const t = await fetchMarketBeatTranscript(rep);
-        if (!t) continue; // results-only page / no transcript
+        const t = tgt.url ? await fetchMarketBeatTranscript({ url: tgt.url, date: tgt.date }) : slug ? await fetchMarketBeatByDate(slug, tgt.date) : null;
+        if (!t) continue; // results-only page / no transcript / older URL didn't resolve
         const rec: CallRecord = {
           symbol: sym,
-          fiscalPeriod: t.fiscalPeriod || `d${rep.date}`, // fall back to a date key if the page had no "Q# YYYY"
+          fiscalPeriod: t.fiscalPeriod || `d${t.date}`, // fall back to a date key if the page had no "Q# YYYY"
           callDate: t.date,
           title: t.title,
           url: t.url,
@@ -70,7 +86,7 @@ async function main() {
         fetched++; got++;
       }
       if (got) tickersWithNew++;
-      if (got || inWindow.length) console.log(`  ${sym.padEnd(6)} ${inWindow.length} in-window · +${got} new`);
+      console.log(`  ${sym.padEnd(6)} ${targets.size} in-window · +${got} new`);
     } catch (e) {
       errors++;
       console.warn(`  ${sym}: ${String((e as Error)?.message || e).slice(0, 90)}`);
