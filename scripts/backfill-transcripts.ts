@@ -7,9 +7,11 @@
  * are split so the (fast, free, network-bound) pull isn't gated on the (slow, one-sequence) local GPU.
  *
  * Incremental (skips already-archived call dates), polite (a delay between every fetch), resumable (re-run picks
- * up where it stopped). Env knobs: BACKFILL_YEARS (3), BACKFILL_DELAY_MS (700), BACKFILL_TICKER_LIMIT (0=all),
- * BACKFILL_ONLY ("AAPL,MSFT" — a test subset).
- *   npm run backfill-transcripts            # all 503, ~3yr
+ * up where it stopped). Env knobs: BACKFILL_UNIVERSE ("" = the committed sp500 list; else a universe id whose
+ * R2-hydrated snapshot supplies the names — russell3000 (~2,900), russell1000, sp1500, nasdaq100), BACKFILL_YEARS
+ * (3), BACKFILL_DELAY_MS (700), BACKFILL_TICKER_LIMIT (0=all), BACKFILL_ONLY ("AAPL,MSFT" — a test subset).
+ *   npm run backfill-transcripts                            # the S&P 500, ~3yr
+ *   BACKFILL_UNIVERSE=russell3000 npm run backfill-transcripts   # the full Russell 3000 (needs the snapshot hydrated)
  *   BACKFILL_ONLY=LULU,AAPL npm run backfill-transcripts
  */
 import { promises as fs } from "fs";
@@ -17,14 +19,25 @@ import path from "path";
 import { discoverMarketBeatReports, fetchMarketBeatTranscript, fetchMarketBeatByDate, slugFromReportUrl } from "../lib/marketbeat";
 import { getFilings } from "../lib/edgar";
 import { saveCallRecord, loadSymbolCalls, type CallRecord } from "../lib/callsArchive";
+import { loadSnapshot, snapshotNames } from "../lib/data";
 import { sleep } from "../lib/scriptKit";
 
 const YEARS = Math.max(1, Number(process.env.BACKFILL_YEARS || 3));
 const DELAY_MS = Math.max(0, Number(process.env.BACKFILL_DELAY_MS || 700));
 const TICKER_LIMIT = Number(process.env.BACKFILL_TICKER_LIMIT || 0); // 0 = all
 const ONLY = (process.env.BACKFILL_ONLY || "").split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase());
+// Which universe to backfill. Empty → the committed S&P 500 constituents file (default; the completed run's exact
+// list). Set to a universe id (russell3000, russell1000, sp1500, nasdaq100) → that universe's R2-hydrated member
+// snapshot (data/<id>/snapshot.json). russell3000 (~2,900 names, IWV-sourced) is the broadest reach.
+const UNIVERSE = (process.env.BACKFILL_UNIVERSE || "").trim();
 
 async function loadConstituents(): Promise<{ symbol: string; name: string }[]> {
+  if (UNIVERSE) {
+    // A universe's canonical member list (R2-hydrated snapshot). This is the ONLY source for russell3000 — there is
+    // no committed constituents file for it; it lives at data/russell3000/snapshot.json, sourced from IWV holdings.
+    return snapshotNames(await loadSnapshot(UNIVERSE), UNIVERSE);
+  }
+  // Default: the committed S&P 500 constituents file (byte-for-byte the list the completed run walked).
   const p = path.join(process.cwd(), "data", "constituents", "sp500.json");
   const arr = JSON.parse(await fs.readFile(p, "utf8")) as { symbol: string; name: string }[];
   return arr.filter((c) => c.symbol);
@@ -47,7 +60,7 @@ async function main() {
   let names = await loadConstituents();
   if (ONLY.length) names = names.filter((c) => ONLY.includes(c.symbol.toUpperCase()));
   if (TICKER_LIMIT > 0) names = names.slice(0, TICKER_LIMIT);
-  console.log(`backfill-transcripts: ${names.length} names · window ≥ ${cutoffISO} (${YEARS}yr) · source MarketBeat · delay ${DELAY_MS}ms`);
+  console.log(`backfill-transcripts: ${names.length} names (${UNIVERSE || "sp500"}) · window ≥ ${cutoffISO} (${YEARS}yr) · source MarketBeat · delay ${DELAY_MS}ms`);
 
   const t0 = Date.now();
   let fetched = 0, skipped = 0, noReports = 0, tickersWithNew = 0, errors = 0;

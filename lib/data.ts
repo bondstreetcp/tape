@@ -82,6 +82,16 @@ export async function loadSnapshot(universe: string): Promise<Snapshot | null> {
   return cachedFile(path.join(DATA_DIR, universe, "snapshot.json"), (raw) => JSON.parse(raw) as Snapshot);
 }
 
+/** Turn a universe member snapshot into the {symbol, name} list a bulk job (e.g. the transcript backfill) walks.
+ *  Pure. Throws an operator-actionable error when the snapshot is missing/empty — universe snapshots are
+ *  R2-hydrated, so a fresh clone that hasn't run data-from-r2 has only stubs. */
+export function snapshotNames(snap: Snapshot | null, universe: string): { symbol: string; name: string }[] {
+  if (!snap?.stocks?.length) {
+    throw new Error(`no member snapshot for universe "${universe}" (data/${universe}/snapshot.json) — hydrate it from R2 first (npm run data-from-r2)`);
+  }
+  return snap.stocks.filter((s) => s.symbol).map((s) => ({ symbol: s.symbol, name: s.name || s.symbol }));
+}
+
 export async function loadSymbolSeries(
   symbol: string,
 ): Promise<StockSeries | null> {

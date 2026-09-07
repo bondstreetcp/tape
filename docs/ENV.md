@@ -1,7 +1,7 @@
 # Environment reference
 
 Generated from `lib/envManifest.ts` by `npm run gen-env-reference` — edit the table there, not this file.
-157 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
+158 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
 or GitHub secrets; everything else is optional and documented with its default.
 
 ## Secrets and endpoints
@@ -114,9 +114,10 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `CALL_DIGEST_CAP` | `30` | refresh-call-digests | Most transcripts digested per run. |
 | `CALL_DIGEST_CONCURRENCY` | `6 cloud / 2 local` | refresh-call-digests | Transcripts in flight at once. |
 | `CALL_DIGEST_LOOKBACK_DAYS` | `7` | refresh-call-digests | How many days back a call may be (the sources lag). |
+| `BACKFILL_UNIVERSE` | `` | backfill-transcripts | Universe to backfill: empty = the committed S&P 500 list; else a universe id (russell3000, russell1000, sp1500, nasdaq100) whose R2-hydrated snapshot supplies the names. |
 | `BACKFILL_YEARS` | `3` | backfill-transcripts | Years of earnings-call history to pull from MarketBeat into the data/calls archive. |
 | `BACKFILL_DELAY_MS` | `700` | backfill-transcripts | Politeness delay (ms) between MarketBeat fetches. |
-| `BACKFILL_TICKER_LIMIT` | `0` | backfill-transcripts | Cap the S&P 500 names processed (0 = all) — for chunking/testing. |
+| `BACKFILL_TICKER_LIMIT` | `0` | backfill-transcripts | Cap the names processed (0 = all) — for chunking/testing. |
 | `BACKFILL_ONLY` | `` | backfill-transcripts | Comma/space-separated ticker subset to backfill (test scope); empty = all. |
 | `INGEST_LOCAL_ONLY` | `1` | ingest-transcripts | 1 = refuse to digest the archive on the paid cloud (require the local rig); 0 = allow cloud fallback. |
 | `INGEST_LIMIT` | `0` | ingest-transcripts | Max un-digested archive records to ingest this run (0 = all) — for overnight chunking. |
