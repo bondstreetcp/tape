@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import RedlineSection from "./Redline";
 import TranscriptIntel from "./TranscriptIntel";
 import CallAnalysis from "./CallAnalysis";
@@ -18,19 +19,15 @@ interface Filing {
   url: string;
 }
 
-interface TranscriptLink {
+interface ArchivedQuarter {
+  period: string; // "2026-Q2"
+  callDate: string; // "2026-05-01"
   title: string;
-  publisher: string;
-  link: string;
-  time: string | null;
-}
-
-interface FullTranscript {
-  title: string;
-  date: string | null;
   source: string;
-  url: string;
-  text: string;
+  hasDigest: boolean;
+  tone: string | null;
+  tldr: string | null;
+  chars: number;
 }
 
 export default function FilingsView({ symbol, name }: { symbol: string; name?: string }) {
@@ -107,7 +104,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
       <FilingAI symbol={symbol} name={name} />
       <EarningsCallAI symbol={symbol} name={name} />
       <CallAnalysis symbol={symbol} name={name} />
-      <TranscriptLinks symbol={symbol} name={name} />
+      <EarningsCallTranscripts symbol={symbol} />
       <TranscriptIntel symbol={symbol} name={name} />
       <RedlineSection symbol={symbol} name={name} />
       {loading ? (
@@ -121,7 +118,7 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs leading-relaxed text-[var(--text-3)]">
         <span className="font-semibold text-[var(--text-2)]">Earnings releases &amp; material filings</span> straight from SEC EDGAR —
         open an <span className="text-[#22c55e]">earnings release</span> to read management&apos;s results commentary inline.
-        The earnings-call <em>transcripts</em> above link to the full call (with Q&amp;A) on the publisher&apos;s site.
+        The earnings-call <em>transcripts</em> above open our own archived call — full Q&amp;A + the AI digest — in the reader.
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
@@ -168,120 +165,67 @@ export default function FilingsView({ symbol, name }: { symbol: string; name?: s
   );
 }
 
-function TranscriptBody({ text }: { text: string }) {
-  const SPK = /^([A-Z][\w.'’-]*(?: [A-Z][\w.'’&-]*){0,4}):\s+([\s\S]+)$/;
-  return (
-    <>
-      {text.split(/\n\n+/).map((p, i) => {
-        const t = p.trim();
-        if (!t) return null;
-        if (t.length < 50 && (t === t.toUpperCase() || /^(prepared remarks|questions?(\s*(and|&)\s*)?answers?|q&a|call participants|operator instructions)\b/i.test(t))) {
-          return <p key={i} className="mb-1.5 mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-3)]">{t}</p>;
-        }
-        const m = t.match(SPK);
-        if (m && m[1].length <= 34) {
-          return (
-            <p key={i} className="mb-2">
-              <span className="font-semibold text-[var(--text)]">{m[1]}</span>: {m[2]}
-            </p>
-          );
-        }
-        return <p key={i} className="mb-2">{t}</p>;
-      })}
-    </>
-  );
-}
+const TONE_DOT: Record<string, string> = { upbeat: "🟢", measured: "🟡", cautious: "🟠", defensive: "🔴" };
 
-function TranscriptLinks({ symbol, name }: { symbol: string; name?: string }) {
-  const [links, setLinks] = useState<TranscriptLink[] | null>(null);
-  const [full, setFull] = useState<FullTranscript | "loading" | "error" | null>(null);
+// Our OWN archived earnings calls (data/calls via /api/calls) — replaces the old list of publisher-site links.
+// Each quarter opens the iMessage-style reader (full Q&A + AI digest). The reader lives at <stock page>/transcripts,
+// so we build its href from the current pathname (query-less: /u/<universe>/stock/<symbol>) — no universe prop needed.
+function EarningsCallTranscripts({ symbol }: { symbol: string }) {
+  const pathname = usePathname();
+  const [quarters, setQuarters] = useState<ArchivedQuarter[] | null>(null);
 
   useEffect(() => {
     let alive = true;
-    setLinks(null);
-    setFull(null);
-    fetch(`/api/transcripts/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
+    setQuarters(null);
+    fetch(`/api/calls/${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
-      .then((d) => alive && setLinks(d.links || []))
-      .catch(() => alive && setLinks([]));
+      .then((d) => alive && setQuarters(d.quarters || []))
+      .catch(() => alive && setQuarters([]));
     return () => {
       alive = false;
     };
-  }, [symbol, name]);
+  }, [symbol]);
 
-  const loadFull = () => {
-    if (full && full !== "error") return; // already loading or loaded
-    setFull("loading");
-    fetch(`/api/transcript-text/${encodeURIComponent(symbol)}?name=${encodeURIComponent(name || symbol)}`)
-      .then((r) => r.json())
-      .then((d) => setFull(d.transcript || "error"))
-      .catch(() => setFull("error"));
-  };
-
-  const loaded = full && full !== "loading" && full !== "error" ? full : null;
+  const readerBase = `${(pathname || "").replace(/\/$/, "")}/transcripts`;
 
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <span className="text-sm font-semibold text-[var(--text-2)]">Earnings-call transcripts</span>
-        <button onClick={loadFull} disabled={full === "loading"} className="text-xs text-[var(--accent)] hover:underline disabled:opacity-60">
-          {full === "loading" ? "Loading…" : loaded ? "↻ Reload full call" : "📄 Read latest call in full"}
-        </button>
+        {quarters && quarters.length > 0 && (
+          <a href={readerBase} className="text-xs text-[var(--accent)] hover:underline">Open reader →</a>
+        )}
       </div>
 
-      {loaded && (
-        <div className="border-b border-[var(--divider)] bg-[var(--surface-2)] px-4 py-3">
-          <div className="text-sm font-semibold text-[var(--text)]">{loaded.title}</div>
-          <div className="mb-2 text-[11px] text-[var(--text-4)]">
-            {loaded.source}
-            {loaded.date ? ` · ${loaded.date}` : ""} ·{" "}
-            <a href={loaded.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">source ↗</a>
-          </div>
-          <div className="max-h-[480px] overflow-y-auto pr-1 text-[13px] leading-relaxed text-[var(--text-body)]">
-            <TranscriptBody text={loaded.text} />
-          </div>
-        </div>
-      )}
-      {full === "error" && (
-        <div className="border-b border-[var(--divider)] px-4 py-2 text-xs text-[var(--text-3)]">
-          Couldn&apos;t load the full transcript automatically — open one of the links below.
-        </div>
-      )}
-
-      {links == null ? (
-        <div className="px-4 py-4 text-xs text-[var(--text-3)]">Finding recent transcripts…</div>
-      ) : links.length === 0 ? (
-        <div className="px-4 py-4 text-xs text-[var(--text-3)]">
-          No transcripts found yet. Try a{" "}
-          <a
-            className="text-[var(--accent)] hover:underline"
-            target="_blank"
-            rel="noreferrer"
-            href={`https://news.google.com/search?q=${encodeURIComponent((name || symbol) + " earnings call transcript")}`}
-          >
-            Google News search ↗
-          </a>
-          .
+      {quarters == null ? (
+        <div className="px-4 py-4 text-xs text-[var(--text-3)]">Loading archived calls…</div>
+      ) : quarters.length === 0 ? (
+        <div className="px-4 py-5 text-xs leading-relaxed text-[var(--text-3)]">
+          No archived transcripts for {symbol} yet — the earnings-call archive fills in as the backfill + AI ingestion run.
         </div>
       ) : (
         <ul>
-          {links.map((l, i) => (
-            <li key={i} className="border-b border-[var(--divider)] last:border-0">
-              <a
-                href={l.link}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-hover)]"
-              >
-                <span className="flex min-w-0 items-center gap-2 text-sm text-[var(--text)]">
-                  {l.time && (
-                    <span className="shrink-0 whitespace-nowrap rounded bg-[var(--bg)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--text-3)]">
-                      {new Date(l.time).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-                    </span>
-                  )}
-                  <span className="truncate">{l.title}</span>
+          {quarters.map((q) => (
+            <li key={q.period} className="border-b border-[var(--divider)] last:border-0">
+              <a href={`${readerBase}?q=${encodeURIComponent(q.period)}`} className="block px-4 py-2.5 hover:bg-[var(--surface-hover)]">
+                <span className="flex items-center gap-2">
+                  <span className="shrink-0 whitespace-nowrap rounded bg-[var(--bg)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-[var(--text-3)]">
+                    {q.period.replace("-", " ")}
+                  </span>
+                  <span className="text-sm tabular-nums text-[var(--text-2)]">{q.callDate}</span>
+                  {q.tone && <span className="text-[11px] text-[var(--text-4)]">{TONE_DOT[q.tone] || ""} {q.tone}</span>}
+                  <span className="ml-auto shrink-0 text-[11px] text-[var(--accent)]">Read →</span>
                 </span>
-                <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--text-3)]">{l.publisher} ↗</span>
+                {q.tldr ? (
+                  <span
+                    className="mt-1 block text-[12px] leading-snug text-[var(--text-3)]"
+                    style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                  >
+                    {q.tldr}
+                  </span>
+                ) : (
+                  <span className="mt-1 block text-[11px] italic text-[var(--text-4)]">Full transcript archived · AI digest pending</span>
+                )}
               </a>
             </li>
           ))}
