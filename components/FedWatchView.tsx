@@ -51,6 +51,24 @@ export default function FedWatchView({ universe, data }: { universe: string; dat
         </div>
       )}
 
+      {/* Market-implied path — the digest above is the Fed's words; CME FedWatch is what the futures price. */}
+      <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-2)]">Market-implied rate path <span className="font-normal text-[var(--text-4)]">— what the futures are pricing, by meeting</span></h2>
+          <a
+            href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent)] hover:text-white"
+          >
+            Open CME FedWatch ↗
+          </a>
+        </div>
+        <p className="mt-1.5 max-w-3xl text-[12px] leading-relaxed text-[var(--text-3)]">
+          The digest below is the Fed&apos;s <b className="text-[var(--text-2)]">words</b>; CME FedWatch is the <b className="text-[var(--text-2)]">market&apos;s bet</b> — the implied probability of a cut / hold / hike at each upcoming FOMC meeting, derived from 30-day Fed funds futures. Read them together: a dovish statement the curve already fully prices is priced in; a hawkish surprise{" "}<i>vs</i>{" "}the implied path is what moves markets. (CME&apos;s tool is proprietary and can&apos;t be embedded, so it opens in a new tab.)
+        </p>
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--bg)] p-0.5">
           <button onClick={() => setKindF("all")} className={TB(kindF === "all")}>All</button>
