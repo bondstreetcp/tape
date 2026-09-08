@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   mapPool, mapPoolSafe, sleep, swallow, quietly, suppressedCounts, resetSuppressed, parseSuppressed, SUPPRESSED_MARK,
-  readJson, htmlToText, pct, money, BROWSER_UA, RESEARCH_UA,
+  readJson, htmlToText, pct, money, BROWSER_UA, RESEARCH_UA, isGeorgiaPowerPeak,
 } from "../lib/scriptKit";
 
 /** Silence console.warn for a block and hand back what was logged. */
@@ -94,4 +94,20 @@ test("prompt formatters and the two user-agents", () => {
   assert.equal(money(12_400), "$12K");
   assert.match(BROWSER_UA, /^Mozilla\/5\.0 \(Windows NT .* Chrome\/\d+/);
   assert.match(RESEARCH_UA, /tape research; .+@.+/);
+});
+
+test("isGeorgiaPowerPeak: weekday 2-7pm ET only, off on nights/weekends/holidays/after-season", () => {
+  // Sept 2026 = EDT (UTC-4), so ET hour = UTC hour − 4.
+  const at = (iso: string) => isGeorgiaPowerPeak(new Date(iso));
+  // Wed 2026-09-09: 2:00pm ET (18:00Z) on-peak; 1:59pm off; 6:59pm on; 7:00pm (23:00Z) off.
+  assert.equal(at("2026-09-09T18:00:00Z"), true, "2:00pm ET Wed is on-peak");
+  assert.equal(at("2026-09-09T17:59:00Z"), false, "1:59pm ET is off-peak");
+  assert.equal(at("2026-09-09T22:59:00Z"), true, "6:59pm ET is on-peak");
+  assert.equal(at("2026-09-09T23:00:00Z"), false, "7:00pm ET is off-peak");
+  assert.equal(at("2026-09-09T05:00:00Z"), false, "1am ET (night) is off-peak");
+  // Weekend + holiday (Labor Day Mon 2026-09-07) at 3pm ET (19:00Z) → off.
+  assert.equal(at("2026-09-12T19:00:00Z"), false, "Saturday afternoon is off-peak");
+  assert.equal(at("2026-09-07T19:00:00Z"), false, "Labor Day afternoon is off-peak (holiday)");
+  // After the season ends (Thu 2026-10-08 3pm ET) → off.
+  assert.equal(at("2026-10-08T19:00:00Z"), false, "after Sep 30 the peak season is over");
 });

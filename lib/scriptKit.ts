@@ -18,6 +18,25 @@ export const DATA_DIR = path.join(process.cwd(), "data");
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+// Georgia Power "Nights & Weekends" plan peak-day holidays (no peak charge these days), in America/New_York.
+const GA_PEAK_HOLIDAYS = new Set(["2026-01-01", "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]);
+/**
+ * True when NOW is inside Georgia Power's summer on-peak window — weekdays 14:00–19:00 (2–7pm) America/New_York,
+ * excluding the plan's holidays, through the season end (default 2026-09-30). Off-peak — nights, weekends,
+ * holidays, and after the season — returns false. Pure (pass `now` to test); computes wall-clock ET so it's
+ * correct across DST. Used to pause GPU-heavy batch jobs (the transcript ingest) out of peak electricity pricing.
+ */
+export function isGeorgiaPowerPeak(now: Date = new Date(), untilYmd = "2026-09-30"): boolean {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", hour12: false, year: "numeric", month: "2-digit", day: "2-digit" });
+  const p = Object.fromEntries(f.formatToParts(now).map((x) => [x.type, x.value])) as Record<string, string>;
+  const ymd = `${p.year}-${p.month}-${p.day}`;
+  if (ymd > untilYmd) return false; // peak season is over → never on-peak
+  const dow = (({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }) as Record<string, number>)[p.weekday] ?? 0;
+  if (dow === 0 || dow === 6 || GA_PEAK_HOLIDAYS.has(ymd)) return false; // weekend / holiday
+  const hour = Number(p.hour) % 24; // hour12:false can emit "24" at midnight in some ICU builds
+  return hour >= 14 && hour < 19; // 2pm–7pm ET
+}
+
 /** What a real Chrome sends — for hosts that serve a thin page (or a 403) to anything else. */
 export const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";

@@ -132,6 +132,7 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   K("INGEST_LOCAL_ONLY", "tuning", "ingest-transcripts", "1 = refuse to digest the archive on the paid cloud (require the local rig); 0 = allow cloud fallback.", "1"),
   K("INGEST_LIMIT", "tuning", "ingest-transcripts", "Max un-digested archive records to ingest this run (0 = all) — for overnight chunking.", "0"),
   K("INGEST_ORDER", "tuning", "ingest-transcripts", "Digest order: 'recent' = newest call first (most move-relevant, the default); 'alpha' = by symbol A→Z.", "recent"),
+  K("INGEST_PAUSE_PEAK", "tuning", "ingest-transcripts", "1 = pause the rig during Georgia Power on-peak (weekdays 14:00-19:00 ET, excl holidays, thru Sep 30) to dodge peak electricity pricing.", "0"),
   K("INGEST_ONLY", "tuning", "ingest-transcripts", "Comma/space-separated ticker subset to ingest; empty = all.", ""),
   K("INGEST_DELAY_MS", "tuning", "ingest-transcripts", "Delay (ms) between digest calls (pace a one-sequence rig).", "0"),
   K("CALL_DIGEST_PUBLISH", "runner", "refresh-call-digests", "=1 merges the output with R2's site-data/call-digests.json and publishes it — the clean-IP worker's mode."),

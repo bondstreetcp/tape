@@ -11,7 +11,8 @@
  * Incremental (skips already-digested records), resumable, budgeted. Orders NEWEST call first by default so the
  * most move-relevant quarters digest first (the archive is ~24k records / weeks of rig time — cap it). Env:
  * INGEST_ORDER ("recent"=newest first | "alpha"=by symbol), INGEST_LIMIT (0=all), INGEST_ONLY ("AAPL,MSFT"),
- * INGEST_DELAY_MS (0), INGEST_LOCAL_ONLY (1).
+ * INGEST_DELAY_MS (0), INGEST_LOCAL_ONLY (1), INGEST_PAUSE_PEAK (1 = pause during Georgia Power on-peak:
+ * weekdays 14:00-19:00 ET, excl holidays, thru Sep 30 — dodges peak electricity pricing on the rig).
  *   CALL_DIGEST_LOCAL_URL=http://192.168.1.76:8000/v1 CALL_DIGEST_LOCAL_MODEL=argus-vlm npm run ingest-transcripts
  *   INGEST_LIMIT=3000 …  # digest the 3,000 most recent calls first, then re-run for more
  */
@@ -23,7 +24,7 @@ if (SCOPED) Object.assign(process.env, SCOPED);
 import { FLASH_MODEL, llmConfigured } from "../lib/llm";
 import { digestTranscript, type DigestLlm } from "../lib/digestTranscript";
 import { callsCacheDir, loadSymbolCalls, loadCallRecord, saveCallRecord, type CallRecord } from "../lib/callsArchive";
-import { sleep } from "../lib/scriptKit";
+import { sleep, isGeorgiaPowerPeak } from "../lib/scriptKit";
 
 const LOCAL = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
 const LOCAL_ONLY = process.env.INGEST_LOCAL_ONLY !== "0"; // default true: don't burn cloud $ on a bulk backfill
@@ -31,6 +32,7 @@ const LIMIT = Number(process.env.INGEST_LIMIT || 0); // 0 = all un-digested
 const DELAY_MS = Math.max(0, Number(process.env.INGEST_DELAY_MS || 0));
 const ONLY = (process.env.INGEST_ONLY || "").split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase());
 const ORDER = (process.env.INGEST_ORDER || "recent").toLowerCase(); // "recent" = newest call first (most move-relevant); "alpha" = by symbol A→Z
+const PAUSE_PEAK = process.env.INGEST_PAUSE_PEAK === "1"; // pause GPU work during Georgia Power on-peak (wkdays 2-7pm ET, excl holidays, thru Sep 30)
 
 const LLM: DigestLlm = { model: FLASH_MODEL, local: true, reasoningEffort: "low", timeoutMs: LOCAL ? 600_000 : 180_000, retries: LOCAL_ONLY ? 1 : 3 };
 const MODEL_LABEL = LOCAL ? `local:${process.env.LLM_LOCAL_MODEL}` : `cloud:${FLASH_MODEL}`;
@@ -62,10 +64,15 @@ async function main() {
   if (ORDER !== "alpha") work.sort((a, b) => (b.callDate || b.fiscalPeriod).localeCompare(a.callDate || a.fiscalPeriod));
   const queue = LIMIT ? work.slice(0, LIMIT) : work;
 
-  console.log(`ingest-transcripts: ${work.length} undigested across ${syms.length} names · order ${ORDER}${LIMIT ? ` · processing newest ${queue.length}` : ""} · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}`);
+  console.log(`ingest-transcripts: ${work.length} undigested across ${syms.length} names · order ${ORDER}${LIMIT ? ` · processing newest ${queue.length}` : ""} · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}${PAUSE_PEAK ? " · peak-pause on (wkdys 2-7pm ET)" : ""}`);
   const t0 = Date.now();
   let done = 0, failed = 0, already = 0;
   for (const w of queue) {
+    if (PAUSE_PEAK && isGeorgiaPowerPeak()) {
+      console.log(`  ⏸ ${new Date().toISOString()} · Georgia Power on-peak (wkdys 14:00–19:00 ET) — pausing the rig until off-peak`);
+      while (isGeorgiaPowerPeak()) await sleep(5 * 60_000);
+      console.log(`  ▶ ${new Date().toISOString()} · off-peak — resuming ingest`);
+    }
     const rec = await loadCallRecord(w.symbol, w.fiscalPeriod); // lazy reload → current state + bounded memory
     if (!rec) { failed++; continue; }
     if (rec.digest) { already++; continue; } // digested since the queue was built (a prior/overlapping run)

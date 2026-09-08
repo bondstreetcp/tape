@@ -1,7 +1,7 @@
 # Environment reference
 
 Generated from `lib/envManifest.ts` by `npm run gen-env-reference` — edit the table there, not this file.
-159 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
+160 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
 or GitHub secrets; everything else is optional and documented with its default.
 
 ## Secrets and endpoints
@@ -122,6 +122,7 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `INGEST_LOCAL_ONLY` | `1` | ingest-transcripts | 1 = refuse to digest the archive on the paid cloud (require the local rig); 0 = allow cloud fallback. |
 | `INGEST_LIMIT` | `0` | ingest-transcripts | Max un-digested archive records to ingest this run (0 = all) — for overnight chunking. |
 | `INGEST_ORDER` | `recent` | ingest-transcripts | Digest order: 'recent' = newest call first (most move-relevant, the default); 'alpha' = by symbol A→Z. |
+| `INGEST_PAUSE_PEAK` | `0` | ingest-transcripts | 1 = pause the rig during Georgia Power on-peak (weekdays 14:00-19:00 ET, excl holidays, thru Sep 30) to dodge peak electricity pricing. |
 | `INGEST_ONLY` | `` | ingest-transcripts | Comma/space-separated ticker subset to ingest; empty = all. |
 | `INGEST_DELAY_MS` | `0` | ingest-transcripts | Delay (ms) between digest calls (pace a one-sequence rig). |
 | `CALL_DIGEST_LOCAL_ONLY` | — | refresh-call-digests | =1 refuses the cloud tier (local model or nothing). |
