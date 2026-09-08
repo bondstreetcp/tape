@@ -5,7 +5,7 @@ Extracted from the 63-min call (fathom.video/share/FhBziGe2nvfYTtYkNaZiYB2xynVzY
 they land.
 
 ## Priority — earnings & conference transcripts
-- [ ] **1. Earnings-call summary truncates** — "we have the data, it's just not being fed into the LLM… very fixable." 🐞 @27:14
+- [x] **1. Earnings-call summary truncates** — FIXED: the /api/earnings-call route used summarizeText's 45k default, halving 50-90k transcripts; now passes 185k (the filing cap) so the whole call is summarized. 🐞 @27:14
 - [~] **2. Conference audio → transcript pipeline** — replay/media URL → Whisper → archive + searchable + feed the predictor; internal-use, not republished (@59:42). *In progress: `lib/transcriptDrop.ts` + `scripts/ingest-transcript-text.ts` + `scripts/fetch-transcribe.sh` shipped; gated capture stays on the user side.* @22:47/28:14/33:44
 - [ ] **3. Beat/miss predictor from transcript tone/words + backtest** — phase 2B, after the structured-digest ingest (2A). 🔵 @22:49/24:24
 - [ ] **4. Transcript coverage** — mostly large-cap (~2–3k); mid/small/obscure missing. Backfill on request. 📋 @25:15

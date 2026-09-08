@@ -27,7 +27,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ symb
     if (!t || !t.text || t.text.length < 500) {
       return NextResponse.json({ configured: true, available: false });
     }
-    const result = await summarizeText(t.title || `${name} earnings call`, INSTRUCTION, t.text);
+    // Earnings-call transcripts run 50-90k chars; the 45k summarizeText default truncated them to ~half (the
+    // summary "cut off"). Pass the same large cap the filing route uses so the whole call is fed to the LLM.
+    const result = await summarizeText(t.title || `${name} earnings call`, INSTRUCTION, t.text, 185_000);
     return NextResponse.json({
       configured: true,
       available: true,
