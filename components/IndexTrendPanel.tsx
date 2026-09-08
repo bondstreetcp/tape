@@ -173,18 +173,35 @@ function IndexCard({ t, onOpen }: { t: IndexTrend; onOpen: () => void }) {
   );
 }
 
+// The "i" button clears up the recurring misread (raised in the 2026-09-08 review): "valuation" here is NOT a
+// P/E — it's where price sits in its own log-linear trend channel, a technical stretch/mean-reversion read.
+const DEFAULT_INFO: ReactNode = (
+  <>
+    <b className="text-[var(--text-2)]">What this is — and isn&apos;t.</b> Not a P/E or fundamental valuation. It
+    fits a straight <b>log-linear trend</b> to price over time (steady % growth plots as a line on a log scale) and
+    draws <b>±1σ / ±2σ</b> bands around it. Where price sits in that channel — the z-score / verdict — is a{" "}
+    <b>technical &ldquo;how stretched&rdquo; read</b>: how far above or below its own long-run exponential path the
+    market has run, i.e. closer to a mean-reversion / exhaustion gauge than to whether earnings make it cheap or
+    dear. <span className="text-[#f59e0b]">Descriptive, not predictive</span> — reversion isn&apos;t guaranteed and
+    the fit is sensitive to the start year. Price-only (ex-dividends).
+  </>
+);
+
 export default function IndexTrendPanel({
   data,
   title = "Index valuation",
   subtitle = "price vs its long-run trend channel",
   footer,
+  info = DEFAULT_INFO,
 }: {
   data: IndexTrendData | null;
   title?: string;
   subtitle?: string;
   footer?: ReactNode;
+  info?: ReactNode;
 }) {
   const [detail, setDetail] = useState<IndexTrend | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const header = (
     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="text-base font-semibold text-[var(--text)]">{title} <span className="text-[13px] font-normal text-[var(--text-4)]">· {subtitle}</span></h3>
@@ -205,9 +222,24 @@ export default function IndexTrendPanel({
   return (
     <section className="mt-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold text-[var(--text)]">{title} <span className="text-[13px] font-normal text-[var(--text-4)]">· {subtitle}</span></h3>
+        <div className="flex items-baseline gap-1.5">
+          <h3 className="text-base font-semibold text-[var(--text)]">{title} <span className="text-[13px] font-normal text-[var(--text-4)]">· {subtitle}</span></h3>
+          <button
+            type="button"
+            onClick={() => setShowInfo((v) => !v)}
+            aria-label="What this chart shows"
+            aria-expanded={showInfo}
+            title="What this chart shows"
+            className={"shrink-0 self-center rounded-md px-1.5 py-0.5 text-[12px] leading-none transition-colors " + (showInfo ? "bg-[var(--accent-strong)] text-white" : "text-[var(--text-4)] hover:bg-[var(--surface-2)] hover:text-[var(--text-2)]")}
+          >ⓘ</button>
+        </div>
         {asOf && <span className="text-[11px] text-[var(--text-4)]">as of {asOf}</span>}
       </div>
+      {showInfo && (
+        <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-[11.5px] leading-relaxed text-[var(--text-3)]">
+          {info}
+        </div>
+      )}
       <div className="grid gap-3 lg:grid-cols-3">
         {data.indices.map((t) => <IndexCard key={t.key} t={t} onOpen={() => setDetail(t)} />)}
       </div>
