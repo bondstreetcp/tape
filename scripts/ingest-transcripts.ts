@@ -8,9 +8,12 @@
  * REFUSES to run without the rig configured (INGEST_LOCAL_ONLY=1) so a 6,000-transcript backfill never silently
  * bills the cloud flash tier; set INGEST_LOCAL_ONLY=0 to allow the cloud fallback.
  *
- * Incremental (skips already-digested records), resumable, budgeted. Env: INGEST_LIMIT (0=all), INGEST_ONLY
- * ("AAPL,MSFT"), INGEST_DELAY_MS (0), INGEST_LOCAL_ONLY (1).
+ * Incremental (skips already-digested records), resumable, budgeted. Orders NEWEST call first by default so the
+ * most move-relevant quarters digest first (the archive is ~24k records / weeks of rig time — cap it). Env:
+ * INGEST_ORDER ("recent"=newest first | "alpha"=by symbol), INGEST_LIMIT (0=all), INGEST_ONLY ("AAPL,MSFT"),
+ * INGEST_DELAY_MS (0), INGEST_LOCAL_ONLY (1).
  *   CALL_DIGEST_LOCAL_URL=http://192.168.1.76:8000/v1 CALL_DIGEST_LOCAL_MODEL=argus-vlm npm run ingest-transcripts
+ *   INGEST_LIMIT=3000 …  # digest the 3,000 most recent calls first, then re-run for more
  */
 import { promises as fs } from "fs";
 import { scopedLocalEnv } from "../lib/callDigests";
@@ -19,7 +22,7 @@ const SCOPED = scopedLocalEnv(process.env);
 if (SCOPED) Object.assign(process.env, SCOPED);
 import { FLASH_MODEL, llmConfigured } from "../lib/llm";
 import { digestTranscript, type DigestLlm } from "../lib/digestTranscript";
-import { callsCacheDir, loadSymbolCalls, saveCallRecord, type CallRecord } from "../lib/callsArchive";
+import { callsCacheDir, loadSymbolCalls, loadCallRecord, saveCallRecord, type CallRecord } from "../lib/callsArchive";
 import { sleep } from "../lib/scriptKit";
 
 const LOCAL = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
@@ -27,6 +30,7 @@ const LOCAL_ONLY = process.env.INGEST_LOCAL_ONLY !== "0"; // default true: don't
 const LIMIT = Number(process.env.INGEST_LIMIT || 0); // 0 = all un-digested
 const DELAY_MS = Math.max(0, Number(process.env.INGEST_DELAY_MS || 0));
 const ONLY = (process.env.INGEST_ONLY || "").split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase());
+const ORDER = (process.env.INGEST_ORDER || "recent").toLowerCase(); // "recent" = newest call first (most move-relevant); "alpha" = by symbol A→Z
 
 const LLM: DigestLlm = { model: FLASH_MODEL, local: true, reasoningEffort: "low", timeoutMs: LOCAL ? 600_000 : 180_000, retries: LOCAL_ONLY ? 1 : 3 };
 const MODEL_LABEL = LOCAL ? `local:${process.env.LLM_LOCAL_MODEL}` : `cloud:${FLASH_MODEL}`;
@@ -44,25 +48,36 @@ async function main() {
   if (ONLY.length) syms = syms.filter((s) => ONLY.includes(s.toUpperCase()));
   syms.sort();
 
-  console.log(`ingest-transcripts: ${syms.length} symbols · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}${LIMIT ? ` · limit ${LIMIT}` : ""}`);
+  // Build the work queue = every UN-digested record across the selected names. We keep only a light key per record
+  // (never all ~1.4 GB of transcript text at once): load one symbol's records, push the keys, let them GC, repeat.
+  // Then order newest-call-first so the most move-relevant quarters digest first (INGEST_ORDER=alpha keeps A→Z per
+  // symbol). LIMIT caps the queue — so `INGEST_LIMIT=3000` on the default order digests the 3,000 most recent calls.
+  type Work = { symbol: string; fiscalPeriod: string; callDate: string };
+  const work: Work[] = [];
+  for (const sym of syms) {
+    for (const rec of await loadSymbolCalls(sym)) {
+      if (!rec.digest) work.push({ symbol: rec.symbol, fiscalPeriod: rec.fiscalPeriod, callDate: rec.callDate });
+    }
+  }
+  if (ORDER !== "alpha") work.sort((a, b) => (b.callDate || b.fiscalPeriod).localeCompare(a.callDate || a.fiscalPeriod));
+  const queue = LIMIT ? work.slice(0, LIMIT) : work;
+
+  console.log(`ingest-transcripts: ${work.length} undigested across ${syms.length} names · order ${ORDER}${LIMIT ? ` · processing newest ${queue.length}` : ""} · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}`);
   const t0 = Date.now();
   let done = 0, failed = 0, already = 0;
-  outer: for (const sym of syms) {
-    const recs = await loadSymbolCalls(sym);
-    for (const rec of recs) {
-      if (rec.digest) { already++; continue; }
-      if (LIMIT && done >= LIMIT) break outer;
-      if (DELAY_MS) await sleep(DELAY_MS);
-      const digest = await digestTranscript(
-        { symbol: rec.symbol, name: rec.symbol, sector: null, marketCap: null, title: rec.title, date: rec.callDate, url: rec.url, source: rec.source, text: rec.transcript.text },
-        LLM, MODEL_LABEL, rec.callDate,
-      ).catch((e) => { console.warn(`  ${sym} ${rec.fiscalPeriod}: ${String((e as Error)?.message || e).slice(0, 80)}`); return null; });
-      if (!digest) { failed++; continue; }
-      const updated: CallRecord = { ...rec, digest, digestedAt: new Date().toISOString() };
-      await saveCallRecord(updated);
-      done++;
-      if (done % 20 === 0) console.log(`  … ${done} digested (${sym} ${rec.fiscalPeriod})`);
-    }
+  for (const w of queue) {
+    const rec = await loadCallRecord(w.symbol, w.fiscalPeriod); // lazy reload → current state + bounded memory
+    if (!rec) { failed++; continue; }
+    if (rec.digest) { already++; continue; } // digested since the queue was built (a prior/overlapping run)
+    if (DELAY_MS) await sleep(DELAY_MS);
+    const digest = await digestTranscript(
+      { symbol: rec.symbol, name: rec.symbol, sector: null, marketCap: null, title: rec.title, date: rec.callDate, url: rec.url, source: rec.source, text: rec.transcript.text },
+      LLM, MODEL_LABEL, rec.callDate,
+    ).catch((e) => { console.warn(`  ${w.symbol} ${w.fiscalPeriod}: ${String((e as Error)?.message || e).slice(0, 80)}`); return null; });
+    if (!digest) { failed++; continue; }
+    await saveCallRecord({ ...rec, digest, digestedAt: new Date().toISOString() });
+    done++;
+    if (done % 20 === 0) console.log(`  … ${done}/${queue.length} digested (latest ${w.symbol} ${w.fiscalPeriod} · ${w.callDate})`);
   }
   console.log(`ingest-transcripts: done in ${Math.round((Date.now() - t0) / 60_000)}min · ${done} digested · ${already} already · ${failed} failed`);
 }
