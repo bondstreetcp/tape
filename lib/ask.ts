@@ -7,7 +7,8 @@
  */
 import { loadCompanyBundle } from "./companyCache";
 import { loadCallDigests } from "./callDigests";
-import { getCallDigestHistory } from "./callsArchive";
+import { loadSymbolCalls } from "./callsArchive";
+import { parseTranscriptTurns } from "./transcriptTurns";
 import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
@@ -39,13 +40,28 @@ const big = (v: number | null) =>
 const pct = (v: number | null) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 const r1 = (v: number | null) => (v == null ? "n/a" : v.toFixed(1));
 
+// Management's first substantive passage from a raw (not-yet-digested) transcript — the CEO/CFO's own framing of
+// the quarter + outlook, which is what the move-explainer most needs. Skips the IR safe-harbour boilerplate turn.
+// A cheap stand-in until the rig ingests a proper digest; capped so the grounded ask stays inside its deadline.
+function callExcerpt(text: string, max = 550): string {
+  const mgmt = parseTranscriptTurns(text).filter((t) => t.side === "mgmt" && t.text.length > 150);
+  if (!mgmt.length) return "";
+  const isExec = (t: { role: string }) => /\b(chief|CEO|CFO|COO|CTO|president|founder)\b/i.test(t.role);
+  const isBoiler = (t: { role: string; text: string }) =>
+    /investor relations/i.test(t.role) || /forward-looking|safe harbor|risk factors discussed|non-?GAAP|replay of (this|the) call|call is being recorded/i.test(t.text);
+  // Prefer the first exec (CEO/CFO) — their opening frames the quarter + outlook — else the first non-boilerplate turn.
+  const pick = mgmt.find(isExec) || mgmt.find((t) => !isBoiler(t)) || mgmt[0];
+  const s = pick.text.replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, max).replace(/\s+\S*$/, "") + "…" : s;
+}
+
 export async function gatherContext(symbol: string, name = ""): Promise<{ name: string; text: string }> {
   // stats/profile/financials from the baked per-stock cache (local on a hit); only news stays live.
-  const [bundle, news, archiveCalls, digests] = await Promise.all([
+  const [bundle, news, symCalls, digests] = await Promise.all([
     loadCompanyBundle(symbol),
     getNews(name || symbol, 8).catch(() => []),
-    getCallDigestHistory(symbol, 4).catch(() => []), // deep archive (data/calls) — the multi-quarter history
-    loadCallDigests().catch(() => null), // fallback: the rolling desk digests until the archive is ingested
+    loadSymbolCalls(symbol).catch(() => []), // deep archive (data/calls), newest-first: raw transcript + digest per quarter
+    loadCallDigests().catch(() => null), // tertiary fallback: the rolling desk digests for names not yet archived
   ]);
   const { stats, profile, financials: fin } = bundle;
   const display = name || symbol;
@@ -85,14 +101,28 @@ export async function gatherContext(symbol: string, name = ""): Promise<{ name: 
     ].filter(Boolean);
     if (lines.length) text += `Annual financial trend (oldest→newest):\n${lines.join("\n")}\n`;
   }
-  // Earnings-call digests for THIS name (newest first) — lets the move-explainer pin a drop/pop on a guidance
-  // cut or tone shift, not just news. Compact by design: the grounded ask runs ~10× nightly on the desk note.
-  const calls = archiveCalls.length ? archiveCalls : (digests?.digests ?? []).filter((d) => d.symbol === symbol).slice(0, 4);
-  if (calls.length) {
-    text += `Recent earnings calls (what management said on the call):\n${calls
-      .map((d) => `- ${d.callDate}: tone ${d.tone}, guidance ${d.guidance.action}${d.guidance.detail ? ` (${d.guidance.detail})` : ""} — ${d.tldr}`)
-      .join("\n")}\n`;
+  // Earnings calls for THIS name (newest first) — lets the move-explainer pin a drop/pop on a guidance cut or tone
+  // shift, not just news. Prefer the AI digest; before a call is ingested, fall back to management's own opening
+  // (raw excerpt) for the two most recent so the archive still informs the move. Compact by design: the grounded
+  // ask runs ~10× nightly on the desk note.
+  let callLines: string[] = [];
+  const recent = symCalls.slice(0, 4);
+  if (recent.length) {
+    let rawUsed = 0;
+    callLines = recent.map((c) => {
+      const d = c.digest;
+      if (d) return `- ${c.callDate} (${c.fiscalPeriod}): tone ${d.tone}, guidance ${d.guidance.action}${d.guidance.detail ? ` (${d.guidance.detail})` : ""} — ${d.tldr}`;
+      if (rawUsed < 2) {
+        const ex = callExcerpt(c.transcript.text);
+        if (ex) { rawUsed++; return `- ${c.callDate} (${c.fiscalPeriod}) — management's opening (AI summary pending): ${ex}`; }
+      }
+      return `- ${c.callDate} (${c.fiscalPeriod}): transcript archived, AI summary pending`;
+    });
+  } else {
+    callLines = (digests?.digests ?? []).filter((d) => d.symbol === symbol).slice(0, 4)
+      .map((d) => `- ${d.callDate}: tone ${d.tone}, guidance ${d.guidance.action}${d.guidance.detail ? ` (${d.guidance.detail})` : ""} — ${d.tldr}`);
   }
+  if (callLines.length) text += `Recent earnings calls (what management said on the call):\n${callLines.join("\n")}\n`;
   if (news.length) text += `Recent news headlines:\n${news.map((n) => `- ${n.title} (${n.publisher})`).join("\n")}\n`;
   return { name: display, text };
 }
