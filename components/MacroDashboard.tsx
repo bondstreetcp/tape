@@ -7,14 +7,12 @@ import type { EconEvent } from "@/lib/econCalendar";
 import type { VolOil } from "@/lib/curves";
 import { LABEL_TO_RELEASE, type ReleaseData } from "@/lib/releases";
 import { CATEGORY_COLOR, type MacroRelease } from "@/lib/macroReleases";
-import { type MarketHeadline } from "@/lib/marketHeadlines";
 import { type RealEconomyData } from "@/lib/realEconomy";
 import { type IndexTrendData } from "@/lib/indexTrend";
 import { type CotData } from "@/lib/cot";
 import { type EnergyData } from "@/lib/energy";
 import { type EconSurpriseData } from "@/lib/econSurprise";
 import { type AttentionData } from "@/lib/attention";
-import MarketHeadlinesWire from "./MarketHeadlinesWire";
 import RealEconomyPanel from "./RealEconomyPanel";
 import IndexTrendPanel from "./IndexTrendPanel";
 import CotPanel from "./CotPanel";
@@ -287,7 +285,6 @@ export default function MacroDashboard({
   releases,
   creditSeries,
   recentReleases,
-  headlines,
   realEconomy,
   indexTrend,
   sectorTrend,
@@ -305,7 +302,6 @@ export default function MacroDashboard({
   releases?: Record<string, ReleaseData>;
   creditSeries?: CreditSeries;
   recentReleases?: MacroRelease[];
-  headlines?: MarketHeadline[];
   realEconomy?: RealEconomyData | null;
   indexTrend?: IndexTrendData | null;
   sectorTrend?: IndexTrendData | null;
@@ -327,7 +323,7 @@ export default function MacroDashboard({
     });
   // "Credit" renders as the richer windowed CreditSpreads charts below, not plain cards.
   const groups = [...new Set(indicators.map((i) => i.group))].filter((g) => g !== "Credit");
-  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "energy" | "valuation" | "positioning" | "credit" | "calendar" | "surprises" | "attention" | "headlines">("rates");
+  const [section, setSection] = useState<"rates" | "indicators" | "realecon" | "energy" | "valuation" | "positioning" | "credit" | "calendar" | "surprises" | "attention">("rates");
   const SECTIONS = [
     { key: "rates", label: "Rates & Curves" },
     { key: "indicators", label: "Indicators" },
@@ -339,7 +335,6 @@ export default function MacroDashboard({
     { key: "calendar", label: "Calendar" },
     { key: "surprises", label: "Surprises" },
     { key: "attention", label: "Attention" },
-    { key: "headlines", label: "Headlines" },
   ] as const;
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -528,16 +523,6 @@ export default function MacroDashboard({
       </section>
       )}
 
-      {section === "headlines" && (
-      <section className="mb-5">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[var(--text-2)]">Market headlines <span className="font-normal text-[var(--text-4)]">— macro, Fed, trade, energy &amp; geopolitics</span></h2>
-          <span className="text-[11px] text-[var(--text-4)]">⚡ Walter Bloomberg flashes + reputable wire · ~5-min live</span>
-        </div>
-        <MarketHeadlinesWire initial={headlines} />
-        <p className="mt-1.5 text-[11px] text-[var(--text-4)]"><span className="text-[var(--accent)]">⚡</span> = Walter Bloomberg&apos;s hand-curated flashes (his public Telegram, read as public content — no login/API); the rest is a reputable-source aggregate (Reuters, Bloomberg, CNBC, WSJ…) for anything he didn&apos;t flag. Refreshes ~every 5 min. Research, not advice.</p>
-      </section>
-      )}
 
       <p className="mt-2 text-[11px] text-[var(--text-4)]">
         Source: Federal Reserve Economic Data (FRED). Spreads in percentage points; OAS = option-adjusted spread.

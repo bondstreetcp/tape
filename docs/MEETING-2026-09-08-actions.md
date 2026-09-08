@@ -18,7 +18,7 @@ they land.
 - [x] **9. Daily Desk: "economic releases today / this week" section** — DONE: `DeskEconReleases` strip at the top of the Desk Brief tab — next-7-days macro calendar (CPI/PPI/jobs/PCE bolded), Today/Tomorrow/weekday chips, consensus attached (ForexFactory), ≈ for approximate dates. Data from `lib/econCalendar` (key-free approximate; exact on the FRED-key path). 🔵 @13:27–14:00
 - [x] **10. Verify the surprise-index tracker records each new release** — VERIFIED + FIXED: it did **not** catch monthly prints (NFP/CPI/PPI/PCE/GDP…) — it matched the ForexFactory consensus off the FRED *reference month* (±7d), which for monthly series is weeks before the release, so only weekly claims ever slipped through. Now matches against the run date (FF only carries the current week), guards y/y↔m/m unit mismatches, and skips consensuses for not-yet-printed releases. Stores the release date (decay) + reference date (`obs`, dedup). Tested (`tests/econSurprise.test.ts`); live run confirmed CPI/PPI/sentiment now score. ✅ @14:00
 - [ ] **11. "Attention" (Wikipedia page-views): move out of Economy** — flag new surging names + add zoom, OR delete. ⚖️ @14:23–16:17
-- [ ] **12. Walter Bloomberg headlines: move out of the Economy section** (good feed, wrong place). 🔀 @16:17–17:19
+- [x] **12. Walter Bloomberg headlines: move out of the Economy section** — DONE: removed the redundant "Headlines" tab from the Economy dashboard; the identical `MarketHeadlinesWire` feed already lives in Daily Desk → Market Headlines, its natural home. 🔀 @16:17–17:19
 
 ## Rates / FedWatch
 - [ ] **13. Embed/link the CME FedWatch chart** (market-implied hikes by maturity). 🔵 @18:32–19:00

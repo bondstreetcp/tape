@@ -10,20 +10,18 @@ import { getCot } from "@/lib/cotServer";
 import { getEnergy } from "@/lib/energyServer";
 import { getEconSurprise } from "@/lib/econSurpriseServer";
 import { getAttention } from "@/lib/attentionServer";
-import { getMarketHeadlines } from "@/lib/marketHeadlinesFetch";
 import MacroDashboard from "@/components/MacroDashboard";
 
 // FRED data updates daily/monthly — cache for an hour.
 export const revalidate = 3600;
 
 export default async function MacroPage() {
-  const [macro, calendar, volOil, ff, recentReleases, headlines, realEconomy, indexTrend, sectorTrend, cot, energy, econSurprise, attention] = await Promise.all([
+  const [macro, calendar, volOil, ff, recentReleases, realEconomy, indexTrend, sectorTrend, cot, energy, econSurprise, attention] = await Promise.all([
     getMacroCached(),
     getEconCalendar(),
     getVolOilCurves().catch(() => ({ vix: [], oil: [], asOf: "" })),
     getEconEstimates().catch(() => []),
     getMacroReleases().catch(() => []),
-    getMarketHeadlines().catch(() => []),
     getRealEconomy().catch(() => null),
     getIndexTrend().catch(() => null),
     getSectorTrend().catch(() => null),
@@ -48,7 +46,6 @@ export default async function MacroPage() {
       releases={macro.releases}
       creditSeries={macro.creditSeries}
       recentReleases={recentReleases}
-      headlines={headlines}
       realEconomy={realEconomy}
       indexTrend={indexTrend}
       sectorTrend={sectorTrend}
