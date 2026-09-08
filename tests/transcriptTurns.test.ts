@@ -24,6 +24,8 @@ test("splitNameRole: separate a glued name+role", () => {
   assert.deepEqual(splitNameRole("Operator"), { name: "Operator", role: "" });
   // "COO" must not match the "coo" inside "Cook" — the name is "Tim Cook", not "Tim"
   assert.deepEqual(splitNameRole("Tim CookCEO at Apple"), { name: "Tim Cook", role: "CEO at Apple" });
+  // MarketBeat glues analyst labels too — "Amit DaryananiAnalyst at Evercore"
+  assert.deepEqual(splitNameRole("Amit DaryananiAnalyst at Evercore"), { name: "Amit Daryanani", role: "Analyst at Evercore" });
 });
 
 test("splitIntoBubbles: walls of text become several short bubbles; short stays one", () => {

@@ -218,7 +218,7 @@ function EarningsCallTranscripts({ symbol }: { symbol: string }) {
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="border-b border-[var(--border)] px-4 py-2.5">
         <span className="text-sm font-semibold text-[var(--text-2)]">Earnings-call transcripts</span>
-        <span className="ml-2 text-[11px] text-[var(--text-4)]">full Q&amp;A as a chat thread</span>
+        <span className="ml-2 text-[11px] text-[var(--text-4)]">prepared remarks + Q&amp;A, speaker by speaker</span>
       </div>
 
       {quarters == null ? (

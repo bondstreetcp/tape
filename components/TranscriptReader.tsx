@@ -1,7 +1,7 @@
 /**
- * TranscriptReader — the human reading view for archived earnings calls (data/calls), rendered as an
- * iMessage-style thread: management speaks in accent bubbles on the right, analysts/operator on the left,
- * with the AI digest as a header card and a quarter picker. Server component (pure rendering); the quarter
+ * TranscriptReader — the human reading view for archived earnings calls (data/calls), rendered as a left-aligned
+ * transcript DOCUMENT (see TranscriptThread): speaker blocks coloured by role, "Prepared remarks" / "Q&A"
+ * dividers, the AI digest as a header card, and a quarter picker. Server component (pure rendering); the quarter
  * picker is plain links (?q=<period>) so each render ships only the selected call's turns.
  */
 import type { CallDigest } from "@/lib/callDigests";

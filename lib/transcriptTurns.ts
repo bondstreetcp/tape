@@ -23,8 +23,8 @@ export function classifySpeaker(label: string): TurnSide {
 
 // Role words that begin a title — used to un-glue "TubinVP" and to find where the name ends.
 // \b-bounded so an abbreviation never matches inside a name (e.g. "COO" must not hit the "coo" in "Cook").
-const ROLE_START = /\b(chief|officer|CEO|CFO|COO|CTO|CMO|CIO|president|chair(?:man|woman|person)?|founder|treasurer|controller|investor relations|head of|managing director|EVP|SVP|VP|vice president|executive|director of|senior vice)\b/i;
-const GLUED = /([a-z])((?:VP|Chief|President|CEO|CFO|COO|CTO|Chair|Founder|Treasurer|Controller|Head|Managing|EVP|SVP|Executive|Vice|Director|Investor)\b)/g;
+const ROLE_START = /\b(chief|officer|CEO|CFO|COO|CTO|CMO|CIO|president|chair(?:man|woman|person)?|founder|treasurer|controller|investor relations|head of|managing director|EVP|SVP|VP|vice president|executive|director of|senior vice|analyst|partner|research)\b/i;
+const GLUED = /([a-z])((?:VP|Chief|President|CEO|CFO|COO|CTO|Chair|Founder|Treasurer|Controller|Head|Managing|EVP|SVP|Executive|Vice|Director|Investor|Analyst|Partner|Research)\b)/g;
 
 /** Best-effort split of a "Name Role at Company" label into {name, role}. Handles MarketBeat's glued form
  *  ("Howard TubinVP of Investor Relations…"). Pure. */
