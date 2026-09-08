@@ -36,6 +36,21 @@ export function splitNameRole(label: string): { name: string; role: string } {
   return { name: s, role: "" };
 }
 
+/** Management's first substantive passage from a transcript — the CEO/CFO's own framing of the quarter + outlook,
+ *  which is what the AI move-explainer / earnings-setup read most needs. Prefers the first exec turn (role names a
+ *  chief/CEO/CFO/…), else the first non-boilerplate turn, skipping the IR safe-harbour preamble. A cheap stand-in
+ *  for a not-yet-ingested call. Pure; capped to `max` chars on a word boundary. "" when there's no usable turn. */
+export function callExcerpt(text: string, max = 550): string {
+  const mgmt = parseTranscriptTurns(text).filter((t) => t.side === "mgmt" && t.text.length > 150);
+  if (!mgmt.length) return "";
+  const isExec = (t: TranscriptTurn) => /\b(chief|CEO|CFO|COO|CTO|president|founder)\b/i.test(t.role);
+  const isBoiler = (t: TranscriptTurn) =>
+    /investor relations/i.test(t.role) || /forward-looking|safe harbor|risk factors discussed|non-?GAAP|replay of (this|the) call|call is being recorded/i.test(t.text);
+  const pick = mgmt.find(isExec) || mgmt.find((t) => !isBoiler(t)) || mgmt[0];
+  const s = pick.text.replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, max).replace(/\s+\S*$/, "") + "…" : s;
+}
+
 /** Split ONE speaker's turn into reader-friendly chat bubbles so prepared remarks read as a sequence of short
  *  messages instead of one wall of text: paragraphs (blank-line breaks) first, then any long paragraph into
  *  ~2-3 sentence groups under `maxChars`. Pure. A single over-long sentence stays whole (never mid-sentence). */

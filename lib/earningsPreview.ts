@@ -25,7 +25,8 @@ import { chatJSON, NO_ADVICE, PRO_MODEL, FLASH_MODEL } from "./llm";
 import { isPlaceholderText, narrative, narrativeList } from "./llmValidate";
 import { computeQuant, buildSig, loadGuidance, loadSss, loadScannerRead, type QuantResult } from "./earningsQuant";
 import { listDocs } from "./research/store";
-import { getCallDigestHistory } from "./callsArchive";
+import { loadSymbolCalls, type CallRecord } from "./callsArchive";
+import { callExcerpt } from "./transcriptTurns";
 import { loadCallDigests, type CallDigest } from "./callDigests";
 import type { CompanyStats } from "./companyStats";
 
@@ -106,14 +107,9 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
     // preview couldn't reference it before (only the separate part=preprint path loaded it); wire it in
     // here so the narrative can synthesize it (the Campbell's gap). Empty for names with no notes.
     raceTimeout(listDocs(sym).catch(() => []), 6_000, [] as Awaited<ReturnType<typeof listDocs>>),
-    // Earnings-call HISTORY — the deep archive's digests (data/calls), falling back to the rolling desk digests
-    // until the archive is ingested. Guidance trajectory + tone across quarters, read INTO this print.
-    raceTimeout((async () => {
-      const arch = await getCallDigestHistory(sym, 4).catch(() => [] as CallDigest[]);
-      if (arch.length) return arch;
-      const dd = await loadCallDigests().catch(() => null);
-      return (dd?.digests ?? []).filter((d) => d.symbol === sym).slice(0, 4);
-    })(), 6_000, [] as CallDigest[]),
+    // Earnings-call HISTORY — the deep archive (data/calls), newest-first: raw transcript + digest per quarter. The
+    // ctx builder prefers each quarter's AI digest and falls back to management's own opening until it's ingested.
+    raceTimeout(loadSymbolCalls(sym).then((cs) => cs.slice(0, 4)).catch(() => [] as CallRecord[]), 6_000, [] as CallRecord[]),
   ]);
   const guid = loadGuidance(sym);
   const sss = loadSss(sym);
@@ -148,15 +144,24 @@ export async function assemblePreviewContext(sym: string, earningsISO: string | 
         .slice(0, 2600)
     : "";
 
-  // Earnings-call HISTORY — the last few quarters' digests (deep archive, else the rolling desk digests). Lets
-  // the setup read judge guidance TRAJECTORY and whether management's tone is improving/deteriorating into the
-  // print — the block self-instructs, so no SYSTEM-prompt change is needed. Capped like researchCtx.
-  const callHistCtx = callHist.length
-    ? `\n\nEARNINGS CALL HISTORY (last ${callHist.length} quarters — this desk's digests; use for guidance TRAJECTORY, follow-through, and whether management's tone is improving or deteriorating INTO this print):\n` +
-      callHist
-        .map((d) => `• ${d.callDate} · tone ${d.tone} · guidance ${d.guidance.action}${d.guidance.detail ? `: ${d.guidance.detail}` : ""}: ${d.tldr}${d.kpis.length ? ` | KPIs: ${d.kpis.slice(0, 2).join("; ")}` : ""}${d.watch.length ? ` | watch: ${d.watch.slice(0, 2).join("; ")}` : ""}`)
-        .join("\n")
-        .slice(0, 2600)
+  // Earnings-call HISTORY — the last few quarters (deep archive). Prefer each quarter's AI digest; before a call is
+  // ingested, fall back to management's own opening (raw excerpt) so the trajectory read still has substance. If the
+  // archive holds nothing for this name, use the rolling desk digests. Lets the setup read judge guidance TRAJECTORY
+  // and whether management's tone is improving/deteriorating into the print. Capped like researchCtx; self-instructs.
+  const deskLine = (d: CallDigest) => `• ${d.callDate} · tone ${d.tone} · guidance ${d.guidance.action}${d.guidance.detail ? `: ${d.guidance.detail}` : ""}: ${d.tldr}${d.kpis.length ? ` | KPIs: ${d.kpis.slice(0, 2).join("; ")}` : ""}${d.watch.length ? ` | watch: ${d.watch.slice(0, 2).join("; ")}` : ""}`;
+  let callLines = callHist.map((c) => {
+    const d = c.digest;
+    if (d) return `• ${c.callDate} · tone ${d.tone} · guidance ${d.guidance.action}${d.guidance.detail ? `: ${d.guidance.detail}` : ""}: ${d.tldr}${d.kpis.length ? ` | KPIs: ${d.kpis.slice(0, 2).join("; ")}` : ""}${d.watch.length ? ` | watch: ${d.watch.slice(0, 2).join("; ")}` : ""}`;
+    const ex = callExcerpt(c.transcript.text, 450);
+    return ex ? `• ${c.callDate} (${c.fiscalPeriod}) — management's opening (AI summary pending): ${ex}` : `• ${c.callDate} (${c.fiscalPeriod}): transcript archived, AI summary pending`;
+  });
+  if (!callLines.length) {
+    const dd = await loadCallDigests().catch(() => null);
+    callLines = (dd?.digests ?? []).filter((d) => d.symbol === sym).slice(0, 4).map(deskLine);
+  }
+  const callHistCtx = callLines.length
+    ? `\n\nEARNINGS CALL HISTORY (last ${callLines.length} quarters — AI digests where ingested, else management's own opening; use for guidance TRAJECTORY, follow-through, and whether management's tone is improving or deteriorating INTO this print):\n` +
+      callLines.join("\n").slice(0, 2600)
     : "";
 
   // Quant signals are RECOMPUTED here from the server's own sources (never taken from the URL —

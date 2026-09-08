@@ -8,7 +8,7 @@
 import { loadCompanyBundle } from "./companyCache";
 import { loadCallDigests } from "./callDigests";
 import { loadSymbolCalls } from "./callsArchive";
-import { parseTranscriptTurns } from "./transcriptTurns";
+import { callExcerpt } from "./transcriptTurns";
 import { getNews } from "./news";
 import { type FinPeriod } from "./financials";
 import { chatText, NO_ADVICE } from "./llm";
@@ -39,21 +39,6 @@ const big = (v: number | null) =>
   v == null ? "n/a" : v >= 1e12 ? `$${(v / 1e12).toFixed(2)}T` : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v}`;
 const pct = (v: number | null) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 const r1 = (v: number | null) => (v == null ? "n/a" : v.toFixed(1));
-
-// Management's first substantive passage from a raw (not-yet-digested) transcript — the CEO/CFO's own framing of
-// the quarter + outlook, which is what the move-explainer most needs. Skips the IR safe-harbour boilerplate turn.
-// A cheap stand-in until the rig ingests a proper digest; capped so the grounded ask stays inside its deadline.
-function callExcerpt(text: string, max = 550): string {
-  const mgmt = parseTranscriptTurns(text).filter((t) => t.side === "mgmt" && t.text.length > 150);
-  if (!mgmt.length) return "";
-  const isExec = (t: { role: string }) => /\b(chief|CEO|CFO|COO|CTO|president|founder)\b/i.test(t.role);
-  const isBoiler = (t: { role: string; text: string }) =>
-    /investor relations/i.test(t.role) || /forward-looking|safe harbor|risk factors discussed|non-?GAAP|replay of (this|the) call|call is being recorded/i.test(t.text);
-  // Prefer the first exec (CEO/CFO) — their opening frames the quarter + outlook — else the first non-boilerplate turn.
-  const pick = mgmt.find(isExec) || mgmt.find((t) => !isBoiler(t)) || mgmt[0];
-  const s = pick.text.replace(/\s+/g, " ").trim();
-  return s.length > max ? s.slice(0, max).replace(/\s+\S*$/, "") + "…" : s;
-}
 
 export async function gatherContext(symbol: string, name = ""): Promise<{ name: string; text: string }> {
   // stats/profile/financials from the baked per-stock cache (local on a hit); only news stays live.

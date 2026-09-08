@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifySpeaker, splitNameRole, parseTranscriptTurns, splitIntoBubbles } from "../lib/transcriptTurns";
+import { classifySpeaker, splitNameRole, parseTranscriptTurns, splitIntoBubbles, callExcerpt } from "../lib/transcriptTurns";
 
 // The reader UI (components/TranscriptReader) renders these turns as an iMessage thread: management right,
 // analysts/operator left. These pin the speaker classification + the labeled-text split.
@@ -39,6 +39,18 @@ test("splitIntoBubbles: walls of text become several short bubbles; short stays 
   assert.ok(bubbles.every((b) => b.length <= 100), "each bubble is reader-sized");
   assert.equal(bubbles.join(" ").replace(/\s+/g, " "), wall.replace(/\s+/g, " "), "no text lost");
   assert.deepEqual(splitIntoBubbles(""), []);
+});
+
+test("callExcerpt: prefers the exec's opening over the IR safe-harbour boilerplate, capped", () => {
+  const text = [
+    "Jane Doe - Director of Investor Relations: Welcome to the call. Some of the statements we make today are forward-looking statements, and please refer to the risk factors discussed in our SEC filings for more detail.",
+    "John Smith - Chief Executive Officer: Good afternoon, everyone, and thanks for joining. We delivered record revenue of $5 billion this quarter, up 20 percent, and we are raising our full-year guidance on broad-based demand.",
+  ].join("\n\n");
+  const ex = callExcerpt(text, 120);
+  assert.ok(ex.startsWith("Good afternoon, everyone"), `picks the CEO, got: ${ex}`);
+  assert.ok(!/forward-looking/.test(ex), "skips the IR safe-harbour turn");
+  assert.ok(ex.length <= 122, "capped to ~max on a word boundary");
+  assert.equal(callExcerpt(""), ""); // no turns → empty
 });
 
 test("parseTranscriptTurns: splits labeled turns, classifies sides, merges continuations", () => {
