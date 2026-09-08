@@ -256,3 +256,35 @@ export async function getMacro(): Promise<Macro> {
 
   return { curve, indicators, asOf: new Date(now).toISOString(), gdpNow, releases, creditSeries };
 }
+
+/**
+ * The subset the Fixed Income (/rates) page actually renders — the Treasury curve + the daily credit-spread
+ * series only. ~14 FRED calls instead of getMacro's ~32, so when there's no committed snapshot the cold path
+ * is roughly twice as fast (the /rates "loads slowly / does nothing at first" report). Same shape the page
+ * reads out of data/macro.json, so getRatesCached can serve either transparently.
+ */
+export async function getCurveCredit(): Promise<Pick<Macro, "curve" | "asOf" | "creditSeries">> {
+  const now = Date.now();
+  const curveStart = new Date(now - 400 * DAY).toISOString().slice(0, 10);
+  const creditStart = new Date(now - 6 * 365 * DAY).toISOString().slice(0, 10);
+  const baaStart = new Date(now - 12 * 365 * DAY).toISOString().slice(0, 10);
+  const [curveSeries, hyObs, igObs, baaObs] = await Promise.all([
+    Promise.all(CURVE.map(async ([id, label, mat]) => ({ label, mat, obs: await fetchSeries(id, curveStart) }))),
+    fetchSeries("BAMLH0A0HYM2", creditStart),
+    fetchSeries("BAMLC0A0CM", creditStart),
+    fetchSeries("BAA10Y", baaStart),
+  ]);
+  const curve: CurvePoint[] = curveSeries.map(({ label, mat, obs }) => ({
+    label,
+    mat,
+    now: last(obs)?.value ?? null,
+    monthAgo: onOrBefore(obs, now - 30 * DAY)?.value ?? null,
+    yearAgo: onOrBefore(obs, now - 365 * DAY)?.value ?? null,
+  }));
+  const creditSeries = {
+    hy: hyObs.map((o) => [o.date, o.value] as [string, number]),
+    ig: igObs.map((o) => [o.date, o.value] as [string, number]),
+    baa: baaObs.map((o) => [o.date, o.value] as [string, number]),
+  };
+  return { curve, asOf: new Date(now).toISOString(), creditSeries };
+}

@@ -22,7 +22,7 @@ they land.
 
 ## Rates / FedWatch
 - [x] **13. Embed/link the CME FedWatch chart** — DONE (link): a "Market-implied rate path" card on the Fed Watch page links out to CME FedWatch, framed against our narrative digest (Fed's words vs the market's bet). CME's tool is proprietary + iframe-blocked so it can't be embedded, and we have no keyless Fed-funds-futures feed to compute our own path — a native implied-probability chart is a possible follow-up if a data source is sourced. 🔵 @18:32–19:00
-- [ ] **14. Fixed-income link loads very slowly / "does nothing" at first** — check perf. 🐞 @17:52–18:19
+- [x] **14. Fixed-income link loads very slowly / "does nothing" at first** — FIXED: the page only renders the curve + credit spreads but was awaiting the full 32-series macro pull on a cold cache; added `getRatesCached`/`getCurveCredit` which fetch just those ~14 series (measured **4.6s → 1.9s** cold, snapshot path unchanged) and a page-shaped `loading.tsx` skeleton so navigation never looks dead. (Ruled out tracing-excludes — it never strips macro.json.) 🐞 @17:52–18:19
 
 ## ARB tool
 - [ ] **15. Monitor: filter by deal type** — cash / cash+stock / all-stock / all (4 buttons). 🔵 @38:44–39:40
