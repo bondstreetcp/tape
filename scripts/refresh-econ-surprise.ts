@@ -17,12 +17,11 @@ import { getMacroCached } from "../lib/macroData";
 import { getEconEstimates, matchEstimate } from "../lib/econEstimates";
 import { RELEASES } from "../lib/releases";
 import { writeFeedGuarded } from "../lib/feedGuard";
-import { SURPRISE_CFG, parseFFValue, type SurpriseEvent, type EconSurpriseData } from "../lib/econSurprise";
+import { SURPRISE_CFG, parseFFValue, standardizeSurprise, metricConsistent, surpriseIdOf, type SurpriseEvent, type EconSurpriseData } from "../lib/econSurprise";
 
 const DAY = 86_400_000;
 const t = (d: string) => new Date(d + "T00:00:00Z").getTime();
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 async function readPrior(): Promise<EconSurpriseData | null> {
   try {
@@ -54,7 +53,8 @@ function buildIndex(events: SurpriseEvent[]): [string, number][] {
 async function main() {
   const prior = await readPrior();
   const priorEvents = prior?.events ?? [];
-  const seen = new Set(priorEvents.map((e) => `${e.key}|${e.date}`));
+  const seen = new Set(priorEvents.map(surpriseIdOf));
+  const today = iso(Date.now());
 
   const [macro, ff] = await Promise.all([getMacroCached(), getEconEstimates()]);
   const releases = macro.releases ?? {};
@@ -64,15 +64,26 @@ async function main() {
     const cfg = SURPRISE_CFG[def.key];
     const rel = releases[def.key];
     if (!cfg || !rel || rel.latest == null || !rel.latestDate) continue;
-    const key = `${def.key}|${rel.latestDate}`;
-    if (seen.has(key)) continue;
-    const est = matchEstimate(def.key, rel.latestDate, ff); // consensus near this print (±7d, this week)
+    // Identity is the FRED reference/observation date (stable per print). A new one = a fresh release.
+    const id = `${def.key}|${rel.latestDate}`;
+    if (seen.has(id)) continue;
+    // ForexFactory only carries the CURRENT week, so a just-detected print is landing ~now — match the
+    // consensus against the run date, NOT the reference month (which for monthly releases is weeks earlier
+    // than the release and would fall outside matchEstimate's ±7d window, silently dropping every monthly
+    // surprise — only weekly claims, where reference≈release, slipped through before).
+    const est = matchEstimate(def.key, today, ff);
     const consensus = parseFFValue(est?.forecast);
     if (consensus == null) continue; // no consensus on file → can't score this print yet
-    const raw = ((rel.latest - consensus) / cfg.scale) * (cfg.invert ? -1 : 1);
-    const z = Math.round(clamp(raw, -3, 3) * 100) / 100;
-    fresh.push({ key: def.key, label: def.label, category: cfg.category, date: rel.latestDate, actual: rel.latest, consensus, unit: def.unit, z });
-    seen.add(key);
+    if (!metricConsistent(def.transform, est?.title)) continue; // FF only had the wrong metric (y/y vs m/m)
+    // ForexFactory's week includes UPCOMING releases. If the matched consensus is for a release that hasn't
+    // happened yet, the print sitting in FRED is the PRIOR period — don't pair them (the new period gets
+    // captured once it actually prints and FRED advances). Only score a consensus whose release day has come.
+    const releaseDate = est?.dateISO ? est.dateISO.slice(0, 10) : today;
+    if (releaseDate > today) continue;
+    const z = standardizeSurprise(def.key, rel.latest, consensus);
+    if (z == null) continue;
+    fresh.push({ key: def.key, label: def.label, category: cfg.category, date: releaseDate, actual: rel.latest, consensus, unit: def.unit, z, obs: rel.latestDate });
+    seen.add(id);
   }
 
   const events = [...priorEvents, ...fresh].sort((a, b) => t(a.date) - t(b.date));

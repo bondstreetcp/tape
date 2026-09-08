@@ -16,11 +16,38 @@ export interface SurpriseEvent {
   key: string;
   label: string;
   category: SurpriseCategory;
-  date: string; // the print's date (YYYY-MM-DD)
+  date: string; // the RELEASE date (YYYY-MM-DD) — when the surprise hit the tape; drives the time-decay
   actual: number;
   consensus: number;
   unit: string;
   z: number; // standardized surprise; sign = economic direction (positive = stronger-than-expected)
+  obs?: string; // FRED observation/reference date — the STABLE print identity for dedup (differs from
+                // `date` for monthly releases, whose reference month precedes the release by weeks)
+}
+
+/** Stable identity for de-duping the ledger across refreshes. Older events (pre-`obs`) stored the
+ *  reference date in `date`, so they fall back to it — keeping identity continuous through the schema bump. */
+export const surpriseIdOf = (e: SurpriseEvent): string => `${e.key}|${e.obs ?? e.date}`;
+
+/** Standardize a surprise into a clamped z-score: (actual − consensus) / typical-scale, sign flipped
+ *  where a higher print is economically weaker (e.g. jobless claims). Returns null for an unknown key. */
+export function standardizeSurprise(key: string, actual: number, consensus: number): number | null {
+  const cfg = SURPRISE_CFG[key];
+  if (!cfg) return null;
+  const raw = ((actual - consensus) / cfg.scale) * (cfg.invert ? -1 : 1);
+  return Math.round(Math.max(-3, Math.min(3, raw)) * 100) / 100;
+}
+
+/** Guard against scoring a YoY actual against an m/m consensus (or vice versa): when ForexFactory carries
+ *  only the "wrong" metric for a release, our actual (fixed by the release's transform) and their forecast
+ *  are in different units and the surprise is nonsense. Only an explicit y/y↔m/m contradiction is rejected;
+ *  level releases whose FF title names neither (claims, sentiment, housing, jobs) always pass. */
+export function metricConsistent(transform: string, ffTitle: string | null | undefined): boolean {
+  const title = ffTitle ?? "";
+  const titleYoY = /y\/y/i.test(title), titleMoM = /m\/m/i.test(title);
+  if (transform === "yoy" && titleMoM && !titleYoY) return false;
+  if ((transform === "mom" || transform === "momChange") && titleYoY && !titleMoM) return false;
+  return true;
 }
 
 export interface EconSurpriseData {
