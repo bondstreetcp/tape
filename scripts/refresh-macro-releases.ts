@@ -14,7 +14,7 @@
  */
 import { promises as fsp } from "fs";
 import path from "path";
-import { catOf, type MacroRelease, type MacroReleasesData } from "../lib/macroReleases";
+import { blsReleaseUrl, catOf, type MacroRelease, type MacroReleasesData } from "../lib/macroReleases";
 import { RESEARCH_UA as UA } from "../lib/scriptKit";
 import { writeFeedOrExit } from "../lib/feedGuard";
 
@@ -78,7 +78,7 @@ function parseBLS(xml: string): MacroRelease[] {
     const value = afterBr.split(/<a\b/i)[0].replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
     if (!value || value.length < 2) continue;
     const href = (block.match(/<a[^>]+href="([^"]+)"/i) || ["", ""])[1];
-    const url = href ? new URL(href, "https://www.bls.gov").href : "https://www.bls.gov/data/";
+    const url = href ? blsReleaseUrl(new URL(href, "https://www.bls.gov").href) : "https://www.bls.gov/data/";
     out.push({ source: "BLS", title: `${label}: ${value}`, url, date, category: catOf(label), value });
   }
   return out;
@@ -96,7 +96,10 @@ async function main() {
   // Forward-accumulate: seed with prior (keeps each headline's first-seen date), add only new titles.
   const prior: MacroReleasesData = await fsp.readFile(FILE, "utf8").then((s) => JSON.parse(s)).catch(() => ({ generatedAt: "", releases: [] as MacroRelease[] }));
   const key = (r: MacroRelease) => `${r.source}|${r.title}`;
-  const seen = new Map<string, MacroRelease>((prior.releases ?? []).map((r) => [key(r), r]));
+  // Upgrade any BLS toc-page links already stored (feed forward-accumulates, so old entries keep their URL).
+  const seen = new Map<string, MacroRelease>(
+    (prior.releases ?? []).map((r) => [key(r), r.source === "BLS" ? { ...r, url: blsReleaseUrl(r.url) } : r]),
+  );
   let added = 0;
   for (const r of [...bea, ...bls]) if (!seen.has(key(r))) { seen.set(key(r), r); added++; }
 

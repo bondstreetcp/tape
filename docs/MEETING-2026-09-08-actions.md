@@ -14,7 +14,7 @@ they land.
 - [x] **5. Real Economy → Energy charts don't render on click** — FIXED: extracted the shared `SeriesChartModal` and made EnergyPanel cards clickable (full history + timeframes), matching RealEconomyPanel. 🐞 @8:42
 - [ ] **6. Valuation chart: add an "i" info button** — it's log price + trend line + 2σ bands = technical exhaustion, not PE valuation; label it. 🔵 @9:00–11:21
 - [ ] **7. Positioning (+ others): click-to-expand a bigger chart**, consistently. 🔵 @11:45
-- [ ] **8. Economy Calendar release links go to a generic BLS index page**, not the specific release. 🐞 @12:30–12:56
+- [x] **8. Economy Calendar release links go to a generic BLS index page** — FIXED: the bls_latest rollup links each indicator to its release table-of-contents (`…/empsit.toc.htm`, a page of links); `blsReleaseUrl` retargets the news-release narrative (`…/empsit.nr0.htm`). Applied to new prints and migrated onto existing entries on the next nightly refresh. 🐞 @12:30–12:56
 - [ ] **9. Daily Desk: "economic releases today / this week" section** (CPI etc. front-and-center). 🔵 @13:27–14:00
 - [ ] **10. Verify the surprise-index tracker records each new release going forward** (did it catch Fri's unemployment?). ✅ @14:00
 - [ ] **11. "Attention" (Wikipedia page-views): move out of Economy** — flag new surging names + add zoom, OR delete. ⚖️ @14:23–16:17

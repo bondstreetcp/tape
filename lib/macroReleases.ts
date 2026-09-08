@@ -39,6 +39,16 @@ export function catOf(title: string): MacroCategory {
   return "Other";
 }
 
+/**
+ * The BLS "Latest Numbers" rollup links each indicator to its release TABLE OF CONTENTS (…/empsit.toc.htm) — a
+ * page of links, not the release itself. Point at the news-release narrative (…/empsit.nr0.htm), the "…nr0"
+ * convention BLS uses uniformly (empsit/cpi/ppi/eci/prod2/ximpim …). Non-toc links (a specific table, or the
+ * generic /data/ fallback) are left untouched.
+ */
+export function blsReleaseUrl(u: string): string {
+  return u.replace(/\/news\.release\/([a-z0-9]+)\.toc\.htm$/i, "/news.release/$1.nr0.htm");
+}
+
 export const CATEGORY_COLOR: Record<MacroCategory, string> = {
   Growth: "#22c55e",
   Inflation: "#ef4444",
