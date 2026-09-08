@@ -25,13 +25,13 @@ they land.
 - [x] **14. Fixed-income link loads very slowly / "does nothing" at first** — FIXED: the page only renders the curve + credit spreads but was awaiting the full 32-series macro pull on a cold cache; added `getRatesCached`/`getCurveCredit` which fetch just those ~14 series (measured **4.6s → 1.9s** cold, snapshot path unchanged) and a page-shaped `loading.tsx` skeleton so navigation never looks dead. (Ruled out tracing-excludes — it never strips macro.json.) 🐞 @17:52–18:19
 
 ## ARB tool
-- [ ] **15. Monitor: filter by deal type** — cash / cash+stock / all-stock / all (4 buttons). 🔵 @38:44–39:40
-- [ ] **16. Extend the backtest window (~2 years)**. 🔵 @36:33–36:46
-- [ ] **17. Improve deal/news data-validation accuracy** (~70–80%; paid sources unfindable). 🔧 @35:26–35:58
+- [→] **15. Monitor: filter by deal type** — cash / cash+stock / all-stock / all (4 buttons). 🔵 @38:44–39:40 — DEFERRED: the ARB tool is a separate codebase (arb.truporchhomesvm.com); `/merger-arb` here just redirects to it and `MergerArbView` is dead code. Implement in that repo. (Backend note: `refresh-merger-arb` here already records ALL DEFM14A targets in `targets[]`, cash-only in `rows[]`; surfacing stock/mixed in `rows[]` is the feed-side prep if that tool reads this feed.)
+- [→] **16. Extend the backtest window (~2 years)** — DEFERRED: build in the standalone ARB tool; no arb backtest exists in this repo. 🔵 @36:33–36:46
+- [→] **17. Improve deal/news data-validation accuracy** (~70–80%; paid sources unfindable) — DEFERRED with #15/#16 (ARB deal-validation lives in the standalone ARB tool). 🔧 @35:26–35:58
 
 ## Staples & lower-priority
 - [ ] **18. Easier NielsenIQ/sell-side PDF drop** — an upload portal (vs the `staples-scans/` folder) so it's not memory-dependent. 🔵 @5:14–6:49
-- [ ] **19. Truth Social feed stale / not updating** — Trump posts are noise; de-emphasize or fix lag. 🔵 low @29:47
+- [x] **19. Truth Social feed stale / not updating** — DONE: the header showed `generatedAt` (bumped every nightly run even when the source returned nothing), hiding the real lag. Now surfaces the **latest post's age** as the honest freshness signal + a "possibly lagging" badge when no new stock-relevant post has landed in >10 days, and reframes it as a "low-signal, noise-heavy" feed (de-emphasized). 🔵 low @29:47
 - [ ] **20. Convertible Watch: no live convert pricing / hedge ratio** (hard to source) — ack, phase-2. 📋 @20:14
 
-Legend: 🐞 bug · 🔵 feature · ⚖️ decision · 🔀 move · ✅ verify · 📋 backlog · [~]/[≈] in progress.
+Legend: 🐞 bug · 🔵 feature · ⚖️ decision · 🔀 move · ✅ verify · 📋 backlog · [~]/[≈] in progress · [→] deferred (separate repo / later).

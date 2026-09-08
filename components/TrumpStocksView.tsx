@@ -43,15 +43,28 @@ export default function TrumpStocksView({ universe, data }: { universe: string; 
   );
 
   const wr = stats.bullHitRate;
+  // "Stale / not updating" (2026-09-08 review): generatedAt bumps every nightly run even when the source
+  // (Truth Social API / RSS) returned nothing new, so it hid the real lag. Surface the LATEST POST's age —
+  // that's the honest freshness signal — and flag it when no new stock-relevant post has landed in a while.
+  const latestPost = data.posts[0]?.date ?? null;
+  const latestDays = latestPost ? Math.floor((Date.now() - Date.parse(latestPost)) / 86_400_000) : null;
+  const laggy = latestDays != null && latestDays > 10;
 
   return (
     <main className="mx-auto max-w-[70rem] px-4 py-6 sm:px-6">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link href={`/u/${universe}`} className="text-sm text-[var(--text-3)] hover:text-[var(--text)]">← {UNIVERSE_BY_ID[universe]?.name ?? "Home"}</Link>
-          <h1 className="mt-1 text-2xl font-bold">Trump&apos;s Stock Calls</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">Trump&apos;s Stock Calls</h1>
+            {laggy && (
+              <span className="rounded-full border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-2 py-0.5 text-[11px] font-semibold text-[#f59e0b]" title="No new stock-relevant Truth Social post has been captured recently — the source (Truth Social API / RSS) may be lagging or rate-limited. The performance figures below still update daily.">
+                possibly lagging · latest post {latestDays}d ago
+              </span>
+            )}
+          </div>
           <p className="mt-1 max-w-3xl text-[13px] text-[var(--text-3)]">
-            Just the Truth Social posts where the President names a specific public company — the political noise filtered out — with how the stock has moved since. {data.posts.length} calls · {data.scanned} posts scanned · {data.source} · {fmtDateTime(data.generatedAt)}
+            A low-signal, noise-heavy feed (most posts are politics) — just the Truth Social posts where the President names a specific public company, with how the stock moved since. {data.posts.length} calls · latest post {latestPost ? dateLabel(latestPost) : "—"} · prices refreshed {fmtDateTime(data.generatedAt)}
           </p>
         </div>
         <UniverseSwitcher current={universe} />
