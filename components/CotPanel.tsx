@@ -1,7 +1,29 @@
 "use client";
+import { useState } from "react";
 import { type CotData, type CotRow, COT_GROUP_ORDER, fmtContracts, crowding } from "@/lib/cot";
+import SeriesChartModal, { type ChartDetail } from "./SeriesChartModal";
 
 const pctColor = (v: number) => (v >= 0 ? "#22c55e" : "#ef4444");
+
+// Map a COT row into the shared chart-modal shape (spec-net history + crowding/WoW/%OI lines).
+function cotDetail(r: CotRow): ChartDetail {
+  const cr = crowding(r.percentile);
+  return {
+    label: r.label,
+    unit: "contracts",
+    history: r.history,
+    current: r.specNet,
+    latestDate: null,
+    source: "CFTC Commitments of Traders (Legacy, futures-only) · non-commercial net (large speculators)",
+    tooltip: "Spec net = non-commercial long − short. The 5-yr percentile is the crowding read; extremes are a contrarian flag (crowded longs = squeeze-lower fuel, crowded shorts = squeeze-higher).",
+    fmt: (v) => (v == null ? "—" : fmtContracts(v)),
+    lines: [
+      { label: cr.label, value: `${r.percentile.toFixed(0)}%ile`, color: cr.color },
+      { label: "WoW", value: `${r.wowChange >= 0 ? "+" : ""}${fmtContracts(r.wowChange)}`, color: pctColor(r.wowChange) },
+      ...(r.pctOI != null ? [{ label: "%OI", value: `${r.pctOI >= 0 ? "+" : ""}${r.pctOI.toFixed(0)}%` }] : []),
+    ],
+  };
+}
 
 function Spark({ points }: { points: [string, number][] }) {
   if (!points || points.length < 2) return null;
@@ -32,11 +54,11 @@ function Gauge({ pct }: { pct: number }) {
   );
 }
 
-function Card({ r }: { r: CotRow }) {
+function Card({ r, onOpen }: { r: CotRow; onOpen: () => void }) {
   const cr = crowding(r.percentile);
   const extreme = r.percentile >= 90 || r.percentile <= 10;
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" style={extreme ? { borderColor: `${cr.color}66` } : undefined}>
+    <button type="button" onClick={onOpen} title="Click for the full history + timeframes" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--accent)]" style={extreme ? { borderColor: `${cr.color}66` } : undefined}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-[13px] font-semibold text-[var(--text)]" title={r.label}>{r.label}</div>
@@ -65,11 +87,12 @@ function Card({ r }: { r: CotRow }) {
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function CotPanel({ data }: { data: CotData | null }) {
+  const [detail, setDetail] = useState<ChartDetail | null>(null);
   if (!data || !data.rows.length) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">
@@ -91,15 +114,16 @@ export default function CotPanel({ data }: { data: CotData | null }) {
             <div key={g}>
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{g}</div>
               <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                {rows.map((r) => <Card key={r.key} r={r} />)}
+                {rows.map((r) => <Card key={r.key} r={r} onOpen={() => setDetail(cotDetail(r))} />)}
               </div>
             </div>
           );
         })}
       </div>
       <p className="mt-3 max-w-3xl text-[11px] leading-relaxed text-[var(--text-4)]">
-        Source: CFTC Commitments of Traders (Legacy futures-only), free public data, as-of Tuesday and published Friday. &quot;Spec net&quot; = non-commercial long − short (large speculators / trend-followers); commercials are the hedgers on the other side. The 5-year percentile is the crowding gauge. Positioning is a contrarian/context signal at extremes, not a timing tool — decision-support, not investment advice.
+        Source: CFTC Commitments of Traders (Legacy futures-only), free public data, as-of Tuesday and published Friday. &quot;Spec net&quot; = non-commercial long − short (large speculators / trend-followers); commercials are the hedgers on the other side. The 5-year percentile is the crowding gauge. Click any card for its full history. Positioning is a contrarian/context signal at extremes, not a timing tool — decision-support, not investment advice.
       </p>
+      {detail && <SeriesChartModal item={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
