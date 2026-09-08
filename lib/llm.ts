@@ -229,8 +229,10 @@ async function callChat(
         return null;
       }
       const j: any = await res.json();
-      // Meter tokens even on an empty-content reply — reasoning tokens are still billed.
-      if (j?.usage) recordUsage(targetModel, j.usage.prompt_tokens, j.usage.completion_tokens);
+      // Meter tokens even on an empty-content reply — reasoning tokens are still billed. But ONLY paid cloud calls:
+      // local rig calls are free, and metering them mis-prices free GPU (no PRICES match → DEFAULT $1/$4) so a bulk
+      // local backfill (e.g. the 24k-record ingest) would inject hundreds of phantom dollars into the $-meter.
+      if (j?.usage && !useLocal) recordUsage(targetModel, j.usage.prompt_tokens, j.usage.completion_tokens);
       const content: string = j?.choices?.[0]?.message?.content ?? "";
       if (content.trim()) return content;
       lastInfo = `${useLocal ? "local " : ""}empty content`; // reasoning likely ate the budget → grow it + retry
