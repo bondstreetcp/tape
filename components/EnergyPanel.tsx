@@ -4,6 +4,7 @@ import {
   type EnergyData, type EnergySeries, ENERGY_GROUP_ORDER, ENERGY_TOOLTIPS,
   fmtEnergy, fmtChange, fmtPct, changeColor, buildDraw, tintColor,
 } from "@/lib/energy";
+import SeriesChartModal, { type ChartDetail } from "./SeriesChartModal";
 
 function Spark({ points }: { points: [string, number][] }) {
   if (!points || points.length < 2) return null;
@@ -21,29 +22,41 @@ function Spark({ points }: { points: [string, number][] }) {
   );
 }
 
+// Tooltip via title (no nested <button>, so the whole card can be a click-to-expand button).
 function Info({ text }: { text?: string }) {
-  const [open, setOpen] = useState(false);
   if (!text) return null;
-  return (
-    <span className="relative inline-flex">
-      <button
-        type="button"
-        onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onClick={() => setOpen((o) => !o)}
-        className="ml-1 grid h-3.5 w-3.5 place-items-center rounded-full border border-[var(--border-strong)] text-[9px] leading-none text-[var(--text-4)] hover:text-[var(--text-2)]"
-        aria-label="What is this?"
-      >i</button>
-      {open && (
-        <span className="absolute left-1/2 top-5 z-20 w-60 -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-[11px] font-normal normal-case leading-snug text-[var(--text-2)] shadow-xl">{text}</span>
-      )}
-    </span>
-  );
+  return <span className="ml-1 shrink-0 cursor-help text-[10px] text-[var(--text-4)]" title={text}>ⓘ</span>;
 }
 
-function Card({ s }: { s: EnergySeries }) {
+// Map an energy series into the shared chart-modal shape (WoW/YoY or inventory build-draw lines; energy formatter).
+function energyDetail(s: EnergySeries): ChartDetail {
+  const isPrice = s.group === "Prices";
+  const isInv = s.group === "Inventories";
+  const lines: ChartDetail["lines"] = isPrice
+    ? [
+        { label: "WoW", value: fmtPct(s.wowPct), color: s.signMode ? changeColor(s.wowPct, s.signMode) : tintColor(s.wowPct) },
+        { label: "YoY", value: fmtPct(s.yoyPct), color: s.signMode ? changeColor(s.yoyPct, s.signMode) : tintColor(s.yoyPct) },
+      ]
+    : isInv
+    ? [
+        { label: buildDraw(s.wow), value: fmtChange(s.wow, s.unit), color: s.wow == null ? "var(--text-3)" : s.wow > 0 ? "#f59e0b" : "#22c55e" },
+        ...(s.vsSeasonalPct != null ? [{ label: "vs 5-yr", value: fmtPct(s.vsSeasonalPct), color: s.vsSeasonalPct < -5 ? "#f59e0b" : "var(--text-3)" }] : []),
+      ]
+    : [
+        { label: "WoW", value: fmtChange(s.wow, s.unit), color: changeColor(s.wow, s.signMode) },
+        { label: "YoY", value: fmtPct(s.yoyPct), color: changeColor(s.yoyPct, s.signMode) },
+      ];
+  return {
+    label: s.label, unit: s.unit, history: s.history, current: s.latest, latestDate: null,
+    source: s.source, tooltip: ENERGY_TOOLTIPS[s.key], fmt: (v, u) => (v == null ? "—" : fmtEnergy(v, u)), lines,
+  };
+}
+
+function Card({ s, onOpen }: { s: EnergySeries; onOpen: () => void }) {
   const isPrice = s.group === "Prices";
   const isInv = s.group === "Inventories";
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+    <button type="button" onClick={onOpen} title="Click for the full history + timeframes" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--accent)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center text-[12px] font-semibold text-[var(--text)]">
@@ -85,11 +98,12 @@ function Card({ s }: { s: EnergySeries }) {
           </>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
 export default function EnergyPanel({ data }: { data: EnergyData | null }) {
+  const [detail, setDetail] = useState<ChartDetail | null>(null);
   if (!data || !data.series.length) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-3)]">
@@ -112,7 +126,7 @@ export default function EnergyPanel({ data }: { data: EnergyData | null }) {
             <div key={g}>
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">{g}</div>
               <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                {rows.map((s) => <Card key={s.key} s={s} />)}
+                {rows.map((s) => <Card key={s.key} s={s} onOpen={() => setDetail(energyDetail(s))} />)}
               </div>
             </div>
           );
@@ -125,8 +139,9 @@ export default function EnergyPanel({ data }: { data: EnergyData | null }) {
         </div>
       )}
       <p className="mt-3 max-w-3xl text-[11px] leading-relaxed text-[var(--text-4)]">
-        Sources: prices from FRED (St. Louis Fed, keyless); the weekly balance from the U.S. EIA (Weekly Petroleum Status Report &amp; Natural Gas Storage Report). Inventory build/draw and level vs the ~5-yr seasonal norm are the standard reads. Decision-support, not investment advice.
+        Sources: prices from FRED (St. Louis Fed, keyless); the weekly balance from the U.S. EIA (Weekly Petroleum Status Report &amp; Natural Gas Storage Report). Inventory build/draw and level vs the ~5-yr seasonal norm are the standard reads. Click any card for its full history. Decision-support, not investment advice.
       </p>
+      {detail && <SeriesChartModal item={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }

@@ -11,7 +11,7 @@ they land.
 - [ ] **4. Transcript coverage** — mostly large-cap (~2–3k); mid/small/obscure missing. Backfill on request. 📋 @25:15
 
 ## Economy / Macro & Rates
-- [ ] **5. Real Economy → Energy charts don't render on click** (the Real-Economy ones do). 🐞 @8:42
+- [x] **5. Real Economy → Energy charts don't render on click** — FIXED: extracted the shared `SeriesChartModal` and made EnergyPanel cards clickable (full history + timeframes), matching RealEconomyPanel. 🐞 @8:42
 - [ ] **6. Valuation chart: add an "i" info button** — it's log price + trend line + 2σ bands = technical exhaustion, not PE valuation; label it. 🔵 @9:00–11:21
 - [ ] **7. Positioning (+ others): click-to-expand a bigger chart**, consistently. 🔵 @11:45
 - [ ] **8. Economy Calendar release links go to a generic BLS index page**, not the specific release. 🐞 @12:30–12:56
