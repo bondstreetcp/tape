@@ -90,8 +90,8 @@ export default function TranscriptReader({
             </div>
           )}
 
-          {/* The iMessage-style thread */}
-          <TranscriptThread turns={selected.turns} />
+          {/* The transcript document (see TranscriptThread) */}
+          <TranscriptThread turns={selected.turns} surfaceVar="var(--bg)" />
 
           <footer style={{ marginTop: 20, fontSize: 11, color: "var(--text-4)", textAlign: "center" }}>
             Transcript via <a href={selected.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--text-3)" }}>{selected.source}</a>. Research, not advice.

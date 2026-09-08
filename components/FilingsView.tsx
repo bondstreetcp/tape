@@ -259,7 +259,7 @@ function EarningsCallTranscripts({ symbol }: { symbol: string }) {
                 <p className="mb-3 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-[13px] leading-relaxed text-[var(--text)]">{selected.digest.tldr}</p>
               )}
               <div className="max-h-[560px] overflow-y-auto pr-1" style={{ opacity: switching ? 0.45 : 1, transition: "opacity 120ms" }}>
-                <TranscriptThread turns={selected.turns} />
+                <TranscriptThread key={selected.period} turns={selected.turns} />
               </div>
               <div className="mt-3 text-[11px] text-[var(--text-4)]">
                 Transcript via{" "}
