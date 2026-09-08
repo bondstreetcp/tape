@@ -8,6 +8,10 @@ import { loadOvernightFilings } from "@/lib/overnightFilings";
 import { loadCallDigests } from "@/lib/callDigests";
 import type { FilingIndex, RelatedFiling } from "@/lib/filingIndex";
 import { UNIVERSE_BY_ID } from "@/lib/universes";
+import { getEconCalendar } from "@/lib/econCalendar";
+import { getEconEstimates, matchEstimate } from "@/lib/econEstimates";
+import { LABEL_TO_RELEASE } from "@/lib/releases";
+import DeskEconReleases from "@/components/DeskEconReleases";
 import DeskNote from "@/components/DeskNote";
 import Briefing from "@/components/Briefing";
 import DailyDeskTabs from "@/components/DailyDeskTabs";
@@ -46,14 +50,18 @@ export default async function DailyDeskPage({
   const { universe } = await params;
   if (!UNIVERSE_BY_ID[universe]) notFound();
   const { tab } = await searchParams;
-  const [note, overnight, snapshot, related, headlines, calls] = await Promise.all([
+  const [note, overnight, snapshot, related, headlines, calls, calendar, ff] = await Promise.all([
     loadDeskNote(),
     loadOvernightFilings().catch(() => null),
     loadSnapshot(universe).catch(() => null),
     loadRelated(),
     getMarketHeadlines().catch(() => []),
     loadCallDigests().catch(() => null),
+    getEconCalendar(8).catch(() => []),
+    getEconEstimates().catch(() => []),
   ]);
+  // The week-ahead macro calendar, with consensus attached where we have one — same as the macro page.
+  const weekEvents = calendar.map((e) => ({ ...e, estimate: matchEstimate(LABEL_TO_RELEASE[e.label] ?? "", e.date, ff) }));
   const known = snapshot?.stocks.map((s) => s.symbol) ?? [];
   const sectors: Record<string, string> = {};
   for (const s of snapshot?.stocks ?? []) if (s.sector) sectors[s.symbol] = s.sector;
@@ -71,13 +79,16 @@ export default async function DailyDeskPage({
       <DailyDeskTabs
         initial={tab}
         brief={
-          note ? (
-            <DeskNote note={note} universe={universe} />
-          ) : (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
-              The desk note isn&apos;t built yet — it generates before the open (~8:45am ET) and after the close (~5:15pm ET) on weekdays.
-            </div>
-          )
+          <>
+            <DeskEconReleases events={weekEvents} />
+            {note ? (
+              <DeskNote note={note} universe={universe} />
+            ) : (
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-16 text-center text-sm text-[var(--text-3)]">
+                The desk note isn&apos;t built yet — it generates before the open (~8:45am ET) and after the close (~5:15pm ET) on weekdays.
+              </div>
+            )}
+          </>
         }
         wire={
           <>
