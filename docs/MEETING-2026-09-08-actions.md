@@ -30,8 +30,8 @@ they land.
 - [→] **17. Improve deal/news data-validation accuracy** (~70–80%; paid sources unfindable) — DEFERRED with #15/#16 (ARB deal-validation lives in the standalone ARB tool). 🔧 @35:26–35:58
 
 ## Staples & lower-priority
-- [ ] **18. Easier NielsenIQ/sell-side PDF drop** — an upload portal (vs the `staples-scans/` folder) so it's not memory-dependent. 🔵 @5:14–6:49
+- [x] **18. Easier NielsenIQ/sell-side PDF drop** — DONE: a drag-drop "Add a scan" upload card on the Staples Scanner page → `POST /api/staples/upload`, which auth-gates (signed-in only, licensed content), validates (PDF magic byte + a text layer), sanitizes the filename (no path traversal), and lands it in `STAPLES_SCAN_DIR` for the next nightly scan. The raw PDF is never served back. No more SSH-ing files into the folder. 🔵 @5:14–6:49
 - [x] **19. Truth Social feed stale / not updating** — DONE: the header showed `generatedAt` (bumped every nightly run even when the source returned nothing), hiding the real lag. Now surfaces the **latest post's age** as the honest freshness signal + a "possibly lagging" badge when no new stock-relevant post has landed in >10 days, and reframes it as a "low-signal, noise-heavy" feed (de-emphasized). 🔵 low @29:47
-- [ ] **20. Convertible Watch: no live convert pricing / hedge ratio** (hard to source) — ack, phase-2. 📋 @20:14
+- [→] **20. Convertible Watch: no live convert pricing / hedge ratio** (hard to source) — ACKNOWLEDGED as phase-2 in the meeting; no convert-price feed to source, so arb P&L stays deferred (see the convertible-arb memory). 📋 @20:14
 
 Legend: 🐞 bug · 🔵 feature · ⚖️ decision · 🔀 move · ✅ verify · 📋 backlog · [~]/[≈] in progress · [→] deferred (separate repo / later).

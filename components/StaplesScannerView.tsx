@@ -6,6 +6,7 @@ import { fmtDateTime } from "@/lib/format";
 import UniverseSwitcher from "./UniverseSwitcher";
 import InfoDot from "./InfoDot";
 import HowToRead from "./HowToRead";
+import StaplesUpload from "./StaplesUpload";
 import { inflectionColor, growthColor, fmtPct, scanHistoryFor, type StaplesScannerData, type ScanRow, type ScanLevel, type Inflection, type ScanPoint } from "@/lib/staplesScanner";
 
 type FlatRow = ScanRow & { segment: string; source: string; periodEnd: string };
@@ -181,6 +182,8 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
         <p className="text-[var(--text-4)]">Derived from licensed sell-side scans (NielsenIQ) — figures only, internal use. Nielsen covers tracked brick-and-mortar channels, not all e-commerce, so it understates some premium/online-skewed names. Research, not advice.</p>
       </HowToRead>
 
+      <StaplesUpload />
+
       {data.summary && data.summary.headline && (
         <div className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-4)]">
@@ -211,7 +214,7 @@ export default function StaplesScannerView({ universe, data }: { universe: strin
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-12 text-center text-sm text-[var(--text-3)]">
           {reports.length
             ? "No rows for this segment / level."
-            : "No scans extracted yet — drop the biweekly Nielsen PDFs in the watched folder and run npm run refresh-staples-scanner."}
+            : "No scans extracted yet — upload the biweekly Nielsen PDFs above (or drop them in the watched folder); they're ingested on the next nightly scan."}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">

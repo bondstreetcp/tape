@@ -168,3 +168,20 @@ export function latestScannerFor(data: StaplesScannerData | null, ticker: string
   }
   return best;
 }
+
+/**
+ * Make an uploaded scan's filename safe to write into the watched folder (the upload portal, 2026-09-08
+ * review): drop any path component (no traversal), keep a conservative charset, collapse whitespace, force a
+ * single .pdf extension, and cap the length. Always returns a non-empty "*.pdf" basename.
+ */
+export function sanitizeScanFilename(name: string | null | undefined): string {
+  const base = String(name ?? "").replace(/\\/g, "/").split("/").pop() ?? "";
+  const stem = base
+    .replace(/\.pdf$/i, "")
+    .replace(/[^A-Za-z0-9 ._-]+/g, "_")
+    .replace(/\s+/g, " ")
+    .replace(/^[._ ]+|[._ ]+$/g, "")
+    .slice(0, 120)
+    .trim();
+  return `${stem || "scan"}.pdf`;
+}
