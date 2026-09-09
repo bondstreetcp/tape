@@ -66,7 +66,13 @@ else
   need yt-dlp; need ffmpeg
   TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
   echo "-> fetching audio: $URL"
-  yt-dlp -q -x --audio-format mp3 -o "$TMP/audio.%(ext)s" "$URL"
+  # securehds CDNs 704 without a Referer; carry FETCH_REFERER/FETCH_UA (the wrapper sets sane defaults) and
+  # COOKIES_FROM for a session-bound stream. These make --batch of webcast m3u8 URLs work in one pass.
+  set -- -q -x --audio-format mp3 -o "$TMP/audio.%(ext)s"
+  [ -n "${FETCH_REFERER:-}" ] && set -- --referer "$FETCH_REFERER" "$@"
+  [ -n "${FETCH_UA:-}" ] && set -- --user-agent "$FETCH_UA" "$@"
+  [ -n "${COOKIES_FROM:-}" ] && set -- --cookies-from-browser "$COOKIES_FROM" "$@"
+  yt-dlp "$@" "$URL"
   AUDIO="$(ls "$TMP"/audio.* 2>/dev/null | head -1 || true)"
   [ -n "${AUDIO:-}" ] || { echo "no audio produced from that URL (a gated portal page has no media — pass a real stream/replay URL, or a local audio file)"; exit 1; }
 fi

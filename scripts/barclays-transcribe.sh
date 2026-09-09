@@ -53,6 +53,10 @@ CONF="${CONF:-Barclays Consumer 2026}"
 DEFDATE="${CONF_DATE:-$(date +%Y-%m-%d)}"
 ASR_URL="${ASR_URL:-http://127.0.0.1:8000/v1}"   # pinged by preflight; fetch-transcribe reads the same var
 LOCAL_AUDIO=""; AUDIO_DIR=""                      # set by --audio-dir (local files -> no yt-dlp/ffmpeg needed)
+# securehds webcast CDNs 704 without a Referer — carry sane defaults so `--batch` of m3u8 URLs works out of the
+# box (fetch-transcribe reads these). COOKIES_FROM=… passes through for a session-bound stream.
+export FETCH_REFERER="${FETCH_REFERER:-https://event.webcasts.com/}"
+export FETCH_UA="${FETCH_UA:-Mozilla/5.0}"
 
 usage() {
   sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
