@@ -12,7 +12,13 @@
 #    (whitespace-separated; blank lines and #comments are skipped). One conference =
 #    one file of ~150 lines -> one run. Failures are logged and skipped, not fatal.
 #
-#  Flags (before the URL / --batch):
+#  BULK from a folder (simplest for a whole conference — no URLs, no yt-dlp, no per-talk fiddling):
+#    sh scripts/barclays-transcribe.sh --audio-dir <DIR>
+#    DIR holds one audio file per talk, named TICKER.ext or TICKER_YYYY-MM-DD.ext
+#    (mp3/m4a/wav/mp4/aac/flac/ogg). Transcribes + summarizes every file you've already downloaded.
+#
+#  Flags (before the URL / --batch / --audio-dir):
+#    --audio-dir <D> bulk: transcribe + summarize every audio file in folder D (local files, no download)
 #    --capture-only  audio→text only, write the drop, STOP (same as CAPTURE_ONLY=1) — for the Mac mini
 #    --preflight     check deps + ping Whisper, print status, and exit (no capture)
 #    --no-preflight  skip the auto deps+Whisper check that otherwise runs before any real run
@@ -38,21 +44,24 @@ set -eu
 # Resolve the repo root from THIS script's location, so it works from any cwd once
 # invoked by path (e.g. `sh ~/tape-ops/repo/scripts/barclays-transcribe.sh ...`).
 REPO="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-FETCH="$REPO/scripts/fetch-transcribe.sh"
+FETCH="${FETCH:-$REPO/scripts/fetch-transcribe.sh}"
 [ -f "$FETCH" ] || { echo "can't find $FETCH — run this from inside the tape checkout"; exit 1; }
 
 CONF="${CONF:-Barclays Consumer 2026}"
 DEFDATE="${CONF_DATE:-$(date +%Y-%m-%d)}"
 ASR_URL="${ASR_URL:-http://127.0.0.1:8000/v1}"   # pinged by preflight; fetch-transcribe reads the same var
+LOCAL_AUDIO=""; AUDIO_DIR=""                      # set by --audio-dir (local files -> no yt-dlp/ffmpeg needed)
 
 usage() {
-  sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-# Fail in ~2s, not on file 1 of 150: confirm the capture tooling is here and Whisper actually answers.
+# Fail in ~2s, not on file 1 of 150: confirm the tooling is here and Whisper actually answers.
 preflight() {
   miss=""
-  for dep in yt-dlp ffmpeg jq curl; do command -v "$dep" >/dev/null 2>&1 || miss="$miss $dep"; done
+  # Local audio (--audio-dir) skips the download tooling; a URL/batch run needs yt-dlp+ffmpeg too.
+  need="jq curl"; [ -n "$LOCAL_AUDIO" ] || need="yt-dlp ffmpeg jq curl"
+  for dep in $need; do command -v "$dep" >/dev/null 2>&1 || miss="$miss $dep"; done
   if [ -n "$miss" ]; then echo "preflight FAIL — missing:$miss  (brew install$miss)"; return 1; fi
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$ASR_URL/models" 2>/dev/null || true)"
   if [ -z "$code" ] || [ "$code" = "000" ]; then
@@ -73,6 +82,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --capture-only) export CAPTURE_ONLY=1; shift ;;
     --no-preflight) SKIP_PREFLIGHT=1; shift ;;
+    --audio-dir)    LOCAL_AUDIO=1; AUDIO_DIR="${2:?--audio-dir needs a folder of audio files}"; shift 2 ;;
     --preflight)    if preflight; then exit 0; else exit 1; fi ;;   # standalone check
     -h | --help)    usage; exit 0 ;;
     --) shift; break ;;
@@ -82,8 +92,29 @@ while [ $# -gt 0 ]; do
 done
 
 # Auto-preflight before any real run (skippable) — catches missing deps / a down Whisper before work starts.
-if [ -z "$SKIP_PREFLIGHT" ] && [ -n "${1:-}" ]; then
+if [ -z "$SKIP_PREFLIGHT" ] && { [ -n "${1:-}" ] || [ -n "$AUDIO_DIR" ]; }; then
   if ! preflight; then echo "(bypass with --no-preflight)"; exit 1; fi
+fi
+
+# ── bulk mode: a FOLDER of already-downloaded audio files ────────────────────
+# One file per presentation, named TICKER.ext or TICKER_YYYY-MM-DD.ext (mp3/m4a/wav/mp4/aac/flac/ogg).
+# Transcribes + summarizes every one (add --capture-only to just transcribe now and ingest on the NAS later).
+if [ -n "$AUDIO_DIR" ]; then
+  [ -d "$AUDIO_DIR" ] || { echo "no such folder: $AUDIO_DIR"; exit 1; }
+  ok=0; fail=0; n=0
+  for f in "$AUDIO_DIR"/*.mp3 "$AUDIO_DIR"/*.m4a "$AUDIO_DIR"/*.wav "$AUDIO_DIR"/*.mp4 "$AUDIO_DIR"/*.aac "$AUDIO_DIR"/*.flac "$AUDIO_DIR"/*.ogg; do
+    [ -f "$f" ] || continue                      # unmatched glob -> literal pattern -> skip
+    n=$((n + 1))
+    base="$(basename "$f")"; stem="${base%.*}"
+    sym="${stem%%_*}"                            # TICKER (everything before the first "_")
+    rest="${stem#"$sym"}"; rest="${rest#_}"
+    date=""; case "$rest" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) date="${rest%%_*}" ;; esac
+    echo "=== $sym  ($CONF)  <- $base ==="
+    if one "$f" "$sym" "$date"; then ok=$((ok + 1)); else fail=$((fail + 1)); echo "  (failed: $sym — continuing)"; fi
+  done
+  [ "$n" -gt 0 ] || echo "no audio files in $AUDIO_DIR (looked for mp3/m4a/wav/mp4/aac/flac/ogg)"
+  echo "audio-dir done: $ok ok, $fail failed of $n files  ->  run sync-calls-archive to publish"
+  exit 0
 fi
 
 case "${1:-}" in

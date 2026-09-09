@@ -4,13 +4,17 @@
 #  The link-driven front of the audio pipeline. Run it in the tape repo on a box that has yt-dlp + ffmpeg + curl +
 #  jq, can reach your Whisper (ASR_URL) and the digest rig (CALL_DIGEST_LOCAL_URL).
 #
-#  Usage:  sh scripts/fetch-transcribe.sh <MEDIA-URL> <SYMBOL> [YYYY-MM-DD] [source label]
+#  Usage:  sh scripts/fetch-transcribe.sh <MEDIA-URL | LOCAL-AUDIO-FILE> <SYMBOL> [YYYY-MM-DD] [source label]
 #    e.g.  sh scripts/fetch-transcribe.sh 'https://…/replay.mp3' STZ 2026-09-08 'Barclays Consumer 2026'
+#    e.g.  sh scripts/fetch-transcribe.sh ./downloads/MSFT_2026-09-09.mp3 MSFT 2026-09-09 'Goldman Communicopia 2026'
 #
-#  IMPORTANT: <MEDIA-URL> must be a fetchable audio/video/stream URL (a public replay MP3, a YouTube talk, or a
-#  stream URL you legitimately obtained from a player you're authenticated to). This script NEVER passes an auth
-#  wall — hand it a gated portal page (e.g. .../agenda.jsp?...) and yt-dlp simply gets no media. Internal-research
-#  use; the capture is yours to make.
+#  Two input kinds:
+#    · A LOCAL audio file (already on disk) is transcribed directly — no yt-dlp/ffmpeg, no network fetch. This is
+#      how the --audio-dir bulk path processes audio you captured yourself.
+#    · A MEDIA-URL is fetched with yt-dlp — it must be a real audio/video/stream URL (a public replay MP3, a
+#      YouTube talk, or a stream URL you legitimately obtained from a player you're authenticated to). This script
+#      NEVER passes an auth wall — hand it a gated portal page (.../agenda.jsp?...) and yt-dlp gets no media. The
+#      capture (getting the file/URL) is yours; internal-research use.
 #
 #  Config (env, with defaults):
 #    ASR_URL   Whisper endpoint, OpenAI /audio/transcriptions shape   (default http://127.0.0.1:8000/v1)
@@ -32,15 +36,22 @@ DROP_DIR="${DROP_DIR:-$REPO/data/incoming-transcripts}"
 export CALL_DIGEST_LOCAL_URL="${CALL_DIGEST_LOCAL_URL:-http://192.168.1.76:8000/v1}"
 export CALL_DIGEST_LOCAL_MODEL="${CALL_DIGEST_LOCAL_MODEL:-argus-vlm}"
 
-for dep in yt-dlp ffmpeg jq curl; do
-  command -v "$dep" >/dev/null 2>&1 || { echo "missing dependency: $dep (install it, e.g. brew install $dep). This box needs yt-dlp+ffmpeg+jq+curl and a reachable Whisper (ASR_URL) — a Mac mini is the natural fit."; exit 1; }
-done
-
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-echo "-> fetching audio: $URL"
-yt-dlp -q -x --audio-format mp3 -o "$TMP/audio.%(ext)s" "$URL"
-AUDIO="$(ls "$TMP"/audio.* 2>/dev/null | head -1 || true)"
-[ -n "${AUDIO:-}" ] || { echo "no audio produced from that URL (a gated portal page has no media — pass a real stream/replay URL)"; exit 1; }
+# A LOCAL audio file (already downloaded) is transcribed directly — no yt-dlp/ffmpeg, no network fetch. A URL
+# goes through yt-dlp, which needs the full tooling.
+if [ -f "$URL" ]; then
+  for dep in jq curl; do command -v "$dep" >/dev/null 2>&1 || { echo "missing dependency: $dep"; exit 1; }; done
+  AUDIO="$URL"; TMP=""
+  echo "-> using local audio file: $AUDIO"
+else
+  for dep in yt-dlp ffmpeg jq curl; do
+    command -v "$dep" >/dev/null 2>&1 || { echo "missing dependency: $dep (install it, e.g. brew install $dep). A URL input needs yt-dlp+ffmpeg+jq+curl and a reachable Whisper (ASR_URL) — a Mac mini is the natural fit."; exit 1; }
+  done
+  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+  echo "-> fetching audio: $URL"
+  yt-dlp -q -x --audio-format mp3 -o "$TMP/audio.%(ext)s" "$URL"
+  AUDIO="$(ls "$TMP"/audio.* 2>/dev/null | head -1 || true)"
+  [ -n "${AUDIO:-}" ] || { echo "no audio produced from that URL (a gated portal page has no media — pass a real stream/replay URL, or a local audio file)"; exit 1; }
+fi
 
 echo "-> transcribing on Whisper: $ASR_URL ($ASR_MODEL)"
 if [ -n "${ASR_KEY:-}" ]; then
