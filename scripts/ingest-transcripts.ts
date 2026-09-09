@@ -84,7 +84,9 @@ async function main() {
     if (!digest) { failed++; continue; }
     await saveCallRecord({ ...rec, digest, digestedAt: new Date().toISOString() });
     done++;
-    if (done % 20 === 0) console.log(`  … ${done}/${queue.length} digested (latest ${w.symbol} ${w.fiscalPeriod} · ${w.callDate})`);
+    // Log EVERY record (was every 20 ≈ one line per ~30min at 90s/call, which read as "nothing happening"
+    // on a foreground/supervisor watch). Includes the running rate so a slow/stuck rig is obvious.
+    console.log(`  … ${done}/${queue.length} digested · ${w.symbol} ${w.fiscalPeriod} (${w.callDate}) · ~${Math.round((Date.now() - t0) / 1000 / Math.max(1, done))}s/call`);
   }
   console.log(`ingest-transcripts: done in ${Math.round((Date.now() - t0) / 60_000)}min · ${done} digested · ${already} already · ${failed} failed`);
 }

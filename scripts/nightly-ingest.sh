@@ -6,13 +6,18 @@
 #  and read tape.env).
 #
 #  Each run:
-#    1. Starts the transcript ingest (scripts/ingest-transcripts) ONLY if one is not
-#       already running — so a daily driver never stacks a 2nd GPU job on the rig and
-#       coexists with a long continuous pass. The ingest is newest-call-first,
+#    1. Starts the INGEST SUPERVISOR (scripts/ingest-supervisor) ONLY if one isn't
+#       already running. The supervisor runs the ingest and RESTARTS it on death
+#       (OOM/hiccup) so the backfill doesn't stall until the next night; it exits
+#       cleanly once the backlog is drained. The ingest is newest-call-first,
 #       peak-aware (INGEST_PAUSE_PEAK), incremental + resumable.
 #    2. Syncs the digested archive to R2 (sync-calls-archive) so the live site picks
 #       up whatever has been digested so far. Safe alongside a running ingest —
 #       records are written atomically.
+#
+#  NOTE: run this from the DSM Task Scheduler (or with setsid), NOT interactively over
+#  SSH — a plain `nohup … &` child is killed by Synology session cleanup when the
+#  launching shell's session ends, which is why a hand-run ingest "silently vanishes."
 #
 #  Net effect: the archive digests itself over time and publishes daily, hands-off.
 #  When the backlog is fully digested the ingest exits; the next night's run restarts
@@ -32,12 +37,19 @@ export CALL_DIGEST_LOCAL_URL="${CALL_DIGEST_LOCAL_URL:-http://192.168.1.76:8000/
 export CALL_DIGEST_LOCAL_MODEL="${CALL_DIGEST_LOCAL_MODEL:-argus-vlm}"
 export INGEST_PAUSE_PEAK="${INGEST_PAUSE_PEAK:-1}"
 
-if pgrep -f "scripts/ingest-transcripts" >/dev/null 2>&1; then
-  echo "ingest already running — not starting another" >> "$LOG"
+if pgrep -f "scripts/ingest-supervisor" >/dev/null 2>&1; then
+  echo "ingest supervisor already running — not starting another" >> "$LOG"
 else
   STAMP="$(date +%Y%m%dT%H%M)"
-  echo "starting ingest -> $HOME/tape-ops/ingest-$STAMP.log" >> "$LOG"
-  nohup npm run ingest-transcripts > "$HOME/tape-ops/ingest-$STAMP.log" 2>&1 &
+  SUP_LOG="$HOME/tape-ops/supervisor-$STAMP.log"
+  echo "starting ingest supervisor -> $SUP_LOG" >> "$LOG"
+  # setsid detaches it into its own session so it (and the ingest it manages) survive this launcher's
+  # session ending — plain `nohup … &` is killed by Synology session cleanup when run from an SSH shell.
+  if command -v setsid >/dev/null 2>&1; then
+    setsid sh scripts/ingest-supervisor.sh > "$SUP_LOG" 2>&1 &
+  else
+    nohup sh scripts/ingest-supervisor.sh > "$SUP_LOG" 2>&1 &
+  fi
 fi
 
 # Publish whatever is digested so far (daily → the live site stays current).
