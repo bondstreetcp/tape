@@ -26,6 +26,8 @@
 #  Prefilled defaults (override via env):
 #    CONF          source label (default "Barclays Consumer 2026"); e.g. CONF='Barclays Financials 2026'
 #    CONF_DATE     fallback date (default today) when a line/arg omits one
+#    WHISPER_MODEL ggml*.bin path -> transcribe with whisper.cpp locally (no server; best on an M4).
+#                  Needs whisper-cpp + ffmpeg. Unset = use an HTTP Whisper at ASR_URL instead.
 #    CAPTURE_ONLY=1  run the audio→text half only (Mac mini: has Whisper + brew tooling), write the drop, and
 #                    STOP — then copy the drop to the NAS's data/incoming-transcripts/ and ingest there. Passed
 #                    straight through to fetch-transcribe. Whisper is localhost-bound on the mini, so run this
@@ -53,19 +55,28 @@ ASR_URL="${ASR_URL:-http://127.0.0.1:8000/v1}"   # pinged by preflight; fetch-tr
 LOCAL_AUDIO=""; AUDIO_DIR=""                      # set by --audio-dir (local files -> no yt-dlp/ffmpeg needed)
 
 usage() {
-  sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-# Fail in ~2s, not on file 1 of 150: confirm the tooling is here and Whisper actually answers.
+# Fail in ~2s, not on file 1 of 150: confirm the tooling is here and the transcriber is usable.
 preflight() {
   miss=""
-  # Local audio (--audio-dir) skips the download tooling; a URL/batch run needs yt-dlp+ffmpeg too.
+  if [ -n "${WHISPER_MODEL:-}" ]; then
+    # whisper.cpp CLI mode: need jq + ffmpeg + the CLI binary + the model file (a URL run also needs yt-dlp).
+    need="jq ffmpeg ${WHISPER_CLI:-whisper-cli}"; [ -n "$LOCAL_AUDIO" ] || need="$need yt-dlp"
+    for dep in $need; do command -v "$dep" >/dev/null 2>&1 || miss="$miss $dep"; done
+    if [ -n "$miss" ]; then echo "preflight FAIL — missing:$miss  (brew install whisper-cpp ffmpeg jq)"; return 1; fi
+    [ -f "$WHISPER_MODEL" ] || { echo "preflight FAIL — WHISPER_MODEL not found: $WHISPER_MODEL"; return 1; }
+    echo "preflight OK — whisper.cpp ($(basename "$WHISPER_MODEL")) + deps present"
+    return 0
+  fi
+  # HTTP Whisper mode: local audio (--audio-dir) skips the download tooling; a URL/batch run needs yt-dlp+ffmpeg.
   need="jq curl"; [ -n "$LOCAL_AUDIO" ] || need="yt-dlp ffmpeg jq curl"
   for dep in $need; do command -v "$dep" >/dev/null 2>&1 || miss="$miss $dep"; done
   if [ -n "$miss" ]; then echo "preflight FAIL — missing:$miss  (brew install$miss)"; return 1; fi
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$ASR_URL/models" 2>/dev/null || true)"
   if [ -z "$code" ] || [ "$code" = "000" ]; then
-    echo "preflight FAIL — Whisper not reachable at $ASR_URL. Run this ON the box where Whisper listens (it's localhost-bound on the mini), or set ASR_URL=..."
+    echo "preflight FAIL — Whisper not reachable at $ASR_URL. Set WHISPER_MODEL to use whisper.cpp (no server), or point ASR_URL at a running Whisper."
     return 1
   fi
   echo "preflight OK — deps present · Whisper reachable at $ASR_URL (HTTP $code)"
