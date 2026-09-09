@@ -13,8 +13,12 @@
 #    one file of ~150 lines -> one run. Failures are logged and skipped, not fatal.
 #
 #  Prefilled defaults (override via env):
-#    CONF       source label   (default "Barclays Consumer 2026"); e.g. CONF='Barclays Financials 2026'
-#    CONF_DATE  fallback date  (default today) when a line/arg omits one
+#    CONF          source label (default "Barclays Consumer 2026"); e.g. CONF='Barclays Financials 2026'
+#    CONF_DATE     fallback date (default today) when a line/arg omits one
+#    CAPTURE_ONLY=1  run the audio→text half only (Mac mini: has Whisper + brew tooling), write the drop, and
+#                    STOP — then copy the drop to the NAS's data/incoming-transcripts/ and ingest there. Passed
+#                    straight through to fetch-transcribe. Whisper is localhost-bound on the mini, so run this
+#                    ON the mini (default ASR_URL=127.0.0.1:8000 works); it is NOT reachable over Tailscale.
 #
 #  IMPORTANT: <MEDIA-URL> must be a REAL fetchable replay/stream URL — the .mp3/.m3u8
 #  the authenticated player actually loads (grab it from the browser Network tab), NOT
@@ -36,7 +40,7 @@ CONF="${CONF:-Barclays Consumer 2026}"
 DEFDATE="${CONF_DATE:-$(date +%Y-%m-%d)}"
 
 usage() {
-  sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 one() { # <url> <symbol> [date]

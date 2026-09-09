@@ -18,6 +18,7 @@
 #    ASR_KEY   bearer token, only if your Whisper server needs one    (default: none)
 #    CALL_DIGEST_LOCAL_URL / _MODEL   the rig digest model            (default http://192.168.1.76:8000/v1 / argus-vlm)
 #    DROP_DIR  where the transcript drop is written                   (default <repo>/data/incoming-transcripts)
+#    CAPTURE_ONLY=1  write the drop then STOP — no Node/ingest; for a capture box (Mac mini) split from the NAS
 # ============================================================================
 set -eu
 URL="${1:?usage: fetch-transcribe <MEDIA-URL> <SYMBOL> [YYYY-MM-DD] [source]}"
@@ -54,6 +55,14 @@ OUT="$DROP_DIR/${SYM}_${DATE}.json"
 jq -n --arg s "$SYM" --arg t "$SYM - $SOURCE ($DATE)" --arg d "$DATE" --arg src "$SOURCE" --arg txt "$TEXT" \
   '{symbol:$s, title:$t, date:$d, source:$src, text:$txt}' > "$OUT"
 echo "-> wrote drop: $OUT"
+
+# CAPTURE_ONLY=1 stops here — for running the audio→text half on a box that has yt-dlp+ffmpeg+Whisper (a Mac mini)
+# but NOT the ingest half (Node, the repo deps, R2 creds, rig access — those live on the NAS). Move the drop(s) to
+# the NAS's data/incoming-transcripts/ and run `npm run ingest-transcript-text` (then ingest-transcripts) there.
+if [ "${CAPTURE_ONLY:-}" = "1" ]; then
+  echo "OK (capture-only): $OUT — copy it to the NAS data/incoming-transcripts/ then run 'npm run ingest-transcript-text' there."
+  exit 0
+fi
 
 # Archive + summarize via the existing pipeline. If the rig is unreachable the drop is still archived and the NAS
 # nightly ingest will digest it later, so the digest step is best-effort.
