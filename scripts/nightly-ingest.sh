@@ -37,7 +37,13 @@ export CALL_DIGEST_LOCAL_URL="${CALL_DIGEST_LOCAL_URL:-http://192.168.1.76:8000/
 export CALL_DIGEST_LOCAL_MODEL="${CALL_DIGEST_LOCAL_MODEL:-argus-vlm}"
 export INGEST_PAUSE_PEAK="${INGEST_PAUSE_PEAK:-1}"
 
-if pgrep -f "scripts/ingest-supervisor" >/dev/null 2>&1; then
+# Synology/busybox has NO pgrep — fall back to ps so this guard actually works (else every
+# nightly spawns another supervisor; the supervisor's own mkdir lock is the last line of defense).
+proc_alive() {
+  if command -v pgrep >/dev/null 2>&1; then pgrep -f "$1" >/dev/null 2>&1
+  else ps -ef 2>/dev/null | grep -v grep | grep -q "$1"; fi
+}
+if proc_alive "scripts/ingest-supervisor"; then
   echo "ingest supervisor already running — not starting another" >> "$LOG"
 else
   STAMP="$(date +%Y%m%dT%H%M)"

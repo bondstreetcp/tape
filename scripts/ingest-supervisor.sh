@@ -64,7 +64,15 @@ wait_for_mem() {
   while ! mem_ok; do log "low memory (< ${MIN_MEM_MB}MB avail) — waiting 60s"; sleep 60; done
 }
 
-ingest_running() { pgrep -f "scripts/ingest-transcripts" >/dev/null 2>&1; }
+# Is an ingest already alive? Synology/busybox has NO pgrep (the guard silently returned
+# false there, so the supervisor would stack a 2nd GPU job on the rig) — fall back to ps.
+ingest_running() {
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -f "scripts/ingest-transcripts" >/dev/null 2>&1
+  else
+    ps -ef 2>/dev/null | grep -v grep | grep -q "scripts/ingest-transcripts"
+  fi
+}
 
 log "supervisor up · rig ${CALL_DIGEST_LOCAL_MODEL} @ ${CALL_DIGEST_LOCAL_URL} · peak-pause=${INGEST_PAUSE_PEAK} · min-mem=${MIN_MEM_MB}MB · max-fails=${MAX_FAILS}"
 
