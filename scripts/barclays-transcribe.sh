@@ -112,7 +112,8 @@ fi
 # Transcribes + summarizes every one (add --capture-only to just transcribe now and ingest on the NAS later).
 if [ -n "$AUDIO_DIR" ]; then
   [ -d "$AUDIO_DIR" ] || { echo "no such folder: $AUDIO_DIR"; exit 1; }
-  ok=0; fail=0; n=0
+  DROP_DIR="${DROP_DIR:-$REPO/data/incoming-transcripts}"   # same default fetch-transcribe writes to
+  ok=0; fail=0; skip=0; n=0
   for f in "$AUDIO_DIR"/*.mp3 "$AUDIO_DIR"/*.m4a "$AUDIO_DIR"/*.wav "$AUDIO_DIR"/*.mp4 "$AUDIO_DIR"/*.aac "$AUDIO_DIR"/*.flac "$AUDIO_DIR"/*.ogg; do
     [ -f "$f" ] || continue                      # unmatched glob -> literal pattern -> skip
     n=$((n + 1))
@@ -120,11 +121,15 @@ if [ -n "$AUDIO_DIR" ]; then
     sym="${stem%%_*}"                            # TICKER (everything before the first "_")
     rest="${stem#"$sym"}"; rest="${rest#_}"
     date=""; case "$rest" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) date="${rest%%_*}" ;; esac
+    # Idempotent: skip a talk whose transcript drop already exists (re-run after adding more files; FORCE=1 redoes).
+    if [ -z "${FORCE:-}" ] && [ -f "$DROP_DIR/${sym}_${date:-$DEFDATE}.json" ]; then
+      echo "=== $sym  (skip — already transcribed) ==="; skip=$((skip + 1)); continue
+    fi
     echo "=== $sym  ($CONF)  <- $base ==="
     if one "$f" "$sym" "$date"; then ok=$((ok + 1)); else fail=$((fail + 1)); echo "  (failed: $sym — continuing)"; fi
   done
   [ "$n" -gt 0 ] || echo "no audio files in $AUDIO_DIR (looked for mp3/m4a/wav/mp4/aac/flac/ogg)"
-  echo "audio-dir done: $ok ok, $fail failed of $n files  ->  run sync-calls-archive to publish"
+  echo "audio-dir done: $ok ok, $skip skipped, $fail failed of $n files  ->  run sync-calls-archive to publish"
   exit 0
 fi
 
