@@ -35,7 +35,7 @@ Do this on the machine you'll **browse the conference from** (the box needs
    and paste this as the URL:
 
    ```
-   javascript:(function(){var S='http://127.0.0.1:8765/capture',T='';var r=performance.getEntriesByType('resource').map(function(e){return e.name}),p=r.filter(function(u){return u.indexOf('.m3u8')>-1&&u.indexOf('playlist')>-1});if(!p.length)p=r.filter(function(u){return u.indexOf('.m3u8')>-1});var u=p.length?p[p.length-1]:'';if(!u){alert('No stream URL yet - press Play so the player loads, then click again.');return}var c=(document.title||'').replace(/\s+/g,' ').trim();var t=prompt('Ticker for:\n'+c,'');if(t===null)return;t=t.trim().toUpperCase();var d=prompt('Date (YYYY-MM-DD):',new Date().toISOString().slice(0,10));if(d===null)return;var h={'Content-Type':'text/plain'};if(T)h['X-Tape-Token']=T;fetch(S,{method:'POST',headers:h,body:JSON.stringify({ticker:t,url:u,date:d.trim(),company:c})}).then(function(x){return x.json()}).then(function(j){alert(j.ok?'Downloading '+j.ticker+' on the capture box.':'Rejected: '+j.error)}).catch(function(){alert('Cannot reach capture server on 127.0.0.1:8765 - start it on THIS machine: node scripts/capture-server.mjs')})})();
+   javascript:(function(){var S='http://127.0.0.1:8765/capture',T='',K='__tapeCapCount';function g(){try{return JSON.parse(localStorage.getItem(K)||'[]')}catch(e){return[]}}function s(a){try{localStorage.setItem(K,JSON.stringify(a))}catch(e){}}function b(){var el=document.getElementById('__tapeBadge');if(!el){el=document.createElement('div');el.id='__tapeBadge';el.style.cssText='position:fixed;z-index:2147483647;right:14px;bottom:14px;background:#111;color:#fff;font:13px/1.35 system-ui,sans-serif;padding:9px 12px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.45);white-space:nowrap';document.body.appendChild(el)}var a=g(),last=a.length?' (last '+a[a.length-1]+')':'';el.innerHTML='tape captured: <b>'+a.length+'</b>'+last+' <span id="__tapeReset" style="cursor:pointer;opacity:.6;margin-left:6px">reset</span>';var x=document.getElementById('__tapeReset');if(x)x.onclick=function(){if(confirm('Reset captured counter?')){s([]);b()}}}var r=performance.getEntriesByType('resource').map(function(e){return e.name}),p=r.filter(function(u){return u.indexOf('.m3u8')>-1&&u.indexOf('playlist')>-1});if(!p.length)p=r.filter(function(u){return u.indexOf('.m3u8')>-1});var u=p.length?p[p.length-1]:'';if(!u){alert('No stream URL yet - press Play so the player loads, then click again.');return}var c=(document.title||'').replace(/\s+/g,' ').trim();var t=prompt('Ticker for:\n'+c,'');if(t===null)return;t=t.trim().toUpperCase();var d=prompt('Date (YYYY-MM-DD):',new Date().toISOString().slice(0,10));if(d===null)return;d=d.trim();var h={'Content-Type':'text/plain'};if(T)h['X-Tape-Token']=T;fetch(S,{method:'POST',headers:h,body:JSON.stringify({ticker:t,url:u,date:d,company:c})}).then(function(x){return x.json()}).then(function(j){if(j&&j.ok){var a=g();a.push(j.ticker||t);s(a);b()}else{alert('Rejected: '+((j&&j.error)||'unknown'))}}).catch(function(){alert('Cannot reach capture server on 127.0.0.1:8765 - start it on THIS machine: node scripts/capture-server.mjs')});b()})();
    ```
 
    If you started the server with `CAPTURE_TOKEN=...`, edit the bookmarklet's
@@ -49,10 +49,14 @@ Do this on the machine you'll **browse the conference from** (the box needs
    stream loads).
 2. Click the **"Grab talk → tape"** bookmark.
 3. Type the **ticker** (the company name is shown), confirm the **date**.
-4. You'll see "Downloading TICKER on the capture box." Move to the next talk.
+4. A **"tape captured: N (last TICKER)"** badge in the bottom-right ticks up on
+   success — no OK to dismiss. Move to the next talk. The count persists as you
+   navigate between talks; "reset" zeroes it (e.g. at the start of a new
+   conference). Only errors pop an alert.
 
-The capture server logs each one (`[capture] OK STZ (18s)` …). If one says the
-token expired, just re-open that talk and click again.
+The capture server also logs each one (`[capture] OK STZ (18s)` …). If a talk
+says the token expired, just re-open it and click again — the badge won't tick
+until the download is accepted.
 
 ---
 
