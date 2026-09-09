@@ -31,8 +31,8 @@ DROP_DIR="${DROP_DIR:-$REPO/data/incoming-transcripts}"
 export CALL_DIGEST_LOCAL_URL="${CALL_DIGEST_LOCAL_URL:-http://192.168.1.76:8000/v1}"
 export CALL_DIGEST_LOCAL_MODEL="${CALL_DIGEST_LOCAL_MODEL:-argus-vlm}"
 
-for dep in yt-dlp jq curl; do
-  command -v "$dep" >/dev/null 2>&1 || { echo "missing dependency: $dep (install it, e.g. brew install $dep)"; exit 1; }
+for dep in yt-dlp ffmpeg jq curl; do
+  command -v "$dep" >/dev/null 2>&1 || { echo "missing dependency: $dep (install it, e.g. brew install $dep). This box needs yt-dlp+ffmpeg+jq+curl and a reachable Whisper (ASR_URL) — a Mac mini is the natural fit."; exit 1; }
 done
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
