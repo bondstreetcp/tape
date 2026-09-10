@@ -14,6 +14,15 @@ import { GICS_TO_ETF } from "@/lib/sectors";
 import { loadSymbolSeries } from "@/lib/data";
 import { memo } from "@/lib/memoCache";
 import { guardLlmRoute } from "@/lib/llmGuard";
+import { promises as fsp } from "fs";
+import path from "path";
+import type { PrintPredictorFile } from "@/lib/printPredictor";
+
+const loadPrintPredictor = (): Promise<PrintPredictorFile | null> =>
+  fsp
+    .readFile(path.join(process.cwd(), "data", "earnings-print-predictor.json"), "utf8")
+    .then((s) => JSON.parse(s) as PrintPredictorFile)
+    .catch(() => null);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -221,6 +230,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ symbol: 
       return NextResponse.json(whyPayload, {
         headers: { "Cache-Control": whyPayload.why ? "public, s-maxage=86400, stale-while-revalidate=172800" : "no-store" },
       });
+    }
+
+    // ── Predictor part: the beat/miss + reaction model's LIVE call for this symbol + its OOS track ──
+    // A local file read of the nightly refresh-print-predictor feed — no LLM, no live fetch. Returns null
+    // (with a "no prediction yet" state on the client) when this name has no digested-call prediction.
+    if (part === "predictor") {
+      const f = await loadPrintPredictor();
+      const live = f?.live.find((l) => l.symbol === sym) ?? null;
+      const track = f ? { beatMiss: f.oos.beatMiss, reaction: f.oos.reaction, verdict: f.oos.verdict } : null;
+      return NextResponse.json(
+        { predictor: live, track, baseRates: f?.baseRates ?? null, models: f?.models ?? null },
+        { headers: { "Cache-Control": live ? "public, s-maxage=10800, stale-while-revalidate=21600" : "no-store" } },
+      );
     }
 
     // ── Data part: reaction history + implied move + options skew/max-pain (auto-loaded) ──
