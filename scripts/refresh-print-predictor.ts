@@ -75,7 +75,7 @@ async function main() {
     const series = (await loadSymbolSeries(symbol))?.daily;
     if (!series?.length) continue;
     const row = meta.get(symbol);
-    perSymbol.push({ sym: symbol, sector: row?.sector ?? null, marketCap: row?.marketCap ?? null, recs, surprises: stats?.surprises, daily: series });
+    perSymbol.push({ sym: symbol, sector: row?.sector ?? null, recs, surprises: stats?.surprises, daily: series });
   }
 
   const { examples, live, baseRates } = buildDataset(perSymbol);
@@ -107,6 +107,11 @@ async function main() {
   // LIVE model: refit on all resolved examples, score the forward (unlabeled) points.
   const mBeat = fitHead(examples, "beat");
   const mReac = fitHead(examples, "reactUp");
+  if (!mBeat && !mReac) {
+    console.error("print-predictor: neither head could fit a model (single-class or too few labeled rows) — keeping the prior file.");
+    process.exit(1);
+    return;
+  }
   const conf = (m: LinModel | null): "high" | "medium" | "low" =>
     !m ? "low" : m.nTrain >= 400 ? "high" : m.nTrain >= 150 ? "medium" : "low";
   const livePreds: LivePrediction[] = live

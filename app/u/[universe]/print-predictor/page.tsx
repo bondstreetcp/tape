@@ -13,7 +13,13 @@ export { universeStaticParams as generateStaticParams } from "@/lib/universePara
 function loadPredictor(): Promise<PrintPredictorFile | null> {
   return fsp
     .readFile(path.join(process.cwd(), "data", "earnings-print-predictor.json"), "utf8")
-    .then((s) => JSON.parse(s) as PrintPredictorFile)
+    .then((s) => {
+      const d = JSON.parse(s) as PrintPredictorFile;
+      // Guard a prior-schema file kept across a deploy: a shape mismatch degrades to the no-feed
+      // empty state rather than crashing the render.
+      const ok = !!(d && d.oos?.beatMiss && d.oos?.reaction && d.models?.beatMiss && d.models?.reaction && d.baseRates && Array.isArray(d.method) && Array.isArray(d.live));
+      return ok ? d : null;
+    })
     .catch(() => null);
 }
 

@@ -92,7 +92,9 @@ export default function PrintPredictorView({ universe, data, live }: { universe:
       <h1 style={{ fontSize: 22, color: "var(--text)", marginBottom: 4 }}>Earnings Print Predictor</h1>
       <p style={dim}>
         Reads each earnings call's tone &amp; guidance to predict the <strong>next</strong> print — graded walk-forward,
-        out-of-sample. {universe.toUpperCase()} · built {new Date(data.generatedAt).toLocaleString()}
+        out-of-sample. Model trained on {data.universe.toUpperCase()}
+        {data.universe.toLowerCase() !== universe.toLowerCase() ? ` (live calls below scoped to ${universe.toUpperCase()})` : ""}
+        {" · built "}{new Date(data.generatedAt).toLocaleString()}
         {data.trainedThrough ? ` · trained through ${data.trainedThrough}` : ""}
         {data.baseRates.beat != null ? ` · base beat rate ${pct(data.baseRates.beat, 0)}` : ""}
         {data.baseRates.up != null ? ` · base up rate ${pct(data.baseRates.up, 0)}` : ""}

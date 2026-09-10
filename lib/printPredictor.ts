@@ -8,10 +8,11 @@
  * module is safe to import from a client bundle (per the verify-with-next-build memo).
  *
  * No-lookahead contract: features come only from the Qn call (+ the Qn print's own reaction, known at call
- * time); both labels come only from the Qn+1 print; the OOS loop refits on strictly-earlier cohorts. See
- * PRINT_METHOD for the honesty box (survivorship, shallow beat/miss labels, no costs).
+ * time); labels come only from the Qn+1 print; the OOS loop refits per cohort on examples whose LABEL
+ * RESOLVED BEFORE the scored cohort's feature (call) date — a real embargo, because features lead labels by
+ * a full quarter (a "strictly-earlier label month" rule alone would leak ~1 quarter of not-yet-resolved
+ * outcomes). See PRINT_METHOD for the honesty box.
  */
-import { pctRank } from "./signalBacktest";
 import { FLAT_MOVE_PCT, actualDirection } from "./earningsPreviewLog";
 import type { WalkForward } from "./signalGrid";
 import type { CallDigest, CallTone, GuidanceAction, Directness } from "./callDigests";
@@ -28,14 +29,13 @@ export interface PrintFeatures {
   nDrivers: number;
   nWatch: number; // flagged risks — bearish tilt
   nReadThrough: number;
-  priorSurprisePct: number | null; // the Qn print's own EPS surprise (decimal), known at call time
+  priorSurprisePct: number | null; // the Qn print's own EPS surprise (decimal); only the recent ~4q are cached
   priorMovePct: number | null; // the Qn print's own 1-day reaction (PEAD carry), known at call time
-  logMktCap: number | null; // size control
 }
 
 export const FEATURE_NAMES: (keyof PrintFeatures)[] = [
   "toneScore", "guideDelta", "qaDirectness", "nKpis", "nDrivers", "nWatch", "nReadThrough",
-  "priorSurprisePct", "priorMovePct", "logMktCap",
+  "priorSurprisePct", "priorMovePct",
 ];
 
 export interface PrintLabels {
@@ -44,7 +44,7 @@ export interface PrintLabels {
   movePct: number | null; // signed 1-day reaction %, the continuous target for rank-IC
 }
 
-export interface PrintExample { symbol: string; sector: string | null; labelDate: string; x: PrintFeatures; y: PrintLabels }
+export interface PrintExample { symbol: string; sector: string | null; featureDate: string; labelDate: string; x: PrintFeatures; y: PrintLabels }
 export interface LivePoint { symbol: string; sector: string | null; callDate: string; fiscalPeriod: string; x: PrintFeatures }
 
 // ── Encoding constants ─────────────────────────────────────────────────────────────────────────────
@@ -55,11 +55,7 @@ const GUIDE_DELTA: Record<GuidanceAction, number> = {
 const DIRECTNESS_SCORE: Record<Directness, number> = { direct: 1, partial: 0, evasive: -1 };
 
 /** Digest → numeric feature vector. `prior` is the Qn print's own surprise/move (legit at call time). */
-export function featurize(
-  d: CallDigest,
-  prior: { surprisePct: number | null; movePct: number | null },
-  marketCap: number | null,
-): PrintFeatures {
+export function featurize(d: CallDigest, prior: { surprisePct: number | null; movePct: number | null }): PrintFeatures {
   const qa = d.qa || [];
   const qaDirectness = qa.length
     ? qa.reduce((s, q) => s + (DIRECTNESS_SCORE[q.directness] ?? 0), 0) / qa.length
@@ -74,7 +70,6 @@ export function featurize(
     nReadThrough: (d.readThrough || []).length,
     priorSurprisePct: prior.surprisePct,
     priorMovePct: prior.movePct,
-    logMktCap: marketCap && marketCap > 0 ? +Math.log10(marketCap).toFixed(3) : null,
   };
 }
 
@@ -123,7 +118,7 @@ const reactLabel = (movePct: number | null): 0 | 1 | null =>
 
 // ── Dataset / pairing builder ────────────────────────────────────────────────────────────────────────
 export interface SymbolInput {
-  sym: string; sector: string | null; marketCap: number | null;
+  sym: string; sector: string | null;
   recs: CallRecord[]; surprises: SurpriseRow[] | undefined; daily: XY[] | undefined;
 }
 export interface BaseRates { beat: number | null; up: number | null; nBeat: number; nUp: number }
@@ -140,11 +135,10 @@ export function buildDataset(perSymbol: SymbolInput[]): { examples: PrintExample
       .sort((a, b) => (a.callDate || "").localeCompare(b.callDate || "")); // ascending by call date
     for (let i = 0; i < recs.length; i++) {
       const cur = recs[i];
-      const x = featurize(
-        cur.digest!,
-        { surprisePct: surpriseFromStats(s.surprises, cur.callDate), movePct: reactionFromSeries(s.daily, cur.callDate) },
-        s.marketCap,
-      );
+      const x = featurize(cur.digest!, {
+        surprisePct: surpriseFromStats(s.surprises, cur.callDate),
+        movePct: reactionFromSeries(s.daily, cur.callDate),
+      });
       const next = recs[i + 1];
       if (!next) { // newest digested call → the forward (unlabeled) prediction the card shows
         live.push({ symbol: s.sym, sector: s.sector, callDate: cur.callDate, fiscalPeriod: cur.fiscalPeriod, x });
@@ -159,7 +153,8 @@ export function buildDataset(perSymbol: SymbolInput[]): { examples: PrintExample
         movePct: labelMove,
       };
       if (y.beat == null && y.reactUp == null) continue; // no usable label
-      examples.push({ symbol: s.sym, sector: s.sector, labelDate: next.callDate, x, y });
+      // featureDate = the Qn call (when the features are knowable); labelDate = the Qn+1 print (the outcome).
+      examples.push({ symbol: s.sym, sector: s.sector, featureDate: cur.callDate, labelDate: next.callDate, x, y });
     }
   }
   const beats = examples.map((e) => e.y.beat).filter((v): v is 0 | 1 => v != null);
@@ -271,8 +266,9 @@ export function rankData(xs: number[]): number[] {
   return r;
 }
 
-/** AUC via Mann–Whitney U == P(score(pos) > score(neg)). null if either class is empty. */
+/** AUC via Mann–Whitney U == P(score(pos) > score(neg)). null if either class is empty or lengths differ. */
 export function auc(scores: number[], labels: (0 | 1)[]): number | null {
+  if (scores.length !== labels.length) return null;
   const pos = labels.filter((l) => l === 1).length, neg = labels.length - pos;
   if (!pos || !neg) return null;
   const r = rankData(scores);
@@ -289,22 +285,19 @@ const pearson = (a: number[], b: number[]): number | null => {
   let num = 0, da = 0, db = 0;
   for (let i = 0; i < n; i++) { const x = a[i] - ma, y = b[i] - mb; num += x * y; da += x * x; db += y * y; }
   const d = Math.sqrt(da * db);
-  return d > 1e-12 ? +(num / d).toFixed(4) : null;
+  return d > 1e-12 ? +(num / d).toFixed(4) : null; // constant input → no variance → null (not a spurious ±1)
 };
 
-/** Spearman rank-IC via pctRank (reused from signalBacktest), Pearson over the rank vectors. */
+/** Spearman rank-IC. Uses rankData (average ranks) — NOT pctRank, which ranks by sort position and would
+ *  fabricate variance for tied/constant inputs, reporting a spurious ±1 IC for a no-signal model. */
 export function rankIC(preds: number[], labels: number[]): number | null {
   if (preds.length < 3 || preds.length !== labels.length) return null;
-  const rp = pctRank(preds.map((v, i) => ({ sym: String(i), v })));
-  const rl = pctRank(labels.map((v, i) => ({ sym: String(i), v })));
-  const a = preds.map((_, i) => rp.get(String(i)) ?? 0);
-  const b = labels.map((_, i) => rl.get(String(i)) ?? 0);
-  return pearson(a, b);
+  return pearson(rankData(preds), rankData(labels));
 }
 
-export function hitRate(probs: number[], labels: (0 | 1)[], thresh: number): { hit: number; balanced: number; n: number } {
+export function hitRate(probs: number[], labels: (0 | 1)[], thresh: number): { hit: number | null; balanced: number | null; n: number } {
   const n = labels.length;
-  if (!n) return { hit: 0, balanced: 0, n: 0 };
+  if (!n) return { hit: null, balanced: null, n: 0 };
   let correct = 0, tp = 0, tn = 0, pos = 0, neg = 0;
   for (let i = 0; i < n; i++) {
     const pred = probs[i] >= thresh ? 1 : 0;
@@ -316,26 +309,25 @@ export function hitRate(probs: number[], labels: (0 | 1)[], thresh: number): { h
 }
 
 export interface CalBin { lo: number; hi: number; predMean: number; empFreq: number; n: number }
-export function calibrationCurve(probs: number[], labels: (0 | 1)[], bins = 10): { bins: CalBin[]; brier: number; reliability: number } {
+export function calibrationCurve(probs: number[], labels: (0 | 1)[], bins = 10): { bins: CalBin[]; brier: number | null; reliability: number | null } {
   const out: CalBin[] = [];
   let brier = 0;
   for (let i = 0; i < labels.length; i++) brier += (probs[i] - labels[i]) ** 2;
-  brier = labels.length ? brier / labels.length : 0;
   let rel = 0, relN = 0;
   for (let bi = 0; bi < bins; bi++) {
     const lo = bi / bins, hi = (bi + 1) / bins;
     const members = probs.map((p, i) => ({ p, i })).filter((o) => (bi === bins - 1 ? o.p >= lo && o.p <= hi : o.p >= lo && o.p < hi));
     const nb = members.length;
-    if (!nb) { out.push({ lo, hi, predMean: 0, empFreq: 0, n: 0 }); continue; }
+    if (!nb) { out.push({ lo, hi, predMean: (lo + hi) / 2, empFreq: (lo + hi) / 2, n: 0 }); continue; } // empty → diagonal, n=0 signals "ignore"
     const predMean = members.reduce((s, o) => s + o.p, 0) / nb;
     const empFreq = members.reduce((s, o) => s + labels[o.i], 0) / nb;
     out.push({ lo, hi, predMean: +predMean.toFixed(4), empFreq: +empFreq.toFixed(4), n: nb });
     rel += nb * Math.abs(predMean - empFreq); relN += nb;
   }
-  return { bins: out, brier: +brier.toFixed(4), reliability: relN ? +(rel / relN).toFixed(4) : 0 };
+  return { bins: out, brier: labels.length ? +(brier / labels.length).toFixed(4) : null, reliability: relN ? +(rel / relN).toFixed(4) : null };
 }
 
-// ── Walk-forward, out-of-sample (expanding-window refit; no lookahead) ────────────────────────────────
+// ── Walk-forward, out-of-sample (expanding-window refit with a real embargo; no lookahead) ────────────
 export interface Cohort { key: string; idxs: number[] }
 export function cohorts(examples: PrintExample[]): { list: Cohort[] } {
   const m = new Map<string, number[]>();
@@ -366,8 +358,9 @@ export interface OosResult {
   perCohortIC: number[]; perCohortEdge: number[]; nCohorts: number; nOOS: number;
 }
 
-/** Expanding-window walk-forward: for each cohort after warmup, refit on STRICTLY EARLIER cohorts only,
- *  then score this cohort. The single no-lookahead guarantee for the model. head = which label to fit. */
+/** Expanding-window walk-forward with an embargo: for each cohort after warmup, refit ONLY on examples whose
+ *  label RESOLVED before the earliest feature (call) date in the scored cohort — so a live model acting at
+ *  the call could actually have trained on them. head = which label to fit. */
 export function walkForwardRefit(
   examples: PrintExample[], coh: { list: Cohort[] }, head: "beat" | "reactUp",
   opts: { warmupCohorts?: number; l2?: number; featNames?: string[]; minTrain?: number } = {},
@@ -378,20 +371,31 @@ export function walkForwardRefit(
   const labOf = (e: PrintExample) => (head === "beat" ? e.y.beat : e.y.reactUp);
   const probs: number[] = [], labels: (0 | 1)[] = [], move: number[] = [], perCohortIC: number[] = [], perCohortEdge: number[] = [];
   for (let c = warmup; c < coh.list.length; c++) {
+    const cohort = coh.list[c];
+    // Decision boundary = the earliest feature (call) date in this cohort. Train only on labels resolved
+    // before it — features lead labels by a full quarter, so "earlier label MONTH" alone would leak the
+    // most recent ~quarter of outcomes that hadn't happened yet at the scored calls' decision time.
+    let boundary = "";
+    for (const i of cohort.idxs) { const fd = examples[i].featureDate; if (fd && (!boundary || fd < boundary)) boundary = fd; }
+    if (!boundary) continue;
     const train: { x: PrintFeatures; y: 0 | 1 }[] = [];
-    for (let cc = 0; cc < c; cc++) for (const i of coh.list[cc].idxs) { const l = labOf(examples[i]); if (l != null) train.push({ x: examples[i].x, y: l }); }
+    for (const e of examples) {
+      if (!(e.labelDate < boundary)) continue; // label must have resolved before we decide on this cohort
+      const l = labOf(e);
+      if (l != null) train.push({ x: e.x, y: l });
+    }
     if (train.length < minTrain) continue;
     const yv = train.map((r) => r.y);
     if (yv.every((v) => v === yv[0])) continue; // single-class train window
     const m = fitLogit(train.map((r) => featureVec(r.x, featNames)), yv, featNames, { l2: opts.l2 ?? 1 });
     const cp: number[] = [], cm: number[] = [];
-    for (const i of coh.list[c].idxs) {
+    for (const i of cohort.idxs) {
       const e = examples[i];
       const l = labOf(e);
       if (l == null) continue;
       const pr = predictProb(m, e.x);
-      probs.push(pr); labels.push(l); move.push(e.y.movePct ?? 0);
-      cp.push(pr); cm.push(e.y.movePct ?? 0);
+      probs.push(pr); labels.push(l);
+      if (e.y.movePct != null) { move.push(e.y.movePct); cp.push(pr); cm.push(e.y.movePct); } // don't coerce missing moves to 0
     }
     if (cp.length >= 20) {
       const ic = rankIC(cp, cm);
@@ -405,7 +409,7 @@ export function walkForwardRefit(
 
 // ── Published feed shape ─────────────────────────────────────────────────────────────────────────────
 export interface OosBlock {
-  auc: number | null; hit: number; balanced: number; brier: number; reliability: number;
+  auc: number | null; hit: number | null; balanced: number | null; brier: number | null; reliability: number | null;
   calibration: CalBin[]; nOOS: number; cohorts: number;
   rankIC?: number | null; rankICCI?: [number, number] | null; longShortEdge?: number | null; edgeCI?: [number, number] | null;
 }
@@ -427,9 +431,10 @@ export interface PrintPredictorFile {
 export const PRINT_METHOD: string[] = [
   "Features are as-of each earnings CALL (Qn); both labels are the NEXT print (Qn+1), a full quarter forward — no lookahead.",
   "Beat/miss label = sign of the reported EPS surprise from the local company cache (~4 quarters of Yahoo history) — SHALLOW. The reaction head carries the deeper backtest.",
-  "Reaction label = the 1-day post-print move from the local daily series (larger of print-day / next-day move), years deep.",
+  "Reaction label = the 1-day post-print move from the local daily series, taken as the larger of the print-day / next-day move (we lack the 8-K acceptance hour here, so a borderline before-open vs after-close print can be attributed to the wrong session).",
+  "priorSurprisePct is only populated for the recent ~4-quarter cache window; before that it is imputed neutral, so its published coefficient reflects that recent window only.",
   "Model = ridge, class-weighted logistic regression on standardized features; the odds ratios ARE the thesis. Deterministic (fixed GD steps).",
-  "Out-of-sample = expanding-window refit by monthly cohort: the model never sees a label at or after the cohort it scores.",
+  "Out-of-sample = expanding-window refit by monthly cohort, EMBARGOED: each model trains only on prints that had resolved before the scored cohort's call dates — because features lead labels by a quarter, this drops the most recent ~quarter of training labels rather than leaking them.",
   "Survivorship: the universe is TODAY's index members applied historically — delisted/acquired names (the miss-and-crash tail) are absent, so every number is an optimistic upper bound.",
   "No trading costs or slippage. AUC 0.5 / rank-IC 0 / a confidence interval straddling 0 = no edge.",
 ];
