@@ -34,6 +34,7 @@ export default function TranscriptReader({
   selected: TranscriptReaderData | null;
 }) {
   const isConference = selected?.period.startsWith("conference-") ?? false;
+  const takeaways = selected?.digest?.takeaways || [];
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 12px 64px" }}>
       <header style={{ padding: "16px 2px 8px" }}>
@@ -79,7 +80,16 @@ export default function TranscriptReader({
               </div>
               <h2 style={{ margin: "14px 0 8px", fontSize: 17, fontWeight: 700, color: "var(--text)" }}>AI summary</h2>
               <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "var(--text)" }}>{selected.digest.tldr}</p>
-              {selected.digest.kpis.length > 0 && (
+              {takeaways.length > 0 && <>
+                <h3 style={{ margin: "22px 0 12px", fontSize: 14, fontWeight: 700 }}>Key shareholder takeaways</h3>
+                <ul style={{ margin: 0, paddingLeft: 22, listStyleType: "disc", display: "grid", gap: 18, fontSize: 14, color: "var(--text-2)", lineHeight: 1.65 }}>
+                  {takeaways.map((t,i) => <li key={i} style={{ paddingLeft: 4 }}>
+                    <h4 style={{ margin: "0 0 5px", fontSize: 15, fontWeight: 700, lineHeight: 1.45, color: "var(--text)" }}>{t.heading}</h4>
+                    <p style={{ margin: 0 }}>{t.detail}</p>
+                  </li>)}
+                </ul>
+              </>}
+              {!takeaways.length && selected.digest.kpis.length > 0 && (
                 <>
                   <h3 style={{ margin: "22px 0 12px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
                     {isConference ? "Key shareholder takeaways" : "Key figures"}
@@ -101,6 +111,13 @@ export default function TranscriptReader({
                   </ul>
                 </>
               )}
+              {!isConference && <details style={{ marginTop: 22, fontSize: 14, lineHeight: 1.65, color: "var(--text-2)" }} open={!takeaways.length}>
+                <summary style={{ cursor: "pointer", fontWeight: 650, color: "var(--text)" }}>Supporting figures, guidance and what to watch</summary>
+                {takeaways.length > 0 && !!selected.digest.kpis.length && <ul style={{ listStyleType: "disc", paddingLeft: 22, margin: "12px 0" }}>{selected.digest.kpis.map((k,i) => <li key={i}>{k}</li>)}</ul>}
+                {!!selected.digest.guidance.detail && <><h4 style={{ fontWeight: 700, marginTop: 14 }}>Guidance</h4><p>{selected.digest.guidance.detail}</p></>}
+                {!takeaways.length && !!selected.digest.drivers.length && <><h4 style={{ fontWeight: 700, marginTop: 14 }}>What drove results</h4><ul style={{ listStyleType: "disc", paddingLeft: 22 }}>{selected.digest.drivers.map((d,i) => <li key={i} style={{ marginTop: 8 }}>{d}</li>)}</ul></>}
+                {!!selected.digest.watch.length && <><h4 style={{ fontWeight: 700, marginTop: 14 }}>What to watch next</h4><ul style={{ listStyleType: "disc", paddingLeft: 22 }}>{selected.digest.watch.map((w,i) => <li key={i} style={{ marginTop: 8 }}>{w}</li>)}</ul></>}
+              </details>}
             </section>
           )}
           {!selected.digest && (

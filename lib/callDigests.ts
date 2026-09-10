@@ -52,6 +52,8 @@ export interface CallDigest {
   url: string;
   source: string;
   tldr: string;
+  /** Ranked shareholder implications; separate from the compact KPI facts. Optional for legacy digests. */
+  takeaways?: { heading: string; detail: string }[];
   tone: CallTone;
   guidance: { action: GuidanceAction; detail: string };
   /** Quantified earnings facts; conference digests use this card field for shareholder takeaways. */
@@ -180,6 +182,10 @@ export function sanitizeDigest(raw: unknown, transcript: string, meta: DigestMet
   if (!o) return null;
   const tldr = narrative(o.tldr, 420);
   if (!tldr) return null;
+  const takeaways = (Array.isArray(o.takeaways) ? o.takeaways : [])
+    .map((t: { heading?: unknown; detail?: unknown } | null) => ({ heading: narrative(t?.heading, 100), detail: narrative(t?.detail, 650) }))
+    .filter((t: { heading: string; detail: string }) => t.heading && t.detail)
+    .slice(0, 5);
   const g = o.guidance && typeof o.guidance === "object" ? o.guidance : {};
   const guidance = { action: coerceEnum(g.action, GUIDANCE_ACTIONS, "none"), detail: narrative(g.detail, 300) };
   const conference = meta.eventType === "conference";
@@ -201,10 +207,11 @@ export function sanitizeDigest(raw: unknown, transcript: string, meta: DigestMet
     .filter((q: CallQuote) => q.text)
     .map((q: CallQuote) => ({ speaker: q.speaker, text: q.text.slice(0, 280) }))
     .slice(0, 3);
-  if (kpis.length + drivers.length + qa.length < 2) return null;
+  if (kpis.length + drivers.length + qa.length + takeaways.length < 2) return null;
   return {
     ...meta,
     tldr,
+    ...(takeaways.length ? { takeaways } : {}),
     tone: coerceEnum(o.tone, TONES, "measured"),
     guidance,
     kpis,

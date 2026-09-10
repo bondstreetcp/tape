@@ -158,6 +158,13 @@ test("conference takeaways retain complete explanations without expanding earnin
   assert.ok(sanitizeDigest(raw, TRANSCRIPT, META)!.kpis[0].length <= 170);
 });
 
+test("shareholder takeaways keep their explanations separate from short KPI facts and reject shells", () => {
+  const detail = "Comparable sales increased 14.1%, with demand across multiple categories supporting growth. This gives shareholders more evidence of a broad consumer franchise than a single product trend, although that breadth must persist as comparisons become harder.";
+  const digest = sanitizeDigest({ tldr: "Broad demand supports the outlook.", takeaways: [{ heading: "Growth quality matters", detail }, { heading: "…", detail: "…" }, null], kpis: ["Comparable sales +14.1%"] }, TRANSCRIPT, META);
+  assert.deepEqual(digest?.takeaways, [{ heading: "Growth quality matters", detail }]);
+  assert.deepEqual(digest?.kpis, ["Comparable sales +14.1%"]);
+});
+
 test("sanitizeDigest: THE SHELL TRAP — a '…' tldr, or a tldr with nothing behind it, is no digest", () => {
   assert.equal(sanitizeDigest({ tldr: "…", tone: "measured", kpis: ["…"], drivers: [], qa: [] }, TRANSCRIPT, META), null);
   assert.equal(sanitizeDigest({ tldr: "A fine quarter.", kpis: [], drivers: ["Demand was strong"], qa: [] }, TRANSCRIPT, META), null); // one element only

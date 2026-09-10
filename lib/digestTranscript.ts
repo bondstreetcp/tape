@@ -35,6 +35,9 @@ const DIGEST_SYSTEM =
   "'tone' — upbeat | measured | cautious | defensive. " +
   "'guidance' — {action: raised | reaffirmed | cut | initiated | withdrawn | mixed | none, detail: the guided figures/language in one line}. " +
   "'kpis' — 3-6 quantified facts from the call, each with its number EXACTLY as stated. " +
+  "'takeaways' — 4-5 ranked shareholder takeaways as {heading, detail}. Use a short, informative heading (under 100 characters) and 2-3 connected sentences (under 600 characters) explaining what happened, the supporting facts, why it matters and the relevant uncertainty. " +
+  "Prioritize the quality of revenue growth (volume versus pricing/mix and timing), profit conversion, guidance changes with old/new ranges and assumptions, cash generation/capital allocation, and the most material question or risk. Adapt to the business; do not force unsupported topics. Avoid repeating the same fact in multiple bullets. " +
+  "Distinguish GAAP from adjusted results, quarterly from annual figures, recurring performance from one-time benefits, and management targets from achieved results. Never claim a consensus beat or miss without an explicit comparison in the source. Explain weak conversion or offsets alongside strong headline results. " +
   "'drivers' — 2-4 lines on what drove the quarter: demand, pricing, margins/costs, capital allocation. " +
   "'qa' — the 3-5 sharpest analyst exchanges: analyst/firm if named, the gist of the question, the gist of the answer, directness = direct | partial | evasive. " +
   "'readThrough' — 1-3 implications for peers, suppliers or customers (name a ticker only when certain). " +
@@ -43,9 +46,10 @@ const DIGEST_SYSTEM =
   "Ground everything in the supplied text; never invent a figure. Return ONLY JSON. " +
   NO_ADVICE;
 const DIGEST_SCHEMA =
-  'Return ONLY JSON: {"tldr": string, "tone": "upbeat"|"measured"|"cautious"|"defensive", "guidance": {"action": "raised"|"reaffirmed"|"cut"|"initiated"|"withdrawn"|"mixed"|"none", "detail": string}, "kpis": string[], "drivers": string[], "qa": [{"analyst": string, "question": string, "answer": string, "directness": "direct"|"partial"|"evasive"}], "readThrough": string[], "watch": string[], "quotes": [{"speaker": string, "text": string}]}';
+  'Return ONLY JSON: {"tldr": string, "takeaways": [{"heading": string, "detail": string}], "tone": "upbeat"|"measured"|"cautious"|"defensive", "guidance": {"action": "raised"|"reaffirmed"|"cut"|"initiated"|"withdrawn"|"mixed"|"none", "detail": string}, "kpis": string[], "drivers": string[], "qa": [{"analyst": string, "question": string, "answer": string, "directness": "direct"|"partial"|"evasive"}], "readThrough": string[], "watch": string[], "quotes": [{"speaker": string, "text": string}]}';
 
 const CONFERENCE_EDITORIAL =
+  "For a conference, return an empty takeaways array: the existing kpis presentation below carries its shareholder takeaways. " +
   " For this conference, override the earnings-style tldr/kpis instructions: write for an existing shareholder who missed the presentation. " +
   "The tldr should connect growth strategy, profitability and the main execution dependency in 1-2 sentences under 420 characters. " +
   "The existing 'kpis' field is the summary card's bullet list: write 4-5 ranked, distinct shareholder takeaways, NOT disconnected statistics. " +
@@ -61,7 +65,7 @@ export async function digestTranscript(input: DigestInput, llm: DigestLlm, model
     : "";
   const allChunks = chunkTranscript(input.text, CHUNK_CHARS);
   const digestSystem = conferenceContext + DIGEST_SYSTEM + (input.eventType === "conference" ? CONFERENCE_EDITORIAL : "");
-  const digestTokens = input.eventType === "conference" ? 4000 : 3200;
+  const digestTokens = 5000;
   const chunks = input.eventType === "conference" ? allChunks : allChunks.slice(0, MAX_CHUNKS);
   const head = `${input.name} (${input.symbol}) — ${input.title} (${input.date || sessionDay})`;
   let raw: unknown;
