@@ -45,13 +45,28 @@ SYNC_CMD="${SYNC_CMD:-npm run -s sync-calls-archive}"
 
 log() { echo "[supervisor $(date +%Y-%m-%dT%H:%M:%S)] $*"; }
 
-# Single instance: an atomic mkdir lock, cleaned up on exit.
+# Single instance: an atomic mkdir lock, with a LIVENESS check so a hard-killed
+# predecessor can't wedge every future start. (Observed: a supervisor killed with
+# SIGKILL on Sep-8 left the dir behind and blocked restarts — nightly included — for a
+# full day.) We record our PID in the lock and, on contention, reclaim it if the owner
+# is gone.
 LOCK="${SUPERVISOR_LOCK:-${TMPDIR:-/tmp}/tape-ingest-supervisor.lock}"
-if ! mkdir "$LOCK" 2>/dev/null; then
-  log "another supervisor holds $LOCK — exiting"
+acquire_lock() {
+  if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid" 2>/dev/null; return 0; fi
+  owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
+  if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then
+    return 1                                   # a LIVE supervisor owns it — stand down
+  fi
+  log "stale lock $LOCK (owner '${owner:-?}' not running) — reclaiming"
+  rm -rf "$LOCK" 2>/dev/null || true
+  if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid" 2>/dev/null; return 0; fi
+  return 1
+}
+if ! acquire_lock; then
+  log "another (live) supervisor holds $LOCK — exiting"
   exit 0
 fi
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM
+trap 'rm -rf "$LOCK" 2>/dev/null || true' EXIT INT TERM
 
 # Memory headroom gate. Linux only (reads /proc/meminfo); anywhere else it's a no-op so the script still runs.
 mem_ok() {
