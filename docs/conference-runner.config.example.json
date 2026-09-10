@@ -1,0 +1,20 @@
+{
+  "channel": "msedge",
+  "ytdlp": "yt-dlp",
+  "ffmpeg": "ffmpeg",
+  "asr": {
+    "mode": "http",
+    "url": "http://127.0.0.1:8000/v1",
+    "model": "whisper-1",
+    "language": "en"
+  },
+  "llm": {
+    "mode": "local",
+    "url": "http://192.168.1.76:8000/v1",
+    "model": "argus-vlm"
+  },
+  "symbols": {
+    "Freshpet": "FRPT",
+    "Constellation Brands, Inc.": "STZ"
+  }
+}

@@ -54,6 +54,7 @@ export interface CallDigest {
   tldr: string;
   tone: CallTone;
   guidance: { action: GuidanceAction; detail: string };
+  /** Quantified earnings facts; conference digests use this card field for shareholder takeaways. */
   kpis: string[];
   drivers: string[];
   qa: CallQa[];
@@ -164,6 +165,7 @@ export function kpiGrounded(line: string, transcript: string): boolean {
 }
 
 export interface DigestMeta {
+  eventType?: "earnings" | "conference";
   symbol: string; name: string; sector: string | null; marketCap: number | null;
   callDate: string; title: string; url: string; source: string;
   chars: number; chunks: number; model: string; digestedAt: string;
@@ -180,7 +182,8 @@ export function sanitizeDigest(raw: unknown, transcript: string, meta: DigestMet
   if (!tldr) return null;
   const g = o.guidance && typeof o.guidance === "object" ? o.guidance : {};
   const guidance = { action: coerceEnum(g.action, GUIDANCE_ACTIONS, "none"), detail: narrative(g.detail, 300) };
-  const kpis = narrativeList(o.kpis, 6, 170).filter((k) => kpiGrounded(k, transcript));
+  const conference = meta.eventType === "conference";
+  const kpis = narrativeList(o.kpis, conference ? 5 : 6, conference ? 650 : 170).filter((k) => kpiGrounded(k, transcript));
   const drivers = narrativeList(o.drivers, 4, 240);
   const qa: CallQa[] = (Array.isArray(o.qa) ? o.qa : [])
     .map((q: any) => ({

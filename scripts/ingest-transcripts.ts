@@ -88,7 +88,7 @@ async function main() {
     if (rec.digest) { already++; continue; } // digested since the queue was built (a prior/overlapping run)
     if (DELAY_MS) await sleep(DELAY_MS);
     const digest = await digestTranscript(
-      { symbol: rec.symbol, name: rec.symbol, sector: null, marketCap: null, title: rec.title, date: rec.callDate, url: rec.url, source: rec.source, text: rec.transcript.text },
+      { symbol: rec.symbol, name: rec.symbol, sector: null, marketCap: null, title: rec.title, date: rec.callDate, url: rec.url, source: rec.source, text: rec.transcript.text, eventType: rec.eventType },
       LLM, MODEL_LABEL, rec.callDate,
     ).catch((e) => { console.warn(`  ${w.symbol} ${w.fiscalPeriod}: ${String((e as Error)?.message || e).slice(0, 80)}`); return null; });
     if (!digest) { failed++; continue; }

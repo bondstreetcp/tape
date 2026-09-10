@@ -1,4 +1,5 @@
 node_modules/
+.conference-runner/
 .next/
 out/
 build/
@@ -41,3 +42,4 @@ sql/views_local.sql
 # Staples Scanner watched folder — the biweekly NielsenIQ scan PDFs (licensed) live here, OUTSIDE data/
 # so they never ride the R2 tarball. scripts/refresh-staples-scanner.ts reads them in place. NEVER committed.
 /staples-scans/
+/.conference-service/

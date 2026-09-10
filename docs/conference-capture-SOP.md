@@ -1,5 +1,7 @@
 # Conference capture SOP — one click per talk
 
+For automatic agenda traversal and fresh stream capture, use the newer [conference runner](conference-runner.md): `npm run conference`, then paste the conference link. The bookmarklet workflow below remains available for manual capture.
+
 Turns a sell-side conference webcast (Barclays, Goldman Communicopia, etc. on
 webcasts.com) into transcribed + summarized notes in tape, with **one click per
 talk and no terminal/DevTools**. Designed to hand to a VA/intern.

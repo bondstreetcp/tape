@@ -122,6 +122,17 @@ test("buildDataset: N digested calls → N-1 consecutive pairs + 1 live point, w
 });
 
 // ── the no-lookahead invariant (with the embargo) ───────────────────────────────
+test("conference presentations do not interrupt quarterly pairs or replace the live earnings point", () => {
+  const dates = ["2024-01-15", "2024-04-15", "2024-07-15"];
+  const earnings = dates.map((d, i) => mkRec(d, `2024-Q${i + 1}`, mkDigest("upbeat", "raised", d)));
+  const conference = (d: string): CallRecord => ({ ...mkRec(d, `conference-123-${d}`, mkDigest("cautious", "none", d)), eventType: "conference" });
+  const input = { sym: "TST", sector: "Tech", surprises: [], daily: [] };
+  const base = buildDataset([{ ...input, recs: earnings }]);
+  const mixed = buildDataset([{ ...input, recs: [...earnings, conference("2024-02-10"), conference("2024-08-10")] }]);
+  assert.deepEqual(mixed, base);
+  assert.equal(mixed.live[0].callDate, "2024-07-15");
+});
+
 test("walkForwardRefit: a FUTURE cohort never changes a PAST cohort's OOS prediction", () => {
   const examples: PrintExample[] = [];
   for (let month = 0; month < 12; month++) {

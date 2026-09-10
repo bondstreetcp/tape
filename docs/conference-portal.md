@@ -1,0 +1,15 @@
+# Conference inbox
+
+Open Research → Conferences, unlock with the private conference access code (or a configured Tape sign-in), and paste a Webcasts.com agenda link. The page polls progress every 15 seconds. Closing the browser does not stop the job.
+
+The Mac runs two per-user LaunchAgents: the existing queue owns capture and local Whisper/LLM work; `conference-portal-bridge.ts` polls Tape over outgoing HTTPS and publishes each completed, matched presentation. No Windows coordinator, inbound Mac port, or browser credentials are sent to Tape. A new conference may require interactive registration in the Mac worker's persistent Chrome profile. Local Network access must be enabled for the background worker to reach a LAN summary server.
+
+Server state lives in `/app/conference-service` on the persistent tape-web volume, outside both A/B slots and `data/`. Jobs and newly published records therefore survive deployments and hourly R2 hydration. `loadSymbolCalls` and `loadCallRecord` read the conference records alongside the archive. Back up this directory with the web volume; these new records are not yet exported into the NAS runner's full R2 calls archive. Do not replace the archive with this partial store.
+
+Provision `worker-key.json` with a random `token`, and `access.json` with the SHA-256 `codeHash` of a strong private access code plus a separate random `sessionKey`. Keep both mode 600. The access code grants the shared conference-owner role, not general Tape administration. The HTTP-only, secure, same-site session expires after 30 days. Submissions and edits require that session or configured Supabase authentication; worker endpoints require their separate bearer token. Rotate keys by replacing these private files. Never commit them.
+
+On the Mac, `.conference-runner/portal.json` contains `{ "url": "https://your-tape-host", "token": "matching worker token" }`, mode 600. Run `npm run conference:install-portal` once. It uses the same checkout and Node runtime as the existing queue, starts at user login and resumes outgoing polling after temporary network failures. It does not interrupt an active capture/transcription process. Inspect `portal-errors.log` if the page reports the Mac offline.
+
+Company names match only when a normalized name resolves to one ticker in Tape's snapshots. Ambiguous names require the submitter to enter a verified Tape ticker. Publication validates the conference/presentation identity, source host, transcript size and digest structure, and preserves a newer previously reviewed summary. Each presentation publishes independently; failures and missing matches stay visible. Resume resets exhausted local attempts only when explicitly requested on the page, retaining completed recordings/transcripts/digests.
+
+The initial adapter supports dated Webcasts.com agendas; it does not promise support for every conference provider, unavailable replays or unattended access to a newly gated event. Speaker separation remains an optional local step; speaker identities need introduction/handoff evidence, and uncertain voices must remain unnamed.

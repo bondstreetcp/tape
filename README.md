@@ -73,6 +73,7 @@ its guards, observability, and how to add a feed, a knob or a model call without
 | Doc | What |
 |---|---|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | the system map |
+| [conference-runner.md](docs/conference-runner.md) | conference link → automatic audio capture, transcription, and AI notes |
 | [ENV.md](docs/ENV.md) | every environment knob (generated from `lib/envManifest.ts`) |
 | [SETUP-NAS-CRON.md](docs/SETUP-NAS-CRON.md) · [SETUP-NAS-WEB.md](docs/SETUP-NAS-WEB.md) · [SETUP-NAS-BACKUP.md](docs/SETUP-NAS-BACKUP.md) | the runner, the web slots, backups |
 | [SETUP-clean-ip-worker.md](docs/SETUP-clean-ip-worker.md) | the box that bakes the per-stock cache and the call digests |

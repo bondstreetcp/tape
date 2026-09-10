@@ -131,7 +131,7 @@ export function buildDataset(perSymbol: SymbolInput[]): { examples: PrintExample
   const live: LivePoint[] = [];
   for (const s of perSymbol) {
     const recs = s.recs
-      .filter((r) => r.digest)
+      .filter((r) => r.digest && r.eventType !== "conference")
       .sort((a, b) => (a.callDate || "").localeCompare(b.callDate || "")); // ascending by call date
     for (let i = 0; i < recs.length; i++) {
       const cur = recs[i];

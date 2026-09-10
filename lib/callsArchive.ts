@@ -15,9 +15,11 @@ import { promises as fs } from "fs";
 import { existsSync } from "fs";
 import path from "path";
 import type { CallDigest } from "./callDigests";
+import { conferenceRecordsDir } from "./conferencePortal";
 
 /** One archived call — the raw transcript AND its structured digest, keyed by (symbol, fiscalPeriod). */
 export interface CallRecord {
+  eventType?: "earnings" | "conference"; // legacy records without a type retain earnings behavior
   symbol: string;
   fiscalPeriod: string; // stable per-quarter key, e.g. "2026-Q3" (the archive's identity — NOT callDate)
   callDate: string; // YYYY-MM-DD — the transcript's own date
@@ -50,18 +52,26 @@ export async function saveCallRecord(rec: CallRecord): Promise<void> {
 }
 
 export async function loadCallRecord(sym: string, fiscalPeriod: string): Promise<CallRecord | null> {
+  if (/^[A-Z0-9][A-Z0-9.^=-]{0,19}$/i.test(sym) && /^conference-\d+-\d+$/.test(fiscalPeriod)) {
+    try { return JSON.parse(await fs.readFile(path.join(conferenceRecordsDir(), sym.toUpperCase(), `${fiscalPeriod}.json`), "utf8")) as CallRecord; } catch { /* legacy archive fallback */ }
+  }
   try { return JSON.parse(await fs.readFile(callFile(sym, fiscalPeriod), "utf8")) as CallRecord; }
   catch { return null; }
 }
 
 /** All archived records for one symbol, newest call first. Best-effort: [] on any miss. */
 export async function loadSymbolCalls(sym: string): Promise<CallRecord[]> {
-  try {
-    const dir = callsSymbolDir(sym);
+  if (!/^[A-Z0-9][A-Z0-9.^=-]{0,19}$/i.test(sym)) return [];
+  const readDir = async (dir: string): Promise<CallRecord[]> => { try {
     const files = (await fs.readdir(dir)).filter((n) => n.endsWith(".json") && !n.endsWith(".tmp"));
     const recs = await Promise.all(files.map((n) => fs.readFile(path.join(dir, n), "utf8").then((s) => JSON.parse(s) as CallRecord).catch(() => null)));
     return recs.filter((r): r is CallRecord => !!r).sort((a, b) => (b.callDate || "").localeCompare(a.callDate || ""));
-  } catch { return []; }
+  } catch { return []; } };
+  const base = await readDir(callsSymbolDir(sym));
+  const overlay = await readDir(path.join(conferenceRecordsDir(), sym.toUpperCase()));
+  const records = new Map(base.map(r => [r.fiscalPeriod, r]));
+  for (const r of overlay) if (r.eventType === "conference" && r.symbol === sym.toUpperCase()) records.set(r.fiscalPeriod, r);
+  return [...records.values()].sort((a,b) => b.callDate.localeCompare(a.callDate));
 }
 
 /** The last `n` DIGESTED calls for a symbol (newest first) — the compact history the AI surfaces read into

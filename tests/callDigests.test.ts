@@ -151,6 +151,13 @@ test("sanitizeDigest: verbatim quotes kept, paraphrases and off-transcript numbe
   assert.equal(d.callDate, "2026-09-02");
 });
 
+test("conference takeaways retain complete explanations without expanding earnings KPI limits", () => {
+  const bullet = "Comparable sales increased 14.1%. Management described demand across multiple product categories rather than dependence on a single trend. Shareholders should watch whether that breadth persists as the company raises its outlook.";
+  const raw = { tldr: "Broad demand supports the higher outlook.", kpis: [bullet], drivers: ["Trading cards contributed to growth."] };
+  assert.equal(sanitizeDigest(raw, TRANSCRIPT, { ...META, eventType: "conference" })?.kpis[0], bullet);
+  assert.ok(sanitizeDigest(raw, TRANSCRIPT, META)!.kpis[0].length <= 170);
+});
+
 test("sanitizeDigest: THE SHELL TRAP — a '…' tldr, or a tldr with nothing behind it, is no digest", () => {
   assert.equal(sanitizeDigest({ tldr: "…", tone: "measured", kpis: ["…"], drivers: [], qa: [] }, TRANSCRIPT, META), null);
   assert.equal(sanitizeDigest({ tldr: "A fine quarter.", kpis: [], drivers: ["Demand was strong"], qa: [] }, TRANSCRIPT, META), null); // one element only
