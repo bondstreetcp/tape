@@ -21,7 +21,7 @@ export async function POST(req: Request) {
         await publishConferenceRecord(job, talk, body.record, await stockCatalog());
         if (talk.published) {
           try { const { backupPresentation } = await import("@/lib/conferenceBackup"); await backupPresentation(job, talk.id); }
-          catch { talk.backedUp = false; console.error(`Conference ${job.id}: off-host backup pending for ${talk.id}.`); }
+          catch (e) { talk.backedUp = false; console.error(`Conference ${job.id}: off-host backup pending for ${talk.id}: ${(e as Error).message.slice(0, 200)}`); }
         }
       } else {
         if (body.title) job.title = body.title.slice(0, 240);
