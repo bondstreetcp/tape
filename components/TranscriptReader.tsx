@@ -33,6 +33,7 @@ export default function TranscriptReader({
   quarters: Quarter[];
   selected: TranscriptReaderData | null;
 }) {
+  const isConference = selected?.period.startsWith("conference-") ?? false;
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 12px 64px" }}>
       <header style={{ padding: "16px 2px 8px" }}>
@@ -76,11 +77,29 @@ export default function TranscriptReader({
                 <span>{TONE_EMOJI[selected.digest.tone] || ""} tone {selected.digest.tone}</span>
                 {GUIDE_LABEL[selected.digest.guidance.action] && <span>guidance {GUIDE_LABEL[selected.digest.guidance.action]}</span>}
               </div>
-              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: "var(--text)" }}>{selected.digest.tldr}</p>
+              <h2 style={{ margin: "14px 0 8px", fontSize: 17, fontWeight: 700, color: "var(--text)" }}>AI summary</h2>
+              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "var(--text)" }}>{selected.digest.tldr}</p>
               {selected.digest.kpis.length > 0 && (
-                <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>
-                  {selected.digest.kpis.slice(0, 5).map((k, i) => <li key={i}>{k}</li>)}
-                </ul>
+                <>
+                  <h3 style={{ margin: "22px 0 12px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                    {isConference ? "Key shareholder takeaways" : "Key figures"}
+                  </h3>
+                  <ul style={{ margin: 0, paddingLeft: 22, listStyleType: "disc", display: "grid", gap: 18, fontSize: 14, color: "var(--text-2)", lineHeight: 1.65 }}>
+                    {selected.digest.kpis.slice(0, 5).map((k, i) => {
+                      // Conference bullets begin with a thesis sentence. Require a complete
+                      // sentence followed by prose so decimals and short KPI lines stay intact.
+                      const parts = isConference ? k.match(/^(.{12,180}?[.!?])\s+(?=[A-Z])([\s\S]+)$/) : null;
+                      return (
+                        <li key={i} style={{ paddingLeft: 4 }}>
+                          {parts ? <>
+                            <h4 style={{ margin: "0 0 5px", fontSize: 15, fontWeight: 700, lineHeight: 1.45, color: "var(--text)" }}>{parts[1]}</h4>
+                            <p style={{ margin: 0 }}>{parts[2]}</p>
+                          </> : k}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </section>
           )}
