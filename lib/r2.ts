@@ -27,10 +27,10 @@ const objUrl = (key: string) => `https://${EP}/${BUCKET}/${key.replace(/^\/+/, "
 
 /** PUT one object. body is held in memory (fine for a ~40 MB tarball). Throws on non-2xx — the error
  *  message never includes the credentials. */
-export async function putObject(key: string, body: Uint8Array, contentType = "application/octet-stream"): Promise<void> {
+export async function putObject(key: string, body: Uint8Array, contentType = "application/octet-stream", timeoutMs = 180_000): Promise<void> {
   // aws4fetch accepts a Uint8Array body (smoke-verified); the DOM BodyInit type is stricter about the
   // ArrayBuffer generic than reality, so cast rather than copy the ~35 MB into a Blob.
-  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType }, signal: deadline(180_000) });
+  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType }, signal: deadline(timeoutMs) });
   if (!res.ok) throw new Error(`R2 PUT ${key} → ${res.status} ${(await res.text().catch(() => "")).slice(0, 160)}`);
 }
 

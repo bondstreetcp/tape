@@ -7,6 +7,7 @@
 import type { CallDigest } from "@/lib/callDigests";
 import type { TranscriptTurn } from "@/lib/transcriptTurns";
 import TranscriptThread from "./TranscriptThread";
+import CallComparisonPanel from "./CallComparisonPanel";
 
 interface Quarter { period: string; callDate: string; href: string; active: boolean }
 export interface TranscriptReaderData {
@@ -127,6 +128,7 @@ export default function TranscriptReader({
           )}
 
           {/* The transcript document (see TranscriptThread). stickyTop clears the sticky AppHeader (~48px) on this page. */}
+          <CallComparisonPanel key={selected.period} symbol={symbol} period={selected.period} />
           <TranscriptThread turns={selected.turns} surfaceVar="var(--bg)" stickyTop={52} />
 
           <footer style={{ marginTop: 20, fontSize: 11, color: "var(--text-4)", textAlign: "center" }}>

@@ -35,7 +35,7 @@ async function main() {
   }
   await fs.writeFile(lock, JSON.stringify({ pid: process.pid, host: hostname() }), { flag: "wx", mode: 0o600 });
   async function sync(job: PortalJob) {
-    if (job.state === "complete") return;
+    if (job.state === "complete" && job.talks.every(t => !t.published || t.backedUp)) return;
     const url = webcastUrl(job.url); if (url.searchParams.get("ei") !== job.id || !/^\d{1,16}$/.test(job.id)) throw Error("Invalid job identity.");
     const localPath = path.join(root, "queue", `${job.id}.json`);
     let local = await read<LocalJob>(localPath);
@@ -57,9 +57,10 @@ async function main() {
       talks.push({ id: talk.id, name: talk.name, audio: await nonempty(path.join(td, "audio.mp3")), transcript: await nonempty(path.join(td, "transcript.txt")), summary: await nonempty(path.join(td, "digest.json")), error: talk.error ? safeError(talk.error) : undefined });
     }
     const waitingLogin = local.phase === "capture" && !manifest && local.state === "running";
+    const health = await read<{ ok: boolean; message: string }>(path.join(root, "summary-health.json"));
     const portalState = local.state === "failed" ? "attention" : local.state === "complete" ? "complete" : local.state === "queued" ? "queued" : "running";
     await request({ id: job.id, revision: job.revision, title: manifest?.title, state: portalState, phase: local.state === "queued" ? "Queued on Mac" : local.phase === "capture" ? "Capturing presentations" : "Transcribing and summarizing", talks,
-      message: waitingLogin ? "Opening the agenda on the Mac. If registration appears, sign in in the worker's Chrome window." : local.state === "failed" ? "Processing stopped after retries. Saved recordings and transcripts are retained; resolve the presentation errors below, then resume." : undefined });
+      message: waitingLogin ? "Opening the agenda on the Mac. If registration appears, sign in in the worker's Chrome window." : health && !health.ok && talks.some(t => t.transcript && !t.summary) ? health.message : local.state === "failed" ? "Processing stopped after retries. Saved recordings and transcripts are retained; resolve the presentation errors below, then resume." : undefined });
     for (const talk of talks.filter(t => t.summary && t.transcript)) {
       try {
       const original = manifest!.talks.find(t => t.id === talk.id)!;
@@ -70,7 +71,7 @@ async function main() {
       if (!digest) continue;
       const key = `${job.id}-${talk.id}`;
       const hash = createHash("sha256").update(text).update(JSON.stringify(digest)).update(job.mappings[talk.id] || "").digest("hex");
-      if (state.published[key] === hash && job.talks.some(t => t.id === talk.id && t.published)) continue;
+      if (state.published[key] === hash && job.talks.some(t => t.id === talk.id && t.published && t.backedUp)) continue;
       const result = await request({ id: job.id, revision: job.revision, talkId: talk.id, record: {
         symbol: original.symbol || "", fiscalPeriod: `conference-${key}`, eventType: "conference", callDate: original.date,
         title: `${original.name} — ${manifest!.title}`, url: original.url, source: manifest!.title,

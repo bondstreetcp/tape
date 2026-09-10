@@ -19,6 +19,10 @@ export async function POST(req: Request) {
         const talk = job.talks.find(t => t.id === body.talkId);
         if (!talk) throw Error("Unknown presentation.");
         await publishConferenceRecord(job, talk, body.record, await stockCatalog());
+        if (talk.published) {
+          try { const { backupPresentation } = await import("@/lib/conferenceBackup"); await backupPresentation(job, talk.id); }
+          catch { talk.backedUp = false; console.error(`Conference ${job.id}: off-host backup pending for ${talk.id}.`); }
+        }
       } else {
         if (body.title) job.title = body.title.slice(0, 240);
         if (body.state && ["queued", "running", "attention", "complete"].includes(body.state)) job.state = body.state;
@@ -27,7 +31,7 @@ export async function POST(req: Request) {
           if (!Array.isArray(body.talks) || body.talks.length > 500 || body.talks.some(t => !/^\d{1,16}$/.test(t.id) || typeof t.name !== "string")) throw Error("Invalid presentation list.");
           job.talks = body.talks.map(t => {
             const prior = job.talks.find(p => p.id === t.id);
-            return { id: t.id, name: t.name.slice(0, 240), audio: !!t.audio, transcript: !!t.transcript, summary: !!t.summary, error: t.error?.slice(0, 350), symbol: prior?.symbol, published: prior?.published };
+            return { id: t.id, name: t.name.slice(0, 240), audio: !!t.audio, transcript: !!t.transcript, summary: !!t.summary, error: t.error?.slice(0, 350), symbol: prior?.symbol, published: prior?.published, backedUp: prior?.backedUp };
           });
         }
       }

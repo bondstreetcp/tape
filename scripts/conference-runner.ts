@@ -108,8 +108,24 @@ async function main() {
     }
     const { FLASH_MODEL, llmConfigured } = await import("../lib/llm");
     const { loadCallRecord, saveCallRecord } = await import("../lib/callsArchive");
+    let summaryUnavailable = "";
+    if (until === "digest" && config.llm.mode === "local" && process.env.LLM_LOCAL_BASE_URL) {
+      try {
+        const response = await fetch(`${process.env.LLM_LOCAL_BASE_URL.replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(8000) });
+        if (!response.ok) throw Error(`Summary server returned HTTP ${response.status}.`);
+      } catch (error) {
+        const code = (error as { cause?: { code?: string } }).cause?.code;
+        summaryUnavailable = code === "EHOSTUNREACH" && process.platform === "darwin"
+          ? "The Mac cannot reach the summary server. Check Node/Tape Local Network permission in macOS and the server connection, then resume. Transcripts are saved."
+          : "The summary server is unavailable. Check its connection and running model, then resume. Transcripts are saved.";
+      }
+      await atomicWrite(path.join(privateDir, "summary-health.json"), JSON.stringify({ ok: !summaryUnavailable, message: summaryUnavailable, checkedAt: new Date().toISOString() }));
+    }
     const queue = manifest.talks.filter(t => !values.only || t.id === values.only || t.name.toLowerCase().includes(values.only.toLowerCase())).slice(0, limit);
     if (!queue.length) throw new Error("No talks matched --only.");
+    if (summaryUnavailable && (await Promise.all(queue.map(t => nonempty(path.join(dir, t.id, "transcript.txt"))))).every(Boolean)) {
+      console.error(summaryUnavailable); process.exitCode = 78; return;
+    }
     let failed = 0;
     for (const talk of queue) {
       console.log(`\n${talk.name} (${talk.date}; webcast ${talk.id})`);
@@ -132,7 +148,7 @@ async function main() {
         await runTalkStages(paths, {
           exists: nonempty,
           checkpoint: async stage => {
-            if (stage === "transcript" && config.diarization) {
+            if (stage === "transcript" && config.diarization && !summaryUnavailable) {
               console.log("  aligning speaker turns");
               await labelConferenceSpeakers(talkDir, config.ffmpeg, config.asr, config.diarization);
             }
@@ -156,6 +172,7 @@ async function main() {
           },
           transcribe: () => transcribeAudio(paths.audio, paths.transcript, config.ffmpeg, config.asr),
           digest: async () => {
+            if (summaryUnavailable) throw Error(summaryUnavailable);
             const local = config.llm.mode === "local";
             if (local && !(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL)) throw new Error("Set the local LLM URL/model in config or CALL_DIGEST_LOCAL_URL/MODEL in .env.local. Audio and transcript are saved.");
             if (!await llmConfigured()) throw new Error("No LLM configured; transcript is saved.");
@@ -176,7 +193,7 @@ async function main() {
       }
     }
     console.log(`\n${queue.length - failed}/${queue.length} talks completed through ${until}; ${failed} failed. Re-run to resume. No R2 upload performed.`);
-    if (failed) process.exitCode = 1;
+    if (failed) process.exitCode = summaryUnavailable ? 78 : 1;
   } finally {
     try { await browser?.close(); } finally { await fs.unlink(lock); }
   }

@@ -104,6 +104,7 @@ async function main() {
         if (code === 0 && job.phase === "capture") {
           job.phase = "process"; job.state = "queued"; job.attempts = 0;
         } else if (code === 0) job.state = "complete";
+        else if (code === 78) { job.state = "failed"; job.error = "Summary service needs attention. Saved work is preserved; restore access and resume from Tape."; }
         else {
           job.state = job.attempts >= 3 ? "failed" : "retry";
           job.error ||= `Runner exited ${code}; see ${job.id}.log. Completed files are preserved.`;

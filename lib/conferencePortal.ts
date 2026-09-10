@@ -6,7 +6,7 @@ import { webcastUrl, validSymbol } from "./conferenceRunner";
 import type { CallRecord } from "./callsArchive";
 import { sanitizeDigest } from "./callDigests";
 
-export interface PortalTalk { id: string; name: string; audio: boolean; transcript: boolean; summary: boolean; symbol?: string; published?: boolean; error?: string }
+export interface PortalTalk { id: string; name: string; audio: boolean; transcript: boolean; summary: boolean; symbol?: string; published?: boolean; backedUp?: boolean; error?: string }
 export interface PortalJob {
   id: string; url: string; owner: string; title: string; createdAt: string; updatedAt: string;
   revision: number; state: "queued" | "running" | "attention" | "complete";
