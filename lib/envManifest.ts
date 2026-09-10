@@ -209,6 +209,8 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
   K("NIGHT_TOKENS", "lab", "bench-prefill", "A night's input tokens, for the projection.", "4500000"),
   K("ROUNDS", "lab", "bench-prefill", "Rounds per level.", "5"),
   K("STEP_MIN", "lab", "bench-prefill", "run-tick's per-step ceiling, for the projection.", "45"),
+  K("PRINT_PREDICTOR_UNIVERSES", "tuning", "refresh-print-predictor", "Universe(s) to build the earnings print predictor over; first entry wins (e.g. 'sp500').", "sp500"),
+  K("PRINT_PREDICTOR_MIN_PAIRS", "tuning", "refresh-print-predictor", "Minimum labeled (Qn→Qn+1) pairs before a model ships; below it the run keeps the prior file (STALE).", "200"),
 ];
 
 export const ENV_BY_NAME: ReadonlyMap<string, EnvKnob> = new Map(ENV_KNOBS.map((k) => [k.name, k]));

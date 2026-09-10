@@ -1,7 +1,7 @@
 # Environment reference
 
 Generated from `lib/envManifest.ts` by `npm run gen-env-reference` — edit the table there, not this file.
-168 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
+170 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
 or GitHub secrets; everything else is optional and documented with its default.
 
 ## Secrets and endpoints
@@ -176,6 +176,8 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `LOBBY_MAX_PAGES` | `1200 (4000 with SEED)` | refresh-lobbying | Page budget per run. |
 | `STAPLES_SCAN_CAP` | `30000` | refresh-staples-scanner | Characters of each scan note sent to the model. |
 | `AV_BUDGET` | `24` | patch-margins-av | Alpha Vantage calls per run (the free tier is 25/day). |
+| `PRINT_PREDICTOR_UNIVERSES` | `sp500` | refresh-print-predictor | Universe(s) to build the earnings print predictor over; first entry wins (e.g. 'sp500'). |
+| `PRINT_PREDICTOR_MIN_PAIRS` | `200` | refresh-print-predictor | Minimum labeled (Qn→Qn+1) pairs before a model ships; below it the run keeps the prior file (STALE). |
 
 ## Lab, evals and benches
 

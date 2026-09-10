@@ -179,6 +179,10 @@ const FEEDS: FeedSpec[] = [
   // carry-forward in the refresh script means a budget-truncated night keeps yesterday's universes
   // rather than dropping them, so the floor only has to catch a total collapse.
   { file: "signal-grid.json", affects: ["/signal-record"], label: "Signal parameter grid", tier: "synthesis", maxAgeHours: SYNTH, countPath: "universes", minCount: 1 },
+  // Forward-accumulating: `live` starts empty and grows only as calls are digested & paired — NO minCount
+  // (the bootstrap-floor trap; same as earnings-preview-log/trade-log). Age-only is the honest gate.
+  // `affects` intentionally omitted until the /print-predictor page lands (Phase C).
+  { file: "earnings-print-predictor.json", label: "Earnings print predictor", tier: "synthesis", maxAgeHours: SYNTH, countPath: "live" },
 
   // event — forward-accumulating LLM feeds; content can be genuinely sparse, so age-only + a long window
   { file: "campaigns.json", affects: ["/campaigns", "/confluence", "/warnings"], label: "Activism & shorts", tier: "event", maxAgeHours: EVENT },

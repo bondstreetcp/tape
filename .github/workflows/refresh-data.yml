@@ -883,6 +883,14 @@ jobs:
         run: npm run refresh-signal-grid
         continue-on-error: true
 
+      # Earnings print predictor — pairs each digested call (Qn) to the next print (Qn+1), fits a
+      # transparent logistic beat/miss + reaction model, grades it walk-forward OOS. Pure local math
+      # over the digested call archive; no network.
+      - name: Earnings print predictor (beat/miss + reaction, walk-forward)
+        if: ${{ env.FULL == 'true' }}
+        run: npm run refresh-print-predictor
+        continue-on-error: true
+
       # Research trickle (not a user-facing feed): accumulates the 2020/2022/2024 earnings-vol
       # regime replay — ~150 polite fetches/night against EDGAR submissions + DoltHub's options DB.
       - name: Regime replay trickle (earnings-vol backtest)
