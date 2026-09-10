@@ -30,7 +30,9 @@ const objUrl = (key: string) => `https://${EP}/${BUCKET}/${key.replace(/^\/+/, "
 export async function putObject(key: string, body: Uint8Array, contentType = "application/octet-stream", timeoutMs = 180_000): Promise<void> {
   // aws4fetch accepts a Uint8Array body (smoke-verified); the DOM BodyInit type is stricter about the
   // ArrayBuffer generic than reality, so cast rather than copy the ~35 MB into a Blob.
-  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType }, signal: deadline(timeoutMs) });
+  // Next's fetch wrapper can stream a signed Request without inferring its length. R2 rejects
+  // those PUTs with 411, so preserve the byte length explicitly (including multibyte text).
+  const res = await client().fetch(objUrl(key), { method: "PUT", body: body as unknown as BodyInit, headers: { "content-type": contentType, "content-length": String(body.byteLength) }, signal: deadline(timeoutMs) });
   if (!res.ok) throw new Error(`R2 PUT ${key} → ${res.status} ${(await res.text().catch(() => "")).slice(0, 160)}`);
 }
 
