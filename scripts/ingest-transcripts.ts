@@ -11,6 +11,7 @@
  * Incremental (skips already-digested records), resumable, budgeted. Orders NEWEST call first by default so the
  * most move-relevant quarters digest first (the archive is ~24k records / weeks of rig time — cap it). Env:
  * INGEST_ORDER ("recent"=newest first | "alpha"=by symbol), INGEST_LIMIT (0=all), INGEST_ONLY ("AAPL,MSFT"),
+ * INGEST_UNIVERSE ("sp500" = restrict to that universe's snapshot members; intersects INGEST_ONLY),
  * INGEST_DELAY_MS (0), INGEST_LOCAL_ONLY (1), INGEST_PAUSE_PEAK (1 = pause during Georgia Power on-peak:
  * weekdays 14:00-19:00 ET, excl holidays, thru Sep 30 — dodges peak electricity pricing on the rig).
  *   CALL_DIGEST_LOCAL_URL=http://192.168.1.76:8000/v1 CALL_DIGEST_LOCAL_MODEL=argus-vlm npm run ingest-transcripts
@@ -25,6 +26,7 @@ import { FLASH_MODEL, llmConfigured } from "../lib/llm";
 import { digestTranscript, type DigestLlm } from "../lib/digestTranscript";
 import { callsCacheDir, loadSymbolCalls, loadCallRecord, saveCallRecord, type CallRecord } from "../lib/callsArchive";
 import { sleep, isGeorgiaPowerPeak } from "../lib/scriptKit";
+import { loadSnapshot, snapshotNames } from "../lib/data";
 
 const LOCAL = !!(process.env.LLM_LOCAL_BASE_URL && process.env.LLM_LOCAL_MODEL);
 const LOCAL_ONLY = process.env.INGEST_LOCAL_ONLY !== "0"; // default true: don't burn cloud $ on a bulk backfill
@@ -32,6 +34,7 @@ const LIMIT = Number(process.env.INGEST_LIMIT || 0); // 0 = all un-digested
 const DELAY_MS = Math.max(0, Number(process.env.INGEST_DELAY_MS || 0));
 const ONLY = (process.env.INGEST_ONLY || "").split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase());
 const ORDER = (process.env.INGEST_ORDER || "recent").toLowerCase(); // "recent" = newest call first (most move-relevant); "alpha" = by symbol A→Z
+const UNIVERSE = (process.env.INGEST_UNIVERSE || "").trim().toLowerCase(); // restrict to a universe's snapshot members (e.g. sp500); intersects with INGEST_ONLY
 const PAUSE_PEAK = process.env.INGEST_PAUSE_PEAK === "1"; // pause GPU work during Georgia Power on-peak (wkdays 2-7pm ET, excl holidays, thru Sep 30)
 
 const LLM: DigestLlm = { model: FLASH_MODEL, local: true, reasoningEffort: "low", timeoutMs: LOCAL ? 600_000 : 180_000, retries: LOCAL_ONLY ? 1 : 3 };
@@ -48,6 +51,13 @@ async function main() {
   try { syms = (await fs.readdir(callsCacheDir())).filter((s) => !s.startsWith(".")); }
   catch { console.error("ingest-transcripts: no data/calls archive yet — run backfill-transcripts first."); return; }
   if (ONLY.length) syms = syms.filter((s) => ONLY.includes(s.toUpperCase()));
+  if (UNIVERSE) {
+    // Restrict to a universe's snapshot members (e.g. sp500) — intersects with INGEST_ONLY. snapshotNames throws an
+    // operator-actionable "hydrate from R2 first" error on a stub snapshot, so this fails loud on a fresh clone
+    // rather than silently ingesting nothing.
+    const members = new Set(snapshotNames(await loadSnapshot(UNIVERSE), UNIVERSE).map((m) => m.symbol.toUpperCase()));
+    syms = syms.filter((s) => members.has(s.toUpperCase()));
+  }
   syms.sort();
 
   // Build the work queue = every UN-digested record across the selected names. We keep only a light key per record
@@ -64,7 +74,7 @@ async function main() {
   if (ORDER !== "alpha") work.sort((a, b) => (b.callDate || b.fiscalPeriod).localeCompare(a.callDate || a.fiscalPeriod));
   const queue = LIMIT ? work.slice(0, LIMIT) : work;
 
-  console.log(`ingest-transcripts: ${work.length} undigested across ${syms.length} names · order ${ORDER}${LIMIT ? ` · processing newest ${queue.length}` : ""} · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}${PAUSE_PEAK ? " · peak-pause on (wkdys 2-7pm ET)" : ""}`);
+  console.log(`ingest-transcripts: ${work.length} undigested across ${syms.length} names · order ${ORDER}${UNIVERSE ? ` · universe ${UNIVERSE}` : ""}${LIMIT ? ` · processing newest ${queue.length}` : ""} · model ${MODEL_LABEL} · ${LOCAL ? "LOCAL rig" : "cloud fallback"}${PAUSE_PEAK ? " · peak-pause on (wkdys 2-7pm ET)" : ""}`);
   const t0 = Date.now();
   let done = 0, failed = 0, already = 0;
   for (const w of queue) {

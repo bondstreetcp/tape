@@ -1,7 +1,7 @@
 # Environment reference
 
 Generated from `lib/envManifest.ts` by `npm run gen-env-reference` — edit the table there, not this file.
-160 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
+168 knobs. Secrets live in the NAS `tape.env`, the R2 runner-env channel (`npm run add-runner-secret`)
 or GitHub secrets; everything else is optional and documented with its default.
 
 ## Secrets and endpoints
@@ -24,6 +24,7 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `SUPABASE_URL` | — | lib/research/blob, /api/auth | Supabase project URL for server-side storage and auth calls. |
 | `SUPABASE_SECRET_KEY` | — | lib/research/blob, /api/auth | Supabase service-role key — server only, never NEXT_PUBLIC. |
 | `RESEND_API_KEY` | — | push-binary-digest | Resend key for the weekly binary-events digest email. |
+| `CAPTURE_TOKEN` | — | capture-server | Optional shared secret the capture bookmarklet must send (X-Tape-Token); empty = no token required. |
 
 ## Runner and pipeline
 
@@ -124,7 +125,14 @@ or GitHub secrets; everything else is optional and documented with its default.
 | `INGEST_ORDER` | `recent` | ingest-transcripts | Digest order: 'recent' = newest call first (most move-relevant, the default); 'alpha' = by symbol A→Z. |
 | `INGEST_PAUSE_PEAK` | `0` | ingest-transcripts | 1 = pause the rig during Georgia Power on-peak (weekdays 14:00-19:00 ET, excl holidays, thru Sep 30) to dodge peak electricity pricing. |
 | `INGEST_ONLY` | `` | ingest-transcripts | Comma/space-separated ticker subset to ingest; empty = all. |
+| `INGEST_UNIVERSE` | `` | ingest-transcripts | Restrict the ingest work queue to a universe's snapshot members (e.g. 'sp500'); intersects with INGEST_ONLY; empty = the whole calls archive. |
 | `INGEST_DELAY_MS` | `0` | ingest-transcripts | Delay (ms) between digest calls (pace a one-sequence rig). |
+| `CAPTURE_PORT` | `8765` | capture-server | Port the conference capture server listens on (loopback 127.0.0.1 only). |
+| `AUDIO_DIR` | `~/communicopia-audio` | capture-server | Folder where the capture server saves downloaded talk audio (TICKER_DATE.mp3). |
+| `YTDLP` | `yt-dlp` | capture-server | yt-dlp binary name/path the capture server invokes. |
+| `REFERER` | `https://event.webcasts.com/` | capture-server | Referer header sent to the webcasts CDN (securehds returns HTTP 704 without it). |
+| `UA` | `Mozilla/5.0` | capture-server | User-agent the capture server sends to the CDN. |
+| `ALLOW_ORIGIN` | `https://event.webcasts.com` | capture-server | Comma-separated origins allowed to POST to the capture server; '*' allows any (still loopback-bound). |
 | `CALL_DIGEST_LOCAL_ONLY` | — | refresh-call-digests | =1 refuses the cloud tier (local model or nothing). |
 | `BUYBACK_BUDGET_MIN` | `30` | refresh-buybacks | Wall-clock budget (minutes). |
 | `BUYBACK_MAX_AGE_DAYS` | `7` | refresh-buybacks | Re-read a name's facts only when older than this. |
