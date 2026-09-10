@@ -57,8 +57,8 @@ async function main() {
       talks.push({ id: talk.id, name: talk.name, audio: await nonempty(path.join(td, "audio.mp3")), transcript: await nonempty(path.join(td, "transcript.txt")), summary: await nonempty(path.join(td, "digest.json")), error: talk.error ? safeError(talk.error) : undefined });
     }
     const waitingLogin = local.phase === "capture" && !manifest && local.state === "running";
-    const portalState = local.state === "failed" ? "attention" : local.state === "complete" ? "complete" : "running";
-    await request({ id: job.id, revision: job.revision, title: manifest?.title, state: portalState, phase: local.phase === "capture" ? "Capturing presentations" : "Transcribing and summarizing", talks,
+    const portalState = local.state === "failed" ? "attention" : local.state === "complete" ? "complete" : local.state === "queued" ? "queued" : "running";
+    await request({ id: job.id, revision: job.revision, title: manifest?.title, state: portalState, phase: local.state === "queued" ? "Queued on Mac" : local.phase === "capture" ? "Capturing presentations" : "Transcribing and summarizing", talks,
       message: waitingLogin ? "Opening the agenda on the Mac. If registration appears, sign in in the worker's Chrome window." : local.state === "failed" ? "Processing stopped after retries. Saved recordings and transcripts are retained; resolve the presentation errors below, then resume." : undefined });
     for (const talk of talks.filter(t => t.summary && t.transcript)) {
       try {
