@@ -15,12 +15,12 @@ export default function ConferenceInbox({ universe }: { universe: string }) {
   useEffect(() => { void refresh(); const timer = setInterval(() => void refresh(), 15000); return () => clearInterval(timer); }, [refresh]);
   async function submit(body: object) {
     setBusy(true); setError(""); setNotice("");
-    try { const res = await fetch("/api/conferences", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await res.json(); if (!res.ok) throw Error(data.error); setUrl(""); setNotice("Saved. The Mac will pick this up automatically."); await refresh(); }
+    try { const res = await fetch("/api/conferences", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await res.json(); if (!res.ok) throw Error(data.error); setUrl(""); setNotice("Saved. The worker will pick this up automatically."); await refresh(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <main style={{ maxWidth: 1000, margin: "0 auto", padding: "32px 20px 80px" }}>
     <h1 style={{ fontSize: 28, fontWeight: 750, marginBottom: 8 }}>Conferences</h1>
-    <p style={{ color: "var(--text-2)", lineHeight: 1.6, maxWidth: 760 }}>Paste a conference agenda link. Tape captures available presentations, transcribes them on the Mac, writes shareholder summaries and adds them to the matching company pages.</p>
+    <p style={{ color: "var(--text-2)", lineHeight: 1.6, maxWidth: 760 }}>Paste a conference agenda link. Tape captures available presentations, transcribes them on the worker, writes shareholder summaries and adds them to the matching company pages.</p>
     {locked && <form onSubmit={e => { e.preventDefault(); void submit({ action: "unlock", code }); setCode(""); }} style={{ margin: "20px 0", padding: 16, border: "1px solid var(--border)", borderRadius: 10 }}>
       <label htmlFor="conference-code" style={{ display: "block", marginBottom: 10 }}>Conference access code</label>
       <input id="conference-code" type="password" autoComplete="current-password" value={code} onChange={e => setCode(e.target.value)} style={{ padding: 10, marginRight: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", borderRadius: 8 }} />
@@ -32,10 +32,10 @@ export default function ConferenceInbox({ universe }: { universe: string }) {
       <input id="conference-url" type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder="https://event.webcasts.com/viewer/agenda.jsp?..." style={{ flex: "1 1 420px", minWidth: 0, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", color: "var(--text)" }} />
       <button style={button} disabled={busy || !url || locked}>{busy ? "Saving…" : "Process conference"}</button>
     </form>
-    <p style={{ fontSize: 13, color: "var(--text-3)", lineHeight: 1.6 }}>Supports Webcasts.com conference agendas. A new event may require a one-time sign-in in Chrome on the Mac. You can close this page after submitting.</p>
+    <p style={{ fontSize: 13, color: "var(--text-3)", lineHeight: 1.6 }}>Supports Webcasts.com conference agendas. A new event may require a one-time sign-in in Chrome on the worker. You can close this page after submitting.</p>
     {error && <p role="alert" style={{ color: "var(--red, #d34e4e)" }}>{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    {loaded && <p style={{ margin: "24px 0", color: "var(--text-2)" }}>{online ? "● Mac worker connected" : "○ Mac worker offline — submissions stay queued until it reconnects"}</p>}
+    {loaded && <p style={{ margin: "24px 0", color: "var(--text-2)" }}>{online ? "● Conference worker connected" : "○ Conference worker offline — submissions stay queued until it reconnects"}</p>}
     {loaded && !jobs.length && <p>No conferences yet. Add your first link above.</p>}
     {jobs.map(job => <section key={job.id} style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 20, margin: "20px 0", background: "var(--surface-2)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -58,3 +58,4 @@ export default function ConferenceInbox({ universe }: { universe: string }) {
     </section>)}
   </main>;
 }
+

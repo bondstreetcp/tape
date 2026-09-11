@@ -1,4 +1,4 @@
-/** Mac-only outgoing HTTPS bridge. The existing local queue owns capture/Whisper/LLM. */
+/** Outgoing HTTPS bridge. The existing local queue owns capture/Whisper/LLM. */
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { hostname } from "node:os";
@@ -59,8 +59,8 @@ async function main() {
     const waitingLogin = local.phase === "capture" && !manifest && local.state === "running";
     const health = await read<{ ok: boolean; message: string }>(path.join(root, "summary-health.json"));
     const portalState = local.state === "failed" ? "attention" : local.state === "complete" ? "complete" : local.state === "queued" ? "queued" : "running";
-    await request({ id: job.id, revision: job.revision, title: manifest?.title, state: portalState, phase: local.state === "queued" ? "Queued on Mac" : local.phase === "capture" ? "Capturing presentations" : "Transcribing and summarizing", talks,
-      message: waitingLogin ? "Opening the agenda on the Mac. If registration appears, sign in in the worker's Chrome window." : health && !health.ok && talks.some(t => t.transcript && !t.summary) ? health.message : local.state === "failed" ? "Processing stopped after retries. Saved recordings and transcripts are retained; resolve the presentation errors below, then resume." : undefined });
+    await request({ id: job.id, revision: job.revision, title: manifest?.title, state: portalState, phase: local.state === "queued" ? "Queued on worker" : local.phase === "capture" ? "Capturing presentations" : "Transcribing and summarizing", talks,
+      message: waitingLogin ? "Opening the agenda on the worker. If registration appears, sign in in the worker's Chrome window." : health && !health.ok && talks.some(t => t.transcript && !t.summary) ? health.message : local.state === "failed" ? "Processing stopped after retries. Saved recordings and transcripts are retained; resolve the presentation errors below, then resume." : undefined });
     for (const talk of talks.filter(t => t.summary && t.transcript)) {
       try {
       const original = manifest!.talks.find(t => t.id === talk.id)!;
@@ -94,3 +94,4 @@ async function main() {
   } finally { await fs.unlink(lock); }
 }
 main().catch(e => { console.error(safeError(e)); process.exitCode = 1; });
+
