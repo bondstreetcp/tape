@@ -9,6 +9,8 @@ import { atomicWrite, downloadAudio, nonempty, runCommand, transcribeAudio, type
 import { resolveSymbol, runTalkStages, safeError, webcastUrl, type ConferenceTalk } from "../lib/conferenceRunner";
 
 interface Config {
+  contextSpeakers?: boolean;
+  priorityTalks?: string[];
   diarization?: DiarizationConfig;
   channel: string;
   ytdlp: string;
@@ -23,6 +25,7 @@ interface TalkState extends ConferenceTalk { stage?: "audio" | "transcript" | "d
 interface Manifest { version: 1; id: string; title: string; url: string; updatedAt: string; talks: TalkState[] }
 
 const DEFAULTS: Config = {
+  contextSpeakers: true,
   channel: process.platform === "win32" ? "msedge" : "chrome",
   ytdlp: "yt-dlp", ffmpeg: "ffmpeg", loginTimeoutMs: 10 * 60_000, streamTimeoutMs: 45_000,
   asr: { mode: "http", url: "http://127.0.0.1:8000/v1", model: "whisper-1", cli: "whisper-cli", language: "en" },
@@ -121,7 +124,7 @@ async function main() {
       }
       await atomicWrite(path.join(privateDir, "summary-health.json"), JSON.stringify({ ok: !summaryUnavailable, message: summaryUnavailable, checkedAt: new Date().toISOString() }));
     }
-    const queue = manifest.talks.filter(t => !values.only || t.id === values.only || t.name.toLowerCase().includes(values.only.toLowerCase())).slice(0, limit);
+    const queue = manifest.talks.filter(t => !values.only || t.id === values.only || t.name.toLowerCase().includes(values.only.toLowerCase())).sort((a, b) => { const rank = (id: string) => { const n = config.priorityTalks?.indexOf(id) ?? -1; return n < 0 ? 999 : n; }; return rank(a.id) - rank(b.id); }).slice(0, limit);
     if (!queue.length) throw new Error("No talks matched --only.");
     if (summaryUnavailable && (await Promise.all(queue.map(t => nonempty(path.join(dir, t.id, "transcript.txt"))))).every(Boolean)) {
       console.error(summaryUnavailable); process.exitCode = 78; return;
@@ -145,12 +148,25 @@ async function main() {
       };
       try {
         talk.symbol = resolveSymbol(talk.name, config.symbols, stocks) || talk.symbol;
+        const priorDigest = await readJson<import("../lib/callDigests").CallDigest>(paths.digest);
+        // Preserve the manually reviewed Freshpet legacy narrative while upgrading statistic-only digests.
+        const reviewedNarrative = (priorDigest?.kpis || []).filter(k => k.length > 220).length >= 4;
+        const speakerStat = await fs.stat(path.join(talkDir, "transcript.speakers.txt")).catch(() => null);
+        const digestStat = await fs.stat(paths.digest).catch(() => null);
+        const pendingSpeakerSummary = !!speakerStat && !!digestStat && speakerStat.mtimeMs > digestStat.mtimeMs;
+        let refreshDigest = pendingSpeakerSummary || !!priorDigest && !reviewedNarrative && (priorDigest.takeaways?.length || 0) < 4;
         await runTalkStages(paths, {
-          exists: nonempty,
+          exists: file => file === paths.digest && refreshDigest ? Promise.resolve(false) : nonempty(file),
           checkpoint: async stage => {
             if (stage === "transcript" && config.diarization && !summaryUnavailable) {
               console.log("  aligning speaker turns");
               await labelConferenceSpeakers(talkDir, config.ffmpeg, config.asr, config.diarization);
+            }
+            if (stage === "transcript" && !config.diarization && config.contextSpeakers && !summaryUnavailable && until === "digest") {
+              const { labelContextSpeakers } = await import("./conference-context-speakers");
+              console.log("  checking contextual moderator/management turns");
+              const changed = await labelContextSpeakers(talkDir, { model: config.llm.model || FLASH_MODEL, local: config.llm.mode === "local", timeoutMs: 600_000, retries: 1 });
+              refreshDigest ||= changed;
             }
             talk.stage = stage;
             delete talk.error;
@@ -180,8 +196,9 @@ async function main() {
             const text = await fs.readFile(await nonempty(speakerText) ? speakerText : paths.transcript, "utf8");
             const model = config.llm.model || FLASH_MODEL;
             const digest = await digestTranscript({ symbol: talk.symbol || "", name: talk.name, sector: null, marketCap: null, title: `${talk.name} — ${manifest!.title}`, date: talk.date, url: talk.url, source: manifest!.title, text, eventType: "conference" }, { model, local, timeoutMs: 600_000, retries: 1 }, local ? `local:${process.env.LLM_LOCAL_MODEL}` : model, talk.date);
-            if (!digest) throw new Error("LLM returned no validated digest; transcript retained for retry.");
+            if (!digest || (digest.takeaways?.length || 0) < 4) throw new Error("LLM returned no validated digest; transcript retained for retry.");
             await atomicWrite(paths.digest, JSON.stringify(digest, null, 2));
+            refreshDigest = false;
           },
         }, until);
         console.log(`  saved through ${talk.stage}${talk.archived ? `; archived under ${talk.symbol}` : "; files kept by webcast ID"}`);

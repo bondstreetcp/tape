@@ -100,3 +100,9 @@ This adapter targets the dated-tab GlobalMeet/webcasts.com agenda observed at Ba
 ## Development verification
 
 `npm test` covers parsing, stage failures/resumption, multipart ASR requests against a local fixture server, digest validation, and predictor isolation. `npm run test:conference-browser` launches headless Edge/Chrome against intercepted fixture pages to exercise dated tabs, nested players, talk matching and fresh-token acquisition without accessing a real conference. With the binary paths configured in `.conference-runner/config.json`, `npm run test:conference-download` generates a short HLS recording and downloads/validates it with the real yt-dlp and FFmpeg binaries. These tests do not establish live provider access or ASR/model availability; use a one-talk live run to verify your deployment.
+
+### Upgrading older conference records
+
+The processing runner now defaults `contextSpeakers` to true when acoustic diarization is not configured. It asks the summary model for moderator/management role boundaries, reconstructs the text from the original lines, and labels these roles as inferred from the transcript. This is contextual inference, not acoustic speaker identification; names are deliberately not guessed. Original `transcript.txt` files and existing reviewed/acoustic speaker files are preserved. `context-speakers.json` records the method, source hash, model and boundaries.
+
+On a processing pass, statistic-only legacy digests are regenerated as four or five structured shareholder takeaways. A changed speaker transcript also triggers regeneration, including after an interrupted run. The old digest remains on disk until a replacement succeeds. Long manually reviewed legacy narratives are retained. `priorityTalks` can list webcast IDs to upgrade first. Existing completed jobs still need to be explicitly resumed to run this upgrade; a new deployment alone does not rewrite their saved results.
