@@ -60,6 +60,7 @@ test("conference LLM path sends conference context and rejects an invented quote
       tldr: "Management described continued demand growth and ongoing capacity investment.",
       tone: "measured", guidance: { action: "none", detail: "No new guidance was provided." },
       kpis: ["Sales grew 12% during the period."],
+      takeaways: [{ heading: "Distribution supports growth", detail: "Distribution expansion supported demand. Capacity investment remains a priority as the company serves that demand." }],
       drivers: ["Distribution expansion supported demand.", "Capacity investment remains a priority."],
       qa: [], readThrough: [], watch: ["Watch distribution expansion."],
       quotes: [{ speaker: "Management", text: "Sales grew 12% during the period." }, { speaker: "Management", text: "We guarantee profits will triple tomorrow." }],
@@ -73,8 +74,10 @@ test("conference LLM path sends conference context and rejects an invented quote
   try {
     const digest = await digestTranscript({ eventType: "conference", symbol: "FRPT", name: "Freshpet", sector: null, marketCap: null, title: "Fixture Conference", date: "2026-09-10", url: "", source: "fixture", text: "Sales grew 12% during the period. Distribution expansion supported demand. Capacity investment remains a priority. No new guidance was provided." }, { model: "fixture", local: true, retries: 1 }, "local:fixture", "2026-09-10");
     assert.match(system, /CONFERENCE PRESENTATION/);
-    assert.match(system, /4-5 ranked, distinct shareholder takeaways/);
+    assert.match(system, /'takeaways' array MUST contain 4-5 ranked/);
+    assert.doesNotMatch(system, /return an empty takeaways array/);
     assert.ok(digest);
+    assert.equal(digest.takeaways?.[0].heading, "Distribution supports growth");
     assert.equal(digest.quotes.length, 1);
     assert.equal(digest.quotes[0].text, "Sales grew 12% during the period.");
   } finally {

@@ -49,11 +49,10 @@ const DIGEST_SCHEMA =
   'Return ONLY JSON: {"tldr": string, "takeaways": [{"heading": string, "detail": string}], "tone": "upbeat"|"measured"|"cautious"|"defensive", "guidance": {"action": "raised"|"reaffirmed"|"cut"|"initiated"|"withdrawn"|"mixed"|"none", "detail": string}, "kpis": string[], "drivers": string[], "qa": [{"analyst": string, "question": string, "answer": string, "directness": "direct"|"partial"|"evasive"}], "readThrough": string[], "watch": string[], "quotes": [{"speaker": string, "text": string}]}';
 
 const CONFERENCE_EDITORIAL =
-  "For a conference, return an empty takeaways array: the existing kpis presentation below carries its shareholder takeaways. " +
-  " For this conference, override the earnings-style tldr/kpis instructions: write for an existing shareholder who missed the presentation. " +
+  "For this conference, write for an existing shareholder who missed the presentation. " +
   "The tldr should connect growth strategy, profitability and the main execution dependency in 1-2 sentences under 420 characters. " +
-  "The existing 'kpis' field is the summary card's bullet list: write 4-5 ranked, distinct shareholder takeaways, NOT disconnected statistics. " +
-  "Each bullet should begin with a plain-language thesis, explain supporting management comments/figures and why they matter for growth, margins, cash flow or competitive position. " +
+  "The 'takeaways' array MUST contain 4-5 ranked {heading, detail} objects, NOT disconnected statistics; reserve 'kpis' for compact supporting figures. " +
+  "Each heading should state a plain-language thesis; its detail should explain supporting management comments/figures and why they matter for growth, margins, cash flow or competitive position. " +
   "Use 2-3 complete sentences, at most 600 characters per bullet. Explain unfamiliar acronyms. Include relevant uncertainty or a next checkpoint naturally; do not repeat points. " +
   "Attribute management claims, distinguish targets from achieved results, preserve time periods and adjusted metric labels, and separate recurring cash generation from one-time proceeds. " +
   "Do not turn a possible initiative into an announced plan, an aspiration into guidance, or spend per customer into profit per customer. Use fewer bullets only if the source cannot support four; never pad. ";
