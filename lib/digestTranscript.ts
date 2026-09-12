@@ -54,7 +54,7 @@ const CONFERENCE_EDITORIAL =
   "The 'takeaways' array MUST contain 4-5 ranked {heading, detail} objects, NOT disconnected statistics; reserve 'kpis' for compact supporting figures. " +
   "Each heading should state a plain-language thesis; its detail should explain supporting management comments/figures and why they matter for growth, margins, cash flow or competitive position. " +
   "Use 2-3 complete sentences, at most 600 characters per bullet. Explain unfamiliar acronyms. Include relevant uncertainty or a next checkpoint naturally; do not repeat points. " +
-  "Attribute management claims, distinguish targets from achieved results, preserve time periods and adjusted metric labels, and separate recurring cash generation from one-time proceeds. " +
+  "Check every heading against its supporting figures: never call growth volume-led when the stated pricing contribution is larger. Distinguish management statements from estimates or premises in an interviewer question. Do not turn an unanswered question into a confirmed fact (including cannibalization), possible buyback discussions into a decision, or currency-only guidance changes into an operating upgrade. Attribute management claims, distinguish targets from achieved results, preserve time periods and adjusted metric labels, and separate recurring cash generation from one-time proceeds. " +
   "Do not turn a possible initiative into an announced plan, an aspiration into guidance, or spend per customer into profit per customer. Use fewer bullets only if the source cannot support four; never pad. ";
 
 /** Digest one transcript. `modelLabel` is stamped on the digest's `model` field; `debug` logs each stage. */
