@@ -33,7 +33,7 @@ export async function labelContextSpeakers(dir: string, llm: DigestLlm): Promise
     if (!response || !Array.isArray(response.turns) || response.turns[0]?.line !== start) throw Error("Incomplete contextual speaker labels; original transcript retained");
     let previous = start - 1;
     for (const b of response.turns) {
-      if (!Number.isInteger(b.line) || b.line <= previous || b.line >= end || !["moderator", "management", "unknown"].includes(b.role)) throw Error("Invalid contextual speaker labels");
+      if (!Number.isInteger(b.line) || b.line <= previous || b.line >= end || !["moderator", "management", "unknown"].includes(b.role)) throw Error(`Invalid contextual speaker labels: line=${b.line}, previous=${previous}, end=${end}, role=${b.role}`);
       previous = b.line;
       if (boundaries.at(-1)?.role !== b.role) boundaries.push(b);
     }
